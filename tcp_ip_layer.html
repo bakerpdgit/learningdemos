@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TCP/IP Stack Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .layer-block {
+        border: 2px solid;
+        margin-bottom: 8px; /* For single packet view */
+        transition: all 0.3s ease-in-out;
+      }
+      .packet-container {
+        /* New class for multiple packets */
+        margin-bottom: 16px; /* Space between multiple full packet visualisations */
+      }
+      .payload-block {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed rgba(100, 100, 100, 0.3); /* Made slightly darker for visibility */
+      }
+      /* Custom scrollbar for better looks if content overflows */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #e2e8f0; /* Tailwind gray-200 */
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #94a3b8; /* Tailwind gray-400 */
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; /* Tailwind gray-500 */
+      }
+      .control-button {
+        min-width: 100px;
+      }
+      .packet-visualisation-area {
+        display: flex;
+        flex-direction: column; /* Stack packets vertically */
+        gap: 1rem; /* Space between packet visualisations */
+        overflow-y: auto; /* Allow scrolling if content overflows */
+        max-height: 500px; /* Set a max height for the packet view area */
+      }
+    </style>
+  </head>
+  <body
+    class="bg-gray-100 text-gray-800 min-h-screen flex flex-col items-center justify-center p-4"
+  >
+    <div class="w-full max-w-5xl bg-white shadow-2xl rounded-xl p-6 md:p-8">
+      <header class="mb-6 text-center">
+        <h1 class="text-3xl md:text-4xl font-bold text-indigo-600">
+          TCP/IP Protocol Stack Journey
+        </h1>
+        <p class="text-gray-600 mt-1">
+          Follow your data as it travels through the network layers!
+        </p>
+      </header>
+
+      <section
+        id="input-section"
+        class="mb-6 p-6 bg-indigo-50 rounded-lg shadow"
+      >
+        <h2 class="text-xl font-semibold text-indigo-700 mb-3">
+          Start Your Data's Journey
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label
+              for="user-message"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Your Message:</label
+            >
+            <input
+              type="text"
+              id="user-message"
+              value="GET www.perse.co.uk"
+              class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <div>
+            <label
+              for="app-protocol"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Application Protocol:</label
+            >
+            <select
+              id="app-protocol"
+              class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="HTTP">HTTP (Web)</option>
+              <option value="HTTPS">HTTPS (Secure Web)</option>
+              <option value="FTP">FTP (File Transfer)</option>
+              <option value="SMTP">SMTP (Email)</option>
+              <option value="DNS">DNS (Domain Name System)</option>
+            </select>
+          </div>
+        </div>
+        <button
+          id="start-journey-btn"
+          class="mt-4 w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105 control-button"
+        >
+          Start Journey
+        </button>
+      </section>
+
+      <main id="demo-area" class="hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+            <h2 class="text-xl font-semibold text-indigo-700 mb-3">
+              Data Packet View
+            </h2>
+            <div
+              id="packet-visualisation"
+              class="packet-visualisation-area text-sm"
+            ></div>
+          </div>
+
+          <div class="bg-gray-50 p-4 rounded-lg shadow-inner flex flex-col">
+            <div>
+              <h2
+                id="layer-name"
+                class="text-xl font-semibold text-indigo-700 mb-1"
+              >
+                Layer Name
+              </h2>
+              <p
+                id="layer-description"
+                class="text-sm text-gray-600 mb-3 min-h-[100px] max-h-[200px] overflow-y-auto"
+              >
+                Description of the layer...
+              </p>
+            </div>
+            <div class="mt-auto">
+              <h3 class="text-md font-semibold text-indigo-600 mb-1">
+                Processing at this layer:
+              </h3>
+              <p
+                id="layer-processing"
+                class="text-sm text-gray-700 bg-indigo-50 p-3 rounded-md border border-indigo-200 min-h-[100px] max-h-[250px] overflow-y-auto"
+              >
+                What happens to the data...
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="mt-8 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 sm:space-x-4"
+        >
+          <button
+            id="prev-step-btn"
+            class="w-full sm:w-auto bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out control-button"
+          >
+            &larr; Previous Step
+          </button>
+          <button
+            id="reset-btn"
+            class="w-full sm:w-auto bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out control-button"
+          >
+            Reset Journey
+          </button>
+          <button
+            id="next-step-btn"
+            class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out control-button"
+          >
+            Next Step &rarr;
+          </button>
+        </div>
+      </main>
+      <footer class="mt-8 text-center text-sm text-gray-500">
+        <p>GCSE Computer Science TCP/IP Demo</p>
+      </footer>
+    </div>
+
+    <script>
+      // DOM Elements
+      const inputSection = document.getElementById("input-section");
+      const demoArea = document.getElementById("demo-area");
+      const userMessageInput = document.getElementById("user-message");
+      const appProtocolSelect = document.getElementById("app-protocol");
+      const startJourneyBtn = document.getElementById("start-journey-btn");
+
+      const layerNameEl = document.getElementById("layer-name");
+      const layerDescriptionEl = document.getElementById("layer-description");
+      const layerProcessingEl = document.getElementById("layer-processing");
+      const packetVisualisationEl = document.getElementById(
+        "packet-visualisation"
+      );
+
+      const prevStepBtn = document.getElementById("prev-step-btn");
+      const nextStepBtn = document.getElementById("next-step-btn");
+      const resetBtn = document.getElementById("reset-btn");
+
+      // State
+      let currentStepIndex = -1;
+      let originalMessage = ""; // Store the full original message
+      let applicationProtocol = ""; // Store the chosen application protocol
+      let packetSegments = []; // Array to hold packet segments from Transport layer onwards
+
+      // Helper function to get destination port based on protocol
+      function getDestPort(protocol) {
+        switch (protocol) {
+          case "HTTP":
+            return 80;
+          case "HTTPS":
+            return 443;
+          case "FTP":
+            return 21;
+          case "SMTP":
+            return 25;
+          case "DNS":
+            return 53;
+          default:
+            return Math.floor(Math.random() * 1000) + 8000;
+        }
+      }
+
+      // Helper function to generate a mock IP address
+      function generateMockIP(type = "destination") {
+        if (type === "source") {
+          return `192.168.1.${Math.floor(Math.random() * 254) + 1}`;
+        }
+        const octet1 = [104, 172, 203, 198][Math.floor(Math.random() * 4)];
+        return `${octet1}.${Math.floor(Math.random() * 256)}.${Math.floor(
+          Math.random() * 256
+        )}.${Math.floor(Math.random() * 254) + 1}`;
+      }
+
+      // Helper function to generate a mock MAC address
+      function generateMAC() {
+        return Array(6)
+          .fill(0)
+          .map(() =>
+            Math.floor(Math.random() * 256)
+              .toString(16)
+              .padStart(2, "0")
+          )
+          .join(":")
+          .toUpperCase();
+      }
+
+      // Helper function to generate a mock checksum
+      function generateChecksum() {
+        return `0x${Math.floor(Math.random() * 0xffff)
+          .toString(16)
+          .toUpperCase()
+          .padStart(4, "0")}`;
+      }
+
+      // TCP/IP Layers Data and Functions
+      const steps = [
+        {
+          // 0: Application Layer
+          id: "application",
+          layerName: "1. Application Layer",
+          description:
+            "This layer interacts directly with software applications. It provides protocols that applications use to exchange data. Examples: HTTP for web, SMTP for email, FTP for file transfer.",
+          addLayerDataToPacket: () => {
+            // Data (message, protocol) set from user input during initialization.
+            // No specific packet segments yet.
+            packetSegments = []; // Clear any previous segments
+          },
+          getProcessExplanation: () =>
+            `Your message: "<strong>${originalMessage}</strong>"<br>Chosen protocol: <strong>${applicationProtocol}</strong><br>This is the raw data your application wants to send.`,
+          renderVisual: (container) => {
+            container.innerHTML = `
+                        <div class="layer-block border-blue-500 bg-blue-100 text-blue-700 p-3 rounded-md shadow">
+                            <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
+                            <div class="mt-1 p-2 bg-blue-50 rounded break-all">Data: "${originalMessage}"</div>
+                        </div>`;
+          },
+        },
+        {
+          // 1: Transport Layer
+          id: "transport",
+          layerName: "2. Transport Layer",
+          description:
+            "Responsible for process-to-process delivery. It segments data from the application layer, adds port numbers, sequence numbers (for TCP), and a checksum. For this demo, we split the message into two packets.",
+          addLayerDataToPacket: () => {
+            // Only segment if not already segmented (e.g. when moving forward)
+            if (packetSegments.length === 0 && originalMessage) {
+              const transportProto =
+                applicationProtocol === "HTTP" ||
+                applicationProtocol === "HTTPS" ||
+                applicationProtocol === "FTP" ||
+                applicationProtocol === "SMTP"
+                  ? "TCP"
+                  : "UDP";
+              const commonSourcePort =
+                Math.floor(Math.random() * (65535 - 1024)) + 1024;
+              const commonDestPort = getDestPort(applicationProtocol);
+
+              const midPoint = Math.ceil(originalMessage.length / 2);
+              const data1 = originalMessage.substring(0, midPoint);
+              const data2 = originalMessage.substring(midPoint);
+
+              packetSegments = [
+                {
+                  appData: data1,
+                  transportProtocol: transportProto,
+                  sourcePort: commonSourcePort,
+                  destPort: commonDestPort,
+                  sequenceNumber: transportProto === "TCP" ? 1 : undefined, // Sequence only for TCP
+                  checksumTransport: generateChecksum(),
+                },
+                {
+                  appData: data2,
+                  transportProtocol: transportProto,
+                  sourcePort: commonSourcePort,
+                  destPort: commonDestPort,
+                  sequenceNumber: transportProto === "TCP" ? 2 : undefined, // Sequence only for TCP
+                  checksumTransport: generateChecksum(),
+                },
+              ];
+            }
+          },
+          getProcessExplanation: () => {
+            if (!packetSegments || packetSegments.length === 0)
+              return "No data to process.";
+            let explanation = `The data is split and encapsulated into <strong>${
+              packetSegments[0].transportProtocol
+            }</strong> ${
+              packetSegments[0].transportProtocol === "TCP"
+                ? "Segments"
+                : "Datagrams"
+            }.<br><br>`;
+            packetSegments.forEach((seg, index) => {
+              explanation += `<strong>Packet ${index + 1}:</strong><br>
+                            Data: "<strong>${seg.appData}</strong>"<br>
+                            Source Port: <strong>${seg.sourcePort}</strong><br>
+                            Destination Port: <strong>${seg.destPort}</strong>`;
+              if (seg.transportProtocol === "TCP") {
+                explanation += `<br>Sequence Number: <strong>${seg.sequenceNumber}</strong>`;
+              }
+              explanation += `<br>Checksum: <strong>${seg.checksumTransport}</strong><br><br>`;
+            });
+            return explanation;
+          },
+          renderVisual: (container) => {
+            container.innerHTML = ""; // Clear previous
+            if (!packetSegments || packetSegments.length === 0) return;
+            packetSegments.forEach((seg, index) => {
+              let headerInfo = `Src Port: ${seg.sourcePort}, Dst Port: ${seg.destPort}`;
+              if (seg.transportProtocol === "TCP") {
+                headerInfo += `, Seq: ${seg.sequenceNumber}`;
+              }
+              headerInfo += `, Checksum: ${seg.checksumTransport}`;
+
+              container.innerHTML += `
+                            <div class="packet-container">
+                                <div class="text-center font-semibold mb-1 text-indigo-600">Packet ${
+                                  index + 1
+                                } of ${packetSegments.length}</div>
+                                <div class="layer-block border-green-500 bg-green-100 text-green-700 p-3 rounded-md shadow">
+                                    <div class="font-bold text-lg">Transport Layer (${
+                                      seg.transportProtocol
+                                    } Header)</div>
+                                    <div class="mt-1 p-2 bg-green-50 rounded break-all">${headerInfo}</div>
+                                    <div class="payload-block border-blue-500 bg-blue-100 text-blue-700 p-3 rounded-md shadow mt-2">
+                                        <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
+                                        <div class="mt-1 p-2 bg-blue-50 rounded break-all">Data: "${
+                                          seg.appData
+                                        }"</div>
+                                    </div>
+                                </div>
+                            </div>`;
+            });
+          },
+        },
+        {
+          // 2: Internet Layer
+          id: "internet",
+          layerName: "3. Internet Layer (Also known as Network Layer)",
+          description:
+            "Responsible for logical addressing (IP addresses) and routing. Each Transport Layer segment gets an IP header, turning it into an IP Packet.",
+          addLayerDataToPacket: () => {
+            if (!packetSegments || packetSegments.length === 0) return;
+            const commonSourceIP =
+              packetSegments[0].sourceIP || generateMockIP("source"); // Generate once if not set
+            const commonDestIP =
+              packetSegments[0].destIP || generateMockIP("destination"); // Generate once if not set
+            packetSegments.forEach((seg) => {
+              seg.sourceIP = seg.sourceIP || commonSourceIP;
+              seg.destIP = seg.destIP || commonDestIP;
+            });
+          },
+          getProcessExplanation: () => {
+            if (!packetSegments || packetSegments.length === 0)
+              return "No data to process.";
+            let explanation = `Each ${
+              packetSegments[0].transportProtocol === "TCP"
+                ? "Segment"
+                : "Datagram"
+            } is encapsulated in an <strong>IP Packet</strong>.<br><br>`;
+            packetSegments.forEach((seg, index) => {
+              explanation += `<strong>Packet ${index + 1}:</strong><br>
+                            Source IP Address: <strong>${
+                              seg.sourceIP
+                            }</strong><br>
+                            Destination IP Address: <strong>${
+                              seg.destIP
+                            }</strong><br><br>`;
+            });
+            return explanation;
+          },
+          renderVisual: (container) => {
+            container.innerHTML = ""; // Clear previous
+            if (!packetSegments || packetSegments.length === 0) return;
+            packetSegments.forEach((seg, index) => {
+              let transportHeaderInfo = `Src Port: ${seg.sourcePort}, Dst Port: ${seg.destPort}`;
+              if (seg.transportProtocol === "TCP") {
+                transportHeaderInfo += `, Seq: ${seg.sequenceNumber}`;
+              }
+              transportHeaderInfo += `, Checksum: ${seg.checksumTransport}`;
+
+              container.innerHTML += `
+                            <div class="packet-container">
+                                <div class="text-center font-semibold mb-1 text-indigo-600">Packet ${
+                                  index + 1
+                                } of ${packetSegments.length}</div>
+                                <div class="layer-block border-yellow-500 bg-yellow-100 text-yellow-700 p-3 rounded-md shadow">
+                                    <div class="font-bold text-lg">Internet Layer (IP Header)</div>
+                                    <div class="mt-1 p-2 bg-yellow-50 rounded break-all">Src IP: ${
+                                      seg.sourceIP
+                                    }, Dst IP: ${seg.destIP}</div>
+                                    <div class="payload-block border-green-500 bg-green-100 text-green-700 p-3 rounded-md shadow mt-2">
+                                        <div class="font-bold text-lg">Transport Layer (${
+                                          seg.transportProtocol
+                                        } Header)</div>
+                                        <div class="mt-1 p-2 bg-green-50 rounded break-all">${transportHeaderInfo}</div>
+                                        <div class="payload-block border-blue-500 bg-blue-100 text-blue-700 p-3 rounded-md shadow mt-2">
+                                            <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
+                                            <div class="mt-1 p-2 bg-blue-50 rounded break-all">Data: "${
+                                              seg.appData
+                                            }"</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+            });
+          },
+        },
+        {
+          // 3: Link Layer
+          id: "link",
+          layerName: "4. Link Layer (Part I: phsyical addressing)",
+          description:
+            'Handles physical addressing (MAC addresses). Each IP packet is encapsulated in a "frame" (e.g., Ethernet frame) with source and destination MAC addresses for the current network segment.',
+          addLayerDataToPacket: () => {
+            if (!packetSegments || packetSegments.length === 0) return;
+            const commonSourceMAC =
+              packetSegments[0].sourceMAC || generateMAC();
+            let commonDestMAC = packetSegments[0].destMAC || generateMAC();
+            while (commonDestMAC === commonSourceMAC) {
+              commonDestMAC = generateMAC();
+            }
+
+            packetSegments.forEach((seg) => {
+              seg.sourceMAC = seg.sourceMAC || commonSourceMAC;
+              seg.destMAC = seg.destMAC || commonDestMAC;
+              seg.frameChecksum = seg.frameChecksum || generateChecksum();
+            });
+          },
+          getProcessExplanation: () => {
+            if (!packetSegments || packetSegments.length === 0)
+              return "No data to process.";
+            let explanation = `Each IP Packet is encapsulated in an <strong>Ethernet Frame</strong>.<br><br>`;
+            packetSegments.forEach((seg, index) => {
+              explanation += `<strong>Packet ${index + 1}:</strong><br>
+                            Source MAC Address: <strong>${
+                              seg.sourceMAC
+                            }</strong><br>
+                            Destination MAC Address: <strong>${
+                              seg.destMAC
+                            }</strong> (next hop)<br>
+                            Frame Check Sequence (FCS): <strong>${
+                              seg.frameChecksum
+                            }</strong><br><br>`;
+            });
+            return explanation;
+          },
+          renderVisual: (container) => {
+            container.innerHTML = ""; // Clear previous
+            if (!packetSegments || packetSegments.length === 0) return;
+            packetSegments.forEach((seg, index) => {
+              let transportHeaderInfo = `Src Port: ${seg.sourcePort}, Dst Port: ${seg.destPort}`;
+              if (seg.transportProtocol === "TCP") {
+                transportHeaderInfo += `, Seq: ${seg.sequenceNumber}`;
+              }
+              transportHeaderInfo += `, Checksum: ${seg.checksumTransport}`;
+
+              container.innerHTML += `
+                            <div class="packet-container">
+                                <div class="text-center font-semibold mb-1 text-indigo-600">Packet ${
+                                  index + 1
+                                } of ${packetSegments.length}</div>
+                                <div class="layer-block border-red-500 bg-red-100 text-red-700 p-3 rounded-md shadow">
+                                    <div class="font-bold text-lg">Link Layer (Ethernet Frame Header & Trailer)</div>
+                                    <div class="mt-1 p-2 bg-red-50 rounded break-all">Src MAC: ${
+                                      seg.sourceMAC
+                                    }, Dst MAC: ${seg.destMAC}</div>
+                                    <div class="payload-block border-yellow-500 bg-yellow-100 text-yellow-700 p-3 rounded-md shadow mt-2">
+                                        <div class="font-bold text-lg">Internet Layer (IP Header)</div>
+                                        <div class="mt-1 p-2 bg-yellow-50 rounded break-all">Src IP: ${
+                                          seg.sourceIP
+                                        }, Dst IP: ${seg.destIP}</div>
+                                        <div class="payload-block border-green-500 bg-green-100 text-green-700 p-3 rounded-md shadow mt-2">
+                                            <div class="font-bold text-lg">Transport Layer (${
+                                              seg.transportProtocol
+                                            } Header)</div>
+                                            <div class="mt-1 p-2 bg-green-50 rounded break-all">${transportHeaderInfo}</div>
+                                            <div class="payload-block border-blue-500 bg-blue-100 text-blue-700 p-3 rounded-md shadow mt-2">
+                                                <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
+                                                <div class="mt-1 p-2 bg-blue-50 rounded break-all">Data: "${
+                                                  seg.appData
+                                                }"</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-1 p-2 bg-red-50 rounded font-semibold break-all">Frame Trailer (FCS: ${
+                                      seg.frameChecksum
+                                    })</div>
+                                </div>
+                            </div>`;
+            });
+          },
+        },
+        {
+          // 4: Physical Layer
+          id: "physical",
+          layerName: "5. Link Layer (Part II: sometimes called Physical)",
+          description:
+            "This layer finally transmits raw bits (0s and 1s) over a physical medium. Each frame is converted into signals.",
+          addLayerDataToPacket: () => {
+            if (!packetSegments || packetSegments.length === 0) return;
+            packetSegments.forEach((seg) => {
+              if (!seg.bitsRepresentation) {
+                // Generate only if not already set
+                let dataToConvert = `${seg.sourceMAC}${seg.destMAC}${seg.sourceIP}${seg.destIP}${seg.sourcePort}${seg.destPort}${seg.appData}`;
+                let bits = "";
+                // Shorten bit representation for display
+                for (let i = 0; i < Math.min(dataToConvert.length, 10); i++) {
+                  bits +=
+                    dataToConvert.charCodeAt(i).toString(2).padStart(8, "0") +
+                    " ";
+                }
+                seg.bitsRepresentation = bits.trim() + "...";
+              }
+            });
+          },
+          getProcessExplanation: () => {
+            if (!packetSegments || packetSegments.length === 0)
+              return "No data to process.";
+            let explanation = `Each Ethernet Frame is converted into a stream of signals (bits) for transmission.<br><br>`;
+            packetSegments.forEach((seg, index) => {
+              explanation += `<strong>Packet ${
+                index + 1
+              } Bits:</strong> <strong class="font-mono break-all">${
+                seg.bitsRepresentation
+              }</strong><br><br>`;
+            });
+            return explanation;
+          },
+          renderVisual: (container) => {
+            container.innerHTML = ""; // Clear previous
+            if (!packetSegments || packetSegments.length === 0) return;
+            packetSegments.forEach((seg, index) => {
+              container.innerHTML += `
+                            <div class="packet-container">
+                                <div class="text-center font-semibold mb-1 text-indigo-600">Packet ${
+                                  index + 1
+                                } of ${packetSegments.length}</div>
+                                <div class="layer-block border-purple-500 bg-purple-100 text-purple-700 p-3 rounded-md shadow">
+                                    <div class="font-bold text-lg">Link Layer (Bits on the Wire)</div>
+                                    <div class="mt-1 p-2 bg-purple-50 rounded font-mono break-all text-xs">${
+                                      seg.bitsRepresentation
+                                    }</div>
+                                    <div class="text-center mt-3 text-sm italic">
+                                        (Represents Packet ${
+                                          index + 1
+                                        }'s frame encoded as signals)
+                                    </div>
+                                </div>
+                            </div>`;
+            });
+          },
+        },
+      ];
+
+      // Function to render the current step
+      function renderStep() {
+        if (currentStepIndex < 0 || currentStepIndex >= steps.length) return;
+
+        const step = steps[currentStepIndex];
+
+        // Call addLayerDataToPacket for the current step.
+        // This function will now handle creating/updating packetSegments.
+        step.addLayerDataToPacket();
+
+        layerNameEl.textContent = step.layerName;
+        layerDescriptionEl.innerHTML = step.description;
+        layerProcessingEl.innerHTML = step.getProcessExplanation();
+        step.renderVisual(packetVisualisationEl);
+
+        prevStepBtn.disabled = currentStepIndex === 0;
+        prevStepBtn.classList.toggle("opacity-50", prevStepBtn.disabled);
+        prevStepBtn.classList.toggle(
+          "cursor-not-allowed",
+          prevStepBtn.disabled
+        );
+
+        nextStepBtn.disabled = currentStepIndex === steps.length - 1;
+        nextStepBtn.classList.toggle("opacity-50", nextStepBtn.disabled);
+        nextStepBtn.classList.toggle(
+          "cursor-not-allowed",
+          nextStepBtn.disabled
+        );
+      }
+
+      // Event Listeners
+      startJourneyBtn.addEventListener("click", () => {
+        const message = userMessageInput.value.trim();
+        if (!message) {
+          userMessageInput.focus();
+          const tempMsgBox = document.createElement("div");
+          tempMsgBox.textContent = "Please enter a message to send.";
+          tempMsgBox.className =
+            "fixed top-5 left-1/2 -translate-x-1/2 bg-red-500 text-white p-3 rounded-md shadow-lg z-50";
+          document.body.appendChild(tempMsgBox);
+          setTimeout(() => tempMsgBox.remove(), 3000);
+          return;
+        }
+
+        originalMessage = message; // Store the full message
+        applicationProtocol = appProtocolSelect.value; // Store the protocol
+        packetSegments = []; // Reset segments
+        currentStepIndex = 0;
+
+        inputSection.classList.add("hidden");
+        demoArea.classList.remove("hidden");
+        renderStep();
+      });
+
+      nextStepBtn.addEventListener("click", () => {
+        if (currentStepIndex < steps.length - 1) {
+          currentStepIndex++;
+          renderStep();
+        }
+      });
+
+      prevStepBtn.addEventListener("click", () => {
+        if (currentStepIndex > 0) {
+          currentStepIndex--;
+          // When going back, we don't re-segment. The existing packetSegments array
+          // already holds the data as it was. We just re-render.
+          // However, if going back to Application layer, segments should be cleared.
+          if (currentStepIndex === 0) {
+            packetSegments = []; // Clear segments when back at application layer
+          }
+          renderStep();
+        }
+      });
+
+      resetBtn.addEventListener("click", () => {
+        currentStepIndex = -1;
+        originalMessage = "";
+        applicationProtocol = "";
+        packetSegments = [];
+        userMessageInput.value = "GET www.perse.co.uk"; // Reset to default
+        appProtocolSelect.value = "HTTP";
+
+        inputSection.classList.remove("hidden");
+        demoArea.classList.add("hidden");
+
+        layerNameEl.textContent = "Layer Name";
+        layerDescriptionEl.textContent = "Description of the layer...";
+        layerProcessingEl.textContent = "What happens to the data...";
+        packetVisualisationEl.innerHTML = "";
+      });
+
+      // Initialize view
+      inputSection.classList.remove("hidden");
+      demoArea.classList.add("hidden");
+    </script>
+  </body>
+</html>
