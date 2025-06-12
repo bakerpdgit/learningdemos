@@ -27,6 +27,7 @@
   #liftCanvas {
     border: 1px solid #2c3e50;
     background-color: #fff;
+    flex-grow: 1;
   }
   .controls {
     display: flex;
@@ -125,6 +126,14 @@
         <button onclick="changeAccel(1)">+</button>
       </div>
     </div>
+    <div class="control-group">
+      <label>Speed (m/s):</label>
+      <div>
+        <button onclick="changeSpeed(-1)">-</button>
+        <span id="speedDisplay">0</span>
+        <button onclick="changeSpeed(1)">+</button>
+      </div>
+    </div>
     <div class="control-group main-buttons">
       <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
       <button id="resetButton" onclick="resetSimulationState()">Reset</button>
@@ -136,26 +145,30 @@ const canvas = document.getElementById('liftCanvas');
 const ctx = canvas.getContext('2d');
 const massDisplay = document.getElementById('massDisplay');
 const accelDisplay = document.getElementById('accelDisplay');
+const speedDisplay = document.getElementById('speedDisplay');
 const directionSelect = document.getElementById('directionSelect');
 const simulateButton = document.getElementById('simulateButton');
 
 // Parameters
 let mass = 20; // kg
-let accelMag = 0; // m/s^2
+let accel = 0; // m/s^2 (positive is up)
 let direction = 'up';
+let speed = 0; // m/s
 let liftPos = 0; // m (0 at center)
 let liftVel = 0; // m/s
 let isPaused = true;
-let animationFrameId;
+let animationFrameId = null;
 
 // Constants
 const g = 9.8; // m/s^2
 const MIN_MASS = 5;
 const MAX_MASS = 100;
 const MASS_STEP = 5;
-const MIN_ACCEL = 0;
 const MAX_ACCEL = 10;
 const ACCEL_STEP = 1;
+const MIN_SPEED = 0;
+const MAX_SPEED = 5;
+const SPEED_STEP = 1;
 const PIXELS_PER_METER = 50;
 const LIFT_HEIGHT = 3; // m
 const LIFT_WIDTH = 2; // m
@@ -165,9 +178,9 @@ const ARROW_SCALE = 5; // pixels per Newton
 
 function setupCanvas() {
   const containerWidth = canvas.parentElement.offsetWidth - 280;
-  const canvasHeight = 500;
+  const canvasHeight = window.innerHeight - 160;
   canvas.width = Math.max(300, containerWidth);
-  canvas.height = canvasHeight;
+  canvas.height = Math.max(400, canvasHeight);
   draw();
 }
 
@@ -178,10 +191,26 @@ function changeMass(dir) {
   draw();
 }
 
+function changeSpeed(dir) {
+  if (!isPaused) return;
+  speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, speed + dir * SPEED_STEP));
+  speedDisplay.textContent = speed;
+  draw();
+}
+
+function updateAccelDisplay() {
+  if (accel === 0) {
+    accelDisplay.textContent = '0';
+  } else {
+    const word = accel > 0 ? 'up' : 'down';
+    accelDisplay.textContent = Math.abs(accel) + ' ' + word;
+  }
+}
+
 function changeAccel(dir) {
   if (!isPaused) return;
-  accelMag = Math.min(MAX_ACCEL, Math.max(MIN_ACCEL, accelMag + dir * ACCEL_STEP));
-  accelDisplay.textContent = accelMag;
+  accel = Math.min(MAX_ACCEL, Math.max(-MAX_ACCEL, accel + dir * ACCEL_STEP));
+  updateAccelDisplay();
   draw();
 }
 
@@ -195,9 +224,13 @@ function toggleSimulation() {
   isPaused = !isPaused;
   simulateButton.textContent = isPaused ? 'Simulate' : 'Pause';
   if (!isPaused) {
+    if (animationFrameId == null) {
+      liftVel = direction === 'up' ? speed : -speed;
+    }
     animate();
   } else {
     cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
     draw();
   }
 }
@@ -206,14 +239,17 @@ function resetSimulationState() {
   isPaused = true;
   simulateButton.textContent = 'Simulate';
   cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
   liftPos = 0;
-  liftVel = 0;
+  liftVel = direction === 'up' ? speed : -speed;
+  massDisplay.textContent = mass;
+  speedDisplay.textContent = speed;
+  updateAccelDisplay();
   draw();
 }
 
 function updatePhysics() {
-  const a = (direction === 'up' ? accelMag : -accelMag);
-  liftVel += a * TIME_STEP;
+  liftVel += accel * TIME_STEP;
   liftPos += liftVel * TIME_STEP;
 }
 
@@ -292,13 +328,16 @@ function draw() {
   ctx.fillStyle = '#3498db';
   ctx.fillRect(boxX, boxY, boxSizePx, boxSizePx);
 
-  if (!isPaused) {
-    const a = (direction === 'up' ? accelMag : -accelMag);
-    const reaction = Math.max(0, mass * (g + a));
-    const arrowLength = reaction * ARROW_SCALE / 50; // scale down
-    drawArrowUp(boxX + boxSizePx/2, boxY, arrowLength, reaction.toFixed(1));
-    drawArrowDown(boxX + boxSizePx/2, liftY + LIFT_HEIGHT * PIXELS_PER_METER, arrowLength, reaction.toFixed(1));
-  } else {
+  const reaction = Math.max(0, mass * (g + accel));
+  const arrowLength = reaction * ARROW_SCALE / 50; // scale down
+  drawArrowUp(boxX + boxSizePx/2, boxY, arrowLength, reaction.toFixed(1));
+  drawArrowDown(boxX + boxSizePx/2, liftY + LIFT_HEIGHT * PIXELS_PER_METER, arrowLength, reaction.toFixed(1));
+
+  const weight = mass * g;
+  const weightLength = weight * ARROW_SCALE / 50;
+  drawArrowDown(boxX + boxSizePx/2, boxY + boxSizePx/2, weightLength, weight.toFixed(1));
+
+  if (isPaused) {
     drawPauseIcon();
   }
 }
@@ -312,6 +351,7 @@ function animate() {
 
 window.onload = () => {
   setupCanvas();
+  resetSimulationState();
 };
 window.onresize = setupCanvas;
 </script>
