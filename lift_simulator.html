@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lift Mechanics Simulator</title>
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+    color: #333;
+  }
+  h1 {
+    color: #2c3e50;
+  }
+  .container {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    max-width: 1000px;
+  }
+  #liftCanvas {
+    border: 1px solid #2c3e50;
+    background-color: #fff;
+  }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 20px;
+    background-color: #ecf0f1;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 260px;
+  }
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .control-group label {
+    font-weight: bold;
+    color: #34495e;
+  }
+  .control-group div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .control-group button {
+    padding: 8px 12px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  .control-group button:hover {
+    background-color: #2980b9;
+  }
+  .control-group button:active {
+    background-color: #1f618d;
+  }
+  .control-group span {
+    min-width: 50px;
+    text-align: center;
+    font-size: 1em;
+    background-color: #fff;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid #bdc3c7;
+  }
+  .main-buttons button {
+    width: 100%;
+    padding: 10px;
+    font-size: 1.1em;
+  }
+  #simulateButton {
+    background-color: #2ecc71;
+  }
+  #simulateButton:hover {
+    background-color: #27ae60;
+  }
+  #resetButton {
+    background-color: #f39c12;
+  }
+  #resetButton:hover {
+    background-color: #e67e22;
+  }
+</style>
+</head>
+<body>
+<h1>Lift Mechanics Simulator</h1>
+<div class="container">
+  <canvas id="liftCanvas"></canvas>
+  <div class="controls">
+    <div class="control-group">
+      <label>Mass (kg):</label>
+      <div>
+        <button onclick="changeMass(-1)">-</button>
+        <span id="massDisplay">20</span>
+        <button onclick="changeMass(1)">+</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Direction:</label>
+      <div>
+        <select id="directionSelect" onchange="changeDirection()">
+          <option value="up">Up</option>
+          <option value="down">Down</option>
+        </select>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Acceleration (m/s²):</label>
+      <div>
+        <button onclick="changeAccel(-1)">-</button>
+        <span id="accelDisplay">0</span>
+        <button onclick="changeAccel(1)">+</button>
+      </div>
+    </div>
+    <div class="control-group main-buttons">
+      <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
+      <button id="resetButton" onclick="resetSimulationState()">Reset</button>
+    </div>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('liftCanvas');
+const ctx = canvas.getContext('2d');
+const massDisplay = document.getElementById('massDisplay');
+const accelDisplay = document.getElementById('accelDisplay');
+const directionSelect = document.getElementById('directionSelect');
+const simulateButton = document.getElementById('simulateButton');
+
+// Parameters
+let mass = 20; // kg
+let accelMag = 0; // m/s^2
+let direction = 'up';
+let liftPos = 0; // m (0 at center)
+let liftVel = 0; // m/s
+let isPaused = true;
+let animationFrameId;
+
+// Constants
+const g = 9.8; // m/s^2
+const MIN_MASS = 5;
+const MAX_MASS = 100;
+const MASS_STEP = 5;
+const MIN_ACCEL = 0;
+const MAX_ACCEL = 10;
+const ACCEL_STEP = 1;
+const PIXELS_PER_METER = 50;
+const LIFT_HEIGHT = 3; // m
+const LIFT_WIDTH = 2; // m
+const BOX_SIZE = 0.6; // m
+const TIME_STEP = 1/60;
+const ARROW_SCALE = 5; // pixels per Newton
+
+function setupCanvas() {
+  const containerWidth = canvas.parentElement.offsetWidth - 280;
+  const canvasHeight = 500;
+  canvas.width = Math.max(300, containerWidth);
+  canvas.height = canvasHeight;
+  draw();
+}
+
+function changeMass(dir) {
+  if (!isPaused) return;
+  mass = Math.min(MAX_MASS, Math.max(MIN_MASS, mass + dir * MASS_STEP));
+  massDisplay.textContent = mass;
+  draw();
+}
+
+function changeAccel(dir) {
+  if (!isPaused) return;
+  accelMag = Math.min(MAX_ACCEL, Math.max(MIN_ACCEL, accelMag + dir * ACCEL_STEP));
+  accelDisplay.textContent = accelMag;
+  draw();
+}
+
+function changeDirection() {
+  if (!isPaused) return;
+  direction = directionSelect.value;
+  draw();
+}
+
+function toggleSimulation() {
+  isPaused = !isPaused;
+  simulateButton.textContent = isPaused ? 'Simulate' : 'Pause';
+  if (!isPaused) {
+    animate();
+  } else {
+    cancelAnimationFrame(animationFrameId);
+    draw();
+  }
+}
+
+function resetSimulationState() {
+  isPaused = true;
+  simulateButton.textContent = 'Simulate';
+  cancelAnimationFrame(animationFrameId);
+  liftPos = 0;
+  liftVel = 0;
+  draw();
+}
+
+function updatePhysics() {
+  const a = (direction === 'up' ? accelMag : -accelMag);
+  liftVel += a * TIME_STEP;
+  liftPos += liftVel * TIME_STEP;
+}
+
+function drawArrowUp(x, yStart, length, label) {
+  ctx.strokeStyle = '#e74c3c';
+  ctx.fillStyle = '#e74c3c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, yStart);
+  ctx.lineTo(x, yStart - length);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, yStart - length);
+  ctx.lineTo(x - 5, yStart - length + 10);
+  ctx.lineTo(x + 5, yStart - length + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'center';
+  ctx.fillText(label + 'N', x, yStart - length - 12);
+}
+
+function drawArrowDown(x, yStart, length, label) {
+  ctx.strokeStyle = '#e74c3c';
+  ctx.fillStyle = '#e74c3c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, yStart);
+  ctx.lineTo(x, yStart + length);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, yStart + length);
+  ctx.lineTo(x - 5, yStart + length - 10);
+  ctx.lineTo(x + 5, yStart + length - 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'center';
+  ctx.fillText(label + 'N', x, yStart + length + 12);
+}
+
+function drawPauseIcon() {
+  const iconX = canvas.width / 2;
+  const iconY = canvas.height / 3;
+  const r = 25;
+  ctx.fillStyle = 'rgba(100,100,100,0.5)';
+  ctx.beginPath();
+  ctx.arc(iconX, iconY, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillRect(iconX - 10, iconY - 12, 6, 24);
+  ctx.fillRect(iconX + 4, iconY - 12, 6, 24);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const shaftLeft = canvas.width / 2 - (LIFT_WIDTH * PIXELS_PER_METER) / 2 - 20;
+  const shaftTop = 20;
+  const shaftWidth = LIFT_WIDTH * PIXELS_PER_METER + 40;
+  const shaftHeight = canvas.height - 40;
+  ctx.strokeStyle = '#7f8c8d';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(shaftLeft, shaftTop, shaftWidth, shaftHeight);
+
+  const liftX = canvas.width / 2 - (LIFT_WIDTH * PIXELS_PER_METER) / 2;
+  const liftY = canvas.height / 2 - liftPos * PIXELS_PER_METER - (LIFT_HEIGHT * PIXELS_PER_METER) / 2;
+
+  ctx.fillStyle = '#bdc3c7';
+  ctx.fillRect(liftX, liftY, LIFT_WIDTH * PIXELS_PER_METER, LIFT_HEIGHT * PIXELS_PER_METER);
+  ctx.strokeStyle = '#2c3e50';
+  ctx.strokeRect(liftX, liftY, LIFT_WIDTH * PIXELS_PER_METER, LIFT_HEIGHT * PIXELS_PER_METER);
+
+  const boxSizePx = BOX_SIZE * PIXELS_PER_METER;
+  const boxX = liftX + (LIFT_WIDTH * PIXELS_PER_METER - boxSizePx) / 2;
+  const boxY = liftY + LIFT_HEIGHT * PIXELS_PER_METER - boxSizePx - 4;
+  ctx.fillStyle = '#3498db';
+  ctx.fillRect(boxX, boxY, boxSizePx, boxSizePx);
+
+  if (!isPaused) {
+    const a = (direction === 'up' ? accelMag : -accelMag);
+    const reaction = Math.max(0, mass * (g + a));
+    const arrowLength = reaction * ARROW_SCALE / 50; // scale down
+    drawArrowUp(boxX + boxSizePx/2, boxY, arrowLength, reaction.toFixed(1));
+    drawArrowDown(boxX + boxSizePx/2, liftY + LIFT_HEIGHT * PIXELS_PER_METER, arrowLength, reaction.toFixed(1));
+  } else {
+    drawPauseIcon();
+  }
+}
+
+function animate() {
+  if (isPaused) return;
+  updatePhysics();
+  draw();
+  animationFrameId = requestAnimationFrame(animate);
+}
+
+window.onload = () => {
+  setupCanvas();
+};
+window.onresize = setupCanvas;
+</script>
+</body>
+</html>
