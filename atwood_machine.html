@@ -121,7 +121,7 @@
       <label>Table Height (m):</label>
       <div>
         <button onclick="changeTable(-0.5)">-</button>
-        <span id="tableDisplay">2.0</span>
+        <span id="tableDisplay">3.5</span>
         <button onclick="changeTable(0.5)">+</button>
       </div>
     </div>
@@ -143,7 +143,7 @@ const simulateButton = document.getElementById('simulateButton');
 let massA = 5;
 let massB = 5;
 let mu = 0;
-let tableHeight = 2;
+let tableHeight = 3.5;
 let isPaused = true;
 let animationFrameId = null;
 
@@ -153,6 +153,8 @@ let v = 0; // rope velocity (B positive downward)
 let totalLength = yA + yB;
 let freezeA = false;
 let freezeB = false;
+let slackLength = 0;
+let justFrozen = false;
 
 const g = 9.8;
 const MIN_MASS = 1;
@@ -165,9 +167,11 @@ const MIN_TABLE = 0.5;
 const MAX_TABLE = 4;
 const TABLE_STEP = 0.5;
 const PIXELS_PER_METER = 80;
+const BOX_SIZE = 40;
+const HALF_BOX_M = BOX_SIZE / PIXELS_PER_METER / 2;
 const TIME_STEP = 1/60;
 const pulleyY = 60;
-const pulleyRadius = 20;
+const pulleyRadius = 25;
 
 function setupCanvas() {
   const containerWidth = canvas.parentElement.offsetWidth - 280;
@@ -199,8 +203,8 @@ function changeTable(delta) {
   tableHeight = Math.min(MAX_TABLE, Math.max(MIN_TABLE, +(tableHeight + delta).toFixed(1)));
   tableDisplay.textContent = tableHeight.toFixed(1);
   // ensure masses above table
-  yA = Math.min(yA, tableHeight-0.1);
-  yB = Math.min(yB, tableHeight-0.1);
+  yA = Math.min(yA, tableHeight - HALF_BOX_M - 0.01);
+  yB = Math.min(yB, tableHeight - HALF_BOX_M - 0.01);
   totalLength = yA + yB;
   draw();
 }
@@ -228,6 +232,8 @@ function resetSimulationState() {
   v = 0;
   freezeA = false;
   freezeB = false;
+  slackLength = 0;
+  justFrozen = false;
   draw();
 }
 
@@ -249,28 +255,40 @@ function updatePhysics() {
   if (freezeA) {
     v += g*TIME_STEP; // B downward
     yB += v*TIME_STEP;
-    if (yA + yB >= totalLength) resetSimulationState();
+    if (justFrozen) {
+      justFrozen = false;
+    } else if (yA + yB >= slackLength) {
+      resetSimulationState();
+    }
     return;
   }
   if (freezeB) {
     v -= g*TIME_STEP; // A downward => B upward
     yA += -v*TIME_STEP;
-    if (yA + yB >= totalLength) resetSimulationState();
+    if (justFrozen) {
+      justFrozen = false;
+    } else if (yA + yB >= slackLength) {
+      resetSimulationState();
+    }
     return;
   }
   const a = computeAcceleration();
   v += a*TIME_STEP;
   yB += v*TIME_STEP;
   yA = totalLength - yB;
-  // check table collision
-  if (yA >= tableHeight) {
-    yA = tableHeight;
+  // check table collision (account for block size)
+  if (yA + HALF_BOX_M >= tableHeight) {
+    yA = tableHeight - HALF_BOX_M;
     freezeA = true;
-    v = -v; // maintain rope velocity for free particle
-  } else if (yB >= tableHeight) {
-    yB = tableHeight;
+    v = -v;
+    slackLength = yA + yB;
+    justFrozen = true;
+  } else if (yB + HALF_BOX_M >= tableHeight) {
+    yB = tableHeight - HALF_BOX_M;
     freezeB = true;
     v = -v;
+    slackLength = yA + yB;
+    justFrozen = true;
   }
 }
 
@@ -314,23 +332,22 @@ function draw() {
   const aY = pulleyY + yA*PIXELS_PER_METER;
   const bY = pulleyY + yB*PIXELS_PER_METER;
 
+  const ropeGap = pulleyRadius + 5;
   ctx.strokeStyle = '#7f8c8d';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(ax, pulleyY);
-  ctx.lineTo(ax, aY);
-  ctx.moveTo(bx, pulleyY);
-  ctx.lineTo(bx, bY);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(ax, pulleyY);
-  ctx.arc(centerX, pulleyY, 100, Math.PI, 0, false);
-  ctx.moveTo(centerX, pulleyY);
+  ctx.moveTo(ax, aY);
+  ctx.lineTo(ax, pulleyY + ropeGap);
+  ctx.moveTo(bx, bY);
+  ctx.lineTo(bx, pulleyY + ropeGap);
+  ctx.moveTo(ax, pulleyY + ropeGap);
+  ctx.arc(centerX, pulleyY, ropeGap, Math.PI, 0, false);
+  ctx.lineTo(bx, pulleyY + ropeGap);
   ctx.stroke();
 
   ctx.fillStyle = '#3498db';
-  ctx.fillRect(ax-20, aY-20, 40, 40);
-  ctx.fillRect(bx-20, bY-20, 40, 40);
+  ctx.fillRect(ax-BOX_SIZE/2, aY-BOX_SIZE/2, BOX_SIZE, BOX_SIZE);
+  ctx.fillRect(bx-BOX_SIZE/2, bY-BOX_SIZE/2, BOX_SIZE, BOX_SIZE);
 
   const weightA = massA * g;
   const weightB = massB * g;
