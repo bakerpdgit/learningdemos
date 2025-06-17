@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atwood Machine Simulator</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+      color: #333;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      max-width: 1000px;
+    }
+    #simCanvas {
+      border: 1px solid #2c3e50;
+      background-color: #fff;
+      flex-grow: 1;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 20px;
+      background-color: #ecf0f1;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      width: 260px;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .control-group label {
+      font-weight: bold;
+      color: #34495e;
+    }
+    .control-group div {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .control-group button {
+      padding: 8px 12px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .control-group button:hover {
+      background-color: #2980b9;
+    }
+    .control-group button:active {
+      background-color: #1f618d;
+    }
+    .control-group span {
+      min-width: 50px;
+      text-align: center;
+      font-size: 1em;
+      background-color: #fff;
+      padding: 5px 8px;
+      border-radius: 4px;
+      border: 1px solid #bdc3c7;
+    }
+    .main-buttons button {
+      width: 100%;
+      padding: 10px;
+      font-size: 1.1em;
+    }
+    #simulateButton { background-color: #2ecc71; }
+    #simulateButton:hover { background-color: #27ae60; }
+    #resetButton { background-color: #f39c12; }
+    #resetButton:hover { background-color: #e67e22; }
+  </style>
+</head>
+<body>
+<h1>Atwood Machine Simulator</h1>
+<div class="container">
+  <canvas id="simCanvas"></canvas>
+  <div class="controls">
+    <div class="control-group">
+      <label>Mass A (kg):</label>
+      <div>
+        <button onclick="changeMass('A',-1)">-</button>
+        <span id="massADisplay">5</span>
+        <button onclick="changeMass('A',1)">+</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Mass B (kg):</label>
+      <div>
+        <button onclick="changeMass('B',-1)">-</button>
+        <span id="massBDisplay">5</span>
+        <button onclick="changeMass('B',1)">+</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Friction μ:</label>
+      <div>
+        <button onclick="changeMu(-0.1)">-</button>
+        <span id="muDisplay">0.0</span>
+        <button onclick="changeMu(0.1)">+</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Table Height (m):</label>
+      <div>
+        <button onclick="changeTable(-0.5)">-</button>
+        <span id="tableDisplay">2.0</span>
+        <button onclick="changeTable(0.5)">+</button>
+      </div>
+    </div>
+    <div class="control-group main-buttons">
+      <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
+      <button id="resetButton" onclick="resetSimulationState()">Reset</button>
+    </div>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const massADisplay = document.getElementById('massADisplay');
+const massBDisplay = document.getElementById('massBDisplay');
+const muDisplay = document.getElementById('muDisplay');
+const tableDisplay = document.getElementById('tableDisplay');
+const simulateButton = document.getElementById('simulateButton');
+
+let massA = 5;
+let massB = 5;
+let mu = 0;
+let tableHeight = 2;
+let isPaused = true;
+let animationFrameId = null;
+
+let yA = 2; // meters from pulley center
+let yB = 2;
+let v = 0; // rope velocity (B positive downward)
+let totalLength = yA + yB;
+let freezeA = false;
+let freezeB = false;
+
+const g = 9.8;
+const MIN_MASS = 1;
+const MAX_MASS = 20;
+const MASS_STEP = 1;
+const MIN_MU = 0;
+const MAX_MU = 1.0;
+const MU_STEP = 0.1;
+const MIN_TABLE = 0.5;
+const MAX_TABLE = 4;
+const TABLE_STEP = 0.5;
+const PIXELS_PER_METER = 80;
+const TIME_STEP = 1/60;
+const pulleyY = 60;
+const pulleyRadius = 20;
+
+function setupCanvas() {
+  const containerWidth = canvas.parentElement.offsetWidth - 280;
+  const canvasHeight = window.innerHeight - 160;
+  canvas.width = Math.max(300, containerWidth);
+  canvas.height = Math.max(400, canvasHeight);
+  draw();
+}
+
+function changeMass(which,dir) {
+  if (!isPaused) return;
+  if (which==='A') {
+    massA = Math.min(MAX_MASS, Math.max(MIN_MASS, massA + dir*MASS_STEP));
+    massADisplay.textContent = massA;
+  } else {
+    massB = Math.min(MAX_MASS, Math.max(MIN_MASS, massB + dir*MASS_STEP));
+    massBDisplay.textContent = massB;
+  }
+  draw();
+}
+function changeMu(delta) {
+  if (!isPaused) return;
+  mu = Math.min(MAX_MU, Math.max(MIN_MU, +(mu + delta).toFixed(1)));
+  muDisplay.textContent = mu.toFixed(1);
+  draw();
+}
+function changeTable(delta) {
+  if (!isPaused) return;
+  tableHeight = Math.min(MAX_TABLE, Math.max(MIN_TABLE, +(tableHeight + delta).toFixed(1)));
+  tableDisplay.textContent = tableHeight.toFixed(1);
+  // ensure masses above table
+  yA = Math.min(yA, tableHeight-0.1);
+  yB = Math.min(yB, tableHeight-0.1);
+  totalLength = yA + yB;
+  draw();
+}
+
+function toggleSimulation() {
+  isPaused = !isPaused;
+  simulateButton.textContent = isPaused ? 'Simulate' : 'Pause';
+  if (!isPaused) {
+    animate();
+  } else {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+    draw();
+  }
+}
+
+function resetSimulationState() {
+  isPaused = true;
+  simulateButton.textContent = 'Simulate';
+  cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
+  yA = 2;
+  yB = 2;
+  totalLength = yA + yB;
+  v = 0;
+  freezeA = false;
+  freezeB = false;
+  draw();
+}
+
+function computeAcceleration() {
+  const muFactor = Math.exp(mu * Math.PI);
+  if (freezeA || freezeB) return 0;
+  // Determine direction
+  if (massB > massA*muFactor) {
+    const a = g*(massB - massA*muFactor)/(massB + massA*muFactor);
+    return a; // B downward positive
+  } else if (massA > massB*muFactor) {
+    const a = g*(massA - massB*muFactor)/(massA + massB*muFactor);
+    return -a; // B upward (negative)
+  }
+  return 0;
+}
+
+function updatePhysics() {
+  if (freezeA) {
+    v += g*TIME_STEP; // B downward
+    yB += v*TIME_STEP;
+    if (yA + yB >= totalLength) resetSimulationState();
+    return;
+  }
+  if (freezeB) {
+    v -= g*TIME_STEP; // A downward => B upward
+    yA += -v*TIME_STEP;
+    if (yA + yB >= totalLength) resetSimulationState();
+    return;
+  }
+  const a = computeAcceleration();
+  v += a*TIME_STEP;
+  yB += v*TIME_STEP;
+  yA = totalLength - yB;
+  // check table collision
+  if (yA >= tableHeight) {
+    yA = tableHeight;
+    freezeA = true;
+    v = -v; // maintain rope velocity for free particle
+  } else if (yB >= tableHeight) {
+    yB = tableHeight;
+    freezeB = true;
+    v = -v;
+  }
+}
+
+function drawArrow(x, yStart, length, upward, label) {
+  ctx.strokeStyle = '#e74c3c';
+  ctx.fillStyle = '#e74c3c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, yStart);
+  ctx.lineTo(x, upward ? yStart - length : yStart + length);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, upward ? yStart - length : yStart + length);
+  if (upward) {
+    ctx.lineTo(x - 5, yStart - length + 10);
+    ctx.lineTo(x + 5, yStart - length + 10);
+  } else {
+    ctx.lineTo(x - 5, yStart + length - 10);
+    ctx.lineTo(x + 5, yStart + length - 10);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'center';
+  ctx.fillText(label + 'N', x, upward ? yStart - length - 12 : yStart + length + 12);
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const centerX = canvas.width/2;
+  // draw pulley
+  ctx.strokeStyle = '#2c3e50';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(centerX, pulleyY, pulleyRadius, 0, Math.PI*2);
+  ctx.stroke();
+
+  // rope positions
+  const ax = centerX - 100;
+  const bx = centerX + 100;
+  const aY = pulleyY + yA*PIXELS_PER_METER;
+  const bY = pulleyY + yB*PIXELS_PER_METER;
+
+  ctx.strokeStyle = '#7f8c8d';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(ax, pulleyY);
+  ctx.lineTo(ax, aY);
+  ctx.moveTo(bx, pulleyY);
+  ctx.lineTo(bx, bY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(ax, pulleyY);
+  ctx.arc(centerX, pulleyY, 100, Math.PI, 0, false);
+  ctx.moveTo(centerX, pulleyY);
+  ctx.stroke();
+
+  ctx.fillStyle = '#3498db';
+  ctx.fillRect(ax-20, aY-20, 40, 40);
+  ctx.fillRect(bx-20, bY-20, 40, 40);
+
+  const weightA = massA * g;
+  const weightB = massB * g;
+  const aArrowLen = weightA*5/50;
+  const bArrowLen = weightB*5/50;
+  drawArrow(ax, aY, aArrowLen, false, weightA.toFixed(1));
+  drawArrow(bx, bY, bArrowLen, false, weightB.toFixed(1));
+
+  if (!freezeA && !freezeB) {
+    const a = computeAcceleration();
+    const muFactor = Math.exp(mu*Math.PI);
+    let tensionA,tensionB;
+    if (a>0) {
+      tensionA = massA*(g+a);
+      tensionB = massB*(g-a);
+      tensionB = tensionA*muFactor; // ensure difference
+    } else if (a<0) {
+      const aMag = -a;
+      tensionB = massB*(g+aMag);
+      tensionA = tensionB*muFactor;
+    } else {
+      tensionA = massA*g;
+      tensionB = massB*g;
+    }
+    const tArrowA = tensionA*5/50;
+    const tArrowB = tensionB*5/50;
+    drawArrow(ax, aY, tArrowA, true, tensionA.toFixed(1));
+    drawArrow(bx, bY, tArrowB, true, tensionB.toFixed(1));
+    // pulley arrows
+    drawArrow(centerX-20, pulleyY+pulleyRadius+5, tArrowA, false, tensionA.toFixed(1));
+    drawArrow(centerX+20, pulleyY+pulleyRadius+5, tArrowB, false, tensionB.toFixed(1));
+  }
+
+  // draw table
+  const tableY = pulleyY + tableHeight*PIXELS_PER_METER;
+  ctx.strokeStyle = '#8e44ad';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(40, tableY);
+  ctx.lineTo(canvas.width-40, tableY);
+  ctx.stroke();
+  ctx.fillStyle = '#8e44ad';
+  ctx.fillText('Table', canvas.width-60, tableY-10);
+  ctx.fillText(tableHeight.toFixed(1)+' m', canvas.width-80, tableY+20);
+
+  if (isPaused) {
+    ctx.fillStyle = 'rgba(100,100,100,0.5)';
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, canvas.height/3, 25, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillRect(canvas.width/2-10, canvas.height/3-12, 6, 24);
+    ctx.fillRect(canvas.width/2+4, canvas.height/3-12, 6, 24);
+  }
+}
+
+function animate() {
+  if (isPaused) return;
+  updatePhysics();
+  draw();
+  animationFrameId = requestAnimationFrame(animate);
+}
+
+window.onload = () => {
+  setupCanvas();
+  resetSimulationState();
+};
+window.onresize = setupCanvas;
+</script>
+</body>
+</html>
