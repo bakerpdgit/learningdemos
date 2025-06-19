@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Water Phase Change Simulation</title>
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+    color: #333;
+  }
+  h1 { color: #2c3e50; }
+  .container {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    max-width: 1100px;
+  }
+  #viewCanvas, #graphCanvas {
+    border: 1px solid #2c3e50;
+    background-color: #fff;
+  }
+  #viewCanvas { flex-grow: 1; }
+  #graphCanvas { height: 300px; width: 100%; margin-top: 20px; }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px;
+    background-color: #ecf0f1;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 260px;
+  }
+  .controls label { font-weight: bold; color: #34495e; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .timescale button, .row button {
+    padding: 6px 12px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .timescale button.selected { background-color: #2ecc71; }
+  .timescale button:not(.selected):hover, .row button:hover { background-color: #2980b9; }
+  .energy-bar { width: 100%; height: 20px; background-color: #ddd; border-radius: 10px; overflow: hidden; }
+  .energy-fill { height: 100%; background-color: #e67e22; width: 0%; }
+</style>
+</head>
+<body>
+<h1>Water Phase Change</h1>
+<div class="container">
+  <canvas id="viewCanvas" width="500" height="400"></canvas>
+  <div class="controls">
+    <div class="row">
+      <label>Heat Power</label>
+      <input type="range" id="powerSlider" min="0" max="100" value="50">
+      <span id="powerDisplay">50%</span>
+    </div>
+    <div class="row timescale">
+      <label>Time</label>
+      <button data-scale="1" class="selected">×1</button>
+      <button data-scale="2">×2</button>
+      <button data-scale="5">×5</button>
+      <button data-scale="10">×10</button>
+    </div>
+    <div class="row">
+      <button id="playButton">Play</button>
+      <button id="resetButton">Reset</button>
+    </div>
+    <div class="row">
+      <span id="tempDisplay">0.0 °C</span>
+    </div>
+    <div class="energy-bar"><div id="energyFill" class="energy-fill"></div></div>
+    <div class="row"><span id="energyText">0 kJ</span></div>
+  </div>
+</div>
+<canvas id="graphCanvas" width="800" height="300"></canvas>
+<script>
+const MASS = 100; // g
+const CP_ICE = 2.09;
+const CP_WATER = 4.18;
+const CP_STEAM = 2.01;
+const L_F = 334;
+const L_V = 2260;
+const MAX_POWER = 5000; // J/s
+const Q_MELT = MASS * L_F;
+const Q_HEAT_WATER = MASS * CP_WATER * 100;
+const Q_VAP = MASS * L_V;
+const Q_TOTAL = Q_MELT + Q_HEAT_WATER + Q_VAP;
+
+let energy = 0;
+let time = 0;
+let isPaused = true;
+let timeScale = 1;
+let temp = 0;
+let state = 'ice';
+let data = [];
+
+const viewCanvas = document.getElementById('viewCanvas');
+const vctx = viewCanvas.getContext('2d');
+const gCanvas = document.getElementById('graphCanvas');
+const gctx = gCanvas.getContext('2d');
+
+const powerSlider = document.getElementById('powerSlider');
+const powerDisplay = document.getElementById('powerDisplay');
+const playButton = document.getElementById('playButton');
+const resetButton = document.getElementById('resetButton');
+const tempDisplay = document.getElementById('tempDisplay');
+const energyFill = document.getElementById('energyFill');
+const energyText = document.getElementById('energyText');
+
+document.querySelectorAll('.timescale button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.timescale button').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected');
+    timeScale = +btn.dataset.scale;
+  });
+});
+
+powerSlider.addEventListener('input', ()=>{
+  powerDisplay.textContent = powerSlider.value + '%';
+});
+
+playButton.addEventListener('click', ()=>{
+  isPaused = !isPaused;
+  playButton.textContent = isPaused ? 'Play' : 'Pause';
+});
+
+resetButton.addEventListener('click', reset);
+
+function reset(){
+  energy = 0;
+  time = 0;
+  temp = 0;
+  state = 'ice';
+  data = [];
+  energyFill.style.width = '0%';
+  energyText.textContent = '0 kJ';
+  tempDisplay.textContent = '0.0 °C';
+}
+
+function updateState(){
+  if (energy === 0) {
+    state = 'ice';
+    temp = 0;
+  } else if (energy < Q_MELT) {
+    state = 'melting';
+    temp = 0;
+  } else if (energy < Q_MELT + Q_HEAT_WATER) {
+    state = 'liquid';
+    temp = (energy - Q_MELT) / (MASS * CP_WATER);
+  } else if (energy < Q_MELT + Q_HEAT_WATER + Q_VAP) {
+    state = 'boiling';
+    temp = 100;
+  } else {
+    state = 'steam';
+    temp = 100 + (energy - Q_MELT - Q_HEAT_WATER - Q_VAP) / (MASS * CP_STEAM);
+  }
+}
+
+function drawMain(){
+  vctx.clearRect(0,0,viewCanvas.width,viewCanvas.height);
+  const beaker = {x:80,y:320,w:180,h:240};
+  const waterHeight = 140;
+  // burner
+  const flame = powerSlider.value/100;
+  if (flame>0){
+    const fh = 30 + flame*40;
+    vctx.fillStyle='orange';
+    vctx.beginPath();
+    vctx.moveTo(beaker.x+beaker.w/2, beaker.y+20);
+    vctx.quadraticCurveTo(beaker.x+beaker.w/2-20, beaker.y+20-fh/2, beaker.x+beaker.w/2, beaker.y+20-fh);
+    vctx.quadraticCurveTo(beaker.x+beaker.w/2+20, beaker.y+20-fh/2, beaker.x+beaker.w/2, beaker.y+20);
+    vctx.fill();
+  }
+  // beaker
+  vctx.strokeStyle='#333';
+  vctx.lineWidth=2;
+  vctx.strokeRect(beaker.x, beaker.y - beaker.h, beaker.w, beaker.h);
+  // water/ice
+  const waterTop = beaker.y - waterHeight;
+  if(state==='ice'){
+    vctx.fillStyle='#a8d0ff';
+    vctx.fillRect(beaker.x, waterTop, beaker.w, waterHeight);
+    for(let i=0;i<4;i++){
+      for(let j=0;j<5;j++){
+        const cx=beaker.x+20+j*30+(i%2?15:0);
+        const cy=waterTop+20+i*30;
+        vctx.fillStyle='#ffffff';
+        vctx.beginPath();
+        vctx.arc(cx,cy,8,0,Math.PI*2);
+        vctx.fill();
+      }
+    }
+  } else if(state==='melting' || state==='liquid' || state==='boiling'){
+    vctx.fillStyle='#a8d0ff';
+    vctx.fillRect(beaker.x, waterTop, beaker.w, waterHeight);
+    if(state==='boiling'){
+      vctx.fillStyle='rgba(255,255,255,0.8)';
+      for(let i=0;i<10;i++){
+        const bx = beaker.x+20+Math.random()*(beaker.w-40);
+        const by = waterTop+Math.random()*waterHeight;
+        vctx.beginPath();
+        vctx.arc(bx,by,5,0,Math.PI*2);
+        vctx.fill();
+      }
+    }
+  }
+  if(state==='steam'){
+    for(let i=0;i<10;i++){
+      const sx = beaker.x + Math.random()*beaker.w;
+      const sy = waterTop - Math.random()*80;
+      vctx.fillStyle='rgba(200,200,200,0.6)';
+      vctx.beginPath();
+      vctx.arc(sx, sy, 6, 0, Math.PI*2);
+      vctx.fill();
+    }
+  }
+  // thermometer
+  const tColor = `hsl(${240 - Math.min(temp,120)*2},70%,50%)`;
+  vctx.fillStyle=tColor;
+  vctx.fillRect(beaker.x+beaker.w+40, beaker.y - 150, 30, 150);
+  vctx.strokeRect(beaker.x+beaker.w+40, beaker.y - 150, 30, 150);
+  vctx.fillStyle='#333';
+  vctx.fillText(temp.toFixed(1)+' °C', beaker.x+beaker.w+35, beaker.y - 160);
+}
+
+function drawGraph(){
+  gctx.clearRect(0,0,gCanvas.width,gCanvas.height);
+  const margin=40;
+  const w=gCanvas.width;
+  const h=gCanvas.height;
+  const maxT=120;
+  const maxTime=Math.max(10,time);
+  gctx.strokeStyle='#000';
+  gctx.beginPath();
+  gctx.moveTo(margin,margin);
+  gctx.lineTo(margin,h-margin);
+  gctx.lineTo(w-margin,h-margin);
+  gctx.stroke();
+  gctx.fillText('Time (s)', w/2, h-10);
+  gctx.save();
+  gctx.translate(15,h/2);
+  gctx.rotate(-Math.PI/2);
+  gctx.fillText('Temperature (°C)',0,0);
+  gctx.restore();
+  gctx.strokeStyle='#888';
+  [0,100].forEach(t=>{
+    const y=h-margin - t/maxT*(h-2*margin);
+    gctx.beginPath();
+    gctx.moveTo(margin,y);
+    gctx.lineTo(w-margin,y);
+    gctx.stroke();
+  });
+  gctx.strokeStyle='#e74c3c';
+  gctx.beginPath();
+  data.forEach((pt,i)=>{
+    const x=margin+pt.t/maxTime*(w-2*margin);
+    const y=h-margin-pt.T/maxT*(h-2*margin);
+    if(i===0) gctx.moveTo(x,y); else gctx.lineTo(x,y);
+  });
+  gctx.stroke();
+}
+
+function update(dt){
+  if(!isPaused){
+    const power=powerSlider.value/100*MAX_POWER;
+    energy += power*dt*timeScale;
+    time += dt*timeScale;
+    updateState();
+    data.push({t:time, T:temp});
+    if(data.length>500) data.shift();
+    const perc=Math.min(100, energy/Q_TOTAL*100);
+    energyFill.style.width=perc+'%';
+    energyText.textContent=(energy/1000).toFixed(1)+' kJ';
+    tempDisplay.textContent=temp.toFixed(1)+' °C';
+  }
+}
+
+let last=0;
+function animate(timestamp){
+  if(!last) last=timestamp;
+  const dt=(timestamp-last)/1000;
+  last=timestamp;
+  update(dt);
+  drawMain();
+  drawGraph();
+  requestAnimationFrame(animate);
+}
+reset();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
