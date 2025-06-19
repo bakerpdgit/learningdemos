@@ -103,8 +103,6 @@ const BEAKER = {x:80,y:330,w:180,h:230};
 const ICE_INIT_WIDTH = 80;
 const ICE_INIT_HEIGHT = 150;
 const FULL_WATER_HEIGHT = 110;
-const PARTICLE_SIZE = 8;
-const LIQUID_PARTICLE_COUNT = 25;
 
 let energy = 0;
 let time = 0;
@@ -114,8 +112,6 @@ let temp = 0;
 let state = 'ice';
 let data = [];
 let steamParticles = [];
-let iceParticles = [];
-let waterParticles = [];
 
 const viewCanvas = document.getElementById('viewCanvas');
 const vctx = viewCanvas.getContext('2d');
@@ -156,14 +152,6 @@ function reset(){
   state = 'ice';
   data = [];
   steamParticles = [];
-  iceParticles = [];
-  waterParticles = [];
-  for(let r=0;r<8;r++){
-    for(let c=0;c<6;c++){
-      const offset=(r%2)*PARTICLE_SIZE*0.6;
-      iceParticles.push({rx:c*PARTICLE_SIZE*1.2+offset, ry:r*PARTICLE_SIZE*1.2});
-    }
-  }
   energyFill.style.width = '0%';
   energyText.textContent = '0 kJ';
   tempDisplay.textContent = '0.0 °C';
@@ -207,12 +195,7 @@ function drawMain(){
   // beaker
   vctx.strokeStyle='#333';
   vctx.lineWidth=2;
-  vctx.beginPath();
-  vctx.moveTo(beaker.x, beaker.y);
-  vctx.lineTo(beaker.x, beaker.y - beaker.h);
-  vctx.lineTo(beaker.x + beaker.w, beaker.y - beaker.h);
-  vctx.lineTo(beaker.x + beaker.w, beaker.y);
-  vctx.stroke();
+  vctx.strokeRect(beaker.x, beaker.y - beaker.h, beaker.w, beaker.h);
 
   // compute masses
   let massLiquid=0, meltFrac=0;
@@ -230,23 +213,10 @@ function drawMain(){
   const waterHeight = FULL_WATER_HEIGHT * (massLiquid/MASS);
   const waterTop = beaker.y - waterHeight;
 
-  // adjust liquid particle count based on mass
-  const desiredWater = Math.round(LIQUID_PARTICLE_COUNT * (massLiquid/MASS));
-  while(waterParticles.length < desiredWater){
-    waterParticles.push({x:beaker.x+Math.random()*beaker.w,
-                         y:waterTop+Math.random()*waterHeight,
-                         vx:0,vy:0});
-  }
-  while(waterParticles.length > desiredWater){
-    waterParticles.pop();
-  }
-
   // draw water
   if(massLiquid>0){
     vctx.fillStyle='#a8d0ff';
     vctx.fillRect(beaker.x, waterTop, beaker.w, waterHeight);
-    vctx.fillStyle='#777';
-    waterParticles.forEach(p=>{vctx.beginPath();vctx.arc(p.x,p.y,PARTICLE_SIZE/2,0,Math.PI*2);vctx.fill();});
   }
 
   // draw ice block
@@ -255,18 +225,14 @@ function drawMain(){
     const ih = ICE_INIT_HEIGHT*meltFrac;
     const ix = beaker.x + (beaker.w - iw)/2;
     const iy = beaker.y - ih;
-    vctx.fillStyle='#e0e0e0';
+    vctx.fillStyle='#ccc';
     vctx.fillRect(ix, iy, iw, ih);
-    vctx.fillStyle='#555';
-    iceParticles.forEach(pt=>{
-      const x=ix+pt.rx*meltFrac;
-      const y=iy+pt.ry*meltFrac;
-      if(x>ix && x<ix+iw && y>iy && y<iy+ih){
-        vctx.beginPath();
-        vctx.arc(x, y, PARTICLE_SIZE/2, 0, Math.PI*2);
-        vctx.fill();
+    vctx.fillStyle='#888';
+    for(let i=0;i<Math.floor(ih/20);i++){
+      for(let j=0;j<Math.floor(iw/20);j++){
+        vctx.fillRect(ix+5+j*20, iy+5+i*20, 2, 2);
       }
-    });
+    }
   }
 
   // evaporation bubbles
@@ -297,9 +263,13 @@ function drawMain(){
     }
   }
 
-  // draw steam particles
+  // draw steam particles and update
+  steamParticles.forEach(p=>{
+    p.x+=p.vx*0.016; p.y+=p.vy*0.016;
+  });
+  steamParticles=steamParticles.filter(p=>p.y>beaker.y-beaker.h-50 && p.x>beaker.x && p.x<beaker.x+beaker.w);
   vctx.fillStyle='rgba(200,200,200,0.6)';
-  steamParticles.forEach(p=>{vctx.beginPath();vctx.arc(p.x,p.y,PARTICLE_SIZE/2,0,Math.PI*2);vctx.fill();});
+  steamParticles.forEach(p=>{vctx.beginPath();vctx.arc(p.x,p.y,5,0,Math.PI*2);vctx.fill();});
 
   // thermometer
   const tColor = `hsl(${240 - Math.min(temp,120)*2},70%,50%)`;
@@ -359,37 +329,6 @@ function update(dt){
     energyFill.style.width=perc+'%';
     energyText.textContent=(energy/1000).toFixed(1)+' kJ';
     tempDisplay.textContent=temp.toFixed(1)+' °C';
-
-    // update liquid particle motion
-    const beaker=BEAKER;
-    let massLiquid=0;
-    if(energy<Q_MELT) massLiquid=MASS-energy/Q_MELT*MASS;
-    else if(energy<Q_MELT+Q_HEAT_WATER) massLiquid=MASS;
-    else if(energy<Q_MELT+Q_HEAT_WATER+Q_VAP) massLiquid=Math.max(0, MASS-(energy-Q_MELT-Q_HEAT_WATER)/L_V);
-    const waterHeight = FULL_WATER_HEIGHT*(massLiquid/MASS);
-    const waterTop = beaker.y - waterHeight;
-    waterParticles.forEach(p=>{
-      p.vx += (Math.random()-0.5)*40*dt*(temp/100+0.2);
-      p.vy += (Math.random()-0.5)*40*dt*(temp/100+0.2);
-      p.x += p.vx*dt;
-      p.y += p.vy*dt;
-      if(p.x<beaker.x+PARTICLE_SIZE/2){p.x=beaker.x+PARTICLE_SIZE/2;p.vx=Math.abs(p.vx);} 
-      if(p.x>beaker.x+beaker.w-PARTICLE_SIZE/2){p.x=beaker.x+beaker.w-PARTICLE_SIZE/2;p.vx=-Math.abs(p.vx);} 
-      if(p.y>beaker.y-PARTICLE_SIZE/2){p.y=beaker.y-PARTICLE_SIZE/2;p.vy=-Math.abs(p.vy);} 
-      if(p.y<waterTop+PARTICLE_SIZE/2){p.y=waterTop+PARTICLE_SIZE/2;p.vy=Math.abs(p.vy);} 
-      if(state==='boiling' && Math.random()<0.02*dt){
-        steamParticles.push({x:p.x,y:waterTop,vx:(Math.random()-0.5)*30,vy:-40-Math.random()*20});
-      }
-    });
-
-    // update steam particles
-    steamParticles.forEach(p=>{
-      p.x+=p.vx*dt; p.y+=p.vy*dt;
-      if(p.y>beaker.y-beaker.h){
-        if(p.x<beaker.x+PARTICLE_SIZE/2 || p.x>beaker.x+beaker.w-PARTICLE_SIZE/2) p.vx*=-1;
-      }
-    });
-    steamParticles=steamParticles.filter(p=>p.y>beaker.y-beaker.h-60);
   }
 }
 
