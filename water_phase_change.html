@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Water Phase Changes</title>
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+    color: #333;
+  }
+  h1 { color: #2c3e50; }
+  #simArea {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  canvas {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+  }
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  #energyBar {
+    width: 300px;
+    height: 20px;
+    background: #eee;
+    border: 1px solid #aaa;
+    position: relative;
+  }
+  #energyFill {
+    background: #ff8c00;
+    height: 100%;
+    width: 0%;
+  }
+  .time-btn {
+    padding: 5px 10px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .time-btn.active { background: #1f78c1; }
+  button { padding: 5px 10px; border-radius:4px; border:none; cursor:pointer; }
+  #playPauseBtn { background:#2ecc71; color:white; }
+  #resetBtn { background:#e67e22; color:white; }
+</style>
+</head>
+<body>
+<h1>Water Phase Changes</h1>
+<div id="simArea">
+  <canvas id="simCanvas" width="400" height="300"></canvas>
+  <canvas id="graphCanvas" width="400" height="200"></canvas>
+  <div id="temperatureDisplay">0.0 &deg;C</div>
+  <div id="energyBar"><div id="energyFill"></div></div>
+  <div id="energyDisplay">Energy: 0 kJ</div>
+  <div id="controls">
+    <label>Heat Power <input type="range" id="powerSlider" min="0" max="100" value="0"></label><span id="powerValue">0%</span>
+    <div id="timeScaleBtns"></div>
+    <button id="playPauseBtn">Play</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+</div>
+<script>
+const simCanvas = document.getElementById('simCanvas');
+const simCtx = simCanvas.getContext('2d');
+const graphCanvas = document.getElementById('graphCanvas');
+const graphCtx = graphCanvas.getContext('2d');
+const powerSlider = document.getElementById('powerSlider');
+const powerValue = document.getElementById('powerValue');
+const playPauseBtn = document.getElementById('playPauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+const temperatureDisplay = document.getElementById('temperatureDisplay');
+const energyDisplay = document.getElementById('energyDisplay');
+const energyFill = document.getElementById('energyFill');
+const timeScaleBtns = document.getElementById('timeScaleBtns');
+
+let timeScale = 1;
+for(let i=1;i<=10;i++){
+  const b=document.createElement('button');
+  b.textContent='×'+i;
+  b.className='time-btn'+(i===1?' active':'');
+  b.onclick=()=>{timeScale=i;document.querySelectorAll('.time-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');};
+  timeScaleBtns.appendChild(b);
+}
+
+let running=false;
+let time=0;
+let temp=0; // °C
+let energy=0; // kJ
+let state='solid';
+let meltProgress=0;
+let boilProgress=0;
+const cpIce=2.09; // kJ/kg°C
+const cpWater=4.18;
+const cpSteam=2.0;
+const lf=333; // kJ/kg
+const lv=2260; // kJ/kg
+const mass=1; // kg
+const basePower=2; // kJ/s at 100%
+let molecules=[];
+const container={x:150,y:60,w:100,h:180};
+
+function initMolecules(){
+  molecules=[];
+  for(let i=0;i<30;i++){
+    const row=Math.floor(i/5);
+    const col=i%5;
+    molecules.push({
+      x:container.x+20+col*12,
+      y:container.y+20+row*12,
+      vx:0,vy:0
+    });
+  }
+}
+
+function reset(){
+  running=false; time=0; temp=0; energy=0; state='solid'; meltProgress=0; boilProgress=0;
+  powerSlider.value=0; powerValue.textContent='0%';
+  document.querySelectorAll('.time-btn').forEach(x=>x.classList.remove('active'));document.querySelector('.time-btn').classList.add('active'); timeScale=1;
+  initMolecules();
+  updateDisplays();
+  drawGraph();
+}
+
+function updateDisplays(){
+  temperatureDisplay.textContent=temp.toFixed(1)+' °C';
+  energyDisplay.textContent='Energy: '+energy.toFixed(1)+' kJ';
+  energyFill.style.width=Math.min(100,energy/3000*100)+'%';
+}
+
+function updatePhysics(dt){
+  const power=basePower*(powerSlider.value/100);
+  const heat=power*dt; // kJ
+  if(powerSlider.value>0) energy+=heat;
+  switch(state){
+    case 'solid':
+      temp+=heat/(mass*cpIce);
+      if(temp>=0){
+        meltProgress=0;
+        state='melting';
+      }
+      break;
+    case 'melting':
+      meltProgress+=heat/(mass*lf);
+      if(meltProgress>=1){
+        state='liquid';
+        temp=0;
+      }
+      break;
+    case 'liquid':
+      temp+=heat/(mass*cpWater);
+      if(temp>=100){
+        boilProgress=0;
+        state='boiling';
+      }
+      break;
+    case 'boiling':
+      boilProgress+=heat/(mass*lv);
+      if(boilProgress>=1){
+        state='gas';
+        temp=100;
+      }
+      break;
+    case 'gas':
+      temp+=heat/(mass*cpSteam);
+      break;
+  }
+}
+
+function updateMolecules(dt){
+  molecules.forEach(m=>{
+    m.x+=m.vx*dt; m.y+=m.vy*dt;
+    if(state==='solid'||state==='melting'){
+      m.vx*=0.9; m.vy*=0.9; // damp
+    } else if(state==='liquid'||state==='boiling'){
+      if(m.x<container.x||m.x>container.x+container.w) m.vx*=-1;
+      if(m.y<container.y||m.y>container.y+container.h) m.vy*=-1;
+    }
+    if(state==='gas'){
+      if(m.y<container.y-30){ m.y=container.y-30; m.vy= -m.vy; }
+    }
+  });
+  if(state==='liquid'||state==='boiling' || state==='gas'){
+    const speed=(state==='gas'?40:20)+temp;
+    molecules.forEach(m=>{ if(Math.random()<0.2){ m.vx+=(Math.random()-0.5)*speed*dt; m.vy+=(Math.random()-0.5)*speed*dt; } });
+  }
+  if(state==='gas'){
+    molecules.forEach(m=>{m.vy-=30*dt;});
+  }
+}
+
+let graphData=[];
+function drawGraph(){
+  graphCtx.clearRect(0,0,graphCanvas.width,graphCanvas.height);
+  graphCtx.strokeStyle='#333';
+  graphCtx.beginPath();
+  graphCtx.moveTo(40,10);
+  graphCtx.lineTo(40,180);
+  graphCtx.lineTo(390,180);
+  graphCtx.stroke();
+  graphCtx.fillText('Temp (°C)',5,20);
+  graphCtx.fillText('Time (s)',340,195);
+  if(graphData.length<2) return;
+  graphCtx.strokeStyle='#e74c3c';
+  graphCtx.beginPath();
+  const maxTime=graphData[graphData.length-1].t;
+  const scaleX=350/Math.max(10,maxTime);
+  graphCtx.moveTo(40,180-graphData[0].T);
+  graphData.forEach(p=>{ graphCtx.lineTo(40+p.t*scaleX,180-p.T); });
+  graphCtx.stroke();
+}
+
+function draw(){
+  simCtx.clearRect(0,0,simCanvas.width,simCanvas.height);
+  simCtx.strokeStyle='#555';
+  simCtx.strokeRect(container.x,container.y,container.w,container.h);
+  // draw liquid level
+  let level=container.h;
+  if(state==='solid'||state==='melting'){
+    level=container.h*(1-meltProgress);
+  } else if(state==='liquid'||state==='boiling'){
+    level=0;
+  } else if(state==='gas'){
+    level=0;
+  }
+  if(state!=='gas'){
+    simCtx.fillStyle='#4aa3d8';
+    simCtx.fillRect(container.x,container.y+level,container.w,container.h-level);
+  }
+  // draw molecules
+  simCtx.fillStyle='#000';
+  molecules.forEach(m=>{
+    simCtx.beginPath();
+    simCtx.arc(m.x,m.y,4,0,Math.PI*2); simCtx.fill();
+  });
+  // thermometer
+  simCtx.fillStyle='black';
+  simCtx.fillRect(300,container.y,10,container.h);
+  simCtx.fillStyle='red';
+  const tHeight=(temp+20)/150*container.h; // scale
+  simCtx.fillRect(300,container.y+container.h-tHeight,10,tHeight);
+}
+
+function step(){
+  if(!running){ draw(); return; }
+  const dt=0.05*timeScale;
+  updatePhysics(dt);
+  updateMolecules(dt);
+  time+=dt;
+  graphData.push({t:time,T:Math.min(150,temp)});
+  updateDisplays();
+  drawGraph();
+  draw();
+  requestAnimationFrame(step);
+}
+
+powerSlider.oninput=()=>{powerValue.textContent=powerSlider.value+'%';};
+playPauseBtn.onclick=()=>{running=!running; playPauseBtn.textContent=running?'Pause':'Play'; if(running) requestAnimationFrame(step);};
+resetBtn.onclick=reset;
+
+reset();
+</script>
+</body>
+</html>
