@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Water Phase Change Demo</title>
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+    color: #333;
+  }
+  h1 { color: #2c3e50; }
+  .container {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    max-width: 1000px;
+  }
+  canvas {
+    border: 1px solid #2c3e50;
+    background-color: #fff;
+    border-radius: 4px;
+  }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 15px;
+    background-color: #ecf0f1;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 260px;
+  }
+  #beakerContainer { position: relative; }
+  #temperatureDisplay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: #fff;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+  }
+  #energyMeter {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    width: 120px;
+    height: 12px;
+    border: 1px solid #333;
+    background-color: #fff;
+  }
+  #energyFill {
+    height: 100%;
+    width: 0%;
+    background-color: #f39c12;
+  }
+  #energyLabel {
+    position: absolute;
+    left: 8px;
+    bottom: 24px;
+    font-size: 0.9em;
+  }
+  #timeButtons button {
+    margin-right: 5px;
+    padding: 4px 8px;
+  }
+</style>
+</head>
+<body>
+<h1>Water Phase Change Demo</h1>
+<div class="container">
+  <div id="beakerContainer">
+    <canvas id="beakerCanvas" width="300" height="300"></canvas>
+    <div id="temperatureDisplay">0.0 °C</div>
+    <div id="energyMeter"><div id="energyFill"></div></div>
+    <div id="energyLabel">0 kJ</div>
+  </div>
+  <canvas id="moleculeCanvas" width="300" height="300"></canvas>
+</div>
+<canvas id="graphCanvas" width="640" height="200" style="margin-top:20px;"></canvas>
+<div class="controls">
+  <label>Heat Power: <input type="range" id="powerSlider" min="0" max="100" value="0"></label>
+  <span id="powerValue">0%</span>
+  <div id="timeButtons">
+    <button data-scale="1">×1</button>
+    <button data-scale="2">×2</button>
+    <button data-scale="3">×3</button>
+    <button data-scale="5">×5</button>
+    <button data-scale="10">×10</button>
+  </div>
+  <button id="playPauseButton">Play</button>
+  <button id="resetButton">Reset</button>
+</div>
+<script>
+const beakerCanvas = document.getElementById('beakerCanvas');
+const bctx = beakerCanvas.getContext('2d');
+const moleculeCanvas = document.getElementById('moleculeCanvas');
+const mctx = moleculeCanvas.getContext('2d');
+const graphCanvas = document.getElementById('graphCanvas');
+const gctx = graphCanvas.getContext('2d');
+const temperatureDisplay = document.getElementById('temperatureDisplay');
+const energyFill = document.getElementById('energyFill');
+const energyLabel = document.getElementById('energyLabel');
+const powerSlider = document.getElementById('powerSlider');
+const powerValue = document.getElementById('powerValue');
+const timeButtons = document.querySelectorAll('#timeButtons button');
+const playPauseButton = document.getElementById('playPauseButton');
+const resetButton = document.getElementById('resetButton');
+
+let timeScale = 1;
+let isPlaying = false;
+let lastTime = null;
+
+const mass = 0.1; // kg of water
+const cIce = 2.09e3;
+const cWater = 4.18e3;
+const cSteam = 2.01e3;
+const Lf = 334e3;
+const Lv = 2260e3;
+const maxPower = 1000; // Watts
+const energyToMelt = Lf * mass;
+const energyToBoil = energyToMelt + cWater * 100 * mass;
+const energyToVapor = energyToBoil + Lv * mass;
+
+let energyInput = 0; // J
+let simulationTime = 0; // s
+let dataPoints = [];
+
+let molecules = [];
+
+function reset() {
+  energyInput = 0;
+  simulationTime = 0;
+  dataPoints = [];
+  lastTime = null;
+  isPlaying = false;
+  playPauseButton.textContent = 'Play';
+  initMolecules('solid');
+  drawGraph();
+  updateDisplays();
+  drawBeaker();
+}
+
+function initMolecules(state) {
+  molecules = [];
+  if (state === 'solid') {
+    const cols = 5;
+    const rows = 5;
+    const spacing = moleculeCanvas.width / (cols + 1);
+    for (let i = 1; i <= cols; i++) {
+      for (let j = 1; j <= rows; j++) {
+        molecules.push({
+          x: i * spacing,
+          y: j * spacing,
+          vx: 0,
+          vy: 0,
+        });
+      }
+    }
+  } else {
+    const count = 25;
+    for (let i = 0; i < count; i++) {
+      molecules.push({
+        x: Math.random() * moleculeCanvas.width,
+        y: Math.random() * moleculeCanvas.height,
+        vx: (Math.random() - 0.5) * 50,
+        vy: (Math.random() - 0.5) * 50,
+      });
+    }
+  }
+}
+
+function currentTemperature() {
+  if (energyInput < energyToMelt) {
+    return 0;
+  } else if (energyInput < energyToBoil) {
+    return (energyInput - energyToMelt) / (cWater * mass);
+  } else if (energyInput < energyToVapor) {
+    return 100;
+  } else {
+    return 100 + (energyInput - energyToVapor) / (cSteam * mass);
+  }
+}
+
+function currentState() {
+  if (energyInput < energyToMelt) return 'melting';
+  if (energyInput < energyToBoil) return 'liquid';
+  if (energyInput < energyToVapor) return 'boiling';
+  return 'gas';
+}
+
+function updateDisplays() {
+  temperatureDisplay.textContent = currentTemperature().toFixed(1) + ' °C';
+  const kJ = energyInput / 1000;
+  energyLabel.textContent = kJ.toFixed(1) + ' kJ';
+  const percent = Math.min(100, kJ / 350 * 100);
+  energyFill.style.width = percent + '%';
+  powerValue.textContent = powerSlider.value + '%';
+}
+
+function drawBeaker() {
+  bctx.clearRect(0,0,beakerCanvas.width,beakerCanvas.height);
+  const state = currentState();
+  const waterHeight = 200;
+  const waterTop = beakerCanvas.height - waterHeight - 40;
+  // draw beaker outline
+  bctx.strokeStyle = '#333';
+  bctx.strokeRect(80, waterTop-10, 140, waterHeight+10);
+  // water level
+  let level;
+  if (state === 'melting') level = waterHeight*0.8;
+  else if (state === 'liquid' || state === 'boiling') level = waterHeight;
+  else level = waterHeight*0.95;
+  bctx.fillStyle = '#4FC3F7';
+  bctx.fillRect(85, waterTop + waterHeight - level, 130, level);
+  // flame
+  const powerFrac = powerSlider.value/100;
+  const flameHeight = 30 + 40*powerFrac;
+  bctx.fillStyle = 'orange';
+  bctx.beginPath();
+  bctx.moveTo(150, beakerCanvas.height-5);
+  bctx.lineTo(135, beakerCanvas.height-5);
+  bctx.lineTo(150, beakerCanvas.height-5-flameHeight);
+  bctx.lineTo(165, beakerCanvas.height-5);
+  bctx.closePath();
+  bctx.fill();
+}
+
+function updateMolecules(dt) {
+  const state = currentState();
+  if (state === 'melting' || state === 'solid') {
+    // small vibration
+    mctx.clearRect(0,0,moleculeCanvas.width,moleculeCanvas.height);
+    mctx.fillStyle = '#4FC3F7';
+    molecules.forEach(m => {
+      const jitterX = (Math.random()-0.5)*2;
+      const jitterY = (Math.random()-0.5)*2;
+      mctx.beginPath();
+      mctx.arc(m.x+jitterX, m.y+jitterY, 5, 0, Math.PI*2);
+      mctx.fill();
+    });
+    return;
+  }
+  mctx.clearRect(0,0,moleculeCanvas.width,moleculeCanvas.height);
+  mctx.fillStyle = '#4FC3F7';
+  molecules.forEach(m => {
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    if (state === 'gas') {
+      if (m.y < -10) { m.y = moleculeCanvas.height+10; }
+    } else {
+      if (m.x < 5 || m.x > moleculeCanvas.width-5) m.vx *= -1;
+      if (m.y < 5 || m.y > moleculeCanvas.height-5) m.vy *= -1;
+    }
+    mctx.beginPath();
+    mctx.arc(m.x, m.y, 5, 0, Math.PI*2);
+    mctx.fill();
+  });
+}
+
+function drawGraph() {
+  gctx.clearRect(0,0,graphCanvas.width,graphCanvas.height);
+  gctx.strokeStyle = '#ccc';
+  gctx.beginPath();
+  gctx.moveTo(40,10);
+  gctx.lineTo(40,graphCanvas.height-30);
+  gctx.lineTo(graphCanvas.width-10,graphCanvas.height-30);
+  gctx.stroke();
+  gctx.strokeStyle = '#e74c3c';
+  gctx.beginPath();
+  if (dataPoints.length>0) {
+    const scaleX = 2;
+    const scaleY = (graphCanvas.height-40)/150;
+    gctx.moveTo(40+dataPoints[0].t*scaleX, graphCanvas.height-30-dataPoints[0].temp*scaleY);
+    for (let i=1;i<dataPoints.length;i++) {
+      gctx.lineTo(40+dataPoints[i].t*scaleX, graphCanvas.height-30-dataPoints[i].temp*scaleY);
+    }
+  }
+  gctx.stroke();
+}
+
+function step(timestamp) {
+  if (!isPlaying) { lastTime = timestamp; requestAnimationFrame(step); return; }
+  if (!lastTime) lastTime = timestamp;
+  let dt = (timestamp - lastTime)/1000 * timeScale;
+  lastTime = timestamp;
+  const powerFrac = powerSlider.value/100;
+  const energyAdded = powerFrac * maxPower * dt;
+  energyInput += energyAdded;
+  simulationTime += dt;
+  dataPoints.push({t:simulationTime, temp:currentTemperature()});
+  if (dataPoints.length>300) dataPoints.shift();
+  updateDisplays();
+  drawBeaker();
+  updateMolecules(dt);
+  drawGraph();
+  requestAnimationFrame(step);
+}
+
+powerSlider.addEventListener('input', updateDisplays);
+timeButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    timeScale = +btn.getAttribute('data-scale');
+    timeButtons.forEach(b => b.disabled = false);
+    btn.disabled = true;
+  });
+});
+playPauseButton.addEventListener('click', () => {
+  isPlaying = !isPlaying;
+  playPauseButton.textContent = isPlaying ? 'Pause' : 'Play';
+});
+resetButton.addEventListener('click', reset);
+
+reset();
+requestAnimationFrame(step);
+</script>
+</body>
+</html>
