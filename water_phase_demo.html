@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Water Phase Change Simulator</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+      color: #333;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      max-width: 1100px;
+    }
+    canvas {
+      border: 1px solid #2c3e50;
+      background-color: #fff;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #beakerCanvas {
+      flex-grow: 1;
+    }
+    #molecularCanvas {
+      flex-grow: 1;
+    }
+    #graphCanvas {
+      width: 100%;
+      height: 250px;
+      margin-top: 20px;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 20px;
+      background-color: #ecf0f1;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      width: 260px;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .control-group label {
+      font-weight: bold;
+      color: #34495e;
+    }
+    .control-group div {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .control-group button {
+      padding: 6px 10px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .control-group button:hover {
+      background-color: #2980b9;
+    }
+    .main-buttons button {
+      width: 100%;
+      padding: 10px;
+      font-size: 1.1em;
+    }
+    #playPause {
+      background-color: #2ecc71;
+    }
+    #playPause:hover {
+      background-color: #27ae60;
+    }
+    #resetBtn {
+      background-color: #f39c12;
+    }
+    #resetBtn:hover {
+      background-color: #e67e22;
+    }
+    #energyBarContainer {
+      width: 100%;
+      height: 20px;
+      background-color: #bdc3c7;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #energyBar {
+      height: 100%;
+      width: 0%;
+      background-color: #e74c3c;
+    }
+    #timeButtons button.active {
+      background-color: #8e44ad;
+    }
+  </style>
+</head>
+<body>
+<h1>Water Phase Change Simulator</h1>
+<div class="container">
+  <canvas id="beakerCanvas" width="400" height="400"></canvas>
+  <div class="controls">
+    <div class="control-group">
+      <label for="powerSlider">Heat Power</label>
+      <div>
+        <input type="range" id="powerSlider" min="0" max="100" value="0"/>
+        <span id="powerDisplay">0%</span>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Time Scale</label>
+      <div id="timeButtons">
+        <button data-scale="1" class="active">×1</button>
+        <button data-scale="2">×2</button>
+        <button data-scale="3">×3</button>
+        <button data-scale="5">×5</button>
+        <button data-scale="10">×10</button>
+      </div>
+    </div>
+    <div class="main-buttons">
+      <button id="playPause">Play</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+    <div>Temperature: <span id="tempDisplay">0.0</span> °C</div>
+    <div>Energy: <span id="energyDisplay">0.0</span> kJ</div>
+    <div id="energyBarContainer"><div id="energyBar"></div></div>
+  </div>
+</div>
+<canvas id="molecularCanvas" width="400" height="250"></canvas>
+<canvas id="graphCanvas" width="800" height="250"></canvas>
+<script>
+const beakerCanvas = document.getElementById('beakerCanvas');
+const bctx = beakerCanvas.getContext('2d');
+const molCanvas = document.getElementById('molecularCanvas');
+const mctx = molCanvas.getContext('2d');
+const graphCanvas = document.getElementById('graphCanvas');
+const gctx = graphCanvas.getContext('2d');
+
+const powerSlider = document.getElementById('powerSlider');
+const powerDisplay = document.getElementById('powerDisplay');
+const tempDisplay = document.getElementById('tempDisplay');
+const energyDisplay = document.getElementById('energyDisplay');
+const energyBar = document.getElementById('energyBar');
+const timeButtons = document.querySelectorAll('#timeButtons button');
+const playPauseBtn = document.getElementById('playPause');
+const resetBtn = document.getElementById('resetBtn');
+
+let timeScale = 1;
+let playing = false;
+
+const mass = 0.1; // kg
+const C_WATER = 4.18; // kJ/(kg°C)
+const C_ICE = 2.09;
+const C_STEAM = 2.01;
+const L_FUSION = 333.55; // kJ/kg
+const L_VAP = 2257; // kJ/kg
+const POWER_MAX = 3; // kJ/s at 100%
+
+const FUSION_E = L_FUSION * mass;
+const HEAT_WATER_E = C_WATER * mass * 100;
+const VAP_E = L_VAP * mass;
+const TOTAL_E = FUSION_E + HEAT_WATER_E + VAP_E;
+
+let energy = 0; // kJ
+let temperature = 0; // °C
+let phase = 'ice';
+let simTime = 0;
+let graphData = [];
+let molecules = [];
+let iceLattice = [];
+
+function initIceLattice() {
+  iceLattice = [];
+  const cols = 6;
+  const rows = 4;
+  const spacing = 40;
+  const startX = 80;
+  const startY = 260;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      iceLattice.push({x:startX + x*spacing, y:startY - y*spacing});
+    }
+  }
+}
+
+function initMolecules() {
+  molecules = [];
+  const count = 30;
+  for (let i = 0; i < count; i++) {
+    molecules.push({
+      x: Math.random()*300 + 50,
+      y: Math.random()*200 + 120,
+      vx: (Math.random()-0.5)*40,
+      vy: (Math.random()-0.5)*40
+    });
+  }
+}
+
+function resetSimulation() {
+  energy = 0;
+  temperature = 0;
+  phase = 'ice';
+  simTime = 0;
+  graphData = [];
+  playing = false;
+  playPauseBtn.textContent = 'Play';
+  powerSlider.value = 0;
+  powerDisplay.textContent = '0%';
+  energyBar.style.width = '0%';
+  initIceLattice();
+  initMolecules();
+}
+
+function computeState() {
+  if (energy < FUSION_E) {
+    phase = energy > 0 ? 'melting' : 'ice';
+    temperature = 0;
+  } else if (energy < FUSION_E + HEAT_WATER_E) {
+    phase = 'water';
+    let e = energy - FUSION_E;
+    temperature = e / (C_WATER * mass);
+  } else if (energy < FUSION_E + HEAT_WATER_E + VAP_E) {
+    phase = 'boiling';
+    temperature = 100;
+  } else {
+    phase = 'steam';
+    let e = energy - (FUSION_E + HEAT_WATER_E + VAP_E);
+    temperature = 100 + e / (C_STEAM * mass);
+  }
+}
+
+function updateMolecules(dt) {
+  if (phase === 'ice' || phase === 'melting') return;
+  for (let m of molecules) {
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    if (phase === 'boiling' && Math.random() < 0.05) {
+      m.vy -= 20;
+    }
+    if (phase !== 'steam') {
+      if (m.x < 50 || m.x > 350) m.vx *= -1;
+      if (m.y < 80 || m.y > 300) m.vy *= -1;
+    }
+  }
+  molecules = molecules.filter(m => m.y > -20 && m.x > -20 && m.x < 420);
+}
+
+function drawBeaker() {
+  bctx.clearRect(0,0,beakerCanvas.width, beakerCanvas.height);
+  // beaker outline
+  bctx.strokeStyle = '#34495e';
+  bctx.lineWidth = 2;
+  bctx.strokeRect(50,80,300,250);
+
+  // flame
+  const power = powerSlider.value/100;
+  if (power > 0) {
+    const flameHeight = 20 + 60*power;
+    bctx.fillStyle = 'orange';
+    bctx.beginPath();
+    bctx.moveTo(200, 340);
+    bctx.quadraticCurveTo(200-flameHeight/2, 340-flameHeight, 200, 340-flameHeight*1.2);
+    bctx.quadraticCurveTo(200+flameHeight/2, 340-flameHeight, 200, 340);
+    bctx.fill();
+  }
+
+  // water level
+  let waterLevel = 80 + 250*(1 - Math.min(1, energy/(FUSION_E + HEAT_WATER_E)));
+  if (phase === 'ice' || phase === 'melting') waterLevel = 80 + 250;
+  if (phase === 'boiling' || phase === 'steam') waterLevel = 80;
+  bctx.fillStyle = '#3498db';
+  bctx.fillRect(50, waterLevel, 300, 330-waterLevel);
+
+  // thermometer
+  bctx.fillStyle = '#e74c3c';
+  const tempPerc = Math.min(1, (temperature+20)/140);
+  bctx.fillRect(370, 330 - 250*tempPerc, 20, 250*tempPerc);
+  bctx.strokeRect(370,80,20,250);
+
+  bctx.fillStyle = '#000';
+  bctx.font = '16px sans-serif';
+  bctx.fillText(temperature.toFixed(1)+" °C", 360, 60);
+}
+
+function drawMolecules() {
+  mctx.clearRect(0,0,molCanvas.width,molCanvas.height);
+  if (phase === 'ice' || phase === 'melting') {
+    mctx.fillStyle = '#3498db';
+    for (let p of iceLattice) {
+      const jitter = phase==='ice'?2:10;
+      mctx.beginPath();
+      mctx.arc(p.x + (Math.random()-0.5)*jitter, p.y + (Math.random()-0.5)*jitter, 6,0,Math.PI*2);
+      mctx.fill();
+    }
+  } else {
+    mctx.fillStyle = phase==='steam'? '#aaaaaa' : '#3498db';
+    for (let m of molecules) {
+      mctx.beginPath();
+      mctx.arc(m.x-50, m.y-80, 6,0,Math.PI*2);
+      mctx.fill();
+    }
+  }
+}
+
+function drawGraph() {
+  gctx.clearRect(0,0,graphCanvas.width, graphCanvas.height);
+  gctx.strokeStyle = '#ccc';
+  gctx.lineWidth = 1;
+  gctx.beginPath();
+  gctx.moveTo(40,10);
+  gctx.lineTo(40,240);
+  gctx.lineTo(790,240);
+  gctx.stroke();
+
+  gctx.strokeStyle = '#e74c3c';
+  gctx.beginPath();
+  const maxTime = 200;
+  const scaleX = (750)/maxTime;
+  const scaleY = 2.3; // 100°C -> 230px
+  for (let i=0;i<graphData.length;i++) {
+    const t = graphData[i].t;
+    const temp = graphData[i].temp;
+    const x = 40 + t*scaleX;
+    const y = 240 - temp*scaleY;
+    if (i===0) gctx.moveTo(x,y); else gctx.lineTo(x,y);
+  }
+  gctx.stroke();
+  // axis labels
+  gctx.fillStyle = '#000';
+  gctx.font = '14px sans-serif';
+  gctx.fillText('Temperature (°C)', 650,20);
+  gctx.fillText('Time (s)', 740,230);
+}
+
+function update(dt) {
+  if (!playing) return;
+  const power = powerSlider.value/100;
+  const dE = POWER_MAX * power * dt;
+  energy += dE;
+  simTime += dt;
+  computeState();
+  updateMolecules(dt);
+  graphData.push({t: simTime, temp: temperature});
+  if (graphData.length>1000) graphData.shift();
+}
+
+function render() {
+  drawBeaker();
+  drawMolecules();
+  drawGraph();
+  tempDisplay.textContent = temperature.toFixed(1);
+  energyDisplay.textContent = energy.toFixed(1);
+  energyBar.style.width = Math.min(100, energy/TOTAL_E*100)+'%';
+}
+
+let last = null;
+function loop(ts) {
+  if (last==null) last = ts;
+  const dt = (ts - last)/1000 * timeScale;
+  last = ts;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+powerSlider.addEventListener('input', () => {
+  powerDisplay.textContent = powerSlider.value + '%';
+});
+
+timeButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    timeButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    timeScale = parseFloat(btn.dataset.scale);
+  });
+});
+
+playPauseBtn.addEventListener('click', () => {
+  playing = !playing;
+  playPauseBtn.textContent = playing? 'Pause' : 'Play';
+});
+
+resetBtn.addEventListener('click', () => {
+  resetSimulation();
+});
+
+resetSimulation();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
