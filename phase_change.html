@@ -20,14 +20,16 @@
     display: flex;
     gap: 20px;
     width: 100%;
-    max-width: 1100px;
+    max-width: 1000px;
+    align-items: flex-start;
   }
   #viewCanvas, #graphCanvas {
     border: 1px solid #2c3e50;
     background-color: #fff;
   }
   #viewCanvas { flex-grow: 1; }
-  #graphCanvas { height: 300px; width: 100%; margin-top: 20px; }
+  .side { display:flex; flex-direction:column; gap:20px; }
+  #graphCanvas { width:300px; height:200px; }
   .controls {
     display: flex;
     flex-direction: column;
@@ -58,31 +60,32 @@
 <h1>Water Phase Change</h1>
 <div class="container">
   <canvas id="viewCanvas" width="500" height="400"></canvas>
-  <div class="controls">
-    <div class="row">
-      <label>Heat Power</label>
-      <input type="range" id="powerSlider" min="0" max="100" value="50">
-      <span id="powerDisplay">50%</span>
-    </div>
-    <div class="row timescale">
-      <label>Time</label>
+  <div class="side">
+    <div class="controls">
+      <div class="row">
+        <label>Heat Power</label>
+        <input type="range" id="powerSlider" min="0" max="100" value="50">
+        <span id="powerDisplay">50%</span>
+      </div>
+      <div class="row timescale">
+        <label>Time</label>
       <button data-scale="1" class="selected">×1</button>
       <button data-scale="2">×2</button>
-      <button data-scale="5">×5</button>
-      <button data-scale="10">×10</button>
+      <button data-scale="3">×3</button>
+      </div>
+      <div class="row">
+        <button id="playButton">Play</button>
+        <button id="resetButton">Reset</button>
+      </div>
+      <div class="row">
+        <span id="tempDisplay">0.0 °C</span>
+      </div>
+      <div class="energy-bar"><div id="energyFill" class="energy-fill"></div></div>
+      <div class="row"><span id="energyText">0 kJ</span></div>
     </div>
-    <div class="row">
-      <button id="playButton">Play</button>
-      <button id="resetButton">Reset</button>
-    </div>
-    <div class="row">
-      <span id="tempDisplay">0.0 °C</span>
-    </div>
-    <div class="energy-bar"><div id="energyFill" class="energy-fill"></div></div>
-    <div class="row"><span id="energyText">0 kJ</span></div>
+    <canvas id="graphCanvas" width="300" height="200"></canvas>
   </div>
 </div>
-<canvas id="graphCanvas" width="800" height="300"></canvas>
 <script>
 const MASS = 100; // g
 const CP_ICE = 2.09;
@@ -96,6 +99,11 @@ const Q_HEAT_WATER = MASS * CP_WATER * 100;
 const Q_VAP = MASS * L_V;
 const Q_TOTAL = Q_MELT + Q_HEAT_WATER + Q_VAP;
 
+const BEAKER = {x:80,y:330,w:180,h:230};
+const ICE_INIT_WIDTH = 80;
+const ICE_INIT_HEIGHT = 150;
+const FULL_WATER_HEIGHT = 110;
+
 let energy = 0;
 let time = 0;
 let isPaused = true;
@@ -103,6 +111,7 @@ let timeScale = 1;
 let temp = 0;
 let state = 'ice';
 let data = [];
+let steamParticles = [];
 
 const viewCanvas = document.getElementById('viewCanvas');
 const vctx = viewCanvas.getContext('2d');
@@ -142,6 +151,7 @@ function reset(){
   temp = 0;
   state = 'ice';
   data = [];
+  steamParticles = [];
   energyFill.style.width = '0%';
   energyText.textContent = '0 kJ';
   tempDisplay.textContent = '0.0 °C';
@@ -168,12 +178,12 @@ function updateState(){
 
 function drawMain(){
   vctx.clearRect(0,0,viewCanvas.width,viewCanvas.height);
-  const beaker = {x:80,y:320,w:180,h:240};
-  const waterHeight = 140;
-  // burner
-  const flame = powerSlider.value/100;
-  if (flame>0){
-    const fh = 30 + flame*40;
+  const beaker = BEAKER;
+
+  // burner flame depends on temperature and power
+  const power=powerSlider.value;
+  if(power>0){
+    const fh = 20 + temp*0.4;
     vctx.fillStyle='orange';
     vctx.beginPath();
     vctx.moveTo(beaker.x+beaker.w/2, beaker.y+20);
@@ -181,49 +191,86 @@ function drawMain(){
     vctx.quadraticCurveTo(beaker.x+beaker.w/2+20, beaker.y+20-fh/2, beaker.x+beaker.w/2, beaker.y+20);
     vctx.fill();
   }
+
   // beaker
   vctx.strokeStyle='#333';
   vctx.lineWidth=2;
   vctx.strokeRect(beaker.x, beaker.y - beaker.h, beaker.w, beaker.h);
-  // water/ice
+
+  // compute masses
+  let massLiquid=0, meltFrac=0;
+  if(energy<Q_MELT){
+    meltFrac = 1 - energy/Q_MELT;
+    massLiquid = MASS - MASS*meltFrac;
+  }else if(energy < Q_MELT + Q_HEAT_WATER){
+    massLiquid = MASS;
+  }else if(energy < Q_MELT + Q_HEAT_WATER + Q_VAP){
+    massLiquid = Math.max(0, MASS - (energy - Q_MELT - Q_HEAT_WATER)/L_V);
+  }else{
+    massLiquid = 0;
+  }
+
+  const waterHeight = FULL_WATER_HEIGHT * (massLiquid/MASS);
   const waterTop = beaker.y - waterHeight;
-  if(state==='ice'){
+
+  // draw water
+  if(massLiquid>0){
     vctx.fillStyle='#a8d0ff';
     vctx.fillRect(beaker.x, waterTop, beaker.w, waterHeight);
-    for(let i=0;i<4;i++){
-      for(let j=0;j<5;j++){
-        const cx=beaker.x+20+j*30+(i%2?15:0);
-        const cy=waterTop+20+i*30;
-        vctx.fillStyle='#ffffff';
-        vctx.beginPath();
-        vctx.arc(cx,cy,8,0,Math.PI*2);
-        vctx.fill();
-      }
-    }
-  } else if(state==='melting' || state==='liquid' || state==='boiling'){
-    vctx.fillStyle='#a8d0ff';
-    vctx.fillRect(beaker.x, waterTop, beaker.w, waterHeight);
-    if(state==='boiling'){
-      vctx.fillStyle='rgba(255,255,255,0.8)';
-      for(let i=0;i<10;i++){
-        const bx = beaker.x+20+Math.random()*(beaker.w-40);
-        const by = waterTop+Math.random()*waterHeight;
-        vctx.beginPath();
-        vctx.arc(bx,by,5,0,Math.PI*2);
-        vctx.fill();
+  }
+
+  // draw ice block
+  if(meltFrac>0){
+    const iw = ICE_INIT_WIDTH*meltFrac;
+    const ih = ICE_INIT_HEIGHT*meltFrac;
+    const ix = beaker.x + (beaker.w - iw)/2;
+    const iy = beaker.y - ih;
+    vctx.fillStyle='#ccc';
+    vctx.fillRect(ix, iy, iw, ih);
+    vctx.fillStyle='#888';
+    for(let i=0;i<Math.floor(ih/20);i++){
+      for(let j=0;j<Math.floor(iw/20);j++){
+        vctx.fillRect(ix+5+j*20, iy+5+i*20, 2, 2);
       }
     }
   }
-  if(state==='steam'){
-    for(let i=0;i<10;i++){
-      const sx = beaker.x + Math.random()*beaker.w;
-      const sy = waterTop - Math.random()*80;
-      vctx.fillStyle='rgba(200,200,200,0.6)';
+
+  // evaporation bubbles
+  if(state==='liquid' && temp>80){
+    const bub = Math.floor((temp-80)/20*5);
+    vctx.fillStyle='rgba(255,255,255,0.7)';
+    for(let i=0;i<bub;i++){
+      const bx = beaker.x+20+Math.random()*(beaker.w-40);
+      const by = waterTop+Math.random()*waterHeight;
       vctx.beginPath();
-      vctx.arc(sx, sy, 6, 0, Math.PI*2);
+      vctx.arc(bx,by,4,0,Math.PI*2);
       vctx.fill();
     }
   }
+
+  if(state==='boiling'){
+    vctx.fillStyle='rgba(255,255,255,0.8)';
+    for(let i=0;i<10;i++){
+      const bx = beaker.x+20+Math.random()*(beaker.w-40);
+      const by = waterTop+Math.random()*waterHeight;
+      vctx.beginPath();
+      vctx.arc(bx,by,5,0,Math.PI*2);
+      vctx.fill();
+    }
+    // spawn steam particles escaping
+    if(Math.random()<0.3){
+      steamParticles.push({x:beaker.x+beaker.w/2,y:waterTop,vx:(Math.random()-0.5)*30,vy:-40-Math.random()*30});
+    }
+  }
+
+  // draw steam particles and update
+  steamParticles.forEach(p=>{
+    p.x+=p.vx*0.016; p.y+=p.vy*0.016;
+  });
+  steamParticles=steamParticles.filter(p=>p.y>beaker.y-beaker.h-50 && p.x>beaker.x && p.x<beaker.x+beaker.w);
+  vctx.fillStyle='rgba(200,200,200,0.6)';
+  steamParticles.forEach(p=>{vctx.beginPath();vctx.arc(p.x,p.y,5,0,Math.PI*2);vctx.fill();});
+
   // thermometer
   const tColor = `hsl(${240 - Math.min(temp,120)*2},70%,50%)`;
   vctx.fillStyle=tColor;
@@ -235,7 +282,7 @@ function drawMain(){
 
 function drawGraph(){
   gctx.clearRect(0,0,gCanvas.width,gCanvas.height);
-  const margin=40;
+  const margin=30;
   const w=gCanvas.width;
   const h=gCanvas.height;
   const maxT=120;
