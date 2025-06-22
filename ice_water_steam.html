@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ice to Water to Steam Simulation</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+        h1 { margin-top: 20px; color: #2c3e50; }
+        .container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .canvas-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #mainCanvas {
+            border: 1px solid #2c3e50;
+            background-color: #fff;
+        }
+        #graphCanvas {
+            border: 1px solid #2c3e50;
+            background-color: #fff;
+            margin-top: 10px;
+        }
+        #graphLabel {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 20px;
+            background-color: #ecf0f1;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 300px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .control-group button {
+            padding: 8px 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .speed-buttons button { width: 60px; }
+        .main-buttons button { width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Ice → Water → Steam</h1>
+    <div class="container">
+        <div class="canvas-stack">
+            <canvas id="mainCanvas"></canvas>
+            <canvas id="graphCanvas" height="150"></canvas>
+            <div id="graphLabel">Temperature of ice/water (°C)</div>
+        </div>
+        <div class="controls">
+            <div class="control-group">
+                <label for="heatSlider">Burner Power (W)</label>
+                <input type="range" id="heatSlider" min="0" max="3000" value="200">
+                <span id="heatValue">200 W</span>
+            </div>
+            <div class="control-group speed-buttons">
+                <span>Speed</span>
+                <div>
+                    <button data-speed="1">×1</button>
+                    <button data-speed="2">×2</button>
+                    <button data-speed="3">×3</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <span id="tempDisplay">Temperature: -10 °C</span>
+            </div>
+            <div class="control-group main-buttons">
+                <button id="startPause">Start</button>
+                <button id="reset">Reset</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+const RHO_ICE = 917;   // kg/m^3
+const RHO_WATER = 1000;
+const C_ICE = 2100;    // J/(kg*K)
+const C_WATER = 4184;
+const L_FUS = 334000;  // J/kg
+const L_VAP = 2260000; // J/kg
+const PARTICLE_COUNT = 400;
+const PARTICLE_RADIUS = 3; // px
+const BEAKER_RADIUS_M = 0.05; // m, physical radius
+const BEAKER_AREA = Math.PI * BEAKER_RADIUS_M * BEAKER_RADIUS_M;
+const GRAPH_X_SCALE = 6; // px per simulated second
+const FLAME_HEIGHT = 30; // px space for burner flame
+const GAS_VX = 1500; // px/s horizontal launch speed
+const GAS_VY = 1200; // px/s vertical launch speed
+
+let canvas = document.getElementById('mainCanvas');
+let gCanvas = document.getElementById('graphCanvas');
+let ctx = canvas.getContext('2d');
+let gctx = gCanvas.getContext('2d');
+let heatSlider = document.getElementById('heatSlider');
+let heatValue = document.getElementById('heatValue');
+let tempDisplay = document.getElementById('tempDisplay');
+let startPauseBtn = document.getElementById('startPause');
+let resetBtn = document.getElementById('reset');
+let speedButtons = document.querySelectorAll('[data-speed]');
+
+let state;
+let particles = [];
+let graphData = [];
+let graphOffset = 0;
+let lastTime = 0;
+let beakerWidth, beakerLeft, pxPerM, beakerBottom;
+
+function resetState() {
+    state = {
+        massIce: 0.2,     // kg
+        massWater: 0,
+        massSteam: 0,
+        temperature: -10, // Celsius
+        energy: 0,
+        running: false,
+        speed: 1,
+        power: +heatSlider.value,
+        phase: 'solid',
+        time: 0
+    };
+    particles = [];
+    graphData = [];
+    graphOffset = 0;
+    createParticles();
+    tempDisplay.textContent = `Temperature: ${state.temperature.toFixed(1)} °C`;
+}
+
+function resize() {
+    const width = Math.min(600, window.innerWidth*0.6);
+    canvas.width = width;
+    canvas.height = width*1.2;
+    gCanvas.width = width;
+    beakerWidth = width*0.6;
+    beakerLeft = (width-beakerWidth)/2;
+    pxPerM = beakerWidth/(BEAKER_RADIUS_M*2);
+    beakerBottom = canvas.height - FLAME_HEIGHT;
+}
+
+function createParticles() {
+    particles = [];
+    const cols = 20;
+    const rows = 20;
+    const iceHeight = getIceHeightPx();
+    const iceWidth = beakerWidth*2/3;
+    const startX = (canvas.width-iceWidth)/2;
+    const startY = beakerBottom-iceHeight;
+    const spacingX = iceWidth/cols;
+    const spacingY = iceHeight/rows;
+    for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+            let x = startX + c*spacingX + (r%2?spacingX/2:0);
+            let y = startY + r*spacingY;
+            particles.push({x,y,vx:0,vy:0,phase:'solid',baseX:x,baseY:y});
+        }
+    }
+}
+
+function getIceHeightPx(){
+    const V = state.massIce / RHO_ICE; // m^3
+    const h = V / BEAKER_AREA; // m
+    return h * pxPerM;
+}
+function getWaterHeightPx(){
+    const V = state.massWater / RHO_WATER;
+    const h = V / BEAKER_AREA;
+    return h * pxPerM;
+}
+
+function updatePhysics(dt){
+    state.energy += state.power * dt;
+    switch(state.phase){
+        case 'solid':
+            if(state.temperature < 0){
+                const needed = state.massIce*C_ICE*(0-state.temperature);
+                if(state.energy >= needed){
+                    state.energy -= needed;
+                    state.temperature = 0;
+                }else{
+                    state.temperature += state.energy/(state.massIce*C_ICE);
+                    state.energy = 0;
+                }
+            }else{
+                // melting
+                const meltNeeded = state.massIce*L_FUS;
+                const dm = Math.min(state.energy/L_FUS,state.massIce);
+                state.massIce -= dm;
+                state.massWater += dm;
+                state.energy -= dm*L_FUS;
+                if(state.massIce===0){state.phase='liquid';}
+            }
+            break;
+        case 'liquid':
+            if(state.temperature < 100){
+                const needed = state.massWater*C_WATER*(100-state.temperature);
+                if(state.energy >= needed){
+                    state.energy -= needed;
+                    state.temperature = 100;
+                }else{
+                    state.temperature += state.energy/(state.massWater*C_WATER);
+                    state.energy = 0;
+                }
+            }else{
+                const dm = Math.min(state.energy/L_VAP,state.massWater);
+                state.massWater -= dm;
+                state.massSteam += dm;
+                state.energy -= dm*L_VAP;
+                if(state.massWater===0){state.phase='gas';}
+            }
+            break;
+        case 'gas':
+            state.temperature += state.energy/(state.massSteam*C_WATER);
+            state.energy = 0;
+            break;
+    }
+}
+
+function updateParticles(dt){
+    const waterHeight = getWaterHeightPx();
+    const iceHeight = getIceHeightPx();
+    let solidCount = Math.round(state.massIce/0.2*PARTICLE_COUNT);
+    solidCount = Math.min(solidCount, PARTICLE_COUNT);
+    let waterCount = Math.round(state.massWater/0.2*PARTICLE_COUNT);
+    for(let i=0;i<PARTICLE_COUNT;i++){
+        const p = particles[i];
+        if(i<solidCount){
+            p.phase='solid';
+            const vibAmp=Math.max(0,Math.min(2,(state.temperature+10)*0.2));
+            p.x=p.baseX+vibAmp*Math.sin(Date.now()/200+p.baseX);
+            p.y=p.baseY+vibAmp*Math.sin(Date.now()/200+p.baseY);
+        }else if(i<solidCount+waterCount){
+            if(p.phase!=='liquid'){
+                p.x=beakerLeft+Math.random()*beakerWidth;
+                p.y=beakerBottom-waterHeight*Math.random();
+                // higher base speed for liquid particles
+                p.vx=60*(Math.random()-0.5);
+                p.vy=60*(Math.random()-0.5);
+            }
+            p.phase='liquid';
+            const tempFactor=Math.max(1,(state.temperature)/50+1);
+            p.x+=p.vx*dt*tempFactor;
+            p.y+=p.vy*dt*tempFactor;
+            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
+            if(p.y>beakerBottom-PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-PARTICLE_RADIUS;}
+            if(p.y<beakerBottom-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-waterHeight+PARTICLE_RADIUS;}
+            const evapChance=0.02*Math.exp(state.temperature/50)*dt;
+            if(p.y<beakerBottom-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
+                p.phase='gas';
+                // give escaping particles uniform high speed
+                p.vx=GAS_VX*(Math.random()-0.5);
+                p.vy=-GAS_VY*Math.random();
+                state.massWater=Math.max(0,state.massWater-0.2/PARTICLE_COUNT);
+                state.massSteam+=0.2/PARTICLE_COUNT;
+            }
+        }else{
+            if(p.phase!=='gas'){
+                p.x=beakerLeft+Math.random()*beakerWidth;
+                p.y=beakerBottom-waterHeight-iceHeight-Math.random()*100;
+                // initial gas particle speed (uniform)
+                p.vx=GAS_VX*(Math.random()-0.5);
+                p.vy=-GAS_VY*Math.random();
+            }
+            p.phase='gas';
+            p.x+=p.vx*dt;
+            p.y+=p.vy*dt;
+            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
+            if(p.y<0){p.y=-1000;} // disappear
+        }
+    }
+}
+
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // beaker
+    ctx.strokeStyle='#555';
+    ctx.lineWidth=2;
+    ctx.strokeRect(beakerLeft,10,beakerWidth,beakerBottom-10);
+
+    // burner flame arrows
+    const arrowWidth = 5 + state.power/300;
+    const flameHeight = FLAME_HEIGHT - 5;
+    ctx.fillStyle = 'red';
+    for(let i=-1;i<=1;i++){
+        const x = beakerLeft + beakerWidth/2 + i*(arrowWidth+3) - arrowWidth/2;
+        ctx.beginPath();
+        ctx.moveTo(x, beakerBottom + flameHeight);
+        ctx.lineTo(x+arrowWidth/2, beakerBottom);
+        ctx.lineTo(x+arrowWidth, beakerBottom + flameHeight);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    const waterHeight = getWaterHeightPx();
+    const iceHeight = getIceHeightPx();
+
+    // water
+    if(state.massWater>0){
+        ctx.fillStyle='rgba(0,150,255,0.3)';
+        ctx.fillRect(beakerLeft,beakerBottom-waterHeight,beakerWidth,waterHeight);
+    }
+    // ice
+    if(state.massIce>0){
+        ctx.fillStyle='#c0c0c0';
+        ctx.fillRect(beakerLeft + beakerWidth/6,beakerBottom-waterHeight-iceHeight,beakerWidth*2/3,iceHeight);
+    }
+
+    // particles
+    ctx.fillStyle='#555';
+    particles.forEach(p=>{
+        if(p.phase!=='gas' || (p.y>-50)){
+            ctx.beginPath();
+            ctx.arc(p.x,p.y,PARTICLE_RADIUS,0,Math.PI*2);
+            ctx.fill();
+        }
+    });
+
+    // update graph
+    gctx.clearRect(0,0,gCanvas.width,gCanvas.height);
+    gctx.strokeStyle='#e74c3c';
+    gctx.beginPath();
+    const lastX = graphData.length ? graphData[graphData.length-1].time*GRAPH_X_SCALE : 0;
+    if(lastX - graphOffset > gCanvas.width) graphOffset = lastX - gCanvas.width;
+    graphData.forEach((pt,i)=>{
+        const x = pt.time*GRAPH_X_SCALE - graphOffset;
+        const y = gCanvas.height - (pt.temp+20);
+        if(i===0) gctx.moveTo(x,y); else gctx.lineTo(x,y);
+    });
+    gctx.stroke();
+}
+
+function loop(ts){
+    if(!lastTime) lastTime=ts;
+    const dt=(ts-lastTime)/1000*state.speed;
+    lastTime=ts;
+    if(state.running){
+        state.time=(state.time||0)+dt;
+        updatePhysics(dt);
+        updateParticles(dt);
+        if(state.massWater===0 && state.massIce===0){
+            state.running=false;
+            startPauseBtn.textContent='Start';
+        }
+        if(!graphData.length||state.time-graphData[graphData.length-1].time>0.5){
+            graphData.push({time:state.time,temp:state.temperature});
+        }
+        tempDisplay.textContent=`Temperature: ${state.temperature.toFixed(1)} °C`;
+    }
+    draw();
+    requestAnimationFrame(loop);
+}
+
+heatSlider.addEventListener('input',()=>{
+    state.power=+heatSlider.value;
+    heatValue.textContent=`${state.power} W`;
+});
+
+startPauseBtn.addEventListener('click',()=>{
+    state.running=!state.running;
+    startPauseBtn.textContent=state.running?'Pause':'Start';
+});
+resetBtn.addEventListener('click',()=>{
+    resetState();
+    startPauseBtn.textContent='Start';
+});
+
+speedButtons.forEach(btn=>btn.addEventListener('click',()=>{
+    state.speed=+btn.dataset.speed;
+}));
+
+window.addEventListener('resize',resize);
+resize();
+resetState();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
