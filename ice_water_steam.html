@@ -115,6 +115,10 @@ const GRAPH_X_SCALE = 6; // px per simulated second
 const FLAME_HEIGHT = 30; // px space for burner flame
 const GAS_VX = 1500; // px/s horizontal launch speed
 const GAS_VY = 1200; // px/s vertical launch speed
+const BROWNIAN_LIQ = 30;  // px/s^2 baseline jitter
+const BROWNIAN_GAS = 80;  // px/s^2 baseline jitter
+const BROWNIAN_LIQ_IMPULSE = 300; // px/s random kick every 10 frames
+const BROWNIAN_GAS_IMPULSE = 600; // px/s random kick every 10 frames
 
 let canvas = document.getElementById('mainCanvas');
 let gCanvas = document.getElementById('graphCanvas');
@@ -132,6 +136,7 @@ let particles = [];
 let graphData = [];
 let graphOffset = 0;
 let lastTime = 0;
+let frameCount = 0;
 let beakerWidth, beakerLeft, pxPerM, beakerBottom;
 
 function resetState() {
@@ -150,6 +155,7 @@ function resetState() {
     particles = [];
     graphData = [];
     graphOffset = 0;
+    frameCount = 0;
     createParticles();
     tempDisplay.textContent = `Temperature: ${state.temperature.toFixed(1)} °C`;
 }
@@ -244,6 +250,8 @@ function updatePhysics(dt){
 }
 
 function updateParticles(dt){
+    frameCount++;
+    const impulse = (frameCount % 10 === 0);
     const waterHeight = getWaterHeightPx();
     const iceHeight = getIceHeightPx();
     let solidCount = Math.round(state.massIce/0.2*PARTICLE_COUNT);
@@ -267,8 +275,12 @@ function updateParticles(dt){
             p.phase='liquid';
             const tempFactor=Math.max(1,(state.temperature)/50+1);
             // Brownian-like random impulses
-            p.vx+= (Math.random()-0.5)*30*dt;
-            p.vy+= (Math.random()-0.5)*30*dt;
+            p.vx += (Math.random() - 0.5) * BROWNIAN_LIQ * dt;
+            p.vy += (Math.random() - 0.5) * BROWNIAN_LIQ * dt;
+            if(impulse){
+                p.vx += (Math.random() - 0.5) * BROWNIAN_LIQ_IMPULSE;
+                p.vy += (Math.random() - 0.5) * BROWNIAN_LIQ_IMPULSE;
+            }
             p.x+=p.vx*dt*tempFactor;
             p.y+=p.vy*dt*tempFactor;
             if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
@@ -294,8 +306,12 @@ function updateParticles(dt){
             }
             p.phase='gas';
             // more intense Brownian motion in gas phase
-            p.vx+= (Math.random()-0.5)*80*dt;
-            p.vy+= (Math.random()-0.5)*80*dt;
+            p.vx += (Math.random() - 0.5) * BROWNIAN_GAS * dt;
+            p.vy += (Math.random() - 0.5) * BROWNIAN_GAS * dt;
+            if(impulse){
+                p.vx += (Math.random() - 0.5) * BROWNIAN_GAS_IMPULSE;
+                p.vy += (Math.random() - 0.5) * BROWNIAN_GAS_IMPULSE;
+            }
             p.x+=p.vx*dt;
             p.y+=p.vy*dt;
             if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
