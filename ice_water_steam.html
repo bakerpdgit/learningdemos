@@ -281,11 +281,25 @@ function updateParticles(dt){
                 p.vx += (Math.random() - 0.5) * BROWNIAN_LIQ_IMPULSE;
                 p.vy += (Math.random() - 0.5) * BROWNIAN_LIQ_IMPULSE;
             }
-            p.x+=p.vx*dt*tempFactor;
-            p.y+=p.vy*dt*tempFactor;
-            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
-            if(p.y>beakerBottom-PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-PARTICLE_RADIUS;}
-            if(p.y<beakerBottom-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-waterHeight+PARTICLE_RADIUS;}
+            p.x += p.vx * dt * tempFactor;
+            p.y += p.vy * dt * tempFactor;
+            if(p.x < beakerLeft + PARTICLE_RADIUS){
+                p.x = beakerLeft + PARTICLE_RADIUS;
+                p.vx = Math.abs(p.vx);
+            }
+            if(p.x > beakerLeft + beakerWidth - PARTICLE_RADIUS){
+                p.x = beakerLeft + beakerWidth - PARTICLE_RADIUS;
+                p.vx = -Math.abs(p.vx);
+            }
+            if(p.y > beakerBottom - PARTICLE_RADIUS){
+                p.y = beakerBottom - PARTICLE_RADIUS;
+                p.vy = -Math.abs(p.vy);
+            }
+            const top = beakerBottom - waterHeight + PARTICLE_RADIUS;
+            if(p.y < top){
+                p.y = top;
+                p.vy = Math.abs(p.vy);
+            }
             let evapChance=0.02*Math.exp(state.temperature/50)*dt;
             if(state.temperature>=100) evapChance*=2; // faster release when boiling
             if(p.y<beakerBottom-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
@@ -312,10 +326,21 @@ function updateParticles(dt){
                 p.vx += (Math.random() - 0.5) * BROWNIAN_GAS_IMPULSE;
                 p.vy += (Math.random() - 0.5) * BROWNIAN_GAS_IMPULSE;
             }
-            p.x+=p.vx*dt;
-            p.y+=p.vy*dt;
-            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
-            if(p.y<0){p.y=-1000;} // disappear
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            if(p.x < beakerLeft + PARTICLE_RADIUS){
+                p.x = beakerLeft + PARTICLE_RADIUS;
+                p.vx = Math.abs(p.vx);
+            }
+            if(p.x > beakerLeft + beakerWidth - PARTICLE_RADIUS){
+                p.x = beakerLeft + beakerWidth - PARTICLE_RADIUS;
+                p.vx = -Math.abs(p.vx);
+            }
+            if(p.y > beakerBottom - PARTICLE_RADIUS){
+                p.y = beakerBottom - PARTICLE_RADIUS;
+                p.vy = -Math.abs(p.vy);
+            }
+            if(p.y < 0){p.y=-1000;} // disappear
         }
     }
     // simple pairwise collisions for gas particles
