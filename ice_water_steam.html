@@ -282,17 +282,21 @@ function updateParticles(dt){
     const startX = iceLeft;
     const iceBottom = iceTop + iceHeight;
     const cSpacing = (iceWidth - 2*PARTICLE_RADIUS)/(ICE_COLS - 1);
-    const rSpacing = (iceHeight - 2*PARTICLE_RADIUS)/(ICE_ROWS - 1);
     let solidCount = Math.round(state.massIce/MASS_ICE_INIT*PARTICLE_COUNT);
     solidCount = Math.min(solidCount, PARTICLE_COUNT);
+    const solidRows = solidCount > 0 ? Math.ceil(solidCount/ICE_COLS) : 0;
+    const rSpacing = solidRows>1 ?
+        (iceHeight - 2*PARTICLE_RADIUS)/(solidRows-1) : 0;
     let waterCount = Math.round(state.massWater/MASS_ICE_INIT*PARTICLE_COUNT);
     for(let i=0;i<PARTICLE_COUNT;i++){
         const p = particles[i];
         if(i<solidCount){
             p.phase='solid';
             const vibAmp=Math.max(0,Math.min(2,(state.temperature+10)*0.2));
-            p.baseX = startX + PARTICLE_RADIUS + p.col*cSpacing + (p.row%2?cSpacing/2:0);
-            p.baseY = iceBottom - PARTICLE_RADIUS - p.row*rSpacing;
+            const row = Math.floor(i/ICE_COLS);
+            const col = i%ICE_COLS;
+            p.baseX = startX + PARTICLE_RADIUS + col*cSpacing + (row%2?cSpacing/2:0);
+            p.baseY = iceBottom - PARTICLE_RADIUS - row*rSpacing;
             p.x=p.baseX+vibAmp*Math.sin(Date.now()/200+p.baseX);
             p.y=p.baseY+vibAmp*Math.sin(Date.now()/200+p.baseY);
         }else if(i<solidCount+waterCount){
