@@ -249,11 +249,12 @@ function updateParticles(dt){
             if(p.phase!=='liquid'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=canvas.height-waterHeight*Math.random();
-                p.vx=20*(Math.random()-0.5);
-                p.vy=20*(Math.random()-0.5);
+                // higher base speed for liquid particles
+                p.vx=60*(Math.random()-0.5);
+                p.vy=60*(Math.random()-0.5);
             }
             p.phase='liquid';
-            const tempFactor=Math.sqrt((state.temperature+273.15)/273.15);
+            const tempFactor=Math.max(1,(state.temperature)/50+1);
             p.x+=p.vx*dt*tempFactor;
             p.y+=p.vy*dt*tempFactor;
             if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
@@ -262,8 +263,9 @@ function updateParticles(dt){
             const evapChance=0.02*Math.exp(state.temperature/50)*dt;
             if(p.y<canvas.height-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
                 p.phase='gas';
-                p.vx=100*(Math.random()-0.5);
-                p.vy=-80*Math.random();
+                // give escaping particles very high speed
+                p.vx=1000*(Math.random()-0.5);
+                p.vy=-800*Math.random();
                 state.massWater=Math.max(0,state.massWater-0.2/PARTICLE_COUNT);
                 state.massSteam+=0.2/PARTICLE_COUNT;
             }
@@ -271,8 +273,9 @@ function updateParticles(dt){
             if(p.phase!=='gas'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=canvas.height-waterHeight-iceHeight-Math.random()*100;
-                p.vx=100*(Math.random()-0.5);
-                p.vy=-80*Math.random();
+                // initial gas particle speed
+                p.vx=1000*(Math.random()-0.5);
+                p.vy=-800*Math.random();
             }
             p.phase='gas';
             p.x+=p.vx*dt;
