@@ -105,6 +105,7 @@ const PARTICLE_COUNT = 400;
 const PARTICLE_RADIUS = 3; // px
 const BEAKER_RADIUS_M = 0.05; // m, physical radius
 const BEAKER_AREA = Math.PI * BEAKER_RADIUS_M * BEAKER_RADIUS_M;
+const GRAPH_X_SCALE = 6; // px per simulated second
 
 let canvas = document.getElementById('mainCanvas');
 let gCanvas = document.getElementById('graphCanvas');
@@ -120,6 +121,7 @@ let speedButtons = document.querySelectorAll('[data-speed]');
 let state;
 let particles = [];
 let graphData = [];
+let graphOffset = 0;
 let lastTime = 0;
 let beakerWidth, beakerLeft, pxPerM;
 
@@ -138,6 +140,7 @@ function resetState() {
     };
     particles = [];
     graphData = [];
+    graphOffset = 0;
     createParticles();
     tempDisplay.textContent = `Temperature: ${state.temperature.toFixed(1)} °C`;
 }
@@ -235,31 +238,41 @@ function updateParticles(dt){
     const iceHeight = getIceHeightPx();
     let solidCount = Math.round(state.massIce/0.2*PARTICLE_COUNT);
     solidCount = Math.min(solidCount, PARTICLE_COUNT);
+    let waterCount = Math.round(state.massWater/0.2*PARTICLE_COUNT);
     for(let i=0;i<PARTICLE_COUNT;i++){
         const p = particles[i];
         if(i<solidCount){
             p.phase='solid';
             p.x=p.baseX+2*Math.sin(Date.now()/200+p.baseX);
             p.y=p.baseY+2*Math.sin(Date.now()/200+p.baseY);
-        }else if(i<solidCount+Math.round(state.massWater/0.2*PARTICLE_COUNT)){
+        }else if(i<solidCount+waterCount){
             if(p.phase!=='liquid'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=canvas.height-waterHeight*Math.random();
-                p.vx=30*(Math.random()-0.5);
-                p.vy=30*(Math.random()-0.5);
+                p.vx=20*(Math.random()-0.5);
+                p.vy=20*(Math.random()-0.5);
             }
             p.phase='liquid';
-            p.x+=p.vx*dt;
-            p.y+=p.vy*dt;
+            const tempFactor=Math.sqrt((state.temperature+273.15)/273.15);
+            p.x+=p.vx*dt*tempFactor;
+            p.y+=p.vy*dt*tempFactor;
             if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
             if(p.y>canvas.height-PARTICLE_RADIUS){p.vy*=-1;p.y=canvas.height-PARTICLE_RADIUS;}
             if(p.y<canvas.height-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=canvas.height-waterHeight+PARTICLE_RADIUS;}
+            const evapChance=0.02*Math.exp(state.temperature/50)*dt;
+            if(p.y<canvas.height-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
+                p.phase='gas';
+                p.vx=100*(Math.random()-0.5);
+                p.vy=-80*Math.random();
+                state.massWater=Math.max(0,state.massWater-0.2/PARTICLE_COUNT);
+                state.massSteam+=0.2/PARTICLE_COUNT;
+            }
         }else{
             if(p.phase!=='gas'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=canvas.height-waterHeight-iceHeight-Math.random()*100;
-                p.vx=40*(Math.random()-0.5);
-                p.vy=-30*Math.random();
+                p.vx=100*(Math.random()-0.5);
+                p.vy=-80*Math.random();
             }
             p.phase='gas';
             p.x+=p.vx*dt;
@@ -305,8 +318,10 @@ function draw(){
     gctx.clearRect(0,0,gCanvas.width,gCanvas.height);
     gctx.strokeStyle='#e74c3c';
     gctx.beginPath();
+    const lastX = graphData.length ? graphData[graphData.length-1].time*GRAPH_X_SCALE : 0;
+    if(lastX - graphOffset > gCanvas.width) graphOffset = lastX - gCanvas.width;
     graphData.forEach((pt,i)=>{
-        const x = i*3;
+        const x = pt.time*GRAPH_X_SCALE - graphOffset;
         const y = gCanvas.height - (pt.temp+20);
         if(i===0) gctx.moveTo(x,y); else gctx.lineTo(x,y);
     });
