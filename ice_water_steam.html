@@ -36,6 +36,11 @@
             background-color: #fff;
             margin-top: 10px;
         }
+        #graphLabel {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 4px;
+        }
         .controls {
             display: flex;
             flex-direction: column;
@@ -69,11 +74,12 @@
         <div class="canvas-stack">
             <canvas id="mainCanvas"></canvas>
             <canvas id="graphCanvas" height="150"></canvas>
+            <div id="graphLabel">Temperature of ice/water (°C)</div>
         </div>
         <div class="controls">
             <div class="control-group">
                 <label for="heatSlider">Burner Power (W)</label>
-                <input type="range" id="heatSlider" min="0" max="5000" value="200">
+                <input type="range" id="heatSlider" min="0" max="3000" value="200">
                 <span id="heatValue">200 W</span>
             </div>
             <div class="control-group speed-buttons">
@@ -106,6 +112,7 @@ const PARTICLE_RADIUS = 3; // px
 const BEAKER_RADIUS_M = 0.05; // m, physical radius
 const BEAKER_AREA = Math.PI * BEAKER_RADIUS_M * BEAKER_RADIUS_M;
 const GRAPH_X_SCALE = 6; // px per simulated second
+const FLAME_HEIGHT = 30; // px space for burner flame
 
 let canvas = document.getElementById('mainCanvas');
 let gCanvas = document.getElementById('graphCanvas');
@@ -123,7 +130,7 @@ let particles = [];
 let graphData = [];
 let graphOffset = 0;
 let lastTime = 0;
-let beakerWidth, beakerLeft, pxPerM;
+let beakerWidth, beakerLeft, pxPerM, beakerBottom;
 
 function resetState() {
     state = {
@@ -153,6 +160,7 @@ function resize() {
     beakerWidth = width*0.6;
     beakerLeft = (width-beakerWidth)/2;
     pxPerM = beakerWidth/(BEAKER_RADIUS_M*2);
+    beakerBottom = canvas.height - FLAME_HEIGHT;
 }
 
 function createParticles() {
@@ -162,7 +170,7 @@ function createParticles() {
     const iceHeight = getIceHeightPx();
     const iceWidth = beakerWidth*2/3;
     const startX = (canvas.width-iceWidth)/2;
-    const startY = canvas.height-iceHeight;
+    const startY = beakerBottom-iceHeight;
     const spacingX = iceWidth/cols;
     const spacingY = iceHeight/rows;
     for(let r=0;r<rows;r++){
@@ -248,7 +256,7 @@ function updateParticles(dt){
         }else if(i<solidCount+waterCount){
             if(p.phase!=='liquid'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
-                p.y=canvas.height-waterHeight*Math.random();
+                p.y=beakerBottom-waterHeight*Math.random();
                 // higher base speed for liquid particles
                 p.vx=60*(Math.random()-0.5);
                 p.vy=60*(Math.random()-0.5);
@@ -258,10 +266,10 @@ function updateParticles(dt){
             p.x+=p.vx*dt*tempFactor;
             p.y+=p.vy*dt*tempFactor;
             if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
-            if(p.y>canvas.height-PARTICLE_RADIUS){p.vy*=-1;p.y=canvas.height-PARTICLE_RADIUS;}
-            if(p.y<canvas.height-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=canvas.height-waterHeight+PARTICLE_RADIUS;}
+            if(p.y>beakerBottom-PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-PARTICLE_RADIUS;}
+            if(p.y<beakerBottom-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-waterHeight+PARTICLE_RADIUS;}
             const evapChance=0.02*Math.exp(state.temperature/50)*dt;
-            if(p.y<canvas.height-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
+            if(p.y<beakerBottom-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
                 p.phase='gas';
                 // give escaping particles very high speed
                 p.vx=1000*(Math.random()-0.5);
@@ -272,7 +280,7 @@ function updateParticles(dt){
         }else{
             if(p.phase!=='gas'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
-                p.y=canvas.height-waterHeight-iceHeight-Math.random()*100;
+                p.y=beakerBottom-waterHeight-iceHeight-Math.random()*100;
                 // initial gas particle speed
                 p.vx=1000*(Math.random()-0.5);
                 p.vy=-800*Math.random();
@@ -291,7 +299,21 @@ function draw(){
     // beaker
     ctx.strokeStyle='#555';
     ctx.lineWidth=2;
-    ctx.strokeRect(beakerLeft,10,beakerWidth,canvas.height-10);
+    ctx.strokeRect(beakerLeft,10,beakerWidth,beakerBottom-10);
+
+    // burner flame arrows
+    const arrowWidth = 5 + state.power/300;
+    const flameHeight = FLAME_HEIGHT - 5;
+    ctx.fillStyle = 'red';
+    for(let i=-1;i<=1;i++){
+        const x = beakerLeft + beakerWidth/2 + i*(arrowWidth+3) - arrowWidth/2;
+        ctx.beginPath();
+        ctx.moveTo(x, beakerBottom);
+        ctx.lineTo(x+arrowWidth/2, beakerBottom - flameHeight);
+        ctx.lineTo(x+arrowWidth, beakerBottom);
+        ctx.closePath();
+        ctx.fill();
+    }
 
     const waterHeight = getWaterHeightPx();
     const iceHeight = getIceHeightPx();
@@ -299,12 +321,12 @@ function draw(){
     // water
     if(state.massWater>0){
         ctx.fillStyle='rgba(0,150,255,0.3)';
-        ctx.fillRect(beakerLeft,canvas.height-waterHeight,beakerWidth,waterHeight);
+        ctx.fillRect(beakerLeft,beakerBottom-waterHeight,beakerWidth,waterHeight);
     }
     // ice
     if(state.massIce>0){
         ctx.fillStyle='#c0c0c0';
-        ctx.fillRect(beakerLeft + beakerWidth/6,canvas.height-waterHeight-iceHeight,beakerWidth*2/3,iceHeight);
+        ctx.fillRect(beakerLeft + beakerWidth/6,beakerBottom-waterHeight-iceHeight,beakerWidth*2/3,iceHeight);
     }
 
     // particles
@@ -339,6 +361,10 @@ function loop(ts){
         state.time=(state.time||0)+dt;
         updatePhysics(dt);
         updateParticles(dt);
+        if(state.massWater===0 && state.massIce===0){
+            state.running=false;
+            startPauseBtn.textContent='Start';
+        }
         if(!graphData.length||state.time-graphData[graphData.length-1].time>0.5){
             graphData.push({time:state.time,temp:state.temperature});
         }
