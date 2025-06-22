@@ -124,6 +124,8 @@ const ICE_COLS = 20;
 const ICE_ROWS = 20; // row 0 at bottom
 let ICE_WIDTH0 = 0;  // px, set during resize
 let ICE_HEIGHT0 = 0; // px, set during resize
+let C_SPACING0 = 0;  // base column spacing
+let R_SPACING0 = 0;  // base row spacing
 
 let canvas = document.getElementById('mainCanvas');
 let gCanvas = document.getElementById('graphCanvas');
@@ -178,6 +180,8 @@ function resize() {
     const w0m = ICE_WIDTH0/pxPerM;
     const V0 = MASS_ICE_INIT / RHO_ICE;
     ICE_HEIGHT0 = (V0/(w0m*w0m))*pxPerM;
+    C_SPACING0 = (ICE_WIDTH0 - 2*PARTICLE_RADIUS)/(ICE_COLS - 1);
+    R_SPACING0 = (ICE_HEIGHT0 - 2*PARTICLE_RADIUS)/(ICE_ROWS - 1);
 }
 
 function createParticles() {
@@ -186,8 +190,8 @@ function createParticles() {
     const iceHeight = getIceHeightPx();
     const startX = (canvas.width - iceWidth)/2;
     const bottomY = getIceTopPx() + iceHeight;
-    const cSpacing = (iceWidth - 2*PARTICLE_RADIUS)/(ICE_COLS - 1);
-    const rSpacing = (iceHeight - 2*PARTICLE_RADIUS)/(ICE_ROWS - 1);
+    const cSpacing = C_SPACING0 * getIceScale();
+    const rSpacing = R_SPACING0 * getIceScale();
     for(let r=0;r<ICE_ROWS;r++){
         for(let c=0;c<ICE_COLS;c++){
             const x = startX + PARTICLE_RADIUS + c*cSpacing + (r%2?cSpacing/2:0);
@@ -274,32 +278,37 @@ function updatePhysics(dt){
 function updateParticles(dt){
     frameCount++;
     const impulse = (frameCount % 10 === 0);
+    const scale = getIceScale();
     const waterHeight = getWaterHeightPx();
-    const iceHeight = getIceHeightPx();
-    const iceWidth = getIceWidthPx();
+    const iceHeight = ICE_HEIGHT0 * scale;
+    const iceWidth = ICE_WIDTH0 * scale;
     const iceLeft = (canvas.width - iceWidth)/2;
     const iceTop = getIceTopPx();
-    const startX = iceLeft;
     const iceBottom = iceTop + iceHeight;
-    const cSpacing = (iceWidth - 2*PARTICLE_RADIUS)/(ICE_COLS - 1);
+    const cSpacing = C_SPACING0 * scale;
+    const rSpacing = R_SPACING0 * scale;
+
     let solidCount = Math.round(state.massIce/MASS_ICE_INIT*PARTICLE_COUNT);
-    solidCount = Math.min(solidCount, PARTICLE_COUNT);
-    const solidRows = solidCount > 0 ? Math.ceil(solidCount/ICE_COLS) : 0;
-    const rSpacing = solidRows>1 ?
-        (iceHeight - 2*PARTICLE_RADIUS)/(solidRows-1) : 0;
+    solidCount = Math.max(0, Math.min(solidCount, PARTICLE_COUNT));
     let waterCount = Math.round(state.massWater/MASS_ICE_INIT*PARTICLE_COUNT);
+    waterCount = Math.max(0, Math.min(waterCount, PARTICLE_COUNT - solidCount));
+    const gasCount = PARTICLE_COUNT - solidCount - waterCount;
+    const meltCount = gasCount + waterCount;
+
     for(let i=0;i<PARTICLE_COUNT;i++){
         const p = particles[i];
-        if(i<solidCount){
+        if(i >= meltCount){
+            // solid lattice (top portion)
             p.phase='solid';
             const vibAmp=Math.max(0,Math.min(2,(state.temperature+10)*0.2));
-            const row = Math.floor(i/ICE_COLS);
-            const col = i%ICE_COLS;
-            p.baseX = startX + PARTICLE_RADIUS + col*cSpacing + (row%2?cSpacing/2:0);
+            const j=i-meltCount;
+            const row=Math.floor(j/ICE_COLS);
+            const col=j%ICE_COLS;
+            p.baseX = iceLeft + PARTICLE_RADIUS + col*cSpacing + (row%2?cSpacing/2:0);
             p.baseY = iceBottom - PARTICLE_RADIUS - row*rSpacing;
             p.x=p.baseX+vibAmp*Math.sin(Date.now()/200+p.baseX);
             p.y=p.baseY+vibAmp*Math.sin(Date.now()/200+p.baseY);
-        }else if(i<solidCount+waterCount){
+        }else if(i >= gasCount){
             if(p.phase!=='liquid'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=beakerBottom-waterHeight*Math.random();
