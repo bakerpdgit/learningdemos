@@ -121,6 +121,7 @@ let state;
 let particles = [];
 let graphData = [];
 let lastTime = 0;
+let beakerWidth, beakerLeft, pxPerM;
 
 function resetState() {
     state = {
@@ -131,7 +132,9 @@ function resetState() {
         energy: 0,
         running: false,
         speed: 1,
-        power: +heatSlider.value
+        power: +heatSlider.value,
+        phase: 'solid',
+        time: 0
     };
     particles = [];
     graphData = [];
@@ -144,6 +147,9 @@ function resize() {
     canvas.width = width;
     canvas.height = width*1.2;
     gCanvas.width = width;
+    beakerWidth = width*0.6;
+    beakerLeft = (width-beakerWidth)/2;
+    pxPerM = beakerWidth/(BEAKER_RADIUS_M*2);
 }
 
 function createParticles() {
@@ -151,13 +157,15 @@ function createParticles() {
     const cols = 20;
     const rows = 20;
     const iceHeight = getIceHeightPx();
-    const startY = canvas.height - iceHeight;
-    const cellW = (BEAKER_RADIUS_M*2*canvas.width/ (BEAKER_RADIUS_M*2))/cols;
-    const cellH = iceHeight/rows;
-    for(let i=0;i<rows;i++){
-        for(let j=0;j<cols;j++){
-            let x = canvas.width/2 - BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M + (j+0.5)*cellW;
-            let y = startY + (i+0.5)*cellH;
+    const iceWidth = beakerWidth*2/3;
+    const startX = (canvas.width-iceWidth)/2;
+    const startY = canvas.height-iceHeight;
+    const spacingX = iceWidth/cols;
+    const spacingY = iceHeight/rows;
+    for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+            let x = startX + c*spacingX + (r%2?spacingX/2:0);
+            let y = startY + r*spacingY;
             particles.push({x,y,vx:0,vy:0,phase:'solid',baseX:x,baseY:y});
         }
     }
@@ -166,12 +174,12 @@ function createParticles() {
 function getIceHeightPx(){
     const V = state.massIce / RHO_ICE; // m^3
     const h = V / BEAKER_AREA; // m
-    return h / BEAKER_RADIUS_M * (canvas.width/2); // scale
+    return h * pxPerM;
 }
 function getWaterHeightPx(){
     const V = state.massWater / RHO_WATER;
     const h = V / BEAKER_AREA;
-    return h / BEAKER_RADIUS_M * (canvas.width/2);
+    return h * pxPerM;
 }
 
 function updatePhysics(dt){
@@ -231,11 +239,11 @@ function updateParticles(dt){
         const p = particles[i];
         if(i<solidCount){
             p.phase='solid';
-            p.x=p.baseX+2*Math.sin(Date.now()/200+p.x);
-            p.y=p.baseY+2*Math.sin(Date.now()/200+p.y);
+            p.x=p.baseX+2*Math.sin(Date.now()/200+p.baseX);
+            p.y=p.baseY+2*Math.sin(Date.now()/200+p.baseY);
         }else if(i<solidCount+Math.round(state.massWater/0.2*PARTICLE_COUNT)){
             if(p.phase!=='liquid'){
-                p.x=Math.random()*BEAKER_RADIUS_M*2*(canvas.width/(BEAKER_RADIUS_M*2))+canvas.width/2-BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M;
+                p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=canvas.height-waterHeight*Math.random();
                 p.vx=30*(Math.random()-0.5);
                 p.vy=30*(Math.random()-0.5);
@@ -243,12 +251,12 @@ function updateParticles(dt){
             p.phase='liquid';
             p.x+=p.vx*dt;
             p.y+=p.vy*dt;
-            if(p.x<canvas.width/2-BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M+PARTICLE_RADIUS||p.x>canvas.width/2+BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS-Math. ceil(PARTICLE_RADIUS))p.vx*=-1;
+            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
             if(p.y>canvas.height-PARTICLE_RADIUS){p.vy*=-1;p.y=canvas.height-PARTICLE_RADIUS;}
             if(p.y<canvas.height-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=canvas.height-waterHeight+PARTICLE_RADIUS;}
         }else{
             if(p.phase!=='gas'){
-                p.x=Math.random()*BEAKER_RADIUS_M*2*(canvas.width/(BEAKER_RADIUS_M*2))+canvas.width/2-BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M;
+                p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=canvas.height-waterHeight-iceHeight-Math.random()*100;
                 p.vx=40*(Math.random()-0.5);
                 p.vy=-30*Math.random();
@@ -256,7 +264,7 @@ function updateParticles(dt){
             p.phase='gas';
             p.x+=p.vx*dt;
             p.y+=p.vy*dt;
-            if(p.x<canvas.width/2-BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M+PARTICLE_RADIUS||p.x>canvas.width/2+BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS-Math.ceil(PARTICLE_RADIUS))p.vx*=-1;
+            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
             if(p.y<0){p.y=-1000;} // disappear
         }
     }
@@ -267,7 +275,7 @@ function draw(){
     // beaker
     ctx.strokeStyle='#555';
     ctx.lineWidth=2;
-    ctx.strokeRect(canvas.width/2-BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M,10,BEAKER_RADIUS_M*2*canvas.width/BEAKER_RADIUS_M,canvas.height-10);
+    ctx.strokeRect(beakerLeft,10,beakerWidth,canvas.height-10);
 
     const waterHeight = getWaterHeightPx();
     const iceHeight = getIceHeightPx();
@@ -275,12 +283,12 @@ function draw(){
     // water
     if(state.massWater>0){
         ctx.fillStyle='rgba(0,150,255,0.3)';
-        ctx.fillRect(canvas.width/2-BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M,canvas.height-waterHeight,BEAKER_RADIUS_M*2*canvas.width/BEAKER_RADIUS_M,waterHeight);
+        ctx.fillRect(beakerLeft,canvas.height-waterHeight,beakerWidth,waterHeight);
     }
     // ice
     if(state.massIce>0){
         ctx.fillStyle='#c0c0c0';
-        ctx.fillRect(canvas.width/2-BEAKER_RADIUS_M*canvas.width/BEAKER_RADIUS_M,canvas.height-waterHeight-iceHeight,BEAKER_RADIUS_M*2*canvas.width/BEAKER_RADIUS_M,iceHeight);
+        ctx.fillRect(beakerLeft + beakerWidth/6,canvas.height-waterHeight-iceHeight,beakerWidth*2/3,iceHeight);
     }
 
     // particles
