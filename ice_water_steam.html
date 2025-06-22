@@ -263,49 +263,57 @@ function getWaterHeightPx(){
 
 function updatePhysics(dt){
     state.energy += state.power * dt;
-    switch(state.phase){
-        case 'solid':
-            if(state.temperature < 0){
-                const needed = state.massIce*C_ICE*(0-state.temperature);
-                if(state.energy >= needed){
-                    state.energy -= needed;
-                    state.temperature = 0;
-                }else{
-                    state.temperature += state.energy/(state.massIce*C_ICE);
-                    state.energy = 0;
-                }
-            }else{
-                // melting
-                const meltNeeded = state.massIce*L_FUS;
-                const dm = Math.min(state.energy/L_FUS,state.massIce);
+    const EPS = 1e-9;
+    while(state.energy > EPS){
+        if(state.phase === 'solid' && state.temperature < 0){
+            const needed = state.massIce * C_ICE * (0 - state.temperature);
+            if(state.energy < needed){
+                state.temperature += state.energy / (state.massIce * C_ICE);
+                state.energy = 0;
+                break;
+            }
+            state.energy -= needed;
+            state.temperature = 0;
+        } else if(state.phase === 'solid'){
+            const needed = state.massIce * L_FUS;
+            if(state.energy < needed){
+                const dm = state.energy / L_FUS;
                 state.massIce -= dm;
                 state.massWater += dm;
-                state.energy -= dm*L_FUS;
-                if(state.massIce===0){state.phase='liquid';}
+                state.energy = 0;
+                break;
             }
-            break;
-        case 'liquid':
-            if(state.temperature < 100){
-                const needed = state.massWater*C_WATER*(100-state.temperature);
-                if(state.energy >= needed){
-                    state.energy -= needed;
-                    state.temperature = 100;
-                }else{
-                    state.temperature += state.energy/(state.massWater*C_WATER);
-                    state.energy = 0;
-                }
-            }else{
-                const dm = Math.min(state.energy/L_VAP,state.massWater);
+            state.massWater += state.massIce;
+            state.energy -= needed;
+            state.massIce = 0;
+            state.phase = 'liquid';
+        } else if(state.phase === 'liquid' && state.temperature < 100){
+            const needed = state.massWater * C_WATER * (100 - state.temperature);
+            if(state.energy < needed){
+                state.temperature += state.energy / (state.massWater * C_WATER);
+                state.energy = 0;
+                break;
+            }
+            state.energy -= needed;
+            state.temperature = 100;
+        } else if(state.phase === 'liquid'){
+            const needed = state.massWater * L_VAP;
+            if(state.energy < needed){
+                const dm = state.energy / L_VAP;
                 state.massWater -= dm;
                 state.massSteam += dm;
-                state.energy -= dm*L_VAP;
-                if(state.massWater===0){state.phase='gas';}
+                state.energy = 0;
+                break;
             }
-            break;
-        case 'gas':
-            state.temperature += state.energy/(state.massSteam*C_WATER);
+            state.massSteam += state.massWater;
+            state.energy -= needed;
+            state.massWater = 0;
+            state.phase = 'gas';
+        } else {
+            // heating steam
+            state.temperature += state.energy / (state.massSteam * C_WATER);
             state.energy = 0;
-            break;
+        }
     }
 }
 
