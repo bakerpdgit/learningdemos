@@ -113,6 +113,8 @@ const BEAKER_RADIUS_M = 0.05; // m, physical radius
 const BEAKER_AREA = Math.PI * BEAKER_RADIUS_M * BEAKER_RADIUS_M;
 const GRAPH_X_SCALE = 6; // px per simulated second
 const FLAME_HEIGHT = 30; // px space for burner flame
+const GAS_VX = 1500; // px/s horizontal launch speed
+const GAS_VY = 1200; // px/s vertical launch speed
 
 let canvas = document.getElementById('mainCanvas');
 let gCanvas = document.getElementById('graphCanvas');
@@ -251,8 +253,9 @@ function updateParticles(dt){
         const p = particles[i];
         if(i<solidCount){
             p.phase='solid';
-            p.x=p.baseX+2*Math.sin(Date.now()/200+p.baseX);
-            p.y=p.baseY+2*Math.sin(Date.now()/200+p.baseY);
+            const vibAmp=Math.max(0,Math.min(2,(state.temperature+10)*0.2));
+            p.x=p.baseX+vibAmp*Math.sin(Date.now()/200+p.baseX);
+            p.y=p.baseY+vibAmp*Math.sin(Date.now()/200+p.baseY);
         }else if(i<solidCount+waterCount){
             if(p.phase!=='liquid'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
@@ -271,9 +274,9 @@ function updateParticles(dt){
             const evapChance=0.02*Math.exp(state.temperature/50)*dt;
             if(p.y<beakerBottom-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
                 p.phase='gas';
-                // give escaping particles very high speed
-                p.vx=1000*(Math.random()-0.5);
-                p.vy=-800*Math.random();
+                // give escaping particles uniform high speed
+                p.vx=GAS_VX*(Math.random()-0.5);
+                p.vy=-GAS_VY*Math.random();
                 state.massWater=Math.max(0,state.massWater-0.2/PARTICLE_COUNT);
                 state.massSteam+=0.2/PARTICLE_COUNT;
             }
@@ -281,9 +284,9 @@ function updateParticles(dt){
             if(p.phase!=='gas'){
                 p.x=beakerLeft+Math.random()*beakerWidth;
                 p.y=beakerBottom-waterHeight-iceHeight-Math.random()*100;
-                // initial gas particle speed
-                p.vx=1000*(Math.random()-0.5);
-                p.vy=-800*Math.random();
+                // initial gas particle speed (uniform)
+                p.vx=GAS_VX*(Math.random()-0.5);
+                p.vy=-GAS_VY*Math.random();
             }
             p.phase='gas';
             p.x+=p.vx*dt;
@@ -308,9 +311,9 @@ function draw(){
     for(let i=-1;i<=1;i++){
         const x = beakerLeft + beakerWidth/2 + i*(arrowWidth+3) - arrowWidth/2;
         ctx.beginPath();
-        ctx.moveTo(x, beakerBottom);
-        ctx.lineTo(x+arrowWidth/2, beakerBottom - flameHeight);
-        ctx.lineTo(x+arrowWidth, beakerBottom);
+        ctx.moveTo(x, beakerBottom + flameHeight);
+        ctx.lineTo(x+arrowWidth/2, beakerBottom);
+        ctx.lineTo(x+arrowWidth, beakerBottom + flameHeight);
         ctx.closePath();
         ctx.fill();
     }
