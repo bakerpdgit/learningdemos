@@ -119,9 +119,11 @@ const BROWNIAN_LIQ = 30;  // px/s^2 baseline jitter
 const BROWNIAN_GAS = 80;  // px/s^2 baseline jitter
 const BROWNIAN_LIQ_IMPULSE = 300; // px/s random kick every 10 frames
 const BROWNIAN_GAS_IMPULSE = 600; // px/s random kick every 10 frames
-const MASS_ICE_INIT = 0.2; // initial kg of ice
+const ICE_SIDE_M = 0.06; // 6 cm cube
+const ICE_VOLUME = ICE_SIDE_M ** 3; // m^3
+const MASS_ICE_INIT = RHO_ICE * ICE_VOLUME; // ~0.2 kg
 const ICE_COLS = 20;
-const ICE_ROWS = 20; // row 0 at bottom
+const ICE_ROWS = 20; // row 0 at top
 let ICE_WIDTH0 = 0;  // px, set during resize
 let ICE_HEIGHT0 = 0; // px, set during resize
 let C_SPACING0 = 0;  // base column spacing
@@ -179,10 +181,8 @@ function resize() {
     beakerLeft = (width-beakerWidth)/2;
     pxPerM = beakerWidth/(BEAKER_RADIUS_M*2);
     beakerBottom = canvas.height - FLAME_HEIGHT;
-    ICE_WIDTH0 = beakerWidth*2/3;
-    const w0m = ICE_WIDTH0/pxPerM;
-    const V0 = MASS_ICE_INIT / RHO_ICE;
-    ICE_HEIGHT0 = (V0/(w0m*w0m))*pxPerM;
+    ICE_WIDTH0 = ICE_SIDE_M * pxPerM;
+    ICE_HEIGHT0 = ICE_SIDE_M * pxPerM;
     C_SPACING0 = (ICE_WIDTH0 - 2*PARTICLE_RADIUS)/(ICE_COLS - 1);
     R_SPACING0 = (ICE_HEIGHT0 - 2*PARTICLE_RADIUS)/(ICE_ROWS - 1);
     if(particles.length) repositionSolidParticles();
@@ -198,7 +198,8 @@ function createParticles() {
     const rSpacing = (iceHeight - 2 * PARTICLE_RADIUS) / (ICE_ROWS - 1);
     for (let r = 0; r < ICE_ROWS; r++) {
         for (let c = 0; c < ICE_COLS; c++) {
-            const x = startX + PARTICLE_RADIUS + c * cSpacing + (r % 2 ? cSpacing / 2 : 0);
+            const offset = ((ICE_ROWS - 1 - r) % 2 ? cSpacing / 2 : 0);
+            const x = startX + PARTICLE_RADIUS + c * cSpacing + offset;
             const y = iceTop + PARTICLE_RADIUS + r * rSpacing;
             particles.push({ row: r, col: c, x, y, vx: 0, vy: 0, phase: 'solid' });
         }
@@ -220,7 +221,8 @@ function repositionSolidParticles(){
         const rowBottom = Math.floor(i/ICE_COLS);
         const col = i % ICE_COLS;
         const rowTop = rows-1-rowBottom;
-        p.baseX = iceLeft + PARTICLE_RADIUS + col*cSpacing + (rowTop%2?cSpacing/2:0);
+        const offset = ((ICE_ROWS - 1 - rowTop) % 2 ? cSpacing / 2 : 0);
+        p.baseX = iceLeft + PARTICLE_RADIUS + col*cSpacing + offset;
         p.baseY = iceTop + PARTICLE_RADIUS + rowTop*rSpacing;
         p.x = p.baseX;
         p.y = p.baseY;
@@ -317,7 +319,10 @@ function updateParticles(dt){
     let solids=particles.filter(p=>p.phase==='solid');
     let currentSolid=solids.length;
     if(currentSolid>desiredSolid){
-        solids.sort((a,b)=>b.baseY-a.baseY);
+        solids.sort((a,b)=>{
+            if(b.baseY!==a.baseY) return b.baseY-a.baseY;
+            return b.baseX-a.baseX;
+        });
         const melt=solids.slice(0,currentSolid-desiredSolid);
         melt.forEach(p=>{
             p.phase='liquid';
