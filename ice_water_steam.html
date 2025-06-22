@@ -144,6 +144,8 @@ let graphData = [];
 let graphOffset = 0;
 let lastTime = 0;
 let frameCount = 0;
+let latticeTimer = 0;
+let lastSolidCount = ICE_COLS * ICE_ROWS;
 let beakerWidth, beakerLeft, pxPerM, beakerBottom;
 
 function resetState() {
@@ -164,6 +166,7 @@ function resetState() {
     graphOffset = 0;
     frameCount = 0;
     createParticles();
+    repositionSolidParticles();
     tempDisplay.textContent = `Temperature: ${state.temperature.toFixed(1)} °C`;
 }
 
@@ -182,6 +185,7 @@ function resize() {
     ICE_HEIGHT0 = (V0/(w0m*w0m))*pxPerM;
     C_SPACING0 = (ICE_WIDTH0 - 2*PARTICLE_RADIUS)/(ICE_COLS - 1);
     R_SPACING0 = (ICE_HEIGHT0 - 2*PARTICLE_RADIUS)/(ICE_ROWS - 1);
+    if(particles.length) repositionSolidParticles();
 }
 
 function createParticles() {
@@ -199,6 +203,34 @@ function createParticles() {
             particles.push({ row: r, col: c, x, y, vx: 0, vy: 0, phase: 'solid' });
         }
     }
+}
+
+function repositionSolidParticles(){
+    const solids = particles.filter(p=>p.phase==='solid');
+    const solidCount = solids.length;
+    const scale = getIceScale();
+    const iceWidth = ICE_WIDTH0 * scale;
+    const iceHeight = ICE_HEIGHT0 * scale;
+    const iceLeft = (canvas.width - iceWidth)/2;
+    const iceTop = getIceTopPx();
+    const rows = Math.max(1, Math.ceil(solidCount/ICE_COLS));
+    const cSpacing = (iceWidth - 2*PARTICLE_RADIUS)/(ICE_COLS - 1);
+    const rSpacing = rows>1 ? (iceHeight - 2*PARTICLE_RADIUS)/(rows - 1) : 0;
+    solids.forEach((p,i)=>{
+        const rowBottom = Math.floor(i/ICE_COLS);
+        const col = i % ICE_COLS;
+        const rowTop = rows-1-rowBottom;
+        p.baseX = iceLeft + PARTICLE_RADIUS + col*cSpacing + (rowTop%2?cSpacing/2:0);
+        p.baseY = iceTop + PARTICLE_RADIUS + rowTop*rSpacing;
+        p.x = p.baseX;
+        p.y = p.baseY;
+    });
+    lastSolidCount = solidCount;
+    latticeTimer = 0;
+}
+
+function countSolids(){
+    return particles.reduce((n,p)=>n+(p.phase==='solid'),0);
 }
 
 function getIceScale(){
@@ -277,120 +309,79 @@ function updatePhysics(dt){
 
 function updateParticles(dt){
     frameCount++;
-    const impulse = (frameCount % 10 === 0);
-    const scale = getIceScale();
-    const waterHeight = getWaterHeightPx();
-    const iceHeight = ICE_HEIGHT0 * scale;
-    const iceWidth = ICE_WIDTH0 * scale;
-    const iceLeft = (canvas.width - iceWidth)/2;
-    const iceTop = getIceTopPx();
-    const iceBottom = iceTop + iceHeight;
-    const solidCount = Math.round(state.massIce / MASS_ICE_INIT * PARTICLE_COUNT);
-    const waterCount = Math.round(state.massWater / MASS_ICE_INIT * PARTICLE_COUNT);
-    const gasCount = Math.max(0, PARTICLE_COUNT - solidCount - waterCount);
-    const meltCount = PARTICLE_COUNT - solidCount;
+    const impulse=(frameCount%10===0);
+    latticeTimer+=dt;
+    const waterHeight=getWaterHeightPx();
 
-    const solidRows = Math.max(1, Math.ceil(solidCount / ICE_COLS));
-    const cSpacing = (iceWidth - 2 * PARTICLE_RADIUS) / (ICE_COLS - 1);
-    const rSpacing = solidRows > 1 ? (iceHeight - 2 * PARTICLE_RADIUS) / (solidRows - 1) : 0;
-
-    // numbers above already computed using mass ratios
-
-    for(let i=0;i<PARTICLE_COUNT;i++){
-        const p = particles[i];
-        if (i >= meltCount) {
-            // solid lattice top-aligned
-            p.phase = 'solid';
-            const vibAmp = Math.max(0, Math.min(2, (state.temperature + 10) * 0.2));
-            const j = i - meltCount;
-            const rowBottom = Math.floor(j / ICE_COLS);
-            const col = j % ICE_COLS;
-            const rowTop = solidRows - 1 - rowBottom;
-            p.baseX = iceLeft + PARTICLE_RADIUS + col * cSpacing + (rowTop % 2 ? cSpacing / 2 : 0);
-            p.baseY = iceTop + PARTICLE_RADIUS + rowTop * rSpacing;
-            p.x = p.baseX + vibAmp * Math.sin(Date.now() / 200 + p.baseX);
-            p.y = p.baseY + vibAmp * Math.sin(Date.now() / 200 + p.baseY);
-        }else if(i >= gasCount){
-            if(p.phase!=='liquid'){
-                p.x=beakerLeft+Math.random()*beakerWidth;
-                p.y=beakerBottom-waterHeight*Math.random();
-                // higher base speed for liquid particles
-                p.vx=60*(Math.random()-0.5);
-                p.vy=60*(Math.random()-0.5);
-            }
+    const desiredSolid=Math.round(state.massIce/MASS_ICE_INIT*PARTICLE_COUNT);
+    let solids=particles.filter(p=>p.phase==='solid');
+    let currentSolid=solids.length;
+    if(currentSolid>desiredSolid){
+        solids.sort((a,b)=>b.baseY-a.baseY);
+        const melt=solids.slice(0,currentSolid-desiredSolid);
+        melt.forEach(p=>{
             p.phase='liquid';
+            p.x=beakerLeft+Math.random()*beakerWidth;
+            p.y=beakerBottom-waterHeight*Math.random();
+            p.vx=60*(Math.random()-0.5);
+            p.vy=60*(Math.random()-0.5);
+        });
+        currentSolid=desiredSolid;
+        solids=particles.filter(p=>p.phase==='solid');
+    }
+    if(latticeTimer>=0.5 || currentSolid!==lastSolidCount){
+        repositionSolidParticles();
+        solids=particles.filter(p=>p.phase==='solid');
+    }
+
+    solids.forEach(p=>{
+        const vibAmp=Math.max(0,Math.min(2,(state.temperature+10)*0.2));
+        p.x=p.baseX+vibAmp*Math.sin(Date.now()/200+p.baseX);
+        p.y=p.baseY+vibAmp*Math.sin(Date.now()/200+p.baseY);
+    });
+
+    particles.forEach(p=>{
+        if(p.phase==='liquid'){
             const tempFactor=Math.max(1,(state.temperature)/50+1);
-            // Brownian-like random impulses
-            p.vx += (Math.random() - 0.5) * BROWNIAN_LIQ * dt;
-            p.vy += (Math.random() - 0.5) * BROWNIAN_LIQ * dt;
+            p.vx+=(Math.random()-0.5)*BROWNIAN_LIQ*dt;
+            p.vy+=(Math.random()-0.5)*BROWNIAN_LIQ*dt;
             if(impulse){
-                p.vx += (Math.random() - 0.5) * BROWNIAN_LIQ_IMPULSE;
-                p.vy += (Math.random() - 0.5) * BROWNIAN_LIQ_IMPULSE;
+                p.vx+=(Math.random()-0.5)*BROWNIAN_LIQ_IMPULSE;
+                p.vy+=(Math.random()-0.5)*BROWNIAN_LIQ_IMPULSE;
             }
-            p.x += p.vx * dt * tempFactor;
-            p.y += p.vy * dt * tempFactor;
-            if(p.x < beakerLeft + PARTICLE_RADIUS){
-                p.x = beakerLeft + PARTICLE_RADIUS;
-                p.vx = Math.abs(p.vx);
-            }
-            if(p.x > beakerLeft + beakerWidth - PARTICLE_RADIUS){
-                p.x = beakerLeft + beakerWidth - PARTICLE_RADIUS;
-                p.vx = -Math.abs(p.vx);
-            }
-            if(p.y > beakerBottom - PARTICLE_RADIUS){
-                p.y = beakerBottom - PARTICLE_RADIUS;
-                p.vy = -Math.abs(p.vy);
-            }
-            const top = beakerBottom - waterHeight + PARTICLE_RADIUS;
-            if(p.y < top){
-                p.y = top;
-                p.vy = Math.abs(p.vy);
-            }
+            p.x+=p.vx*dt*tempFactor;
+            p.y+=p.vy*dt*tempFactor;
+            if(p.x<beakerLeft+PARTICLE_RADIUS){p.x=beakerLeft+PARTICLE_RADIUS;p.vx=Math.abs(p.vx);} 
+            if(p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS){p.x=beakerLeft+beakerWidth-PARTICLE_RADIUS;p.vx=-Math.abs(p.vx);} 
+            if(p.y>beakerBottom-PARTICLE_RADIUS){p.y=beakerBottom-PARTICLE_RADIUS;p.vy=-Math.abs(p.vy);} 
+            const top=beakerBottom-waterHeight+PARTICLE_RADIUS;
+            if(p.y<top){p.y=top;p.vy=Math.abs(p.vy);} 
             let evapChance=0.02*Math.exp(state.temperature/50)*dt;
-            if(state.temperature>=100) evapChance*=2; // faster release when boiling
+            if(state.temperature>=100) evapChance*=2;
             if(p.y<beakerBottom-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
                 p.phase='gas';
-                // give escaping particles uniform high speed
                 p.vx=GAS_VX*(Math.random()-0.5);
                 p.vy=-GAS_VY*Math.random();
-                const dm = MASS_ICE_INIT/PARTICLE_COUNT;
+                const dm=MASS_ICE_INIT/PARTICLE_COUNT;
                 state.massWater=Math.max(0,state.massWater-dm);
                 state.massSteam+=dm;
             }
-        }else{
-            if(p.phase!=='gas'){
-                p.x=beakerLeft+Math.random()*beakerWidth;
-                p.y=iceTop-Math.random()*100;
-                // initial gas particle speed (uniform)
-                p.vx=GAS_VX*(Math.random()-0.5);
-                p.vy=-GAS_VY*Math.random();
-            }
-            p.phase='gas';
-            // more intense Brownian motion in gas phase
-            p.vx += (Math.random() - 0.5) * BROWNIAN_GAS * dt;
-            p.vy += (Math.random() - 0.5) * BROWNIAN_GAS * dt;
+        }else if(p.phase==='gas'){
+            p.vx+=(Math.random()-0.5)*BROWNIAN_GAS*dt;
+            p.vy+=(Math.random()-0.5)*BROWNIAN_GAS*dt;
             if(impulse){
-                p.vx += (Math.random() - 0.5) * BROWNIAN_GAS_IMPULSE;
-                p.vy += (Math.random() - 0.5) * BROWNIAN_GAS_IMPULSE;
+                p.vx+=(Math.random()-0.5)*BROWNIAN_GAS_IMPULSE;
+                p.vy+=(Math.random()-0.5)*BROWNIAN_GAS_IMPULSE;
             }
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            if(p.x < beakerLeft + PARTICLE_RADIUS){
-                p.x = beakerLeft + PARTICLE_RADIUS;
-                p.vx = Math.abs(p.vx);
-            }
-            if(p.x > beakerLeft + beakerWidth - PARTICLE_RADIUS){
-                p.x = beakerLeft + beakerWidth - PARTICLE_RADIUS;
-                p.vx = -Math.abs(p.vx);
-            }
-            if(p.y > beakerBottom - PARTICLE_RADIUS){
-                p.y = beakerBottom - PARTICLE_RADIUS;
-                p.vy = -Math.abs(p.vy);
-            }
-            if(p.y < 0){p.y=-1000;} // disappear
+            p.x+=p.vx*dt;
+            p.y+=p.vy*dt;
+            if(p.x<beakerLeft+PARTICLE_RADIUS){p.x=beakerLeft+PARTICLE_RADIUS;p.vx=Math.abs(p.vx);} 
+            if(p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS){p.x=beakerLeft+beakerWidth-PARTICLE_RADIUS;p.vx=-Math.abs(p.vx);} 
+            if(p.y>beakerBottom-PARTICLE_RADIUS){p.y=beakerBottom-PARTICLE_RADIUS;p.vy=-Math.abs(p.vy);} 
+            if(p.y<0){p.y=-1000;}
         }
-    }
-    // simple pairwise collisions for gas particles
+    });
+
     for(let i=0;i<PARTICLE_COUNT;i++){
         const a=particles[i];
         if(a.phase!=='gas' || a.y<-50) continue;
@@ -406,19 +397,13 @@ function updateParticles(dt){
                 const ny=dy/dist;
                 const dvx=b.vx-a.vx;
                 const dvy=b.vy-a.vy;
-                const rel=dx*dvx/dist + dy*dvy/dist;
+                const rel=dx*dvx/dist+dy*dvy/dist;
                 if(rel<0){
-                    const impulse=-rel*0.5;
-                    a.vx-=impulse*nx;
-                    a.vy-=impulse*ny;
-                    b.vx+=impulse*nx;
-                    b.vy+=impulse*ny;
+                    const imp=-rel*0.5;
+                    a.vx-=imp*nx; a.vy-=imp*ny; b.vx+=imp*nx; b.vy+=imp*ny;
                 }
                 const overlap=minDist-dist;
-                a.x-=nx*overlap/2;
-                a.y-=ny*overlap/2;
-                b.x+=nx*overlap/2;
-                b.y+=ny*overlap/2;
+                a.x-=nx*overlap/2; a.y-=ny*overlap/2; b.x+=nx*overlap/2; b.y+=ny*overlap/2;
             }
         }
     }
