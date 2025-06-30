@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queue Manipulative</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f4f8;
+      color: #333;
+    }
+    h1 {
+      color: #0066cc;
+    }
+    .controls {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    select, button {
+      padding: 8px 12px;
+      font-size: 1rem;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background-color: #fff;
+    }
+    button {
+      background-color: #0066cc;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #005bb5;
+    }
+    .queue-area {
+      position: relative;
+      width: 90%;
+      max-width: 800px;
+      min-height: 100px;
+      border: 2px dashed #0066cc;
+      padding: 20px 10px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+    .queue-item {
+      min-width: 40px;
+      height: 40px;
+      border: 2px solid #0066cc;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 10px;
+      background-color: #fff;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+    .arrow {
+      position: absolute;
+      top: -25px;
+      font-weight: bold;
+      color: #0066cc;
+    }
+    .arrow.rear {
+      right: 0;
+    }
+    .output {
+      margin-top: 20px;
+      min-height: 24px;
+      font-size: 1.2rem;
+    }
+    .error {
+      color: red;
+      animation: flash 0.5s step-end infinite;
+    }
+    @keyframes flash {
+      50% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Interactive Queue</h1>
+  <div class="controls">
+    <select id="letterSelect"></select>
+    <button id="enqueueBtn">Enqueue</button>
+    <button id="dequeueBtn">Dequeue</button>
+    <button id="peekBtn">Peek</button>
+  </div>
+  <div class="queue-area" id="queueArea">
+    <div class="arrow" id="frontArrow">Front ↓</div>
+    <div class="arrow rear" id="rearArrow">Rear ↓</div>
+  </div>
+  <div class="output" id="output"></div>
+  <script>
+    const queue = [];
+    const letterSelect = document.getElementById('letterSelect');
+    const queueArea = document.getElementById('queueArea');
+    const frontArrow = document.getElementById('frontArrow');
+    const rearArrow = document.getElementById('rearArrow');
+    const output = document.getElementById('output');
+
+    // populate letters A-Z
+    for (let i = 65; i <= 90; i++) {
+      const opt = document.createElement('option');
+      opt.value = String.fromCharCode(i);
+      opt.textContent = String.fromCharCode(i);
+      letterSelect.appendChild(opt);
+    }
+
+    function renderQueue() {
+      queueArea.querySelectorAll('.queue-item').forEach(el => el.remove());
+      queue.forEach(ch => {
+        const div = document.createElement('div');
+        div.className = 'queue-item';
+        div.textContent = ch;
+        queueArea.appendChild(div);
+      });
+      // update arrow positions
+      if (queue.length === 0) {
+        frontArrow.style.display = 'none';
+        rearArrow.style.display = 'none';
+      } else {
+        const items = queueArea.querySelectorAll('.queue-item');
+        frontArrow.style.display = 'block';
+        rearArrow.style.display = 'block';
+        frontArrow.style.left = items[0].offsetLeft + 'px';
+        rearArrow.style.left = items[items.length - 1].offsetLeft + 'px';
+      }
+    }
+
+    function showMessage(msg, isError=false) {
+      output.textContent = msg;
+      if (isError) {
+        output.classList.add('error');
+      } else {
+        output.classList.remove('error');
+      }
+    }
+
+    document.getElementById('enqueueBtn').onclick = () => {
+      const widthNeeded = (queue.length + 1) * (50); // approx width per item incl margin
+      if (widthNeeded > queueArea.clientWidth) {
+        showMessage('OVERFLOW ERROR', true);
+        return;
+      }
+      queue.push(letterSelect.value);
+      renderQueue();
+      showMessage('');
+    };
+
+    document.getElementById('dequeueBtn').onclick = () => {
+      if (queue.length === 0) {
+        showMessage('UNDERFLOW ERROR', true);
+        return;
+      }
+      const ch = queue.shift();
+      renderQueue();
+      showMessage('Dequeued: ' + ch);
+    };
+
+    document.getElementById('peekBtn').onclick = () => {
+      if (queue.length === 0) {
+        showMessage('UNDERFLOW ERROR', true);
+        return;
+      }
+      showMessage('Front: ' + queue[0]);
+    };
+
+    renderQueue();
+  </script>
+</body>
+</html>
