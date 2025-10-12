@@ -184,10 +184,9 @@
       }
       
       .sqrt-symbol {
-        font-size: 2em;
+        font-size: 1.2em;
         font-weight: bold;
-        align-self: flex-start;
-        margin-top: -10px;
+        margin-right: 2px;
       }
       
       .answer-box {
@@ -593,13 +592,7 @@
           ctx.stroke();
           ctx.setLineDash([]);
           
-          // Draw principal angle arc (only in first quadrant, from positive x-axis to dotted rod)
-          ctx.strokeStyle = '#ff9800';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          // Draw clockwise from 0 to principalRad (because y is inverted, clockwise in canvas = counter-clockwise in math)
-          ctx.arc(centerX, centerY, 30, 0, principalRad, false);
-          ctx.stroke();
+          // Orange arc removed as requested
           
           // Draw coordinate labels
           const quadrant = getQuadrant(normalizeAngle(currentAngle));
@@ -675,7 +668,16 @@
       });
       
       canvas.addEventListener('mouseup', () => {
-        isDragging = false;
+        if (isDragging) {
+          isDragging = false;
+          // Check if correct angle when drag is released
+          const targetAngle = normalizeAngle(currentQuestion.angle);
+          if (currentAngle === targetAngle) {
+            correctAngleSet = true;
+            canvas.classList.add('no-drag');
+            draw(); // Redraw to update visuals
+          }
+        }
       });
       
       canvas.addEventListener('mouseleave', () => {
@@ -694,13 +696,6 @@
         angle = Math.round(angle / 5) * 5;
         
         currentAngle = normalizeAngle(angle);
-        
-        // Check if correct
-        const targetAngle = normalizeAngle(currentQuestion.angle);
-        if (currentAngle === targetAngle) {
-          correctAngleSet = true;
-          canvas.classList.add('no-drag');
-        }
         
         draw();
       }
@@ -817,34 +812,42 @@
           if (selectedBox === 'main') selectedBox = 'numerator';
           document.getElementById(selectedBox + 'Box').classList.add('selected');
         } else if (!useFraction && useSqrt) {
-          // Sqrt mode: sqrt of a single value
-          const sqrtSpan = document.createElement('span');
-          sqrtSpan.className = 'sqrt-symbol';
-          sqrtSpan.textContent = '√';
-          builder.appendChild(sqrtSpan);
-          
+          // Sqrt mode: sqrt inside the box
           const box = document.createElement('div');
           box.className = 'answer-box selected';
           box.id = 'mainBox';
-          box.textContent = mainValue;
           box.onclick = () => selectBox('main');
-          builder.appendChild(box);
-          selectedBox = 'main';
-        } else {
-          // Both sqrt and fraction: sqrt(numerator) / denominator
+          
           const sqrtSpan = document.createElement('span');
           sqrtSpan.className = 'sqrt-symbol';
           sqrtSpan.textContent = '√';
-          builder.appendChild(sqrtSpan);
           
+          const valueSpan = document.createElement('span');
+          valueSpan.textContent = mainValue;
+          
+          box.appendChild(sqrtSpan);
+          box.appendChild(valueSpan);
+          builder.appendChild(box);
+          selectedBox = 'main';
+        } else {
+          // Both sqrt and fraction: sqrt inside numerator box
           const fraction = document.createElement('div');
           fraction.className = 'fraction-container';
           
           const num = document.createElement('div');
           num.className = 'answer-box';
           num.id = 'numeratorBox';
-          num.textContent = numeratorValue;
           num.onclick = () => selectBox('numerator');
+          
+          const sqrtSpan = document.createElement('span');
+          sqrtSpan.className = 'sqrt-symbol';
+          sqrtSpan.textContent = '√';
+          
+          const valueSpan = document.createElement('span');
+          valueSpan.textContent = numeratorValue;
+          
+          num.appendChild(sqrtSpan);
+          num.appendChild(valueSpan);
           
           const line = document.createElement('div');
           line.className = 'fraction-line';
