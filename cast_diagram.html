@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CAST Diagram - Exact Trig Ratios</title>
+    <style>
+      :root {
+        --primary-color: #0066cc;
+        --bg-color: #f0f4f8;
+        --correct-color: #2ecc71;
+        --incorrect-color: #e74c3c;
+        --rod-color: #e74c3c;
+        --font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+      
+      body {
+        margin: 0;
+        padding: 20px;
+        background-color: var(--bg-color);
+        font-family: var(--font-family);
+        color: #333;
+      }
+      
+      h1 {
+        text-align: center;
+        color: var(--primary-color);
+        margin-bottom: 10px;
+      }
+      
+      .question-container {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      
+      .question {
+        font-size: 2em;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+      
+      .mode-toggle {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      
+      .toggle-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      
+      .toggle-switch input[type="checkbox"] {
+        width: 50px;
+        height: 26px;
+        -webkit-appearance: none;
+        appearance: none;
+        background: #ccc;
+        outline: none;
+        border-radius: 13px;
+        cursor: pointer;
+        position: relative;
+        transition: background 0.3s;
+      }
+      
+      .toggle-switch input[type="checkbox"]:checked {
+        background: var(--primary-color);
+      }
+      
+      .toggle-switch input[type="checkbox"]::before {
+        content: '';
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: white;
+        top: 2px;
+        left: 2px;
+        transition: left 0.3s;
+      }
+      
+      .toggle-switch input[type="checkbox"]:checked::before {
+        left: 26px;
+      }
+      
+      .main-container {
+        display: flex;
+        gap: 30px;
+        max-width: 1400px;
+        margin: 0 auto;
+        justify-content: center;
+      }
+      
+      .diagram-section {
+        flex: 2;
+        min-width: 500px;
+      }
+      
+      .answer-section {
+        flex: 1;
+        min-width: 300px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      
+      canvas {
+        border: 2px solid #2c3e50;
+        background-color: white;
+        display: block;
+        margin: 0 auto;
+        cursor: grab;
+      }
+      
+      canvas.no-drag {
+        cursor: default;
+      }
+      
+      canvas:active {
+        cursor: grabbing;
+      }
+      
+      canvas.no-drag:active {
+        cursor: default;
+      }
+      
+      .angle-display {
+        background-color: white;
+        border: 2px solid #2c3e50;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 15px;
+        text-align: center;
+      }
+      
+      .angle-value {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+      
+      .principal-angle {
+        font-size: 1.2em;
+        color: #666;
+        margin-top: 10px;
+      }
+      
+      .answer-input-container {
+        background-color: white;
+        border: 2px solid #2c3e50;
+        border-radius: 8px;
+        padding: 20px;
+        display: none;
+      }
+      
+      .answer-input-container.visible {
+        display: block;
+      }
+      
+      .answer-label {
+        font-weight: bold;
+        margin-bottom: 10px;
+        font-size: 1.1em;
+      }
+      
+      .answer-builder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        margin: 15px 0;
+        min-height: 60px;
+      }
+      
+      .sign-button {
+        font-size: 1.5em;
+        width: 40px;
+        height: 40px;
+        border: 2px solid #2c3e50;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      
+      .sqrt-symbol {
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-right: 2px;
+      }
+      
+      .answer-box {
+        width: 60px;
+        height: 50px;
+        border: 2px dashed #2c3e50;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 1.3em;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        background: white;
+      }
+      
+      .answer-box.selected {
+        border-color: var(--primary-color);
+        border-width: 3px;
+        background: #e6f1fa;
+      }
+      
+      .fraction-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .fraction-line {
+        width: 70px;
+        height: 2px;
+        background: #2c3e50;
+        margin: 2px 0;
+      }
+      
+      .mode-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        justify-content: center;
+      }
+      
+      .mode-btn {
+        padding: 8px 15px;
+        border: 2px solid #2c3e50;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      
+      .mode-btn.active {
+        background: var(--primary-color);
+        color: white;
+      }
+      
+      .number-pad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 15px;
+      }
+      
+      .number-btn {
+        padding: 12px;
+        border: 2px solid #2c3e50;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1.2em;
+        font-weight: bold;
+      }
+      
+      .number-btn:hover {
+        background: #e6f1fa;
+      }
+      
+      .submit-btn {
+        width: 100%;
+        padding: 15px;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1.2em;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      
+      .submit-btn:hover {
+        background: #005bb5;
+      }
+      
+      .correct-answer-display {
+        margin-top: 15px;
+        padding: 15px;
+        background: #fff3cd;
+        border: 2px solid #ffc107;
+        border-radius: 4px;
+        display: none;
+      }
+      
+      .correct-answer-display.visible {
+        display: block;
+      }
+      
+      .streak-container {
+        text-align: center;
+        margin-top: 20px;
+        padding: 20px;
+        background: white;
+        border: 2px solid #2c3e50;
+        border-radius: 8px;
+      }
+      
+      .streak-label {
+        font-size: 1.1em;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+      
+      .streak-value {
+        font-size: 2.5em;
+        font-weight: bold;
+        color: var(--primary-color);
+      }
+      
+      @keyframes flash-correct {
+        0%, 100% { background-color: white; }
+        50% { background-color: var(--correct-color); }
+      }
+      
+      @keyframes flash-incorrect {
+        0%, 100% { background-color: white; }
+        50% { background-color: var(--incorrect-color); }
+      }
+      
+      .streak-container.flash-correct {
+        animation: flash-correct 0.6s ease-in-out;
+      }
+      
+      .streak-container.flash-incorrect {
+        animation: flash-incorrect 0.6s ease-in-out;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CAST Diagram - Exact Trig Ratios</h1>
+    
+    <div class="mode-toggle">
+      <div class="toggle-switch">
+        <span>Degrees</span>
+        <input type="checkbox" id="modeToggle" />
+        <span>Radians</span>
+      </div>
+    </div>
+    
+    <div class="question-container">
+      <div class="question" id="question"></div>
+    </div>
+    
+    <div class="main-container">
+      <div class="diagram-section">
+        <canvas id="canvas" width="500" height="500"></canvas>
+        <div class="angle-display">
+          <div class="angle-value" id="angleDisplay">Drag the rod to the correct angle</div>
+          <div class="principal-angle" id="principalAngleDisplay"></div>
+        </div>
+      </div>
+      
+      <div class="answer-section">
+        <div class="answer-input-container" id="answerContainer">
+          <div class="answer-label">Enter your answer:</div>
+          
+          <div class="mode-buttons">
+            <button class="mode-btn active" id="simpleMode">Simple</button>
+            <button class="mode-btn" id="fractionMode">Fraction</button>
+            <button class="mode-btn" id="sqrtMode">√</button>
+          </div>
+          
+          <div class="answer-builder" id="answerBuilder">
+            <button class="sign-button" id="signButton">+</button>
+            <div class="answer-box selected" id="mainBox">0</div>
+          </div>
+          
+          <div class="number-pad">
+            <button class="number-btn" onclick="inputNumber('1')">1</button>
+            <button class="number-btn" onclick="inputNumber('2')">2</button>
+            <button class="number-btn" onclick="inputNumber('3')">3</button>
+            <button class="number-btn" onclick="inputNumber('4')">4</button>
+            <button class="number-btn" onclick="inputNumber('5')">5</button>
+            <button class="number-btn" onclick="inputNumber('6')">6</button>
+            <button class="number-btn" onclick="inputNumber('7')">7</button>
+            <button class="number-btn" onclick="inputNumber('8')">8</button>
+            <button class="number-btn" onclick="inputNumber('9')">9</button>
+            <button class="number-btn" onclick="clearInput()">C</button>
+            <button class="number-btn" onclick="inputNumber('0')">0</button>
+            <button class="number-btn" onclick="backspace()">←</button>
+          </div>
+          
+          <button class="submit-btn" id="submitBtn" onclick="submitAnswer()">SUBMIT</button>
+          
+          <div class="correct-answer-display" id="correctAnswerDisplay">
+            <strong>Correct answer:</strong> <span id="correctAnswerText"></span>
+          </div>
+        </div>
+        
+        <div class="streak-container" id="streakContainer">
+          <div class="streak-label">Current Streak</div>
+          <div class="streak-value" id="streakValue">0</div>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      // Canvas setup
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = 180;
+      
+      // State
+      let isDegreeMode = true;
+      let currentQuestion = null;
+      let currentAngle = 0; // in degrees, 0-360 range
+      let isDragging = false;
+      let correctAngleSet = false;
+      let streak = 0;
+      let useFraction = false; // Independent toggle for fraction mode
+      let useSqrt = false; // Independent toggle for sqrt mode
+      let selectedBox = 'main'; // 'main', 'numerator', 'denominator'
+      let sign = 1;
+      let mainValue = '0';
+      let numeratorValue = '0';
+      let denominatorValue = '0';
+      
+      // Question generation
+      const trigFunctions = ['cos', 'sin', 'tan'];
+      const angleMultiples30 = [-360, -330, -300, -270, -240, -210, -180, -150, -120, -30, 120, 150, 180, 210, 240, 270, 300, 330, 360];
+      const angleMultiples45 = [-360, -315, -270, -225, -180, -135, -90, -45, 135, 180, 225, 270, 315, 360];
+      
+      function generateQuestion() {
+        let func, angle;
+        let validAngle = false;
+        
+        // Keep generating until we get a valid angle
+        while (!validAngle) {
+          func = trigFunctions[Math.floor(Math.random() * trigFunctions.length)];
+          const use30 = Math.random() < 0.5;
+          const angles = use30 ? angleMultiples30 : angleMultiples45;
+          angle = angles[Math.floor(Math.random() * angles.length)];
+          
+          // For tan, exclude 90, 270, -90, -270 (where tan is undefined)
+          if (func === 'tan' && (angle === 90 || angle === 270 || angle === -90 || angle === -270)) {
+            validAngle = false;
+          } else {
+            validAngle = true;
+          }
+        }
+        
+        currentQuestion = { func, angle };
+        displayQuestion();
+        resetAnswer();
+        correctAngleSet = false;
+        currentAngle = 0;
+        canvas.classList.remove('no-drag');
+        draw();
+      }
+      
+      function displayQuestion() {
+        const q = currentQuestion;
+        let angleStr;
+        if (isDegreeMode) {
+          angleStr = q.angle + '°';
+        } else {
+          angleStr = angleToRadianString(q.angle);
+        }
+        document.getElementById('question').textContent = `${q.func}(${angleStr}) = ?`;
+      }
+      
+      function angleToRadianString(degrees) {
+        const radians = degrees * Math.PI / 180;
+        const piMultiple = radians / Math.PI;
+        
+        // Express as fraction of π
+        if (Math.abs(piMultiple) < 0.001) return '0';
+        
+        // Use GCD to simplify the fraction
+        // Since we're working with multiples of 5 degrees, that's π/36 radians
+        // degrees = (degrees/180) * π = (degrees * π) / 180
+        // Simplify the fraction degrees/180
+        
+        const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+        const absDegrees = Math.abs(degrees);
+        const divisor = gcd(absDegrees, 180);
+        const numerator = degrees / divisor;
+        const denominator = 180 / divisor;
+        
+        const sign = degrees < 0 ? '-' : '';
+        const absNum = Math.abs(numerator);
+        
+        if (denominator === 1) {
+          if (absNum === 1) return `${sign}π`;
+          return `${sign}${absNum}π`;
+        }
+        
+        if (absNum === 1) return `${sign}π/${denominator}`;
+        return `${sign}${absNum}π/${denominator}`;
+      }
+      
+      function normalizeAngle(angle) {
+        // Normalize to 0-360 range
+        while (angle < 0) angle += 360;
+        while (angle >= 360) angle -= 360;
+        return angle;
+      }
+      
+      function getPrincipalAngle(angle) {
+        // Get the reference angle in first quadrant
+        angle = normalizeAngle(angle);
+        
+        if (angle >= 0 && angle <= 90) return angle;
+        if (angle > 90 && angle <= 180) return 180 - angle;
+        if (angle > 180 && angle <= 270) return angle - 180;
+        return 360 - angle;
+      }
+      
+      function getQuadrant(angle) {
+        angle = normalizeAngle(angle);
+        if (angle >= 0 && angle < 90) return 1;
+        if (angle >= 90 && angle < 180) return 2;
+        if (angle >= 180 && angle < 270) return 3;
+        return 4;
+      }
+      
+      function getExactValue(func, angle) {
+        const principal = getPrincipalAngle(angle);
+        const quadrant = getQuadrant(normalizeAngle(angle));
+        
+        // Get base value for principal angle
+        let value = 0;
+        const rad = principal * Math.PI / 180;
+        
+        // Exact values for common angles
+        const exactValues = {
+          0: { sin: 0, cos: 1, tan: 0 },
+          30: { sin: 0.5, cos: Math.sqrt(3)/2, tan: 1/Math.sqrt(3) },
+          45: { sin: Math.sqrt(2)/2, cos: Math.sqrt(2)/2, tan: 1 },
+          60: { sin: Math.sqrt(3)/2, cos: 0.5, tan: Math.sqrt(3) },
+          90: { sin: 1, cos: 0, tan: Infinity }
+        };
+        
+        if (exactValues[principal]) {
+          value = exactValues[principal][func];
+        }
+        
+        // Apply CAST rules
+        if (func === 'sin') {
+          if (quadrant === 3 || quadrant === 4) value = -value;
+        } else if (func === 'cos') {
+          if (quadrant === 2 || quadrant === 3) value = -value;
+        } else if (func === 'tan') {
+          if (quadrant === 2 || quadrant === 4) value = -value;
+        }
+        
+        return value;
+      }
+      
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw axes
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0);
+        ctx.lineTo(centerX, canvas.height);
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(canvas.width, centerY);
+        ctx.stroke();
+        
+        // Draw unit circle
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+        
+        // Draw main rod
+        const angleRad = currentAngle * Math.PI / 180; // 0 degrees = horizontal right (positive x-axis)
+        const endX = centerX + radius * Math.cos(angleRad);
+        const endY = centerY - radius * Math.sin(angleRad); // Negate y because canvas y-axis points down
+        
+        ctx.strokeStyle = correctAngleSet ? '#2ecc71' : '#e74c3c';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        
+        // Draw draggable dot at end if not correct yet
+        if (!correctAngleSet) {
+          ctx.fillStyle = '#e74c3c';
+          ctx.beginPath();
+          ctx.arc(endX, endY, 10, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        
+        // Draw dotted rod in first quadrant if correct angle is set
+        if (correctAngleSet) {
+          const principal = getPrincipalAngle(currentAngle);
+          const principalRad = principal * Math.PI / 180;
+          const principalEndX = centerX + radius * Math.cos(principalRad);
+          const principalEndY = centerY - radius * Math.sin(principalRad); // Negate y because canvas y-axis points down
+          
+          ctx.strokeStyle = '#0066cc';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY);
+          ctx.lineTo(principalEndX, principalEndY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          
+          // Orange arc removed as requested
+          
+          // Draw coordinate labels
+          const quadrant = getQuadrant(normalizeAngle(currentAngle));
+          const labelRadius = radius * 1.2;
+          const labelX = centerX + labelRadius * Math.cos(angleRad);
+          const labelY = centerY - labelRadius * Math.sin(angleRad); // Negate y for canvas coordinates
+          const principalLabelX = centerX + labelRadius * Math.cos(principalRad);
+          const principalLabelY = centerY - labelRadius * Math.sin(principalRad); // Negate y for canvas coordinates
+          
+          ctx.fillStyle = '#2c3e50';
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'center';
+          
+          // Label on principal angle
+          ctx.fillText('(x, y)', principalLabelX, principalLabelY);
+          
+          // Label on main angle
+          let label;
+          if (quadrant === 1) label = '(x, y)';
+          else if (quadrant === 2) label = '(-x, y)';
+          else if (quadrant === 3) label = '(-x, -y)';
+          else label = '(x, -y)';
+          ctx.fillText(label, labelX, labelY);
+        }
+        
+        updateAngleDisplay();
+      }
+      
+      function updateAngleDisplay() {
+        const normalized = normalizeAngle(currentAngle);
+        const negative = currentAngle < 0 ? currentAngle : normalized - 360;
+        
+        let displayText;
+        if (isDegreeMode) {
+          if (normalized === 0) {
+            displayText = '0°';
+          } else {
+            displayText = `+${normalized}° / ${negative}°`;
+          }
+        } else {
+          if (normalized === 0) {
+            displayText = '0';
+          } else {
+            displayText = `+${angleToRadianString(normalized)} / ${angleToRadianString(negative)}`;
+          }
+        }
+        
+        document.getElementById('angleDisplay').textContent = displayText;
+        
+        if (correctAngleSet) {
+          const principal = getPrincipalAngle(currentAngle);
+          const principalStr = isDegreeMode ? principal + '°' : angleToRadianString(principal);
+          document.getElementById('principalAngleDisplay').textContent = `Principal angle: ${principalStr}`;
+          document.getElementById('answerContainer').classList.add('visible');
+        } else {
+          document.getElementById('principalAngleDisplay').textContent = '';
+          document.getElementById('answerContainer').classList.remove('visible');
+        }
+      }
+      
+      // Mouse handling
+      canvas.addEventListener('mousedown', (e) => {
+        if (!correctAngleSet) {
+          isDragging = true;
+          updateAngleFromMouse(e);
+        }
+      });
+      
+      canvas.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+          updateAngleFromMouse(e);
+        }
+      });
+      
+      canvas.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          // Check if correct angle when drag is released
+          const targetAngle = normalizeAngle(currentQuestion.angle);
+          if (currentAngle === targetAngle) {
+            correctAngleSet = true;
+            canvas.classList.add('no-drag');
+            draw(); // Redraw to update visuals
+          }
+        }
+      });
+      
+      canvas.addEventListener('mouseleave', () => {
+        isDragging = false;
+      });
+      
+      function updateAngleFromMouse(e) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left - centerX;
+        const mouseY = e.clientY - rect.top - centerY;
+        
+        // Negate mouseY because canvas y-axis points down, but we want standard math coordinates
+        let angle = Math.atan2(-mouseY, mouseX) * 180 / Math.PI;
+        
+        // Snap to 5-degree increments
+        angle = Math.round(angle / 5) * 5;
+        
+        currentAngle = normalizeAngle(angle);
+        
+        draw();
+      }
+      
+      // Mode toggle
+      document.getElementById('modeToggle').addEventListener('change', (e) => {
+        isDegreeMode = !e.target.checked;
+        displayQuestion();
+        updateAngleDisplay();
+      });
+      
+      // Answer input handling
+      document.getElementById('signButton').addEventListener('click', () => {
+        sign = -sign;
+        document.getElementById('signButton').textContent = sign > 0 ? '+' : '-';
+      });
+      
+      document.getElementById('simpleMode').addEventListener('click', () => {
+        // Simple mode: turn off both fraction and sqrt
+        useFraction = false;
+        useSqrt = false;
+        updateModeButtons();
+        rebuildAnswerDisplay();
+      });
+      
+      document.getElementById('fractionMode').addEventListener('click', () => {
+        // Toggle fraction mode
+        useFraction = !useFraction;
+        updateModeButtons();
+        rebuildAnswerDisplay();
+      });
+      
+      document.getElementById('sqrtMode').addEventListener('click', () => {
+        // Toggle sqrt mode
+        useSqrt = !useSqrt;
+        updateModeButtons();
+        rebuildAnswerDisplay();
+      });
+      
+      function updateModeButtons() {
+        // Simple mode is active when neither fraction nor sqrt is on
+        if (!useFraction && !useSqrt) {
+          document.getElementById('simpleMode').classList.add('active');
+        } else {
+          document.getElementById('simpleMode').classList.remove('active');
+        }
+        
+        // Fraction button shows if fraction mode is on
+        if (useFraction) {
+          document.getElementById('fractionMode').classList.add('active');
+        } else {
+          document.getElementById('fractionMode').classList.remove('active');
+        }
+        
+        // Sqrt button shows if sqrt mode is on
+        if (useSqrt) {
+          document.getElementById('sqrtMode').classList.add('active');
+        } else {
+          document.getElementById('sqrtMode').classList.remove('active');
+        }
+      }
+      
+      function rebuildAnswerDisplay() {
+        const builder = document.getElementById('answerBuilder');
+        builder.innerHTML = '';
+        
+        // Sign button
+        const signBtn = document.createElement('button');
+        signBtn.className = 'sign-button';
+        signBtn.id = 'signButton';
+        signBtn.textContent = sign > 0 ? '+' : '-';
+        signBtn.onclick = () => {
+          sign = -sign;
+          rebuildAnswerDisplay();
+        };
+        builder.appendChild(signBtn);
+        
+        // Four combinations: simple, fraction, sqrt, sqrt+fraction
+        if (!useFraction && !useSqrt) {
+          // Simple mode: just a single box
+          const box = document.createElement('div');
+          box.className = 'answer-box selected';
+          box.id = 'mainBox';
+          box.textContent = mainValue;
+          box.onclick = () => selectBox('main');
+          builder.appendChild(box);
+          selectedBox = 'main';
+        } else if (useFraction && !useSqrt) {
+          // Fraction mode: numerator over denominator
+          const fraction = document.createElement('div');
+          fraction.className = 'fraction-container';
+          
+          const num = document.createElement('div');
+          num.className = 'answer-box';
+          num.id = 'numeratorBox';
+          num.textContent = numeratorValue;
+          num.onclick = () => selectBox('numerator');
+          
+          const line = document.createElement('div');
+          line.className = 'fraction-line';
+          
+          const den = document.createElement('div');
+          den.className = 'answer-box';
+          den.id = 'denominatorBox';
+          den.textContent = denominatorValue;
+          den.onclick = () => selectBox('denominator');
+          
+          fraction.appendChild(num);
+          fraction.appendChild(line);
+          fraction.appendChild(den);
+          builder.appendChild(fraction);
+          
+          // Select first box by default
+          if (selectedBox === 'main') selectedBox = 'numerator';
+          document.getElementById(selectedBox + 'Box').classList.add('selected');
+        } else if (!useFraction && useSqrt) {
+          // Sqrt mode: sqrt inside the box
+          const box = document.createElement('div');
+          box.className = 'answer-box selected';
+          box.id = 'mainBox';
+          box.onclick = () => selectBox('main');
+          
+          const sqrtSpan = document.createElement('span');
+          sqrtSpan.className = 'sqrt-symbol';
+          sqrtSpan.textContent = '√';
+          
+          const valueSpan = document.createElement('span');
+          valueSpan.textContent = mainValue;
+          
+          box.appendChild(sqrtSpan);
+          box.appendChild(valueSpan);
+          builder.appendChild(box);
+          selectedBox = 'main';
+        } else {
+          // Both sqrt and fraction: sqrt inside numerator box
+          const fraction = document.createElement('div');
+          fraction.className = 'fraction-container';
+          
+          const num = document.createElement('div');
+          num.className = 'answer-box';
+          num.id = 'numeratorBox';
+          num.onclick = () => selectBox('numerator');
+          
+          const sqrtSpan = document.createElement('span');
+          sqrtSpan.className = 'sqrt-symbol';
+          sqrtSpan.textContent = '√';
+          
+          const valueSpan = document.createElement('span');
+          valueSpan.textContent = numeratorValue;
+          
+          num.appendChild(sqrtSpan);
+          num.appendChild(valueSpan);
+          
+          const line = document.createElement('div');
+          line.className = 'fraction-line';
+          
+          const den = document.createElement('div');
+          den.className = 'answer-box';
+          den.id = 'denominatorBox';
+          den.textContent = denominatorValue;
+          den.onclick = () => selectBox('denominator');
+          
+          fraction.appendChild(num);
+          fraction.appendChild(line);
+          fraction.appendChild(den);
+          builder.appendChild(fraction);
+          
+          // Select first box by default
+          if (selectedBox === 'main') selectedBox = 'numerator';
+          document.getElementById(selectedBox + 'Box').classList.add('selected');
+        }
+      }
+      
+      function selectBox(box) {
+        selectedBox = box;
+        document.querySelectorAll('.answer-box').forEach(b => b.classList.remove('selected'));
+        document.getElementById(box === 'main' ? 'mainBox' : box + 'Box').classList.add('selected');
+      }
+      
+      function inputNumber(digit) {
+        if (selectedBox === 'main') {
+          if (mainValue === '0') mainValue = digit;
+          else mainValue += digit;
+        } else if (selectedBox === 'numerator') {
+          if (numeratorValue === '0') numeratorValue = digit;
+          else numeratorValue += digit;
+        } else {
+          if (denominatorValue === '0') denominatorValue = digit;
+          else denominatorValue += digit;
+        }
+        rebuildAnswerDisplay();
+      }
+      
+      function clearInput() {
+        if (selectedBox === 'main') mainValue = '0';
+        else if (selectedBox === 'numerator') numeratorValue = '0';
+        else denominatorValue = '0';
+        rebuildAnswerDisplay();
+      }
+      
+      function backspace() {
+        if (selectedBox === 'main') {
+          mainValue = mainValue.length > 1 ? mainValue.slice(0, -1) : '0';
+        } else if (selectedBox === 'numerator') {
+          numeratorValue = numeratorValue.length > 1 ? numeratorValue.slice(0, -1) : '0';
+        } else {
+          denominatorValue = denominatorValue.length > 1 ? denominatorValue.slice(0, -1) : '0';
+        }
+        rebuildAnswerDisplay();
+      }
+      
+      function resetAnswer() {
+        sign = 1;
+        mainValue = '0';
+        numeratorValue = '0';
+        denominatorValue = '0';
+        useFraction = false;
+        useSqrt = false;
+        updateModeButtons();
+        rebuildAnswerDisplay();
+        document.getElementById('correctAnswerDisplay').classList.remove('visible');
+        document.getElementById('submitBtn').textContent = 'SUBMIT';
+      }
+      
+      function getAnswerValue() {
+        let value = 0;
+        if (!useFraction && !useSqrt) {
+          // Simple mode
+          value = parseFloat(mainValue);
+        } else if (useFraction && !useSqrt) {
+          // Fraction mode
+          const num = parseFloat(numeratorValue);
+          const den = parseFloat(denominatorValue);
+          if (den !== 0) value = num / den;
+        } else if (!useFraction && useSqrt) {
+          // Sqrt mode
+          value = Math.sqrt(parseFloat(mainValue));
+        } else {
+          // Sqrt + Fraction mode: sqrt(numerator) / denominator
+          const num = parseFloat(numeratorValue);
+          const den = parseFloat(denominatorValue);
+          if (den !== 0) value = Math.sqrt(num) / den;
+        }
+        return sign * value;
+      }
+      
+      function formatAnswer(value) {
+        // Format the correct answer for display
+        const absValue = Math.abs(value);
+        const signStr = value < 0 ? '-' : '';
+        
+        // Check for common exact values
+        if (Math.abs(value) < 0.0001) return '0';
+        if (Math.abs(value - 0.5) < 0.0001) return signStr + '1/2';
+        if (Math.abs(value + 0.5) < 0.0001) return '-1/2';
+        if (Math.abs(absValue - Math.sqrt(2)/2) < 0.0001) return signStr + '√2/2';
+        if (Math.abs(absValue - Math.sqrt(3)/2) < 0.0001) return signStr + '√3/2';
+        if (Math.abs(absValue - 1/Math.sqrt(3)) < 0.0001) return signStr + '1/√3';
+        if (Math.abs(absValue - Math.sqrt(3)) < 0.0001) return signStr + '√3';
+        if (Math.abs(absValue - 1) < 0.0001) return signStr + '1';
+        
+        return value.toFixed(4);
+      }
+      
+      function submitAnswer() {
+        if (document.getElementById('submitBtn').textContent === 'NEXT') {
+          generateQuestion();
+          return;
+        }
+        
+        const userAnswer = getAnswerValue();
+        const correctAnswer = getExactValue(currentQuestion.func, currentQuestion.angle);
+        
+        const isCorrect = Math.abs(userAnswer - correctAnswer) < 0.0001;
+        
+        const streakContainer = document.getElementById('streakContainer');
+        
+        if (isCorrect) {
+          streak++;
+          streakContainer.classList.remove('flash-incorrect');
+          streakContainer.classList.add('flash-correct');
+          setTimeout(() => {
+            streakContainer.classList.remove('flash-correct');
+            generateQuestion();
+          }, 600);
+        } else {
+          streak = 0;
+          streakContainer.classList.remove('flash-correct');
+          streakContainer.classList.add('flash-incorrect');
+          setTimeout(() => {
+            streakContainer.classList.remove('flash-incorrect');
+          }, 600);
+          
+          // Show correct answer
+          document.getElementById('correctAnswerText').textContent = formatAnswer(correctAnswer);
+          document.getElementById('correctAnswerDisplay').classList.add('visible');
+          document.getElementById('submitBtn').textContent = 'NEXT';
+        }
+        
+        document.getElementById('streakValue').textContent = streak;
+      }
+      
+      // Enter key support
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && correctAngleSet) {
+          submitAnswer();
+        }
+      });
+      
+      // Initialize
+      generateQuestion();
+      draw();
+    </script>
+  </body>
+</html>
