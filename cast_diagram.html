@@ -408,7 +408,8 @@
       let isDragging = false;
       let correctAngleSet = false;
       let streak = 0;
-      let answerMode = 'simple'; // 'simple', 'fraction', 'sqrt'
+      let useFraction = false; // Independent toggle for fraction mode
+      let useSqrt = false; // Independent toggle for sqrt mode
       let selectedBox = 'main'; // 'main', 'numerator', 'denominator'
       let sign = 1;
       let mainValue = '0';
@@ -585,7 +586,8 @@
           ctx.strokeStyle = '#ff9800';
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(centerX, centerY, 30, 0, principalRad, false);
+          // Use anticlockwise = true because canvas y-axis is inverted
+          ctx.arc(centerX, centerY, 30, 0, principalRad, true);
           ctx.stroke();
           
           // Draw coordinate labels
@@ -705,28 +707,48 @@
       });
       
       document.getElementById('simpleMode').addEventListener('click', () => {
-        setAnswerMode('simple');
+        // Simple mode: turn off both fraction and sqrt
+        useFraction = false;
+        useSqrt = false;
+        updateModeButtons();
+        rebuildAnswerDisplay();
       });
       
       document.getElementById('fractionMode').addEventListener('click', () => {
-        setAnswerMode('fraction');
+        // Toggle fraction mode
+        useFraction = !useFraction;
+        updateModeButtons();
+        rebuildAnswerDisplay();
       });
       
       document.getElementById('sqrtMode').addEventListener('click', () => {
-        setAnswerMode('sqrt');
+        // Toggle sqrt mode
+        useSqrt = !useSqrt;
+        updateModeButtons();
+        rebuildAnswerDisplay();
       });
       
-      function setAnswerMode(mode) {
-        answerMode = mode;
+      function updateModeButtons() {
+        // Simple mode is active when neither fraction nor sqrt is on
+        if (!useFraction && !useSqrt) {
+          document.getElementById('simpleMode').classList.add('active');
+        } else {
+          document.getElementById('simpleMode').classList.remove('active');
+        }
         
-        // Update button states
-        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-        if (mode === 'simple') document.getElementById('simpleMode').classList.add('active');
-        else if (mode === 'fraction') document.getElementById('fractionMode').classList.add('active');
-        else document.getElementById('sqrtMode').classList.add('active');
+        // Fraction button shows if fraction mode is on
+        if (useFraction) {
+          document.getElementById('fractionMode').classList.add('active');
+        } else {
+          document.getElementById('fractionMode').classList.remove('active');
+        }
         
-        // Rebuild answer display
-        rebuildAnswerDisplay();
+        // Sqrt button shows if sqrt mode is on
+        if (useSqrt) {
+          document.getElementById('sqrtMode').classList.add('active');
+        } else {
+          document.getElementById('sqrtMode').classList.remove('active');
+        }
       }
       
       function rebuildAnswerDisplay() {
@@ -744,7 +766,9 @@
         };
         builder.appendChild(signBtn);
         
-        if (answerMode === 'simple') {
+        // Four combinations: simple, fraction, sqrt, sqrt+fraction
+        if (!useFraction && !useSqrt) {
+          // Simple mode: just a single box
           const box = document.createElement('div');
           box.className = 'answer-box selected';
           box.id = 'mainBox';
@@ -752,7 +776,8 @@
           box.onclick = () => selectBox('main');
           builder.appendChild(box);
           selectedBox = 'main';
-        } else if (answerMode === 'fraction') {
+        } else if (useFraction && !useSqrt) {
+          // Fraction mode: numerator over denominator
           const fraction = document.createElement('div');
           fraction.className = 'fraction-container';
           
@@ -779,7 +804,8 @@
           // Select first box by default
           if (selectedBox === 'main') selectedBox = 'numerator';
           document.getElementById(selectedBox + 'Box').classList.add('selected');
-        } else { // sqrt mode
+        } else if (!useFraction && useSqrt) {
+          // Sqrt mode: sqrt of a single value
           const sqrtSpan = document.createElement('span');
           sqrtSpan.className = 'sqrt-symbol';
           sqrtSpan.textContent = '√';
@@ -792,6 +818,39 @@
           box.onclick = () => selectBox('main');
           builder.appendChild(box);
           selectedBox = 'main';
+        } else {
+          // Both sqrt and fraction: sqrt(numerator) / denominator
+          const sqrtSpan = document.createElement('span');
+          sqrtSpan.className = 'sqrt-symbol';
+          sqrtSpan.textContent = '√';
+          builder.appendChild(sqrtSpan);
+          
+          const fraction = document.createElement('div');
+          fraction.className = 'fraction-container';
+          
+          const num = document.createElement('div');
+          num.className = 'answer-box';
+          num.id = 'numeratorBox';
+          num.textContent = numeratorValue;
+          num.onclick = () => selectBox('numerator');
+          
+          const line = document.createElement('div');
+          line.className = 'fraction-line';
+          
+          const den = document.createElement('div');
+          den.className = 'answer-box';
+          den.id = 'denominatorBox';
+          den.textContent = denominatorValue;
+          den.onclick = () => selectBox('denominator');
+          
+          fraction.appendChild(num);
+          fraction.appendChild(line);
+          fraction.appendChild(den);
+          builder.appendChild(fraction);
+          
+          // Select first box by default
+          if (selectedBox === 'main') selectedBox = 'numerator';
+          document.getElementById(selectedBox + 'Box').classList.add('selected');
         }
       }
       
@@ -838,22 +897,32 @@
         mainValue = '0';
         numeratorValue = '0';
         denominatorValue = '0';
-        answerMode = 'simple';
-        setAnswerMode('simple');
+        useFraction = false;
+        useSqrt = false;
+        updateModeButtons();
+        rebuildAnswerDisplay();
         document.getElementById('correctAnswerDisplay').classList.remove('visible');
         document.getElementById('submitBtn').textContent = 'SUBMIT';
       }
       
       function getAnswerValue() {
         let value = 0;
-        if (answerMode === 'simple') {
+        if (!useFraction && !useSqrt) {
+          // Simple mode
           value = parseFloat(mainValue);
-        } else if (answerMode === 'fraction') {
+        } else if (useFraction && !useSqrt) {
+          // Fraction mode
           const num = parseFloat(numeratorValue);
           const den = parseFloat(denominatorValue);
           if (den !== 0) value = num / den;
-        } else { // sqrt
+        } else if (!useFraction && useSqrt) {
+          // Sqrt mode
           value = Math.sqrt(parseFloat(mainValue));
+        } else {
+          // Sqrt + Fraction mode: sqrt(numerator) / denominator
+          const num = parseFloat(numeratorValue);
+          const den = parseFloat(denominatorValue);
+          if (den !== 0) value = Math.sqrt(num) / den;
         }
         return sign * value;
       }
