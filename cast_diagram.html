@@ -546,7 +546,7 @@
         ctx.stroke();
         
         // Draw main rod
-        const angleRad = (currentAngle - 90) * Math.PI / 180; // Adjust for canvas coordinate system
+        const angleRad = currentAngle * Math.PI / 180; // 0 degrees = horizontal right (positive x-axis)
         const endX = centerX + radius * Math.cos(angleRad);
         const endY = centerY + radius * Math.sin(angleRad);
         
@@ -565,17 +565,10 @@
           ctx.fill();
         }
         
-        // Draw angle arc
-        ctx.strokeStyle = '#0066cc';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, 40, -Math.PI / 2, angleRad, false);
-        ctx.stroke();
-        
         // Draw dotted rod in first quadrant if correct angle is set
         if (correctAngleSet) {
           const principal = getPrincipalAngle(currentAngle);
-          const principalRad = (principal - 90) * Math.PI / 180;
+          const principalRad = principal * Math.PI / 180;
           const principalEndX = centerX + radius * Math.cos(principalRad);
           const principalEndY = centerY + radius * Math.sin(principalRad);
           
@@ -588,37 +581,15 @@
           ctx.stroke();
           ctx.setLineDash([]);
           
-          // Draw principal angle arc
+          // Draw principal angle arc (only in first quadrant, from positive x-axis to dotted rod)
           ctx.strokeStyle = '#ff9800';
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(centerX, centerY, 30, -Math.PI / 2, principalRad, false);
+          ctx.arc(centerX, centerY, 30, 0, principalRad, false);
           ctx.stroke();
           
-          // Draw corresponding arc on main angle
-          const quadrant = getQuadrant(normalizeAngle(currentAngle));
-          let startArc, endArc;
-          
-          if (quadrant === 2) {
-            startArc = Math.PI;
-            endArc = angleRad;
-          } else if (quadrant === 3) {
-            startArc = angleRad;
-            endArc = Math.PI;
-          } else if (quadrant === 4) {
-            startArc = angleRad;
-            endArc = 0;
-          }
-          
-          if (quadrant !== 1) {
-            ctx.strokeStyle = '#ff9800';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 50, startArc, endArc, quadrant === 3);
-            ctx.stroke();
-          }
-          
           // Draw coordinate labels
+          const quadrant = getQuadrant(normalizeAngle(currentAngle));
           const labelRadius = radius * 1.2;
           const labelX = centerX + labelRadius * Math.cos(angleRad);
           const labelY = centerY + labelRadius * Math.sin(angleRad);
@@ -703,7 +674,7 @@
         const mouseX = e.clientX - rect.left - centerX;
         const mouseY = e.clientY - rect.top - centerY;
         
-        let angle = Math.atan2(mouseY, mouseX) * 180 / Math.PI + 90;
+        let angle = Math.atan2(mouseY, mouseX) * 180 / Math.PI;
         
         // Snap to 5-degree increments
         angle = Math.round(angle / 5) * 5;
