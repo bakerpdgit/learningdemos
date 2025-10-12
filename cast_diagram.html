@@ -431,10 +431,23 @@
       const angleMultiples45 = [-360, -315, -270, -225, -180, -135, -90, -45, 135, 180, 225, 270, 315, 360];
       
       function generateQuestion() {
-        const func = trigFunctions[Math.floor(Math.random() * trigFunctions.length)];
-        const use30 = Math.random() < 0.5;
-        const angles = use30 ? angleMultiples30 : angleMultiples45;
-        const angle = angles[Math.floor(Math.random() * angles.length)];
+        let func, angle;
+        let validAngle = false;
+        
+        // Keep generating until we get a valid angle
+        while (!validAngle) {
+          func = trigFunctions[Math.floor(Math.random() * trigFunctions.length)];
+          const use30 = Math.random() < 0.5;
+          const angles = use30 ? angleMultiples30 : angleMultiples45;
+          angle = angles[Math.floor(Math.random() * angles.length)];
+          
+          // For tan, exclude 90, 270, -90, -270 (where tan is undefined)
+          if (func === 'tan' && (angle === 90 || angle === 270 || angle === -90 || angle === -270)) {
+            validAngle = false;
+          } else {
+            validAngle = true;
+          }
+        }
         
         currentQuestion = { func, angle };
         displayQuestion();
@@ -463,16 +476,24 @@
         // Express as fraction of π
         if (Math.abs(piMultiple) < 0.001) return '0';
         
-        // Find simple fraction representation
-        const denominator = degrees % 30 === 0 ? 6 : 4;
-        const numerator = Math.round(piMultiple * denominator);
+        // Use GCD to simplify the fraction
+        // Since we're working with multiples of 5 degrees, that's π/36 radians
+        // degrees = (degrees/180) * π = (degrees * π) / 180
+        // Simplify the fraction degrees/180
         
-        if (numerator === denominator) return 'π';
-        if (numerator === -denominator) return '-π';
-        if (numerator === 0) return '0';
+        const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+        const absDegrees = Math.abs(degrees);
+        const divisor = gcd(absDegrees, 180);
+        const numerator = degrees / divisor;
+        const denominator = 180 / divisor;
         
-        const sign = numerator < 0 ? '-' : '';
+        const sign = degrees < 0 ? '-' : '';
         const absNum = Math.abs(numerator);
+        
+        if (denominator === 1) {
+          if (absNum === 1) return `${sign}π`;
+          return `${sign}${absNum}π`;
+        }
         
         if (absNum === 1) return `${sign}π/${denominator}`;
         return `${sign}${absNum}π/${denominator}`;
