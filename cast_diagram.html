@@ -548,7 +548,7 @@
         // Draw main rod
         const angleRad = currentAngle * Math.PI / 180; // 0 degrees = horizontal right (positive x-axis)
         const endX = centerX + radius * Math.cos(angleRad);
-        const endY = centerY + radius * Math.sin(angleRad);
+        const endY = centerY - radius * Math.sin(angleRad); // Negate y because canvas y-axis points down
         
         ctx.strokeStyle = correctAngleSet ? '#2ecc71' : '#e74c3c';
         ctx.lineWidth = 3;
@@ -570,7 +570,7 @@
           const principal = getPrincipalAngle(currentAngle);
           const principalRad = principal * Math.PI / 180;
           const principalEndX = centerX + radius * Math.cos(principalRad);
-          const principalEndY = centerY + radius * Math.sin(principalRad);
+          const principalEndY = centerY - radius * Math.sin(principalRad); // Negate y because canvas y-axis points down
           
           ctx.strokeStyle = '#0066cc';
           ctx.lineWidth = 2;
@@ -592,9 +592,9 @@
           const quadrant = getQuadrant(normalizeAngle(currentAngle));
           const labelRadius = radius * 1.2;
           const labelX = centerX + labelRadius * Math.cos(angleRad);
-          const labelY = centerY + labelRadius * Math.sin(angleRad);
+          const labelY = centerY - labelRadius * Math.sin(angleRad); // Negate y for canvas coordinates
           const principalLabelX = centerX + labelRadius * Math.cos(principalRad);
-          const principalLabelY = centerY + labelRadius * Math.sin(principalRad);
+          const principalLabelY = centerY - labelRadius * Math.sin(principalRad); // Negate y for canvas coordinates
           
           ctx.fillStyle = '#2c3e50';
           ctx.font = 'bold 14px Arial';
@@ -674,7 +674,8 @@
         const mouseX = e.clientX - rect.left - centerX;
         const mouseY = e.clientY - rect.top - centerY;
         
-        let angle = Math.atan2(mouseY, mouseX) * 180 / Math.PI;
+        // Negate mouseY because canvas y-axis points down, but we want standard math coordinates
+        let angle = Math.atan2(-mouseY, mouseX) * 180 / Math.PI;
         
         // Snap to 5-degree increments
         angle = Math.round(angle / 5) * 5;
