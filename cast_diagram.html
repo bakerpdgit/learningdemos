@@ -112,8 +112,16 @@
         cursor: grab;
       }
       
+      canvas.no-drag {
+        cursor: default;
+      }
+      
       canvas:active {
         cursor: grabbing;
+      }
+      
+      canvas.no-drag:active {
+        cursor: default;
       }
       
       .angle-display {
@@ -178,6 +186,8 @@
       .sqrt-symbol {
         font-size: 2em;
         font-weight: bold;
+        align-self: flex-start;
+        margin-top: -10px;
       }
       
       .answer-box {
@@ -432,6 +442,7 @@
         resetAnswer();
         correctAngleSet = false;
         currentAngle = 0;
+        canvas.classList.remove('no-drag');
         draw();
       }
       
@@ -586,8 +597,8 @@
           ctx.strokeStyle = '#ff9800';
           ctx.lineWidth = 2;
           ctx.beginPath();
-          // Use anticlockwise = true because canvas y-axis is inverted
-          ctx.arc(centerX, centerY, 30, 0, principalRad, true);
+          // Draw clockwise from 0 to principalRad (because y is inverted, clockwise in canvas = counter-clockwise in math)
+          ctx.arc(centerX, centerY, 30, 0, principalRad, false);
           ctx.stroke();
           
           // Draw coordinate labels
@@ -688,6 +699,7 @@
         const targetAngle = normalizeAngle(currentQuestion.angle);
         if (currentAngle === targetAngle) {
           correctAngleSet = true;
+          canvas.classList.add('no-drag');
         }
         
         draw();
