@@ -343,6 +343,11 @@
         <input type="checkbox" id="modeToggle" />
         <span>Radians</span>
       </div>
+      <div class="toggle-switch" style="margin-left: 30px;">
+        <span>Standard</span>
+        <input type="checkbox" id="advancedToggle" />
+        <span>Advanced</span>
+      </div>
     </div>
     
     <div class="question-container">
@@ -412,10 +417,14 @@
       
       // State
       let isDegreeMode = true;
+      let isAdvancedMode = false;
       let currentQuestion = null;
       let currentAngle = 0; // in degrees, 0-360 range
       let isDragging = false;
+      let isDraggingDotted = false; // for dragging dotted rod in advanced mode
       let correctAngleSet = false;
+      let dottedRodAngle = 0; // angle of dotted rod in advanced mode
+      let dottedRodCorrect = false; // whether dotted rod is correctly placed in advanced mode
       let streak = 0;
       let useFraction = false; // Independent toggle for fraction mode
       let useSqrt = false; // Independent toggle for sqrt mode
@@ -454,6 +463,8 @@
         resetAnswer();
         correctAngleSet = false;
         currentAngle = 0;
+        dottedRodAngle = 0; // Reset dotted rod to positive x-axis
+        dottedRodCorrect = false;
         canvas.classList.remove('no-drag');
         draw();
       }
@@ -577,6 +588,26 @@
         ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
         ctx.stroke();
         
+        // In advanced mode, draw CAST letters in quadrants
+        if (isAdvancedMode && correctAngleSet) {
+          ctx.fillStyle = '#cccccc';
+          ctx.font = 'bold 60px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          // C in quadrant 4 (right lower) - positive x, negative y
+          ctx.fillText('C', centerX + radius * 0.6, centerY + radius * 0.6);
+          
+          // A in quadrant 1 (right upper) - positive x, positive y
+          ctx.fillText('A', centerX + radius * 0.6, centerY - radius * 0.6);
+          
+          // S in quadrant 2 (left upper) - negative x, positive y
+          ctx.fillText('S', centerX - radius * 0.6, centerY - radius * 0.6);
+          
+          // T in quadrant 3 (left lower) - negative x, negative y
+          ctx.fillText('T', centerX - radius * 0.6, centerY + radius * 0.6);
+        }
+        
         // Draw main rod
         const angleRad = currentAngle * Math.PI / 180; // 0 degrees = horizontal right (positive x-axis)
         const endX = centerX + radius * Math.cos(angleRad);
@@ -597,14 +628,28 @@
           ctx.fill();
         }
         
-        // Draw dotted rod in first quadrant if correct angle is set
+        // Draw dotted rod
         if (correctAngleSet) {
           const principal = getPrincipalAngle(currentAngle);
-          const principalRad = principal * Math.PI / 180;
+          
+          // In standard mode, dotted rod appears at principal angle automatically
+          // In advanced mode, dotted rod is draggable and starts at positive x-axis
+          let drawAngle;
+          let rodColor;
+          
+          if (isAdvancedMode) {
+            drawAngle = dottedRodAngle;
+            rodColor = dottedRodCorrect ? '#0066cc' : '#e74c3c';
+          } else {
+            drawAngle = principal;
+            rodColor = '#0066cc';
+          }
+          
+          const principalRad = drawAngle * Math.PI / 180;
           const principalEndX = centerX + radius * Math.cos(principalRad);
           const principalEndY = centerY - radius * Math.sin(principalRad); // Negate y because canvas y-axis points down
           
-          ctx.strokeStyle = '#0066cc';
+          ctx.strokeStyle = rodColor;
           ctx.lineWidth = 2;
           ctx.setLineDash([5, 5]);
           ctx.beginPath();
@@ -613,30 +658,39 @@
           ctx.stroke();
           ctx.setLineDash([]);
           
-          // Orange arc removed as requested
+          // In advanced mode, draw draggable dot at end of dotted rod if not correct yet
+          if (isAdvancedMode && !dottedRodCorrect) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(principalEndX, principalEndY, 10, 0, 2 * Math.PI);
+            ctx.fill();
+          }
           
-          // Draw coordinate labels
-          const quadrant = getQuadrant(normalizeAngle(currentAngle));
-          const labelRadius = radius * 1.2;
-          const labelX = centerX + labelRadius * Math.cos(angleRad);
-          const labelY = centerY - labelRadius * Math.sin(angleRad); // Negate y for canvas coordinates
-          const principalLabelX = centerX + labelRadius * Math.cos(principalRad);
-          const principalLabelY = centerY - labelRadius * Math.sin(principalRad); // Negate y for canvas coordinates
-          
-          ctx.fillStyle = '#2c3e50';
-          ctx.font = 'bold 14px Arial';
-          ctx.textAlign = 'center';
-          
-          // Label on principal angle
-          ctx.fillText('(x, y)', principalLabelX, principalLabelY);
-          
-          // Label on main angle
-          let label;
-          if (quadrant === 1) label = '(x, y)';
-          else if (quadrant === 2) label = '(-x, y)';
-          else if (quadrant === 3) label = '(-x, -y)';
-          else label = '(x, -y)';
-          ctx.fillText(label, labelX, labelY);
+          // Draw coordinate labels only in standard mode
+          if (!isAdvancedMode) {
+            const quadrant = getQuadrant(normalizeAngle(currentAngle));
+            const labelRadius = radius * 1.2;
+            const labelX = centerX + labelRadius * Math.cos(angleRad);
+            const labelY = centerY - labelRadius * Math.sin(angleRad); // Negate y for canvas coordinates
+            const principalLabelX = centerX + labelRadius * Math.cos(principalRad);
+            const principalLabelY = centerY - labelRadius * Math.sin(principalRad); // Negate y for canvas coordinates
+            
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'alphabetic';
+            
+            // Label on principal angle
+            ctx.fillText('(x, y)', principalLabelX, principalLabelY);
+            
+            // Label on main angle
+            let label;
+            if (quadrant === 1) label = '(x, y)';
+            else if (quadrant === 2) label = '(-x, y)';
+            else if (quadrant === 3) label = '(-x, -y)';
+            else label = '(x, -y)';
+            ctx.fillText(label, labelX, labelY);
+          }
         }
         
         updateAngleDisplay();
@@ -663,7 +717,9 @@
         
         document.getElementById('angleDisplay').textContent = displayText;
         
-        if (correctAngleSet) {
+        // In standard mode, show principal angle when correct angle is set
+        // In advanced mode, show principal angle only when dotted rod is correctly placed
+        if (correctAngleSet && (!isAdvancedMode || dottedRodCorrect)) {
           const principal = getPrincipalAngle(currentAngle);
           const principalStr = isDegreeMode ? principal + '°' : angleToRadianString(principal);
           document.getElementById('principalAngleDisplay').textContent = `Principal angle: ${principalStr}`;
@@ -679,12 +735,29 @@
         if (!correctAngleSet) {
           isDragging = true;
           updateAngleFromMouse(e);
+        } else if (isAdvancedMode && !dottedRodCorrect) {
+          // Check if clicking near the dotted rod end
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          
+          const dottedRad = dottedRodAngle * Math.PI / 180;
+          const dottedEndX = centerX + radius * Math.cos(dottedRad);
+          const dottedEndY = centerY - radius * Math.sin(dottedRad);
+          
+          const dist = Math.sqrt((mouseX - dottedEndX) ** 2 + (mouseY - dottedEndY) ** 2);
+          if (dist < 20) {
+            isDraggingDotted = true;
+            updateDottedAngleFromMouse(e);
+          }
         }
       });
       
       canvas.addEventListener('mousemove', (e) => {
         if (isDragging) {
           updateAngleFromMouse(e);
+        } else if (isDraggingDotted) {
+          updateDottedAngleFromMouse(e);
         }
       });
       
@@ -698,11 +771,20 @@
             canvas.classList.add('no-drag');
             draw(); // Redraw to update visuals
           }
+        } else if (isDraggingDotted) {
+          isDraggingDotted = false;
+          // Check if dotted rod is at correct principal angle
+          const principal = getPrincipalAngle(currentAngle);
+          if (dottedRodAngle === principal) {
+            dottedRodCorrect = true;
+            draw(); // Redraw to update visuals
+          }
         }
       });
       
       canvas.addEventListener('mouseleave', () => {
         isDragging = false;
+        isDraggingDotted = false;
       });
       
       function updateAngleFromMouse(e) {
@@ -721,11 +803,36 @@
         draw();
       }
       
+      function updateDottedAngleFromMouse(e) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left - centerX;
+        const mouseY = e.clientY - rect.top - centerY;
+        
+        // Negate mouseY because canvas y-axis points down, but we want standard math coordinates
+        let angle = Math.atan2(-mouseY, mouseX) * 180 / Math.PI;
+        
+        // Snap to 5-degree increments
+        angle = Math.round(angle / 5) * 5;
+        
+        dottedRodAngle = normalizeAngle(angle);
+        
+        draw();
+      }
+      
       // Mode toggle
       document.getElementById('modeToggle').addEventListener('change', (e) => {
         isDegreeMode = !e.target.checked;
         displayQuestion();
         updateAngleDisplay();
+      });
+      
+      // Advanced mode toggle
+      document.getElementById('advancedToggle').addEventListener('change', (e) => {
+        isAdvancedMode = e.target.checked;
+        // Reset dotted rod when switching modes
+        dottedRodAngle = 0;
+        dottedRodCorrect = false;
+        draw();
       });
       
       // Answer input handling
