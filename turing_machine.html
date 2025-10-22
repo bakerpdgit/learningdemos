@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- saved from url=(0060)https://learning.classinteractives.co.uk/turing_machine.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Turing Machine Simulator</title>
     <style>
       :root {
@@ -248,10 +248,8 @@
       <h1>Turing Machine Simulator</h1>
 
       <div class="tape-container">
-        <div class="tape-indices" id="tape-indices"></div>
-        <div class="tape" id="tape">
-          <div class="head-indicator">HEAD</div>
-        </div>
+        <div class="tape-indices" id="tape-indices"><div class="tape-index">-10</div><div class="tape-index">-9</div><div class="tape-index">-8</div><div class="tape-index">-7</div><div class="tape-index">-6</div><div class="tape-index">-5</div><div class="tape-index">-4</div><div class="tape-index">-3</div><div class="tape-index">-2</div><div class="tape-index">-1</div><div class="tape-index">0</div><div class="tape-index">1</div><div class="tape-index">2</div><div class="tape-index">3</div><div class="tape-index">4</div><div class="tape-index">5</div><div class="tape-index">6</div><div class="tape-index">7</div><div class="tape-index">8</div><div class="tape-index">9</div><div class="tape-index">10</div></div>
+        <div class="tape" id="tape"><div class="head-indicator">HEAD</div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell center"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div><div class="tape-cell"></div></div>
         <div class="current-state" id="current-state">State: S0</div>
       </div>
       <div class="controls">
@@ -274,7 +272,7 @@
               <th>On _</th>
             </tr>
           </thead>
-          <tbody id="states-tbody"></tbody>
+          <tbody id="states-tbody"><tr class="state-row"><td class="state-name">S0</td><td class="transition-cell"><select><option value="0">0</option><option value="1">1</option><option value="_">_</option></select><select><option value="S0">S0</option></select><select><option value="L">Left</option><option value="R">Right</option><option value="S">Stay</option></select></td><td class="transition-cell"><select><option value="0">0</option><option value="1">1</option><option value="_">_</option></select><select><option value="S0">S0</option></select><select><option value="L">Left</option><option value="R">Right</option><option value="S">Stay</option></select></td><td class="transition-cell"><select><option value="0">0</option><option value="1">1</option><option value="_">_</option></select><select><option value="S0">S0</option></select><select><option value="L">Left</option><option value="R">Right</option><option value="S">Stay</option></select></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -504,13 +502,19 @@
         renderTape();
         updateCurrentState();
       }
-      function reset() {
-        headPosition = 0;
-        currentState = "S0";
-        // Tape is not cleared here
-        renderTape();
-        updateCurrentState();
-      }
+      
+// Fix reset() to return to the start state (which may have been renamed)
+function reset() {
+  headPosition = 0;
+  if (states.length > 0) {
+    currentState = states[0]; // use first defined state as start
+  } else {
+    currentState = "S0"; // fallback
+  }
+  renderTape();
+  updateCurrentState();
+}
+
 
       function clearTape() {
         tape = {}; // Tape is cleared here
@@ -523,8 +527,521 @@
         ).textContent = `State: ${currentState}`;
       }
 
+      
+// ---- SAVE & LOAD FUNCTIONALITY ----
+
+// Convert current transitions and tape into readable text format
+function generateSaveData() {
+  let data = "Turing Machine Save File\n\n";
+
+  data += "=== States and Transitions ===\n";
+  for (const [state, rules] of Object.entries(transitions)) {
+    data += `State ${state}:\n`;
+    for (const [symbol, trans] of Object.entries(rules)) {
+      data += `  On '${symbol}' -> Write '${trans.write}', Next '${trans.nextState}', Move '${trans.move}'\n`;
+    }
+    data += "\n";
+  }
+
+  data += "=== Tape ===\n";
+  const positions = Object.keys(tape).map(Number).sort((a, b) => a - b);
+  if (positions.length === 0) {
+    data += "(Empty)\n";
+  } else {
+    positions.forEach((pos) => {
+      data += `  [${pos}] = ${tape[pos]}\n`;
+    });
+  }
+
+  data += "\nHead Position: " + headPosition + "\n";
+  data += "Current State: " + currentState + "\n";
+
+  return data;
+}
+
+// Save to a .txt file
+function saveToFile() {
+  const blob = new Blob([generateSaveData()], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "turing_machine_save.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Load from a .txt file
+function loadFromFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    parseLoadedData(content);
+    renderTape();
+    renderStates();
+    updateCurrentState();
+  };
+  reader.readAsText(file);
+}
+
+// Parse human-readable text file and rebuild data
+function parseLoadedData(text) {
+  transitions = {};
+  states = [];
+  tape = {};
+
+  const lines = text.split("\n").map((l) => l.trim());
+  let currentStateName = null;
+
+  lines.forEach((line) => {
+    if (line.startsWith("State ")) {
+      currentStateName = line.split(" ")[1].replace(":", "");
+      states.push(currentStateName);
+      transitions[currentStateName] = {};
+    } else if (line.startsWith("On '") && currentStateName) {
+      const match = line.match(/On '(.+)' -> Write '(.+)', Next '(.+)', Move '(.+)'/);
+      if (match) {
+        const [, symbol, write, next, move] = match;
+        transitions[currentStateName][symbol] = { write, nextState: next, move };
+      }
+    } else if (line.startsWith("[")) {
+      const match = line.match(/\[(\-?\d+)\] = (.+)/);
+      if (match) {
+        const [, pos, val] = match;
+        tape[Number(pos)] = val;
+      }
+    } else if (line.startsWith("Head Position:")) {
+      headPosition = Number(line.split(":")[1].trim());
+    } else if (line.startsWith("Current State:")) {
+      currentState = line.split(":")[1].trim();
+    }
+  });
+
+  // Update nextStateNumber to avoid duplicates
+  const nums = states.map((s) => Number(s.slice(1))).filter((n) => !isNaN(n));
+  nextStateNumber = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+}
+
+// Create buttons for Save and Load
+const controlsDiv = document.querySelector(".controls");
+
+const saveBtn = document.createElement("button");
+saveBtn.className = "btn";
+saveBtn.textContent = "Save";
+saveBtn.onclick = saveToFile;
+
+const loadInput = document.createElement("input");
+loadInput.type = "file";
+loadInput.accept = ".txt";
+loadInput.style.display = "none";
+loadInput.onchange = loadFromFile;
+
+const loadBtn = document.createElement("button");
+loadBtn.className = "btn secondary";
+loadBtn.textContent = "Load";
+loadBtn.onclick = () => loadInput.click();
+
+controlsDiv.appendChild(saveBtn);
+controlsDiv.appendChild(loadBtn);
+controlsDiv.appendChild(loadInput);
+
+// ---- END SAVE & LOAD ----
+
+      
+// ---- DIAGRAM & RULES VISUALISATION ----
+
+// Create containers for diagram and rules
+const diagramContainer = document.createElement("div");
+diagramContainer.id = "diagram-container";
+diagramContainer.style.display = "none";
+diagramContainer.style.textAlign = "center";
+diagramContainer.style.marginTop = "20px";
+
+const canvas = document.createElement("canvas");
+canvas.id = "state-diagram";
+canvas.width = 800;
+canvas.height = 400;
+canvas.style.border = "1px solid #e2e8f0";
+canvas.style.borderRadius = "8px";
+canvas.style.backgroundColor = "white";
+diagramContainer.appendChild(canvas);
+
+const rulesContainer = document.createElement("pre");
+rulesContainer.id = "rules-container";
+rulesContainer.style.display = "none";
+rulesContainer.style.background = "#f8fafc";
+rulesContainer.style.border = "1px solid #e2e8f0";
+rulesContainer.style.padding = "20px";
+rulesContainer.style.borderRadius = "8px";
+rulesContainer.style.textAlign = "left";
+rulesContainer.style.overflowX = "auto";
+rulesContainer.style.marginTop = "20px";
+
+// Add to DOM
+document.querySelector(".container").appendChild(diagramContainer);
+document.querySelector(".container").appendChild(rulesContainer);
+
+// Create toggle buttons
+const diagramBtn = document.createElement("button");
+diagramBtn.className = "btn";
+diagramBtn.textContent = "Toggle Diagram";
+diagramBtn.onclick = () => {
+  if (diagramContainer.style.display === "none") {
+    diagramContainer.style.display = "block";
+    drawDiagram();
+  } else {
+    diagramContainer.style.display = "none";
+  }
+};
+
+const rulesBtn = document.createElement("button");
+rulesBtn.className = "btn secondary";
+rulesBtn.textContent = "Toggle Rules";
+rulesBtn.onclick = () => {
+  if (rulesContainer.style.display === "none") {
+    renderRules();
+    rulesContainer.style.display = "block";
+  } else {
+    rulesContainer.style.display = "none";
+  }
+};
+
+controlsDiv.appendChild(diagramBtn);
+controlsDiv.appendChild(rulesBtn);
+
+// Draws a simple circular state diagram with labelled transitions
+function drawDiagram() {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const numStates = states.length;
+  const radius = 150;
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const stateRadius = 35;
+
+  const positions = {};
+
+  // Calculate positions around a circle
+  states.forEach((state, i) => {
+    const angle = (i / numStates) * 2 * Math.PI;
+    positions[state] = {
+      x: centerX + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+    };
+  });
+
+  ctx.font = "16px Segoe UI";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // Draw transitions (arrows with labels)
+  for (const [state, rules] of Object.entries(transitions)) {
+    for (const [symbol, t] of Object.entries(rules)) {
+      const from = positions[state];
+      const to = positions[t.nextState];
+      if (!from || !to) continue;
+
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const ux = dx / dist;
+      const uy = dy / dist;
+
+      const startX = from.x + ux * stateRadius;
+      const startY = from.y + uy * stateRadius;
+      const endX = to.x - ux * stateRadius;
+      const endY = to.y - uy * stateRadius;
+
+      // Arrow line
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.strokeStyle = "#475569";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Arrowhead
+      const arrowSize = 8;
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - uy * arrowSize - ux * arrowSize, endY + ux * arrowSize - uy * arrowSize);
+      ctx.lineTo(endX + uy * arrowSize - ux * arrowSize, endY - ux * arrowSize - uy * arrowSize);
+      ctx.closePath();
+      ctx.fillStyle = "#475569";
+      ctx.fill();
+
+      // Label
+      const midX = (startX + endX) / 2;
+      const midY = (startY + endY) / 2;
+      ctx.fillStyle = "#1e40af";
+      ctx.fillText(`${symbol}→${t.write},${t.move}`, midX, midY - 10);
+    }
+  }
+
+  // Draw states (circles)
+  for (const [state, pos] of Object.entries(positions)) {
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, stateRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = state === currentState ? "#bfdbfe" : "#ffffff";
+    ctx.strokeStyle = "#1e3a8a";
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#1e3a8a";
+    ctx.fillText(state, pos.x, pos.y);
+  }
+
+  // Initial state arrow
+  const s0 = positions["S0"];
+  if (s0) {
+    ctx.beginPath();
+    ctx.moveTo(s0.x - stateRadius - 30, s0.y);
+    ctx.lineTo(s0.x - stateRadius, s0.y);
+    ctx.strokeStyle = "#22c55e";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = "#22c55e";
+    ctx.fillText("Start", s0.x - stateRadius - 40, s0.y);
+  }
+}
+
+// Render transition rules text
+function renderRules() {
+  let text = "Transition Rules:\n\n";
+  for (const [state, rules] of Object.entries(transitions)) {
+    for (const [symbol, t] of Object.entries(rules)) {
+      text += `(${state}, ${symbol}) → (${t.nextState}, ${t.write}, ${t.move})\n`;
+    }
+  }
+  rulesContainer.textContent = text;
+}
+
+// ---- END DIAGRAM & RULES ----
+
+      
+
+// ==== HASH SYMBOL & INLINE RENAME ENHANCEMENTS ====
+
+// Ensure every state has a '#' rule; and default write options include '#'
+function ensureHashSymbolEverywhere() {
+  // Extend existing transitions with '#' default where missing
+  for (const s of states) {
+    if (!transitions[s]["#"]) {
+      transitions[s]["#"] = { write: "#", nextState: s, move: "S" };
+    }
+  }
+}
+ensureHashSymbolEverywhere();
+
+// Override toggleCell to include '#' in the cycle
+function toggleCell(position) {
+  const currentValue = tape[position] || "_";
+  let next;
+  if (currentValue === "_") next = "0";
+  else if (currentValue === "0") next = "1";
+  else if (currentValue === "1") next = "#";
+  else next = "_";
+  tape[position] = next;
+  renderTape();
+}
+
+// Patch the table header to add "On #"
+(function ensureHeaderHasHash(){
+  const thead = document.querySelector(".state-table thead tr");
+  if (thead && !Array.from(thead.children).some(th => th.textContent.trim() === "On #")) {
+    const th = document.createElement("th");
+    th.textContent = "On #";
+    thead.appendChild(th);
+  }
+})();
+
+// Inline renaming support
+function renameState(oldName, newName) {
+  newName = (newName || "").trim();
+  // Validate: non-empty, not duplicate, allowed chars (letters, digits, underscore)
+  if (!newName || states.includes(newName)) return false;
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(newName)) return false;
+
+  // Update states array
+  const idx = states.indexOf(oldName);
+  if (idx >= 0) states[idx] = newName;
+
+  // Move transitions key
+  transitions[newName] = transitions[oldName];
+  delete transitions[oldName];
+
+  // Update any nextState references across all transitions
+  for (const s of states) {
+    for (const sym of ["0","1","_","#"]) {
+      if (transitions[s][sym].nextState === oldName) {
+        transitions[s][sym].nextState = newName;
+      }
+    }
+  }
+
+  // Update currentState if needed
+  if (currentState === oldName) currentState = newName;
+
+  return true;
+}
+
+// Override renderStates to include '#' column and inline renaming
+function renderStates() {
+  ensureHashSymbolEverywhere();
+  const tbody = document.getElementById("states-tbody");
+  tbody.innerHTML = "";
+
+  states.forEach((state) => {
+    const row = document.createElement("tr");
+    row.className = "state-row";
+
+    // State name cell with inline editing
+    const stateCell = document.createElement("td");
+    stateCell.className = "state-name";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = state;
+    nameSpan.style.cursor = "text";
+    nameSpan.title = "Click to rename this state";
+
+    nameSpan.onclick = () => {
+      // Replace with input
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = state;
+      input.style.fontWeight = "600";
+      input.style.color = "var(--primary-color)";
+      input.size = Math.max(3, state.length);
+      stateCell.replaceChild(input, nameSpan);
+      input.focus();
+      input.select();
+
+      const commit = () => {
+        const proposed = input.value.trim();
+        if (proposed !== state && renameState(state, proposed)) {
+          state = proposed; // local update
+        }
+        // restore span with new name (or old if rename failed)
+        nameSpan.textContent = state;
+        stateCell.replaceChild(nameSpan, input);
+        renderStates();
+        if (typeof drawDiagram === "function") drawDiagram();
+        if (typeof renderRules === "function") renderRules();
+        updateCurrentState();
+      };
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") commit();
+        else if (e.key === "Escape") {
+          stateCell.replaceChild(nameSpan, input);
+        }
+      });
+      input.addEventListener("blur", commit);
+    };
+
+    stateCell.appendChild(nameSpan);
+
+    if (state !== "S0") {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "delete-btn";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.onclick = () => deleteState(state);
+      deleteBtn.style.display = "block";
+      deleteBtn.style.marginTop = "6px";
+      stateCell.appendChild(deleteBtn);
+    }
+    row.appendChild(stateCell);
+
+    // For symbols 0,1,_,#
+    ["0","1","_","#"].forEach((symbol) => {
+      const transitionCell = document.createElement("td");
+      transitionCell.className = "transition-cell";
+
+      const transition = transitions[state][symbol];
+
+      // Write dropdown
+      const writeSelect = document.createElement("select");
+      ["0","1","_","#"].forEach((val) => {
+        const option = document.createElement("option");
+        option.value = val;
+        option.textContent = val;
+        if (transition && val === transition.write) option.selected = true;
+        writeSelect.appendChild(option);
+      });
+      writeSelect.onchange = () => updateTransition(state, symbol, "write", writeSelect.value);
+
+      // Next State dropdown
+      const stateSelect = document.createElement("select");
+      states.forEach((s_option) => {
+        const option = document.createElement("option");
+        option.value = s_option;
+        option.textContent = s_option;
+        if (transition && s_option === transition.nextState) option.selected = true;
+        stateSelect.appendChild(option);
+      });
+      stateSelect.onchange = () => updateTransition(state, symbol, "nextState", stateSelect.value);
+
+      // Move dropdown
+      const moveSelect = document.createElement("select");
+      [
+        { val: "L", text: "Left" },
+        { val: "R", text: "Right" },
+        { val: "S", text: "Stay" },
+      ].forEach(({ val, text }) => {
+        const option = document.createElement("option");
+        option.value = val;
+        option.textContent = text;
+        if (transition && val === transition.move) option.selected = true;
+        else if (!transition && val === "S") option.selected = true;
+        moveSelect.appendChild(option);
+      });
+      moveSelect.onchange = () => updateTransition(state, symbol, "move", moveSelect.value);
+
+      transitionCell.appendChild(writeSelect);
+      transitionCell.appendChild(stateSelect);
+      transitionCell.appendChild(moveSelect);
+
+      row.appendChild(transitionCell);
+    });
+
+    tbody.appendChild(row);
+  });
+}
+
+// Override addState to include '#' defaults
+function addState() {
+  const newState = `S${nextStateNumber}`;
+  nextStateNumber++;
+  states.push(newState);
+
+  transitions[newState] = {
+    0: { write: "0", nextState: newState, move: "S" },
+    1: { write: "1", nextState: newState, move: "S" },
+    _: { write: "_", nextState: newState, move: "S" },
+    "#": { write: "#", nextState: newState, move: "S" },
+  };
+
+  renderStates();
+  if (typeof drawDiagram === "function") drawDiagram();
+  if (typeof renderRules === "function") renderRules();
+}
+
+// Patch initial transitions for S0 to include '#'
+if (!transitions["S0"]["#"]) {
+  transitions["S0"]["#"] = { write: "#", nextState: "S0", move: "S" };
+}
+
+// Ensure save data includes '#': existing generator already iterates keys.
+// Ensure load parser works for '#': regex already allows '#'.
+
+// ==== END ENHANCEMENTS ====
+
       // Initialize on load
       init();
     </script>
-  </body>
-</html>
+  
+
+</body></html>

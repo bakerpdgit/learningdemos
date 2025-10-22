@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Turing Machine Simulator</title>
+    <style>
+      :root {
+        --primary-color: #2563eb;
+        --secondary-color: #1e40af;
+        --bg-color: #f8fafc;
+        --card-bg: #ffffff;
+        --border-color: #e2e8f0;
+        --text-color: #1e293b;
+        --head-color: #dc2626;
+        --success-color: #059669;
+        --font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 20px;
+        background-color: var(--bg-color);
+        font-family: var(--font-family);
+        color: var(--text-color);
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        text-align: center;
+        color: var(--primary-color);
+        margin-bottom: 30px;
+        font-size: 2.5rem;
+        font-weight: 600;
+      }
+
+      .tape-container {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 30px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--border-color);
+      }
+
+      .tape-indices {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 5px;
+        font-size: 12px;
+        color: #64748b;
+      }
+
+      .tape-index {
+        width: 50px;
+        text-align: center;
+        font-weight: 500;
+      }
+
+      .tape {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 15px;
+        position: relative;
+      }
+
+      .tape-cell {
+        width: 50px;
+        height: 50px;
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: 600;
+        background: white;
+        transition: all 0.2s ease;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      .tape-cell:hover {
+        background-color: #f1f5f9;
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+      }
+
+      .tape-cell.center {
+        background-color: #fef3c7;
+        border-color: var(--head-color);
+        border-width: 3px;
+      }
+
+      .head-indicator {
+        position: absolute;
+        top: -30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--head-color);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        pointer-events: none;
+      }
+
+      .current-state {
+        text-align: center;
+        margin-top: 10px;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--primary-color);
+      }
+
+      .controls {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .btn {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        margin: 0 10px;
+        transition: background-color 0.2s ease;
+      }
+
+      .btn:hover {
+        background: var(--secondary-color);
+      }
+
+      .btn:active {
+        transform: translateY(1px);
+      }
+
+      .btn.secondary {
+        background: #6b7280;
+      }
+
+      .btn.secondary:hover {
+        background: #4b5563;
+      }
+
+      .states-container {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--border-color);
+      }
+
+      .states-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .states-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-color);
+      }
+
+      .state-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+      }
+
+      .state-table th {
+        background: var(--bg-color);
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        border: 1px solid var(--border-color);
+      }
+
+      .state-table td {
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        vertical-align: middle;
+      }
+
+      .state-table tr:nth-child(even) {
+        background: #f8fafc;
+      }
+
+      .state-row {
+        transition: background-color 0.2s ease;
+      }
+
+      .state-row:hover {
+        background: #f1f5f9;
+      }
+
+      .state-name {
+        font-weight: 600;
+        color: var(--primary-color);
+      }
+
+      select {
+        padding: 6px 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        margin: 0 2px;
+      }
+
+      .delete-btn {
+        background: #dc2626;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      .delete-btn:hover {
+        background: #b91c1c;
+      }
+
+      .transition-cell {
+        align-items: center;
+        gap: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Turing Machine Simulator</h1>
+
+      <div class="tape-container">
+        <div class="tape-indices" id="tape-indices"></div>
+        <div class="tape" id="tape">
+          <div class="head-indicator">HEAD</div>
+        </div>
+        <div class="current-state" id="current-state">State: S0</div>
+      </div>
+      <div class="controls">
+        <button class="btn" onclick="step()">Step</button>
+        <button class="btn secondary" onclick="reset()">Reset</button>
+        <button class="btn secondary" onclick="clearTape()">Clear Tape</button>
+      </div>
+
+      <div class="states-container">
+        <div class="states-header">
+          <h2 class="states-title">State Transitions</h2>
+          <button class="btn" onclick="addState()">Add State</button>
+        </div>
+        <table class="state-table">
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>On 0</th>
+              <th>On 1</th>
+              <th>On _</th>
+            </tr>
+          </thead>
+          <tbody id="states-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      // Turing machine state
+      let tape = {}; // Sparse array for tape cells
+      let headPosition = 0;
+      let currentState = "S0";
+      let states = ["S0"];
+      let nextStateNumber = 1; // Track next state number to assign
+      let transitions = {
+        S0: {
+          0: { write: "0", nextState: "S0", move: "S" }, // Changed R to S
+          1: { write: "1", nextState: "S0", move: "S" }, // Changed R to S
+          _: { write: "_", nextState: "S0", move: "S" }, // Changed R to S
+        },
+      };
+
+      // Initialize the machine
+      function init() {
+        renderTape();
+        renderStates();
+        updateCurrentState();
+      }
+
+      function renderTape() {
+        const tapeDiv = document.getElementById("tape");
+        const indicesDiv = document.getElementById("tape-indices");
+
+        // Clear existing content except head indicator
+        const headIndicator = tapeDiv.querySelector(".head-indicator");
+        tapeDiv.innerHTML = "";
+        tapeDiv.appendChild(headIndicator);
+        indicesDiv.innerHTML = "";
+
+        // Render 21 cells (-10 to +10 relative to head)
+        for (let i = -10; i <= 10; i++) {
+          const actualPosition = headPosition + i;
+          const cellValue = tape[actualPosition] || "_";
+
+          // Create index
+          const indexDiv = document.createElement("div");
+          indexDiv.className = "tape-index";
+          indexDiv.textContent = actualPosition;
+          indicesDiv.appendChild(indexDiv);
+
+          // Create cell
+          const cellDiv = document.createElement("div");
+          cellDiv.className = "tape-cell";
+          if (i === 0) cellDiv.classList.add("center");
+          cellDiv.textContent = cellValue === "_" ? "" : cellValue;
+          cellDiv.onclick = () => toggleCell(actualPosition);
+          tapeDiv.appendChild(cellDiv);
+        }
+      }
+
+      function toggleCell(position) {
+        const currentValue = tape[position] || "_";
+        if (currentValue === "_") {
+          tape[position] = "0";
+        } else if (currentValue === "0") {
+          tape[position] = "1";
+        } else {
+          tape[position] = "_";
+        }
+        renderTape();
+      }
+
+      function renderStates() {
+        const tbody = document.getElementById("states-tbody");
+        tbody.innerHTML = ""; // Clear previous table body
+
+        states.forEach((state) => {
+          const row = document.createElement("tr");
+          row.className = "state-row";
+
+          // State Name Cell
+          const stateCell = document.createElement("td");
+          stateCell.className = "state-name";
+          stateCell.textContent = state;
+
+          if (state !== "S0") {
+            const deleteBtn = document.createElement("button");
+            deleteBtn.className = "delete-btn";
+            deleteBtn.textContent = "Delete";
+            deleteBtn.onclick = () => deleteState(state);
+            deleteBtn.style.display = "block"; // Make button take its own line
+            deleteBtn.style.marginTop = "5px";
+            stateCell.appendChild(document.createElement("br")); // Add space if needed or ensure it's below
+            stateCell.appendChild(deleteBtn);
+          }
+          row.appendChild(stateCell);
+
+          // Transition Cells for "On 0", "On 1", "On _"
+          ["0", "1", "_"].forEach((symbol) => {
+            const transitionCell = document.createElement("td"); // Create a NEW TD for EACH symbol
+            transitionCell.className = "transition-cell";
+
+            const transition = transitions[state][symbol];
+
+            // Write dropdown
+            const writeSelect = document.createElement("select");
+            ["0", "1", "_"].forEach((val) => {
+              const option = document.createElement("option");
+              option.value = val;
+              option.textContent = val;
+              if (transition && val === transition.write) {
+                option.selected = true;
+              }
+              writeSelect.appendChild(option);
+            });
+            writeSelect.onchange = () =>
+              updateTransition(state, symbol, "write", writeSelect.value);
+
+            // Next State dropdown
+            const stateSelect = document.createElement("select");
+            states.forEach((s_option) => {
+              const option = document.createElement("option");
+              option.value = s_option;
+              option.textContent = s_option;
+              if (transition && s_option === transition.nextState) {
+                option.selected = true;
+              }
+              stateSelect.appendChild(option);
+            });
+            stateSelect.onchange = () =>
+              updateTransition(state, symbol, "nextState", stateSelect.value);
+
+            // Move dropdown
+            const moveSelect = document.createElement("select");
+            [
+              { val: "L", text: "Left" },
+              { val: "R", text: "Right" },
+              { val: "S", text: "Stay" }, // Added Stay option
+            ].forEach(({ val, text }) => {
+              const option = document.createElement("option");
+              option.value = val;
+              option.textContent = text;
+              // Ensure 'S' is selected if it's the transition's move or if no specific move is set (implicitly making it default)
+              if (transition && val === transition.move) {
+                option.selected = true;
+              } else if (!transition && val === "S") {
+                // Default to Stay for new/undefined
+                option.selected = true;
+              }
+              moveSelect.appendChild(option);
+            });
+            moveSelect.onchange = () =>
+              updateTransition(state, symbol, "move", moveSelect.value);
+
+            // Append the three dropdowns for the current symbol to its dedicated cell
+            transitionCell.appendChild(writeSelect);
+            transitionCell.appendChild(stateSelect);
+            transitionCell.appendChild(moveSelect);
+
+            row.appendChild(transitionCell); // Append THIS symbol's cell to the row
+          });
+
+          tbody.appendChild(row);
+        });
+      }
+
+      function updateTransition(state, symbol, property, value) {
+        transitions[state][symbol][property] = value;
+      }
+      function addState() {
+        const newState = `S${nextStateNumber}`; // Uses the incrementing counter
+        nextStateNumber++;
+        states.push(newState);
+
+        // Initialize transitions for new state
+        transitions[newState] = {
+          0: { write: "0", nextState: newState, move: "S" }, // Changed R to S
+          1: { write: "1", nextState: newState, move: "S" }, // Changed R to S
+          _: { write: "_", nextState: newState, move: "S" }, // Changed R to S
+        };
+
+        renderStates();
+      }
+
+      function deleteState(state) {
+        if (state === "S0") return; // Can't delete S0
+
+        states = states.filter((s) => s !== state);
+        delete transitions[state];
+
+        // Update any transitions that reference this state
+        states.forEach((s) => {
+          ["0", "1", "_"].forEach((symbol) => {
+            if (transitions[s][symbol].nextState === state) {
+              transitions[s][symbol].nextState = s; // Default to self
+            }
+          });
+        });
+
+        // Reset to S0 if current state was deleted
+        if (currentState === state) {
+          currentState = "S0";
+          updateCurrentState();
+        }
+
+        renderStates();
+      }
+
+      function step() {
+        const currentSymbol = tape[headPosition] || "_";
+        const transition = transitions[currentState][currentSymbol];
+
+        if (!transition) return;
+
+        // Write symbol
+        tape[headPosition] = transition.write;
+
+        // Move head
+        if (transition.move === "L") {
+          headPosition--;
+        } else if (transition.move === "R") {
+          // Added else if
+          headPosition++;
+        }
+        // If transition.move === "S", headPosition remains unchanged
+
+        // Change state
+        currentState = transition.nextState;
+
+        renderTape();
+        updateCurrentState();
+      }
+      function reset() {
+        headPosition = 0;
+        currentState = "S0";
+        // Tape is not cleared here
+        renderTape();
+        updateCurrentState();
+      }
+
+      function clearTape() {
+        tape = {}; // Tape is cleared here
+        renderTape();
+      }
+
+      function updateCurrentState() {
+        document.getElementById(
+          "current-state"
+        ).textContent = `State: ${currentState}`;
+      }
+
+      // Initialize on load
+      init();
+    </script>
+  </body>
+</html>
