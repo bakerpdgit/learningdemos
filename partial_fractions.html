@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A Level Maths: Partial Fractions Mastery</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.development.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+    ></script>
+
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MathJax -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+        },
+        svg: {
+          fontCache: "global",
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+
+    <style>
+      body {
+        background-color: #f3f4f6;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      /* Custom input number hiding arrows */
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+
+      .fade-in {
+        animation: fadeIn 0.5s ease-in;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .bounce-icon {
+        animation: bounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      @keyframes bounce {
+        0% {
+          transform: scale(0);
+        }
+        50% {
+          transform: scale(1.2);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      #fireworks-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 50;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- Question Data ---
+      // Carefully pre-calculated for integer solutions
+      const questions = [
+        {
+          id: 1,
+          title: "Level 1: The Basics",
+          instruction: "Find the values of the constants A and B.",
+          latex: String.raw`\frac{-3}{(x+1)(x-2)} \equiv \frac{A}{x+1} + \frac{B}{x-2}`,
+          inputs: ["A", "B"],
+          answers: { A: 1, B: -1 },
+        },
+        {
+          id: 2,
+          title: "Level 2: Factorise First",
+          instruction: "Factorise the denominator, then find A and B.",
+          latex: String.raw`\frac{-10}{x^2+x-6} \equiv \frac{A}{x+3} + \frac{B}{x-2}`,
+          inputs: ["A", "B"],
+          answers: { A: 2, B: -2 },
+        },
+        {
+          id: 3,
+          title: "Level 3: Repeated Factors",
+          instruction: "Handle the repeated linear factor in the denominator.",
+          latex: String.raw`\frac{-x^2+8x+2}{(x-1)^2(x+2)} \equiv \frac{A}{x-1} + \frac{B}{(x-1)^2} + \frac{C}{x+2}`,
+          inputs: ["A", "B", "C"],
+          answers: { A: 1, B: 3, C: -2 },
+        },
+        {
+          id: 4,
+          title: "Level 4: Hidden Repetition",
+          instruction: "Factorise the cubic denominator completely first.",
+          latex: String.raw`\frac{5x^2+3x+1}{x^3-3x-2} \equiv \frac{A}{x+1} + \frac{B}{(x+1)^2} + \frac{C}{x-2}`,
+          inputs: ["A", "B", "C"],
+          answers: { A: 2, B: -1, C: 3 },
+        },
+        {
+          id: 5,
+          title: "Level 5: Improper Fractions",
+          instruction:
+            "Perform algebraic division first to find the constant term.",
+          latex: String.raw`\frac{x^2+3x+5}{x^2+3x+2} \equiv A + \frac{B}{x+1} + \frac{C}{x+2}`,
+          inputs: ["A", "B", "C"],
+          answers: { A: 1, B: 3, C: -3 },
+        },
+        {
+          id: 6,
+          title: "Level 6: The Final Boss",
+          instruction:
+            "Improper fraction where the numerator degree is higher than the denominator.",
+          latex: String.raw`\frac{2x^3+x^2-6x+9}{x^2+x-2} \equiv Ax + B + \frac{C}{x-1} + \frac{D}{x+2}`,
+          inputs: ["A", "B", "C", "D"],
+          answers: { A: 2, B: -1, C: 2, D: -3 },
+        },
+      ];
+
+      // --- Components ---
+
+      const Fireworks = ({ active }) => {
+        const canvasRef = useRef(null);
+
+        useEffect(() => {
+          if (!active) return;
+
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext("2d");
+          let animationFrameId;
+          let particles = [];
+
+          const resizeCanvas = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+          };
+          window.addEventListener("resize", resizeCanvas);
+          resizeCanvas();
+
+          class Particle {
+            constructor(x, y, color) {
+              this.x = x;
+              this.y = y;
+              this.color = color;
+              this.velocity = {
+                x: (Math.random() - 0.5) * 8,
+                y: (Math.random() - 0.5) * 8,
+              };
+              this.alpha = 1;
+              this.friction = 0.96;
+              this.gravity = 0.2; // Gravity effect
+            }
+
+            draw() {
+              ctx.save();
+              ctx.globalAlpha = this.alpha;
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, 4, 0, Math.PI * 2, false);
+              ctx.fillStyle = this.color;
+              ctx.fill();
+              ctx.restore();
+            }
+
+            update() {
+              this.velocity.x *= this.friction;
+              this.velocity.y *= this.friction;
+              this.velocity.y += this.gravity;
+              this.x += this.velocity.x;
+              this.y += this.velocity.y;
+              this.alpha -= 0.01;
+            }
+          }
+
+          const colors = [
+            "#FFD700",
+            "#FF6347",
+            "#00BFFF",
+            "#32CD32",
+            "#FF69B4",
+          ];
+
+          const createFirework = (x, y) => {
+            const particleCount = 60;
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            for (let i = 0; i < particleCount; i++) {
+              particles.push(new Particle(x, y, color));
+            }
+          };
+
+          // Auto launch fireworks
+          let timer = 0;
+          const animate = () => {
+            animationFrameId = requestAnimationFrame(animate);
+            ctx.fillStyle = "rgba(243, 244, 246, 0.2)"; // Fade effect (match bg color)
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach((particle, index) => {
+              if (particle.alpha > 0) {
+                particle.update();
+                particle.draw();
+              } else {
+                particles.splice(index, 1);
+              }
+            });
+
+            timer++;
+            if (timer % 30 === 0) {
+              // New firework every 30 frames
+              const x = Math.random() * canvas.width;
+              const y = Math.random() * (canvas.height * 0.6);
+              createFirework(x, y);
+            }
+          };
+
+          animate();
+
+          return () => {
+            window.removeEventListener("resize", resizeCanvas);
+            cancelAnimationFrame(animationFrameId);
+          };
+        }, [active]);
+
+        if (!active) return null;
+        return <canvas id="fireworks-canvas" ref={canvasRef} />;
+      };
+
+      const SuccessIcon = () => (
+        <svg
+          className="w-16 h-16 text-green-500 bounce-icon mx-auto mb-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+      );
+
+      const LockIcon = () => (
+        <svg
+          className="w-5 h-5 ml-2"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+          ></path>
+        </svg>
+      );
+
+      const App = () => {
+        const [currentIndex, setCurrentIndex] = useState(0);
+        const [userInputs, setUserInputs] = useState({});
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [showError, setShowError] = useState(false);
+        const [isComplete, setIsComplete] = useState(false);
+
+        const currentQ = questions[currentIndex];
+
+        // Re-render MathJax when question changes
+        useEffect(() => {
+          if (window.MathJax) {
+            window.MathJax.typesetPromise && window.MathJax.typesetPromise();
+          }
+          // Reset state for new question
+          setUserInputs({});
+          setIsCorrect(false);
+          setShowError(false);
+        }, [currentIndex]);
+
+        const handleInputChange = (variable, value) => {
+          setUserInputs((prev) => ({
+            ...prev,
+            [variable]: value,
+          }));
+          setShowError(false); // Clear error when typing
+        };
+
+        const checkAnswer = (e) => {
+          e.preventDefault();
+
+          const expected = currentQ.answers;
+          let allCorrect = true;
+          let allFilled = true;
+
+          for (let key of currentQ.inputs) {
+            const val = userInputs[key];
+            if (val === undefined || val === "") {
+              allFilled = false;
+              break;
+            }
+            if (parseInt(val) !== expected[key]) {
+              allCorrect = false;
+            }
+          }
+
+          if (!allFilled) {
+            // Could add specific error for empty fields
+            setShowError(true);
+            return;
+          }
+
+          if (allCorrect) {
+            setIsCorrect(true);
+            setShowError(false);
+            if (currentIndex === questions.length - 1) {
+              setTimeout(() => setIsComplete(true), 500);
+            }
+          } else {
+            setShowError(true);
+            setIsCorrect(false);
+          }
+        };
+
+        const nextQuestion = () => {
+          if (currentIndex < questions.length - 1) {
+            setCurrentIndex((prev) => prev + 1);
+          }
+        };
+
+        const resetQuiz = () => {
+          setCurrentIndex(0);
+          setIsComplete(false);
+          setUserInputs({});
+          setIsCorrect(false);
+        };
+
+        if (isComplete) {
+          return (
+            <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+              <Fireworks active={true} />
+              <div className="bg-white p-10 rounded-2xl shadow-2xl text-center z-10 max-w-lg mx-4 border-t-8 border-indigo-600 fade-in">
+                <h1 className="text-4xl font-bold text-indigo-900 mb-4">
+                  Mastery Achieved!
+                </h1>
+                <p className="text-xl text-gray-600 mb-8">
+                  Outstanding work! You have successfully navigated all partial
+                  fraction complexities, from basic factors to improper
+                  algebraic divisions.
+                </p>
+                <div className="text-6xl mb-6">🏆</div>
+                <button
+                  onClick={resetQuiz}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition shadow-lg"
+                >
+                  Start Again
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center">
+            {/* Header */}
+            <div className="w-full max-w-3xl mb-8 flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  A Level Maths
+                </h2>
+                <p className="text-gray-500">Partial Fractions Quiz</p>
+              </div>
+              <div className="bg-white px-4 py-2 rounded-lg shadow text-sm font-semibold text-indigo-600">
+                Question {currentIndex + 1} / {questions.length}
+              </div>
+            </div>
+
+            {/* Question Card */}
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden border border-gray-100 fade-in relative">
+              {/* Progress Bar */}
+              <div className="h-2 bg-gray-100 w-full">
+                <div
+                  className="h-full bg-indigo-500 transition-all duration-500 ease-out"
+                  style={{
+                    width: `${(currentIndex / questions.length) * 100}%`,
+                  }}
+                ></div>
+              </div>
+
+              <div className="p-8">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  {currentQ.title}
+                </h3>
+                <p className="text-gray-600 mb-6 italic">
+                  {currentQ.instruction}
+                </p>
+
+                {/* Math Display */}
+                <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8 flex justify-center items-center min-h-[120px]">
+                  <div className="text-xl md:text-2xl text-gray-800 overflow-x-auto">
+                    {`$$ ${currentQ.latex} $$`}
+                  </div>
+                </div>
+
+                {/* Input Form */}
+                <form onSubmit={checkAnswer} className="max-w-xl mx-auto">
+                  <div className="grid grid-cols-2 gap-6 mb-8">
+                    {currentQ.inputs.map((variable) => (
+                      <div key={variable} className="flex flex-col">
+                        <label className="text-sm font-bold text-gray-700 mb-2 flex items-center">
+                          <span className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center mr-2">
+                            {variable}
+                          </span>
+                          Value
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="?"
+                          value={userInputs[variable] || ""}
+                          onChange={(e) =>
+                            handleInputChange(variable, e.target.value)
+                          }
+                          disabled={isCorrect}
+                          className={`
+                                                    w-full px-4 py-3 rounded-lg border-2 text-lg outline-none transition-colors text-center font-mono
+                                                    ${
+                                                      isCorrect
+                                                        ? "bg-green-50 border-green-200 text-green-700 font-bold"
+                                                        : "border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                                    }
+                                                `}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Feedback & Controls */}
+                  <div className="text-center space-y-4">
+                    {isCorrect && (
+                      <div className="fade-in">
+                        <SuccessIcon />
+                        <p className="text-green-600 font-bold text-lg mb-4">
+                          Correct! Well done.
+                        </p>
+                      </div>
+                    )}
+
+                    {showError && !isCorrect && (
+                      <p className="text-red-500 font-medium animate-pulse">
+                        Incorrect. Check your workings and try again.
+                      </p>
+                    )}
+
+                    {!isCorrect ? (
+                      <button
+                        type="submit"
+                        className="w-full sm:w-auto px-10 py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition shadow-md hover:shadow-lg active:transform active:scale-95"
+                      >
+                        Check Answer
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={nextQuestion}
+                        className="w-full sm:w-auto px-10 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition shadow-md hover:shadow-lg flex items-center justify-center mx-auto"
+                      >
+                        {currentIndex === questions.length - 1
+                          ? "Finish Quiz"
+                          : "Next Question"}
+                        {currentIndex < questions.length - 1 && (
+                          <svg
+                            className="w-5 h-5 ml-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M13 7l5 5m0 0l-5 5m5-5H6"
+                            ></path>
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+
+              {/* Footer Status */}
+              <div className="bg-gray-50 px-8 py-4 border-t border-gray-100 flex justify-between items-center text-sm text-gray-500">
+                <span>Topic: Pure Mathematics</span>
+                <span className="flex items-center">
+                  {isCorrect ? "Unlocked" : "Solve to unlock next"}
+                  {!isCorrect && <LockIcon />}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
