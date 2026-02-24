@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Parametric Domain & Range Quiz</title>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["\\(", "\\)"]],
+          displayMath: [["\\[", "\\]"]],
+        },
+        svg: { fontCache: "global" },
+      };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  </head>
+  <body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useEffect, useState } = React;
+
+      const rawQuestions = [
+        {
+          id: 1,
+          type: "Range",
+          difficulty: "Linear",
+          param: String.raw`x = 2t + 1, \quad y = 3t - 4`,
+          domain_t: String.raw`0 \leq t \leq 5`,
+          question: "What is the range of the function?",
+          options: [
+            { label: String.raw`1 \leq x \leq 11`, correct: false },
+            { label: String.raw`-4 \leq y \leq 11`, correct: true },
+            { label: String.raw`0 \leq y \leq 5`, correct: false },
+            { label: String.raw`-4 \leq y \leq 15`, correct: false },
+          ],
+          hint: "Range refers to the possible values of $y$. Substitute the boundaries of $t$ into the $y$ equation: $y(0) = 3(0)-4 = -4$ and $y(5) = 3(5)-4 = 11$.",
+        },
+        {
+          id: 2,
+          type: "Range",
+          difficulty: "Linear / Negative Gradient",
+          param: String.raw`x = t^2, \quad y = 10 - 2t`,
+          domain_t: String.raw`1 \leq t \leq 4`,
+          question: "What is the range of the function?",
+          options: [
+            { label: String.raw`2 \leq y \leq 8`, correct: true },
+            { label: String.raw`1 \leq x \leq 16`, correct: false },
+            { label: String.raw`1 \leq y \leq 4`, correct: false },
+            { label: String.raw`8 \leq y \leq 2`, correct: false },
+          ],
+          hint: "Calculate $y$ at the boundaries: $y(1) = 10 - 2(1) = 8$ and $y(4) = 10 - 2(4) = 2$. The range is the interval between the lowest and highest values: $[2, 8]$.",
+        },
+        {
+          id: 3,
+          type: "Domain",
+          difficulty: "Trigonometric",
+          param: String.raw`x = 3\sin(t), \quad y = 2\cos(2t)`,
+          domain_t: String.raw`0 \leq t \leq 2\pi`,
+          question: "What is the domain of the function?",
+          options: [
+            { label: String.raw`-2 \leq x \leq 2`, correct: false },
+            { label: String.raw`0 \leq x \leq 3`, correct: false },
+            { label: String.raw`-3 \leq x \leq 3`, correct: true },
+            { label: String.raw`x \in \mathbb{R}`, correct: false },
+          ],
+          hint: "Domain refers to the possible values of $x$. Since $\\sin(t)$ ranges from $-1$ to $1$, $3\\sin(t)$ must range from $-3$ to $3$.",
+        },
+        {
+          id: 4,
+          type: "Domain",
+          difficulty: "Trigonometric (Restricted)",
+          param: String.raw`x = \tan(t), \quad y = \sin(t)`,
+          domain_t: String.raw`-\frac{\pi}{4} \leq t \leq \frac{\pi}{4}`,
+          question: "What is the domain of the function?",
+          options: [
+            { label: String.raw`-1 \leq x \leq 1`, correct: true },
+            { label: String.raw`-\frac{1}{\sqrt{2}} \leq x \leq \frac{1}{\sqrt{2}}`, correct: false },
+            { label: String.raw`x \in \mathbb{R}`, correct: false },
+            { label: String.raw`0 \leq x \leq 1`, correct: false },
+          ],
+          hint: "Evaluate $x = \\tan(t)$ at the boundaries. $\\tan(-\\pi/4) = -1$ and $\\tan(\\pi/4) = 1$. Since $\\tan(t)$ is increasing on this interval, the domain is $[-1, 1]$.",
+        },
+        {
+          id: 5,
+          type: "Range",
+          difficulty: "Quadratic",
+          param: String.raw`x = t - 3, \quad y = t^2 - 4t + 5`,
+          domain_t: String.raw`t \in \mathbb{R}`,
+          question: "What is the range of the function?",
+          options: [
+            { label: String.raw`y \geq 0`, correct: false },
+            { label: String.raw`y \geq 1`, correct: true },
+            { label: String.raw`y \in \mathbb{R}`, correct: false },
+            { label: String.raw`y \geq 5`, correct: false },
+          ],
+          hint: "Complete the square for $y$: $y = (t-2)^2 + 1$. Since $(t-2)^2$ is always $\\geq 0$, the minimum value of $y$ is $1$.",
+        },
+        {
+          id: 6,
+          type: "Domain",
+          difficulty: "Reciprocal",
+          param: String.raw`x = \frac{1}{t+1}, \quad y = t^2`,
+          domain_t: String.raw`t > 0`,
+          question: "What is the domain of the function?",
+          options: [
+            { label: String.raw`x > 0`, correct: false },
+            { label: String.raw`0 < x < 1`, correct: true },
+            { label: String.raw`x < 1`, correct: false },
+            { label: String.raw`x \in \mathbb{R}, x \neq -1`, correct: false },
+          ],
+          hint: "As $t$ increases from $0$ to infinity, the denominator $(t+1)$ increases from $1$ to infinity. Therefore, $1/(t+1)$ decreases from $1$ towards $0$.",
+        },
+        {
+          id: 7,
+          type: "Range",
+          difficulty: "Reciprocal Squared",
+          param: String.raw`x = t^3, \quad y = \frac{4}{t^2 + 2}`,
+          domain_t: String.raw`t \in \mathbb{R}`,
+          question: "What is the range of the function?",
+          options: [
+            { label: String.raw`y > 0`, correct: false },
+            { label: String.raw`0 < y \leq 2`, correct: true },
+            { label: String.raw`y \geq 2`, correct: false },
+            { label: String.raw`0 \leq y \leq 4`, correct: false },
+          ],
+          hint: "The denominator $t^2 + 2$ has a minimum value of $2$ (when $t=0$). This gives $y$ a maximum value of $4/2 = 2$. As $t$ becomes very large, $y$ approaches $0$ but never reaches it.",
+        },
+        {
+          id: 8,
+          type: "Domain",
+          difficulty: "Exponential",
+          param: String.raw`x = e^{2t}, \quad y = e^t + 3`,
+          domain_t: String.raw`t \in \mathbb{R}`,
+          question: "What is the domain of the function?",
+          options: [
+            { label: String.raw`x \in \mathbb{R}`, correct: false },
+            { label: String.raw`x \geq 0`, correct: false },
+            { label: String.raw`x > 0`, correct: true },
+            { label: String.raw`x > 1`, correct: false },
+          ],
+          hint: "The function $x = e^{2t}$ is an exponential function. Exponential functions of the form $a^k$ are always strictly positive for all real exponents.",
+        },
+        {
+          id: 9,
+          type: "Range",
+          difficulty: "Natural Logarithm",
+          param: String.raw`x = \ln(t), \quad y = \frac{1}{t}`,
+          domain_t: String.raw`t \geq 1`,
+          question: "What is the range of the function?",
+          options: [
+            { label: String.raw`y > 0`, correct: false },
+            { label: String.raw`0 < y \leq 1`, correct: true },
+            { label: String.raw`y \geq 1`, correct: false },
+            { label: String.raw`y \in \mathbb{R}`, correct: false },
+          ],
+          hint: "If $t \\geq 1$, then the reciprocal $y = 1/t$ starts at $1/1 = 1$ and gets smaller as $t$ increases, approaching (but never hitting) $0$.",
+        },
+        {
+          id: 10,
+          type: "Domain",
+          difficulty: "Logistic / Recip. Exp.",
+          param: String.raw`x = \frac{10}{1 + e^{-t}}, \quad y = t^2`,
+          domain_t: String.raw`t \in \mathbb{R}`,
+          question: "What is the domain of the function?",
+          options: [
+            { label: String.raw`0 < x < 10`, correct: true },
+            { label: String.raw`x > 0`, correct: false },
+            { label: String.raw`x \in \mathbb{R}`, correct: false },
+            { label: String.raw`1 < x < 10`, correct: false },
+          ],
+          hint: "As $t \\to \\infty$, $e^{-t} \\to 0$, so $x \\to 10/1 = 10$. As $t \\to -\\infty$, $e^{-t} \\to \\infty$, so $x \\to 10/\\infty = 0$.",
+        },
+      ];
+
+      const shuffleArray = (array) => {
+        const newArr = [...array];
+        for (let i = newArr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+        }
+        return newArr;
+      };
+
+      const FormattedText = ({ text }) => {
+        if (!text) return null;
+        const parts = text.split(/(\$.*?\$)/g);
+        return (
+          <span>
+            {parts.map((part, i) =>
+              part.startsWith("$") && part.endsWith("$") ? (
+                <span key={i}>{`\\(${part.slice(1, -1)}\\)`}</span>
+              ) : (
+                <span key={i}>{part}</span>
+              )
+            )}
+          </span>
+        );
+      };
+
+      const App = () => {
+        const buildQuestions = () =>
+          rawQuestions.map((q) => ({
+            ...q,
+            options: shuffleArray(q.options),
+          }));
+
+        const [questions, setQuestions] = useState(buildQuestions);
+        const [currentIdx, setCurrentIdx] = useState(0);
+        const [selectedOption, setSelectedOption] = useState(null);
+        const [wrongSelections, setWrongSelections] = useState([]);
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [score, setScore] = useState(0);
+        const [showFinished, setShowFinished] = useState(false);
+
+        const currentQuestion = questions[currentIdx];
+
+        useEffect(() => {
+          if (window.MathJax?.typesetPromise) {
+            window.MathJax.typesetPromise();
+          }
+        }, [currentIdx, selectedOption, wrongSelections, isCorrect, showFinished]);
+
+        const handleOptionClick = (index) => {
+          if (isCorrect) return;
+
+          const option = currentQuestion.options[index];
+          setSelectedOption(index);
+
+          if (option.correct) {
+            setIsCorrect(true);
+            if (wrongSelections.length === 0) {
+              setScore((prev) => prev + 1);
+            }
+          } else if (!wrongSelections.includes(index)) {
+            setWrongSelections((prev) => [...prev, index]);
+          }
+        };
+
+        const nextQuestion = () => {
+          if (currentIdx < questions.length - 1) {
+            setCurrentIdx((prev) => prev + 1);
+            setSelectedOption(null);
+            setWrongSelections([]);
+            setIsCorrect(false);
+          } else {
+            setShowFinished(true);
+          }
+        };
+
+        const restartQuiz = () => {
+          setQuestions(buildQuestions());
+          setCurrentIdx(0);
+          setSelectedOption(null);
+          setWrongSelections([]);
+          setIsCorrect(false);
+          setScore(0);
+          setShowFinished(false);
+        };
+
+        const progress = ((currentIdx + (isCorrect ? 1 : 0)) / questions.length) * 100;
+
+        if (showFinished) {
+          return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
+              <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full p-8 text-center border border-slate-100">
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
+                  ✓
+                </div>
+                <h1 className="text-3xl font-bold text-slate-800 mb-2">Quiz Complete!</h1>
+                <p className="text-slate-600 mb-8">
+                  You scored <span className="font-bold text-indigo-600">{score} out of {questions.length}</span> on your first attempts.
+                </p>
+                <button onClick={restartQuiz} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-2xl transition-all">
+                  Restart &amp; Re-randomize
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
+            <div className="bg-white rounded-3xl shadow-xl max-w-2xl w-full overflow-hidden flex flex-col border border-slate-100">
+              <div className="p-6 bg-white border-b border-slate-100">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider">
+                    Question {currentIdx + 1} of {questions.length}
+                  </div>
+                  <div className="text-slate-500 text-sm font-medium">{currentQuestion.difficulty}</div>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div className="bg-indigo-600 h-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
+                </div>
+              </div>
+
+              <div className="p-8 flex-grow">
+                <div className="mb-6 bg-slate-900 rounded-2xl p-6 text-center shadow-inner text-white">
+                  <p className="text-indigo-400 font-mono text-sm mb-3">Parametric Equations:</p>
+                  <div className="text-xl md:text-2xl mb-5">{`\\[${currentQuestion.param}\\]`}</div>
+                  <p className="text-indigo-400 font-mono text-sm mb-3">Parameter Domain:</p>
+                  <div className="text-lg">{`\\[${currentQuestion.domain_t}\\]`}</div>
+                </div>
+
+                <h2 className="text-xl font-bold text-slate-800 mb-6">{currentQuestion.question}</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {currentQuestion.options.map((opt, idx) => {
+                    const isWrong = wrongSelections.includes(idx);
+                    const isSelectedCorrect = idx === selectedOption && isCorrect;
+
+                    let buttonStyles = "border-2 border-slate-200 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50";
+                    if (isWrong) buttonStyles = "border-red-200 bg-red-50 text-red-700";
+                    if (isSelectedCorrect) buttonStyles = "border-green-500 bg-green-50 text-green-700";
+
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleOptionClick(idx)}
+                        disabled={isCorrect && !isSelectedCorrect}
+                        className={`p-4 rounded-2xl text-left transition-all relative flex items-center justify-between group ${buttonStyles} font-medium`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-colors shrink-0 ${
+                            isSelectedCorrect
+                              ? "bg-green-500 text-white"
+                              : isWrong
+                              ? "bg-red-500 text-white"
+                              : "bg-slate-100 text-slate-500 group-hover:bg-indigo-200 group-hover:text-indigo-700"
+                          }`}>
+                            {String.fromCharCode(65 + idx)}
+                          </span>
+                          <span>{`\\(${opt.label}\\)`}</span>
+                        </span>
+                        {isSelectedCorrect && <span className="text-green-500">✓</span>}
+                        {isWrong && <span className="text-red-500">✗</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {wrongSelections.length > 0 && !isCorrect && (
+                  <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-xl text-amber-800 text-sm leading-relaxed">
+                    <span className="font-bold flex items-center gap-1 mb-1">
+                      <span className="text-lg">💡</span> Hint:
+                    </span>
+                    <FormattedText text={currentQuestion.hint} />
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={nextQuestion}
+                  disabled={!isCorrect}
+                  className={`flex items-center gap-2 px-8 py-3 rounded-xl font-bold transition-all ${
+                    isCorrect
+                      ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                      : "bg-slate-200 text-slate-400 cursor-not-allowed opacity-50"
+                  }`}
+                >
+                  {currentIdx === questions.length - 1 ? "Finish Quiz" : "Next Question"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
