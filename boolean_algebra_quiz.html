@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boolean Algebra Quiz</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" />
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --panel: #ffffff;
+        --text: #1e293b;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --purple: #7c3aed;
+        --green: #16a34a;
+        --red: #dc2626;
+        --amber-bg: #fffbeb;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .wrap {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+      .card {
+        width: 100%;
+        max-width: 900px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        overflow: hidden;
+      }
+      .section {
+        padding: 1.25rem 1.5rem;
+      }
+      .header {
+        border-bottom: 1px solid var(--line);
+      }
+      .footer {
+        border-top: 1px solid var(--line);
+        background: #f8fafc;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .badge {
+        background: #ede9fe;
+        color: #6d28d9;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.3rem 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .type {
+        font-size: 0.9rem;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .track {
+        margin-top: 0.75rem;
+        background: #e2e8f0;
+        height: 8px;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .bar {
+        background: var(--purple);
+        height: 100%;
+        width: 0%;
+        transition: width 0.2s ease;
+      }
+      .expr {
+        background: #0f172a;
+        border-radius: 12px;
+        color: #fff;
+        text-align: center;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+      }
+      .expr-label {
+        color: #c4b5fd;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .expr-text {
+        font-size: 1.45rem;
+        margin-top: 0.3rem;
+      }
+      .question {
+        font-size: 1.08rem;
+        font-weight: 600;
+        margin-bottom: 0.8rem;
+      }
+      .options {
+        display: grid;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+      @media (min-width: 768px) {
+        .options {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      .option {
+        border: 2px solid var(--line);
+        border-radius: 10px;
+        padding: 0.8rem;
+        background: #fff;
+        text-align: left;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .option:hover {
+        border-color: #ddd6fe;
+        background: #faf5ff;
+      }
+      .option.correct {
+        border-color: var(--green);
+        background: #f0fdf4;
+        color: #166534;
+      }
+      .option.wrong {
+        border-color: #fca5a5;
+        background: #fef2f2;
+        color: #991b1b;
+      }
+      .opt-left {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .letter {
+        width: 1.9rem;
+        height: 1.9rem;
+        border-radius: 8px;
+        background: #f1f5f9;
+        color: #475569;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+      }
+      .option.correct .letter {
+        background: var(--green);
+        color: #fff;
+      }
+      .option.wrong .letter {
+        background: var(--red);
+        color: #fff;
+      }
+      .hint {
+        margin-top: 0.85rem;
+        background: var(--amber-bg);
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        color: #92400e;
+        padding: 0.75rem;
+        font-size: 0.92rem;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 0.8rem 1rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .next {
+        background: var(--purple);
+        color: #fff;
+      }
+      .next[disabled] {
+        background: #e2e8f0;
+        color: #94a3b8;
+        cursor: not-allowed;
+      }
+      .done {
+        text-align: center;
+      }
+      .restart {
+        width: 100%;
+        background: var(--purple);
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <main class="card" id="app"></main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script>
+      const rawQuestions = [
+        {
+          id: 1,
+          difficulty: "Basic Identity",
+          expression: "X \\cdot 1 + 0",
+          question: "Simplify the Boolean expression using identity laws.",
+          options: [
+            { label: "X", correct: true },
+            { label: "1", correct: false },
+            { label: "0", correct: false },
+            { label: "X + 1", correct: false },
+          ],
+          hint: "Anything AND 1 is itself ($X \\cdot 1 = X$). Anything OR 0 is itself ($X + 0 = X$).",
+        },
+        {
+          id: 2,
+          difficulty: "Complement Law",
+          expression: "P + \\overline{P}",
+          question: "What is the simplified result of a variable ORed with its inverse?",
+          options: [
+            { label: "1", correct: true },
+            { label: "0", correct: false },
+            { label: "P", correct: false },
+            { label: "\\overline{P}", correct: false },
+          ],
+          hint: "Since $P$ must be either 0 or 1, one of the two terms in the OR must be 1. Therefore, the result is always 1.",
+        },
+        {
+          id: 3,
+          difficulty: "Double Negation",
+          expression: "\\overline{\\overline{C \\cdot D}}",
+          question: "Simplify the double negation.",
+          options: [
+            { label: "C \\cdot D", correct: true },
+            { label: "\\overline{C \\cdot D}", correct: false },
+            { label: "C + D", correct: false },
+            { label: "1", correct: false },
+          ],
+          hint: "Double bars over an expression cancel out, returning the original expression.",
+        },
+        {
+          id: 4,
+          difficulty: "Absorption Law",
+          expression: "A + A \\cdot B",
+          question: "Simplify using the Absorption Law (note standard precedence).",
+          options: [
+            { label: "A", correct: true },
+            { label: "B", correct: false },
+            { label: "A + B", correct: false },
+            { label: "A \\cdot B", correct: false },
+          ],
+          hint: "In $A + A \\cdot B$, the AND operation happens first. If $A=1$, the expression is 1. If $A=0$, the expression is 0. Thus, it simplifies to $A$.",
+        },
+        {
+          id: 5,
+          difficulty: "Absorption Variation",
+          expression: "Y \\cdot (Y + Z)",
+          question: "Simplify the expression using the second Absorption Law.",
+          options: [
+            { label: "Y", correct: true },
+            { label: "Z", correct: false },
+            { label: "Y \\cdot Z", correct: false },
+            { label: "1", correct: false },
+          ],
+          hint: "If $Y$ is 0, the whole expression is 0. If $Y$ is 1, the expression becomes $1 \\cdot (1+Z) = 1$. The result always matches $Y$.",
+        },
+        {
+          id: 6,
+          difficulty: "De Morgan's (Gate Count)",
+          expression: "\\overline{M} + \\overline{N}",
+          question: "Simplify to use the minimum number of logic gates.",
+          options: [
+            { label: "\\overline{M \\cdot N}", correct: true },
+            { label: "\\overline{M + N}", correct: false },
+            { label: "M \\cdot N", correct: false },
+            { label: "\\overline{M} \\cdot \\overline{N}", correct: false },
+          ],
+          hint: "$\\overline{M \\cdot N}$ is a single NAND gate. The original expression uses two NOT gates and one OR gate.",
+        },
+        {
+          id: 7,
+          difficulty: "Redundancy Law",
+          expression: "X + \\overline{X} \\cdot Y",
+          question: "Simplify the expression using Redundancy rules.",
+          options: [
+            { label: "X + Y", correct: true },
+            { label: "X", correct: false },
+            { label: "Y", correct: false },
+            { label: "X \\cdot Y", correct: false },
+          ],
+          hint: "Distribute $X$: $(X + \\overline{X}) \\cdot (X + Y) = 1 \\cdot (X + Y) = X + Y$.",
+        },
+        {
+          id: 8,
+          difficulty: "Complex De Morgan's",
+          expression: "\\overline{\\overline{P} + Q}",
+          question: "Apply De Morgan's and double negation to simplify.",
+          options: [
+            { label: "P \\cdot \\overline{Q}", correct: true },
+            { label: "P + \\overline{Q}", correct: false },
+            { label: "\\overline{P} \\cdot Q", correct: false },
+            { label: "P \\cdot Q", correct: false },
+          ],
+          hint: "Breaking the bar: $\\overline{\\overline{P}} \\cdot \\overline{Q}$. The double negative on $P$ cancels out.",
+        },
+        {
+          id: 9,
+          difficulty: "De Morgan's + Precedence",
+          expression: "A \\cdot \\overline{\\overline{B} \\cdot C}",
+          question: "Simplify, ensuring brackets are used correctly for precedence.",
+          options: [
+            { label: "A \\cdot (B + \\overline{C})", correct: true },
+            { label: "A \\cdot B + \\overline{C}", correct: false },
+            { label: "A \\cdot B + C", correct: false },
+            { label: "\\overline{A} \\cdot B + \\overline{C}", correct: false },
+          ],
+          hint: "The term $\\overline{\\overline{B} \\cdot C}$ becomes $(\\overline{\\overline{B}} + \\overline{C}) = (B + \\overline{C})$. Brackets are required to keep this term together when multiplying by $A$.",
+        },
+        {
+          id: 10,
+          difficulty: "Advanced Distribution",
+          expression: "(X + Y) \\cdot (X + \\overline{Y})",
+          question: "Fully simplify the expression to its minimal form.",
+          options: [
+            { label: "X", correct: true },
+            { label: "Y", correct: false },
+            { label: "X + Y", correct: false },
+            { label: "1", correct: false },
+          ],
+          hint: "Using FOIL: $X\\cdot X + X\\cdot \\overline{Y} + Y\\cdot X + Y\\cdot \\overline{Y} = X + X\\cdot\\overline{Y} + X\\cdot Y + 0$. Factor $X$: $X \\cdot (1 + \\overline{Y} + Y) = X \\cdot 1 = X$.",
+        },
+        {
+          id: 11,
+          difficulty: "Nested De Morgan's",
+          expression: "\\overline{\\overline{C} + D \\cdot \\overline{E}}",
+          question: "Simplify the expression using De Morgan's Law to its minimal form.",
+          options: [
+            { label: "C \\cdot (\\overline{D} + E)", correct: true },
+            { label: "C \\cdot \\overline{D} + E", correct: false },
+            { label: "C + \\overline{D} \\cdot E", correct: false },
+            { label: "\\overline{C} \\cdot D \\cdot \\overline{E}", correct: false },
+          ],
+          hint: "Breaking the main bar gives $\\overline{\\overline{C}} \\cdot \\overline{D \\cdot \\overline{E}}$. Then $C \\cdot (\\overline{D} + \\overline{\\overline{E}}) = C \\cdot (\\overline{D} + E)$. Brackets are essential here!",
+        },
+        {
+          id: 12,
+          difficulty: "Mixed Laws",
+          expression: "\\overline{A \\cdot (B + \\overline{B})}",
+          question: "Simplify this expression to its absolute simplest form.",
+          options: [
+            { label: "\\overline{A}", correct: true },
+            { label: "A", correct: false },
+            { label: "0", correct: false },
+            { label: "1", correct: false },
+          ],
+          hint: "First, $(B + \\overline{B}) = 1$. The expression becomes $\\overline{A \\cdot 1}$, which is $\\overline{A}$.",
+        },
+      ];
+
+      function shuffleArray(array) {
+        const newArr = [...array];
+        for (let i = newArr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+        }
+        return newArr;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function renderMath(tex, displayMode = false) {
+        if (!window.katex) return escapeHtml(tex);
+        return window.katex.renderToString(tex, { throwOnError: false, displayMode });
+      }
+
+      function formatHint(text) {
+        return text
+          .split(/(\$.*?\$)/g)
+          .map((part) => {
+            if (part.startsWith("$") && part.endsWith("$")) {
+              return renderMath(part.slice(1, -1));
+            }
+            return escapeHtml(part);
+          })
+          .join("");
+      }
+
+      function buildQuestions() {
+        return rawQuestions.map((question) => ({
+          ...question,
+          options: shuffleArray(question.options),
+        }));
+      }
+
+      const state = {
+        currentIdx: 0,
+        selectedOption: null,
+        wrongSelections: [],
+        isCorrect: false,
+        score: 0,
+        showFinished: false,
+        questions: buildQuestions(),
+      };
+
+      function setState(patch) {
+        Object.assign(state, patch);
+        render();
+      }
+
+      function handleOptionClick(index) {
+        if (state.isCorrect) return;
+        const option = state.questions[state.currentIdx].options[index];
+        const wrongSelections = state.wrongSelections.includes(index)
+          ? state.wrongSelections
+          : [...state.wrongSelections, index];
+
+        if (option.correct) {
+          setState({
+            selectedOption: index,
+            isCorrect: true,
+            score: state.score + (state.wrongSelections.length === 0 ? 1 : 0),
+          });
+        } else {
+          setState({ selectedOption: index, wrongSelections });
+        }
+      }
+
+      function nextQuestion() {
+        if (state.currentIdx < state.questions.length - 1) {
+          setState({ currentIdx: state.currentIdx + 1, selectedOption: null, wrongSelections: [], isCorrect: false });
+        } else {
+          setState({ showFinished: true });
+        }
+      }
+
+      function restartQuiz() {
+        setState({
+          currentIdx: 0,
+          selectedOption: null,
+          wrongSelections: [],
+          isCorrect: false,
+          score: 0,
+          showFinished: false,
+          questions: buildQuestions(),
+        });
+      }
+
+      function render() {
+        const app = document.getElementById("app");
+
+        if (state.showFinished) {
+          app.innerHTML = `
+            <section class="section done">
+              <h1>Quiz Complete!</h1>
+              <p>You scored <strong>${state.score}</strong> out of ${state.questions.length} on first attempts.</p>
+              <button class="restart" id="restartQuiz">Try Again</button>
+            </section>
+          `;
+          document.getElementById("restartQuiz").addEventListener("click", restartQuiz);
+          return;
+        }
+
+        const currentQuestion = state.questions[state.currentIdx];
+        const progress = ((state.currentIdx + (state.isCorrect ? 1 : 0)) / state.questions.length) * 100;
+
+        app.innerHTML = `
+          <section class="section header">
+            <div class="row">
+              <div class="badge">Question ${state.currentIdx + 1} of ${state.questions.length}</div>
+              <div class="type">${escapeHtml(currentQuestion.difficulty)}</div>
+            </div>
+            <div class="track"><div class="bar" style="width:${progress}%"></div></div>
+          </section>
+
+          <section class="section">
+            <div class="expr">
+              <div class="expr-label">Boolean Expression</div>
+              <div class="expr-text">${renderMath(currentQuestion.expression, true)}</div>
+            </div>
+
+            <div class="question">${escapeHtml(currentQuestion.question)}</div>
+
+            <div class="options">
+              ${currentQuestion.options
+                .map((option, idx) => {
+                  const isWrong = state.wrongSelections.includes(idx);
+                  const isSelectedCorrect = idx === state.selectedOption && state.isCorrect;
+                  const classes = isSelectedCorrect ? "option correct" : isWrong ? "option wrong" : "option";
+                  const indicator = isSelectedCorrect ? "✓" : isWrong ? "✕" : "";
+
+                  return `<button class="${classes}" data-option="${idx}" ${state.isCorrect && !isSelectedCorrect ? "disabled" : ""}>
+                    <span class="opt-left"><span class="letter">${String.fromCharCode(65 + idx)}</span>${renderMath(option.label)}</span>
+                    <span>${indicator}</span>
+                  </button>`;
+                })
+                .join("")}
+            </div>
+
+            ${state.wrongSelections.length > 0 && !state.isCorrect ? `<div class="hint"><strong>💡 Hint:</strong> ${formatHint(currentQuestion.hint)}</div>` : ""}
+          </section>
+
+          <section class="section footer">
+            <button class="next" id="nextBtn" ${state.isCorrect ? "" : "disabled"}>${state.currentIdx === state.questions.length - 1 ? "Finish Quiz" : "Next Question"}</button>
+          </section>
+        `;
+
+        app.querySelectorAll("[data-option]").forEach((button) => {
+          button.addEventListener("click", () => handleOptionClick(Number(button.dataset.option)));
+        });
+        document.getElementById("nextBtn").addEventListener("click", nextQuestion);
+      }
+
+      render();
+    </script>
+  </body>
+</html>
