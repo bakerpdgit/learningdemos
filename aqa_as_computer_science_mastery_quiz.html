@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA AS Computer Science - Mastery Quiz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- KaTeX for Math Rendering -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+    />
+
+    <script>
+      /**
+       * Safely renders LaTeX math in the provided element.
+       * Checks for both the element's existence and the KaTeX library.
+       */
+      function renderMath(element) {
+        const target = element || document.body;
+        if (!target || !window.renderMathInElement) return;
+
+        try {
+          window.renderMathInElement(target, {
+            delimiters: [
+              { left: "$$", right: "$$", display: true },
+              { left: "$", right: "$", display: false },
+            ],
+            throwOnError: false,
+          });
+        } catch (e) {
+          console.error("KaTeX rendering error:", e);
+        }
+      }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fira+Code:wght@400;500&display=swap");
+
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #0f172a;
+        color: #f8fafc;
+      }
+
+      .option-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
+      }
+
+      .option-card:hover:not(.disabled) {
+        transform: translateY(-2px);
+        background-color: #1e293b;
+        border-color: #38bdf8;
+      }
+
+      .correct {
+        background-color: #065f46 !important;
+        border-color: #10b981 !important;
+        color: #ecfdf5 !important;
+      }
+
+      .incorrect {
+        background-color: #7f1d1d !important;
+        border-color: #ef4444 !important;
+        color: #fef2f2 !important;
+      }
+
+      .fade-in {
+        animation: fadeIn 0.5s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .progress-bar {
+        transition: width 0.4s ease-in-out;
+      }
+
+      .katex {
+        font-size: 1.1em;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-4xl mb-8">
+      <div class="flex justify-between items-end mb-2">
+        <div>
+          <h1 class="text-2xl font-extrabold text-sky-400 tracking-tight">
+            AQA AS COMPUTER SCIENCE
+          </h1>
+          <p
+            id="topic-label"
+            class="text-slate-400 text-sm font-semibold uppercase tracking-widest"
+          >
+            Topic: Mixed Specification Review
+          </p>
+        </div>
+        <div class="text-right">
+          <span id="progress-text" class="text-lg font-bold text-sky-400"
+            >Question 1/24</span
+          >
+        </div>
+      </div>
+      <div
+        class="w-full h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700"
+      >
+        <div
+          id="progress-fill"
+          class="progress-bar h-full bg-gradient-to-r from-sky-500 to-indigo-500"
+          style="width: 4%"
+        ></div>
+      </div>
+    </div>
+
+    <main
+      id="quiz-container"
+      class="w-full max-w-4xl bg-slate-900 rounded-3xl p-8 shadow-2xl border border-slate-800 relative overflow-hidden"
+    >
+      <div id="question-content" class="fade-in">
+        <h2 id="question-text" class="text-3xl font-bold mb-8 leading-tight">
+          Loading question...
+        </h2>
+
+        <div
+          id="options-grid"
+          class="grid grid-cols-1 md:grid-cols-2 gap-4"
+        ></div>
+
+        <div id="feedback-area" class="mt-8 hidden">
+          <div
+            id="feedback-message"
+            class="p-4 rounded-xl font-semibold flex items-center gap-3"
+          ></div>
+
+          <div class="mt-6 flex justify-end">
+            <button
+              id="next-btn"
+              class="bg-sky-500 hover:bg-sky-400 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-lg hidden"
+            >
+              Next Question 
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="mt-8 text-slate-500 text-sm text-center">
+      Designed for Classroom Display • AQA Specification Alignment
+    </div>
+
+    <script>
+      const questions = [
+        {
+          text: "How many of the following numbers belong to the set of Rational Numbers ($\\mathbb{Q}$)?\n\n-5, 0.333..., $\\sqrt{2}$, $\\frac{3}{4}$, $\\pi$",
+          options: ["2", "3", "4", "5"],
+          correct: 1,
+          feedback:
+            "Correct! -5 (integer), 0.333... (recurring decimal), and $\\frac{3}{4}$ (fraction) are rational. $\\sqrt{2}$ and $\\pi$ are irrational.",
+        },
+        {
+          text: 'In the array ["a", "b"], identifying "b" as the 2nd element is an example of which type of numbering?',
+          options: [
+            "Zero-based indexing",
+            "Ordinal numbering",
+            "Natural indexing",
+            "Binary addressing",
+          ],
+          correct: 1,
+          feedback:
+            "Correct! One-based indexing starts counting at 1, whereas most programming languages use zero-based indexing (where 'b' would be index 1).",
+        },
+        {
+          text: "What is the range of values for a 6-bit Two's Complement signed integer system?",
+          options: [
+            "$-32$ to $+31$",
+            "$-31$ to $+32$",
+            "$-64$ to $+63$",
+            "$0$ to $63$",
+          ],
+          correct: 0,
+          feedback:
+            "Correct! For $n$ bits, the range is $-2^{n-1}$ to $2^{n-1}-1$. For 6 bits: $-2^5$ to $2^5-1$, which is $-32$ to $+31$.",
+        },
+        {
+          text: "What is the decimal value of the unsigned fixed-point binary number $101.111$?",
+          options: ["5.5", "5.75", "5.875", "11.75"],
+          correct: 2,
+          feedback:
+            "Correct! $101.111 = 2^2 + 2^0 + 2^{-1} + 2^{-2} + 2^{-3} = 4 + 1 + 0.5 + 0.25 + 0.125 = 5.875$.",
+        },
+        {
+          text: "Which expression represents how many more characters can be defined by a 32-bit Unicode set (UTF-32) compared to the original ASCII set?",
+          options: [
+            "$2^{32} - 2^7$",
+            "$\\frac{2^{32}}{2^7}$",
+            "$2^{25}$",
+            "$32 - 7$",
+          ],
+          correct: 0,
+          feedback:
+            "Correct! UTF-32 provides $2^{32}$ unique patterns, while 7-bit ASCII provides $2^7$ ($128$). The difference is $2^{32} - 2^7$.",
+        },
+        {
+          text: "With an Analogue-to-Digital Converter (ADC), the _________ of the analogue signal is measured at regular intervals and quantised.",
+          options: ["Frequency", "Amplitude", "Wavelength", "Velocity"],
+          correct: 1,
+          feedback:
+            "Correct! The ADC samples the amplitude (voltage) of the wave at each time interval.",
+        },
+        {
+          text: "What is the physical width in inches of a digital image with a resolution of $600 \\times 800$ pixels if the physical resolution is $200$ PPI (pixels per inch)?",
+          options: ["3 inches", "4 inches", "1.33 inches", "40,000 inches"],
+          correct: 0,
+          feedback:
+            "Correct! Width = $\\frac{600 \\text{ pixels}}{200 \\text{ PPI}} = 3$ inches.",
+        },
+        {
+          text: "According to Nyquist's theorem, what is the minimum sample rate (in kHz) required for a sound wave with a highest frequency of $14,500$ Hz?",
+          options: ["14.5 kHz", "24 kHz", "29 kHz", "44.1 kHz"],
+          correct: 2,
+          feedback:
+            "Correct! Nyquist's theorem states the sample rate must be at least twice the highest frequency. $14,500 \\times 2 = 29,000$ Hz = $29$ kHz.",
+        },
+        {
+          text: "The MIDI format represents sound as a sequence of _________ messages, each encoding properties like pitch, volume, and duration.",
+          options: ["Sample", "Analogue", "Event", "Packet"],
+          correct: 2,
+          feedback:
+            "Correct! MIDI does not store sound waves; it stores digital 'event' instructions for a synthesizer to play.",
+        },
+        {
+          text: "Decompress the following Run-Length Encoded (RLE) data: $d*3, x*2, r*4$",
+          options: ["dxr324", "ddd xx rrrr", "dx rrrr", "dddxxrrrr"],
+          correct: 3,
+          feedback:
+            "Correct! RLE replaces repeating sequences with a count. 3 'd's, 2 'x's, and 4 'r's results in dddxxrrrr.",
+        },
+        {
+          text: 'Decompress the Dictionary Compressed message using: {0:"IN", 1:"AT", 2:"ON"}[1,2,1,1,0,2]',
+          options: [
+            "AT ON AT AT IN ON",
+            "IN ON IN IN AT ON",
+            "AT AT ON IN AT ON",
+            "121102",
+          ],
+          correct: 0,
+          feedback:
+            "Correct! Mapping the numbers to the dictionary entries yields: AT (1), ON (2), AT (1), AT (1), IN (0), ON (2).",
+        },
+        {
+          text: "Encrypt 'A' using a Vernam cipher with pad 'U'. ASCII A=65, U=85. What is the XOR result?",
+          options: ["20", "150", "0", "1"],
+          correct: 0,
+          feedback:
+            "Correct! A ($01000001_2$) XOR U ($01010101_2$) = $00010100_2$ (which is $20_{10}$).",
+        },
+        {
+          text: "Which of these is the third type of translator alongside Compilers and Interpreters?",
+          options: ["Debugger", "Linker", "Assembler", "Editor"],
+          correct: 2,
+          feedback:
+            "Correct! Assemblers translate assembly language into machine code.",
+        },
+        {
+          text: "The Operating System manages hardware to allocate processors, memory, and I/O access among competing _________.",
+          options: ["Users", "Processes", "Registers", "Peripherals"],
+          correct: 1,
+          feedback:
+            "Correct! A process is a program in execution that requires OS resources.",
+        },
+        {
+          text: "What type of code is produced by intermediate languages (like those used by Java or C#) to allow for platform independence?",
+          options: ["Machine Code", "Source Code", "Bytecode", "Object Code"],
+          correct: 2,
+          feedback:
+            "Correct! Bytecode is intermediate code that is executed by a Virtual Machine.",
+        },
+        {
+          text: "Using De Morgan's Law, simplify: NOT A OR NOT B",
+          options: ["A AND B", "NOT (A OR B)", "NOT (A AND B)", "A OR B"],
+          correct: 2,
+          feedback:
+            "Correct! According to De Morgan's Law: $\\neg A \\lor \\neg B \\equiv \\neg(A \\land B)$.",
+        },
+        {
+          text: "What does 'Baud Rate' measure the number of in data transmission?",
+          options: [
+            "Bits per second",
+            "Signal changes per second",
+            "Bytes per packet",
+            "Photons per second",
+          ],
+          correct: 1,
+          feedback:
+            "Correct! Baud rate is the rate at which the signal changes state.",
+        },
+        {
+          text: "In which network type do all nodes have equal status and communicate without a central server?",
+          options: [
+            "Client-Server",
+            "Peer-to-Peer",
+            "Star Topology",
+            "Bus Topology",
+          ],
+          correct: 1,
+          feedback:
+            "Correct! Peer-to-Peer (P2P) networks treat all nodes as equals (note this is independent of the physical topology).",
+        },
+        {
+          text: "Which protocol is used in wireless networks to avoid collisions?",
+          options: ["POP3", "CSMA/CA", "FTP", "TCP/IP"],
+          correct: 1,
+          feedback: "Correct! CSMA/CA (Collision Avoidance) is used in WiFi.",
+        },
+        {
+          text: "Apply AQA Instruction `LSL R0, R1, #2`. If R1 is 5, what is R0?",
+          options: ["7", "10", "20", "2.5"],
+          correct: 2,
+          feedback:
+            "Correct! Logical Shift Left by 2 is equivalent to multiplying by $2^2$ (4). $5 \\times 4 = 20$.",
+        },
+        {
+          text: "The 'Word Length' of a computer is typically the same width as which hardware bus?",
+          options: ["Address Bus", "Control Bus", "Data Bus", "Expansion Bus"],
+          correct: 2,
+          feedback:
+            "Correct! The Data Bus width determines word size transfers.",
+        },
+        {
+          text: "During Decode, the instruction is split into Opcode and Operand. Which register holds this instruction?",
+          options: ["PC", "MBR", "CIR", "ACC"],
+          correct: 2,
+          feedback:
+            "Correct! The Current Instruction Register (CIR) holds the instruction being decoded.",
+        },
+        {
+          text: "What is the result of multiplying unsigned binary $101_2$ and $011_2$?",
+          options: ["$1111_2$", "$1000_2$", "$1011_2$", "$1101_2$"],
+          correct: 0,
+          feedback: "Correct! $5 \\times 3 = 15$. Binary $1111_2$ is 15.",
+        },
+        {
+          text: "How is the operation $A - B$ performed by the ALU in a signed system?",
+          options: [
+            "Direct subtraction",
+            "$A + \\text{Two's Complement of } B$",
+            "$B + \\text{Two's Complement of } A$",
+            "$A + B$ then flip sign",
+          ],
+          correct: 1,
+          feedback:
+            "Correct! Subtraction is performed by adding the negative representation (Two's Complement) of the second number.",
+        },
+      ];
+
+      let currentQuestionIndex = 0;
+      let canProgress = false;
+
+      const questionText = document.getElementById("question-text");
+      const optionsGrid = document.getElementById("options-grid");
+      const feedbackArea = document.getElementById("feedback-area");
+      const feedbackMessage = document.getElementById("feedback-message");
+      const nextBtn = document.getElementById("next-btn");
+      const progressFill = document.getElementById("progress-fill");
+      const progressText = document.getElementById("progress-text");
+
+      function loadQuestion() {
+        const q = questions[currentQuestionIndex];
+        canProgress = false;
+
+        const progressPercent =
+          ((currentQuestionIndex + 1) / questions.length) * 100;
+        progressFill.style.width = `${progressPercent}%`;
+        progressText.innerText = `Question ${currentQuestionIndex + 1}/${questions.length}`;
+
+        questionText.innerHTML = q.text.replace(/\n/g, "<br>");
+
+        optionsGrid.innerHTML = "";
+        feedbackArea.classList.add("hidden");
+        nextBtn.classList.add("hidden");
+
+        q.options.forEach((opt, index) => {
+          const button = document.createElement("div");
+          button.className =
+            "option-card bg-slate-800 border-2 border-slate-700 p-6 rounded-2xl flex items-center gap-4 text-xl font-medium";
+          button.innerHTML = `
+                    <span class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-slate-700 rounded-lg text-sm font-bold text-slate-400">${String.fromCharCode(65 + index)}</span>
+                    <span class="opt-content">${opt}</span>
+                `;
+          button.onclick = () => handleAnswer(index, button);
+          optionsGrid.appendChild(button);
+        });
+
+        renderMath(document.body);
+
+        const container = document.getElementById("question-content");
+        container.classList.remove("fade-in");
+        void container.offsetWidth;
+        container.classList.add("fade-in");
+      }
+
+      function handleAnswer(index, element) {
+        if (canProgress) return;
+
+        const q = questions[currentQuestionIndex];
+        const isCorrect = index === q.correct;
+
+        if (isCorrect) {
+          element.classList.add("correct");
+          showFeedback(true, q.feedback);
+          canProgress = true;
+          nextBtn.classList.remove("hidden");
+
+          Array.from(optionsGrid.children).forEach((child) => {
+            if (child !== element)
+              child.classList.add("opacity-30", "disabled");
+          });
+        } else {
+          element.classList.add("incorrect");
+          showFeedback(false, "Incorrect. Consider the logic and try again.");
+          setTimeout(() => {
+            if (!canProgress) element.classList.remove("incorrect");
+          }, 1200);
+        }
+      }
+
+      function showFeedback(isCorrect, message) {
+        feedbackArea.classList.remove("hidden");
+        feedbackMessage.className = `p-4 rounded-xl font-semibold flex items-center gap-3 ${isCorrect ? "bg-emerald-900/30 text-emerald-400" : "bg-rose-900/30 text-rose-400"}`;
+
+        const icon = isCorrect
+          ? '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
+          : '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+
+        feedbackMessage.innerHTML = `${icon} <span>${message}</span>`;
+        renderMath(feedbackMessage);
+      }
+
+      nextBtn.onclick = () => {
+        currentQuestionIndex++;
+        if (currentQuestionIndex < questions.length) {
+          loadQuestion();
+        } else {
+          showFinalResults();
+        }
+      };
+
+      function showFinalResults() {
+        document.getElementById("quiz-container").innerHTML = `
+                <div class="text-center py-12 fade-in">
+                    <div class="inline-block p-4 bg-sky-500/10 rounded-full mb-6">
+                        <svg class="w-16 h-16 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-5xl font-extrabold mb-4">Mastery Complete!</h2>
+                    <p class="text-slate-400 text-xl mb-8">You have successfully reviewed the AS fundamental concepts.</p>
+                    <button onclick="location.reload()" class="bg-white text-slate-900 font-bold py-4 px-10 rounded-2xl hover:bg-slate-200 transition-all text-lg shadow-xl">
+                        Restart Session
+                    </button>
+                </div>
+            `;
+      }
+
+      window.onload = loadQuestion;
+    </script>
+  </body>
+</html>
