@@ -3,7 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Computer Science A Level Revision Quiz - Logic, Internet and Trees</title>
+    <title>
+      Computer Science A Level Revision Quiz - Logic, Internet and Trees
+    </title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script>
+      function renderMath(element) {
+        const target = element || document.body;
+        if (!target || !window.renderMathInElement) return;
+
+        window.renderMathInElement(target, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "\\[", right: "\\]", display: true },
+            { left: "\\(", right: "\\)", display: false },
+            { left: "$", right: "$", display: false },
+          ],
+          throwOnError: false,
+        });
+      }
+    </script>
     <style>
       :root {
         --bg: #020617;
@@ -15,7 +39,9 @@
         --accent-dark: #0891b2;
         --success: #34d399;
       }
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         font-family: Arial, sans-serif;
@@ -52,7 +78,9 @@
         transform: translate(-50%, -50%);
         background: #64748b;
       }
-      .node.done { background: var(--success); }
+      .node.done {
+        background: var(--success);
+      }
       .player {
         position: absolute;
         width: 14px;
@@ -86,7 +114,10 @@
         letter-spacing: 0.04em;
         font-weight: 700;
       }
-      .progress { color: var(--muted); font-size: 14px; }
+      .progress {
+        color: var(--muted);
+        font-size: 14px;
+      }
       #question-text {
         font-size: 1.25rem;
         line-height: 1.45;
@@ -107,7 +138,9 @@
         font-size: 15px;
         cursor: pointer;
       }
-      .option:hover { border-color: var(--accent); }
+      .option:hover {
+        border-color: var(--accent);
+      }
       .result {
         text-align: center;
       }
@@ -124,14 +157,24 @@
         font-weight: 700;
         cursor: pointer;
       }
-      .btn:hover { background: var(--accent-dark); color: #e0f2fe; }
+      .btn:hover {
+        background: var(--accent-dark);
+        color: #e0f2fe;
+      }
       .shake {
         animation: shake 0.45s linear;
       }
       @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        25% { transform: translateX(-8px); }
-        75% { transform: translateX(8px); }
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-8px);
+        }
+        75% {
+          transform: translateX(8px);
+        }
       }
     </style>
   </head>
@@ -147,31 +190,237 @@
 
     <script>
       const rawQuestions = [
-        { topic: "Boolean Simplification", text: "Simplify the Boolean expression \\( \\overline{A} \\cdot B + A \\cdot B \\).", answer: "\\( B \\)", distractors: ["\\( A \\)", "\\( 1 \\)", "\\( 0 \\)"] },
-        { topic: "Boolean Simplification", text: "Simplify the Boolean expression \\( A + \\overline{A} \\cdot B \\).", answer: "\\( A + B \\)", distractors: ["\\( A \\cdot B \\)", "\\( 1 \\)", "\\( A + \\overline{B} \\)"] },
-        { topic: "Adders", text: "What is the Boolean expression for the Sum (\\( S \\)) output of a Half Adder with inputs \\( A \\) and \\( B \\)?", answer: "\\( A \\oplus B \\)", distractors: ["\\( A \\cdot B \\)", "\\( A + B \\)", "\\( \\overline{A \\oplus B} \\)"] },
-        { topic: "Adders", text: "What is the Boolean expression for the Carry Out (\\( C_{out} \\)) of a Full Adder with inputs \\( A, B \\) and \\( C_{in} \\)?", answer: "\\( (A \\cdot B) + (C_{in} \\cdot (A \\oplus B)) \\)", distractors: ["\\( A \\oplus B \\oplus C_{in} \\)", "\\( (A + B) \\cdot (C_{in} + (A \\oplus B)) \\)", "\\( A \\cdot B \\cdot C_{in} \\)"] },
-        { topic: "D-Type Flip-Flops", text: "Which of the following describes the operation of a D-type flip-flop?", answer: "Its output updates to match the data input only on a rising clock edge.", distractors: ["It toggles its output state every clock cycle continuously.", "It acts as a half-adder for two binary inputs.", "It divides the frequency of the data input by two without a clock."] },
-        { topic: "De Morgan's Laws", text: "According to De Morgan's Laws, what is the equivalent of \\( \\overline{A + B} \\)?", answer: "\\( \\overline{A} \\cdot \\overline{B} \\)", distractors: ["\\( \\overline{A} + \\overline{B} \\)", "\\( A \\cdot B \\)", "\\( A + B \\)"] },
-        { topic: "Boolean Simplification", text: "Simplify the expression \\( A \\cdot (A + B) \\) using Boolean identities.", answer: "\\( A \\)", distractors: ["\\( B \\)", "\\( A \\cdot B \\)", "\\( 1 \\)"] },
-        { topic: "Boolean Simplification", text: "Simplify the expression \\( \\overline{\\overline{A} + \\overline{B}} \\).", answer: "\\( A \\cdot B \\)", distractors: ["\\( A + B \\)", "\\( \\overline{A} \\cdot \\overline{B} \\)", "\\( 1 \\)"] },
-        { topic: "Tree Definitions", text: "Which is the correct mathematical definition of a general tree?", answer: "A connected, undirected graph with no cycles.", distractors: ["A directed graph where every node has exactly two children.", "A fully connected graph where every node links to every other node.", "A graph where data is stored strictly in ascending order."] },
-        { topic: "Tree Definitions", text: "What is the defining characteristic of a Binary Tree compared to a general tree?", answer: "Each node has a maximum of two child nodes.", distractors: ["The data must be ordered chronologically.", "It cannot contain leaf nodes.", "It must be perfectly balanced at all times."] },
-        { topic: "Binary Search Trees", text: "In a Binary Search Tree (BST), which traversal algorithm will output the nodes in ascending sequence?", answer: "In-order", distractors: ["Pre-order", "Post-order", "Breadth-first"] },
-        { topic: "Tree Traversals", text: "Which tree traversal follows the sequence: Visit Left Subtree, Visit Right Subtree, Visit Root?", answer: "Post-order", distractors: ["Pre-order", "In-order", "Level-order"] },
-        { topic: "Tree Traversals", text: "Which tree traversal is typically used to safely delete an entire tree from memory by deleting children before parents?", answer: "Post-order", distractors: ["In-order", "Pre-order", "Level-order"] },
-        { topic: "Tree Traversals", text: "Which tree traversal is often used to create a structural copy (clone) of a tree?", answer: "Pre-order", distractors: ["In-order", "Post-order", "Depth-first (bottom-up)"] },
-        { topic: "Binary Search Trees", text: "If the numbers 15, 10, 20, 8, 12 are inserted into an initially empty Binary Search Tree, what will be the right child of the node containing 10?", answer: "12", distractors: ["8", "15", "20"] },
-        { topic: "Tree Representation", text: "When representing a binary tree using a 2D array (with Left Pointer, Data, and Right Pointer fields), what value is typically stored in a pointer field if there is no child node?", answer: "A null pointer or -1.", distractors: ["The index of the root node.", "The index of the current node.", "0 (assuming 1-based indexing)."] },
-        { topic: "DNS System", text: "What is the primary role of the Domain Name System (DNS)?", answer: "To resolve Fully Qualified Domain Names (FQDNs) to IP addresses.", distractors: ["To assign MAC addresses to network interface cards.", "To encrypt traffic between a client and a web server.", "To allocate IP addresses dynamically using DHCP."] },
-        { topic: "Internet Registries", text: "What is the primary purpose of an Internet Registrar?", answer: "To act as an agent providing domain name registration services to the public.", distractors: ["To physically host the root DNS servers for the Internet.", "To assign physical MAC addresses to hardware manufacturers.", "To act as a central firewall for a wide area network."] },
-        { topic: "Packet Switching", text: "In packet switching, how do packets travel from source to destination?", answer: "They may take different routes and are reassembled into order at the destination.", distractors: ["They all follow a single, dedicated, pre-established circuit.", "They are broadcast to all nodes on the network until claimed.", "They are sent sequentially and must arrive in the exact order sent."] },
-        { topic: "Networking Hardware", text: "What is the main difference between a router and a gateway?", answer: "A gateway connects networks using different protocols, while a router connects networks using the same protocol.", distractors: ["A router acts as a firewall, while a gateway only forwards packets.", "A gateway works at the MAC sublayer, while a router works at the Application layer.", "A router is always hardware, whereas a gateway is always software."] },
-        { topic: "Firewalls", text: "How does dynamic packet filtering (stateful inspection) improve upon static packet filtering?", answer: "It remembers the context and state of active network connections.", distractors: ["It scans the actual payload of the packet for virus signatures.", "It encrypts every packet before allowing it through the firewall.", "It dynamically changes the router's IP address to hide it."] },
-        { topic: "Digital Signatures", text: "In public-key cryptography, how is a digital signature created to prove the sender's identity?", answer: "The sender encrypts the message digest (hash) using their private key.", distractors: ["The sender encrypts the message digest using the recipient's public key.", "The sender encrypts the message digest using the recipient's private key.", "The sender encrypts the entire message using their public key."] },
-        { topic: "Malware", text: "What distinguishes a computer worm from a virus?", answer: "A worm self-replicates and spreads across networks without needing a host file.", distractors: ["A worm is a piece of hardware, while a virus is software.", "A worm only infects boot sectors, while viruses infect executables.", "A worm requires a user to execute a host program to spread."] },
-        { topic: "Vulnerabilities", text: "Which of the following is an example of a buffer overflow vulnerability?", answer: "A program writes data outside the bounds of an allocated block of memory.", distractors: ["A user enters SQL commands into a login form to bypass authentication.", "An attacker intercepts and alters a packet in transit.", "A program gets stuck in an infinite loop, consuming all CPU resources."] },
-        { topic: "Code Quality", text: "Which technique is most effective at protecting against SQL injection vulnerabilities in web applications?", answer: "Using parameterized queries (prepared statements).", distractors: ["Encrypting the database passwords using SHA-256.", "Putting the database server behind a stateful inspection firewall.", "Obfuscating the JavaScript code on the client side."] },
+        {
+          topic: "Boolean Simplification",
+          text: "Simplify the Boolean expression \\( \\overline{A} \\cdot B + A \\cdot B \\).",
+          answer: "\\( B \\)",
+          distractors: ["\\( A \\)", "\\( 1 \\)", "\\( 0 \\)"],
+        },
+        {
+          topic: "Boolean Simplification",
+          text: "Simplify the Boolean expression \\( A + \\overline{A} \\cdot B \\).",
+          answer: "\\( A + B \\)",
+          distractors: [
+            "\\( A \\cdot B \\)",
+            "\\( 1 \\)",
+            "\\( A + \\overline{B} \\)",
+          ],
+        },
+        {
+          topic: "Adders",
+          text: "What is the Boolean expression for the Sum (\\( S \\)) output of a Half Adder with inputs \\( A \\) and \\( B \\)?",
+          answer: "\\( A \\oplus B \\)",
+          distractors: [
+            "\\( A \\cdot B \\)",
+            "\\( A + B \\)",
+            "\\( \\overline{A \\oplus B} \\)",
+          ],
+        },
+        {
+          topic: "Adders",
+          text: "What is the Boolean expression for the Carry Out (\\( C_{out} \\)) of a Full Adder with inputs \\( A, B \\) and \\( C_{in} \\)?",
+          answer: "\\( (A \\cdot B) + (C_{in} \\cdot (A \\oplus B)) \\)",
+          distractors: [
+            "\\( A \\oplus B \\oplus C_{in} \\)",
+            "\\( (A + B) \\cdot (C_{in} + (A \\oplus B)) \\)",
+            "\\( A \\cdot B \\cdot C_{in} \\)",
+          ],
+        },
+        {
+          topic: "D-Type Flip-Flops",
+          text: "Which of the following describes the operation of a D-type flip-flop?",
+          answer:
+            "Its output updates to match the data input only on a rising clock edge.",
+          distractors: [
+            "It toggles its output state every clock cycle continuously.",
+            "It acts as a half-adder for two binary inputs.",
+            "It divides the frequency of the data input by two without a clock.",
+          ],
+        },
+        {
+          topic: "De Morgan's Laws",
+          text: "According to De Morgan's Laws, what is the equivalent of \\( \\overline{A + B} \\)?",
+          answer: "\\( \\overline{A} \\cdot \\overline{B} \\)",
+          distractors: [
+            "\\( \\overline{A} + \\overline{B} \\)",
+            "\\( A \\cdot B \\)",
+            "\\( A + B \\)",
+          ],
+        },
+        {
+          topic: "Boolean Simplification",
+          text: "Simplify the expression \\( A \\cdot (A + B) \\) using Boolean identities.",
+          answer: "\\( A \\)",
+          distractors: ["\\( B \\)", "\\( A \\cdot B \\)", "\\( 1 \\)"],
+        },
+        {
+          topic: "Boolean Simplification",
+          text: "Simplify the expression \\( \\overline{\\overline{A} + \\overline{B}} \\).",
+          answer: "\\( A \\cdot B \\)",
+          distractors: [
+            "\\( A + B \\)",
+            "\\( \\overline{A} \\cdot \\overline{B} \\)",
+            "\\( 1 \\)",
+          ],
+        },
+        {
+          topic: "Tree Definitions",
+          text: "Which is the correct mathematical definition of a general tree?",
+          answer: "A connected, undirected graph with no cycles.",
+          distractors: [
+            "A directed graph where every node has exactly two children.",
+            "A fully connected graph where every node links to every other node.",
+            "A graph where data is stored strictly in ascending order.",
+          ],
+        },
+        {
+          topic: "Tree Definitions",
+          text: "What is the defining characteristic of a Binary Tree compared to a general tree?",
+          answer: "Each node has a maximum of two child nodes.",
+          distractors: [
+            "The data must be ordered chronologically.",
+            "It cannot contain leaf nodes.",
+            "It must be perfectly balanced at all times.",
+          ],
+        },
+        {
+          topic: "Binary Search Trees",
+          text: "In a Binary Search Tree (BST), which traversal algorithm will output the nodes in ascending sequence?",
+          answer: "In-order",
+          distractors: ["Pre-order", "Post-order", "Breadth-first"],
+        },
+        {
+          topic: "Tree Traversals",
+          text: "Which tree traversal follows the sequence: Visit Left Subtree, Visit Right Subtree, Visit Root?",
+          answer: "Post-order",
+          distractors: ["Pre-order", "In-order", "Level-order"],
+        },
+        {
+          topic: "Tree Traversals",
+          text: "Which tree traversal is typically used to safely delete an entire tree from memory by deleting children before parents?",
+          answer: "Post-order",
+          distractors: ["In-order", "Pre-order", "Level-order"],
+        },
+        {
+          topic: "Tree Traversals",
+          text: "Which tree traversal is often used to create a structural copy (clone) of a tree?",
+          answer: "Pre-order",
+          distractors: ["In-order", "Post-order", "Depth-first (bottom-up)"],
+        },
+        {
+          topic: "Binary Search Trees",
+          text: "If the numbers 15, 10, 20, 8, 12 are inserted into an initially empty Binary Search Tree, what will be the right child of the node containing 10?",
+          answer: "12",
+          distractors: ["8", "15", "20"],
+        },
+        {
+          topic: "Tree Representation",
+          text: "When representing a binary tree using a 2D array (with Left Pointer, Data, and Right Pointer fields), what value is typically stored in a pointer field if there is no child node?",
+          answer: "A null pointer or -1.",
+          distractors: [
+            "The index of the root node.",
+            "The index of the current node.",
+            "0 (assuming 1-based indexing).",
+          ],
+        },
+        {
+          topic: "DNS System",
+          text: "What is the primary role of the Domain Name System (DNS)?",
+          answer:
+            "To resolve Fully Qualified Domain Names (FQDNs) to IP addresses.",
+          distractors: [
+            "To assign MAC addresses to network interface cards.",
+            "To encrypt traffic between a client and a web server.",
+            "To allocate IP addresses dynamically using DHCP.",
+          ],
+        },
+        {
+          topic: "Internet Registries",
+          text: "What is the primary purpose of an Internet Registrar?",
+          answer:
+            "To act as an agent providing domain name registration services to the public.",
+          distractors: [
+            "To physically host the root DNS servers for the Internet.",
+            "To assign physical MAC addresses to hardware manufacturers.",
+            "To act as a central firewall for a wide area network.",
+          ],
+        },
+        {
+          topic: "Packet Switching",
+          text: "In packet switching, how do packets travel from source to destination?",
+          answer:
+            "They may take different routes and are reassembled into order at the destination.",
+          distractors: [
+            "They all follow a single, dedicated, pre-established circuit.",
+            "They are broadcast to all nodes on the network until claimed.",
+            "They are sent sequentially and must arrive in the exact order sent.",
+          ],
+        },
+        {
+          topic: "Networking Hardware",
+          text: "What is the main difference between a router and a gateway?",
+          answer:
+            "A gateway connects networks using different protocols, while a router connects networks using the same protocol.",
+          distractors: [
+            "A router acts as a firewall, while a gateway only forwards packets.",
+            "A gateway works at the MAC sublayer, while a router works at the Application layer.",
+            "A router is always hardware, whereas a gateway is always software.",
+          ],
+        },
+        {
+          topic: "Firewalls",
+          text: "How does dynamic packet filtering (stateful inspection) improve upon static packet filtering?",
+          answer:
+            "It remembers the context and state of active network connections.",
+          distractors: [
+            "It scans the actual payload of the packet for virus signatures.",
+            "It encrypts every packet before allowing it through the firewall.",
+            "It dynamically changes the router's IP address to hide it.",
+          ],
+        },
+        {
+          topic: "Digital Signatures",
+          text: "In public-key cryptography, how is a digital signature created to prove the sender's identity?",
+          answer:
+            "The sender encrypts the message digest (hash) using their private key.",
+          distractors: [
+            "The sender encrypts the message digest using the recipient's public key.",
+            "The sender encrypts the message digest using the recipient's private key.",
+            "The sender encrypts the entire message using their public key.",
+          ],
+        },
+        {
+          topic: "Malware",
+          text: "What distinguishes a computer worm from a virus?",
+          answer:
+            "A worm self-replicates and spreads across networks without needing a host file.",
+          distractors: [
+            "A worm is a piece of hardware, while a virus is software.",
+            "A worm only infects boot sectors, while viruses infect executables.",
+            "A worm requires a user to execute a host program to spread.",
+          ],
+        },
+        {
+          topic: "Vulnerabilities",
+          text: "Which of the following is an example of a buffer overflow vulnerability?",
+          answer:
+            "A program writes data outside the bounds of an allocated block of memory.",
+          distractors: [
+            "A user enters SQL commands into a login form to bypass authentication.",
+            "An attacker intercepts and alters a packet in transit.",
+            "A program gets stuck in an infinite loop, consuming all CPU resources.",
+          ],
+        },
+        {
+          topic: "Code Quality",
+          text: "Which technique is most effective at protecting against SQL injection vulnerabilities in web applications?",
+          answer: "Using parameterized queries (prepared statements).",
+          distractors: [
+            "Encrypting the database passwords using SHA-256.",
+            "Putting the database server behind a stateful inspection firewall.",
+            "Obfuscating the JavaScript code on the client side.",
+          ],
+        },
       ];
 
       let gameQuestions = [];
@@ -196,7 +445,8 @@
         const startY = 85;
         const endX = 50;
         const endY = 15;
-        const progress = gameQuestions.length > 0 ? index / gameQuestions.length : 0;
+        const progress =
+          gameQuestions.length > 0 ? index / gameQuestions.length : 0;
         return {
           left: `${startX + (endX - startX) * progress}%`,
           top: `${startY + (endY - startY) * progress}%`,
@@ -221,7 +471,10 @@
 
         const player = document.createElement("div");
         player.className = "player";
-        Object.assign(player.style, getPathPosition(Math.min(currentIndex, gameQuestions.length - 1)));
+        Object.assign(
+          player.style,
+          getPathPosition(Math.min(currentIndex, gameQuestions.length - 1)),
+        );
         path.appendChild(player);
       }
 
@@ -281,6 +534,7 @@
         });
 
         panel.appendChild(options);
+        renderMath(panel);
       }
 
       function renderState() {
