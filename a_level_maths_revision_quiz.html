@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A Level Maths Revision Quiz</title>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["\\(", "\\)"]],
+          displayMath: [["\\[", "\\]"]],
+        },
+        svg: { fontCache: "global" },
+      };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+      :root {
+        --bg: #f1f5f9;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --primary: #4f46e5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+
+      .layout {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1rem;
+        min-height: 100vh;
+        display: grid;
+        gap: 1rem;
+        align-items: center;
+      }
+
+      @media (min-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .bar {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 1rem 0 1.25rem;
+      }
+
+      .bar-fill {
+        height: 100%;
+        background: var(--primary);
+        width: 0%;
+        transition: width 0.35s ease;
+      }
+
+      .question {
+        border: 1px solid #cbd5e1;
+        border-radius: 14px;
+        padding: 1rem;
+        line-height: 1.5;
+        min-height: 130px;
+      }
+
+      .shake {
+        animation: shake 0.4s;
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-6px);
+        }
+        75% {
+          transform: translateX(6px);
+        }
+      }
+
+      form {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      input,
+      button {
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        padding: 0.75rem 0.9rem;
+        font-size: 1rem;
+      }
+
+      input {
+        flex: 1;
+        min-width: 220px;
+      }
+
+      button {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .state {
+        border-radius: 14px;
+        padding: 1rem;
+      }
+
+      .state.wrong {
+        border: 1px solid #fda4af;
+        background: #fff1f2;
+      }
+
+      .state.won {
+        border: 1px solid #86efac;
+        background: #f0fdf4;
+      }
+
+      .mountain {
+        background: linear-gradient(#0f172a, #1e293b);
+        color: #fff;
+        min-height: 420px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .path {
+        position: absolute;
+        left: 15%;
+        top: 85%;
+        width: 35%;
+        height: 70%;
+        border-left: 2px dashed rgba(148, 163, 184, 0.8);
+        transform-origin: bottom left;
+        transform: rotate(26deg);
+      }
+
+      .node {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        border: 2px solid #64748b;
+        background: #334155;
+      }
+
+      .node.reached {
+        border-color: #c7d2fe;
+        background: #818cf8;
+      }
+
+      .node.active {
+        box-shadow: 0 0 0 5px rgba(129, 140, 248, 0.3);
+      }
+
+      .node.peak {
+        width: 28px;
+        height: 28px;
+        border-color: #fef08a;
+        background: #f59e0b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <section class="card">
+        <h1>A Level Maths Revision Quiz</h1>
+        <p class="meta">Answer all 12 recap questions correctly in sequence.</p>
+
+        <div id="quiz-area"></div>
+      </section>
+
+      <section class="card mountain">
+        <h2>Mountain Progress</h2>
+        <div class="path"></div>
+        <div id="mountain-nodes"></div>
+      </section>
+    </div>
+
+    <script>
+      const questions = [
+        {
+          topic: "Straight Lines",
+          text: "The line \\( L \\) is perpendicular to the line with equation \\( 2x - 5y + 7 = 0 \\). What is the gradient of \\( L \\)? (Give your answer as a decimal).",
+          answer: -2.5,
+        },
+        {
+          topic: "Circles",
+          text: "What is the radius of the circle with equation \\( x^2 + y^2 - 6x + 8y = 0 \\)?",
+          answer: 5,
+        },
+        {
+          topic: "Trig Identities & Equations",
+          text: "Solve the equation \\( \\sin^2(\\theta) = \\cos^2(\\theta) \\) in the interval \\( 0^\\circ \\le \\theta \\le 180^\\circ \\). What is the largest value of \\( \\theta \\) in degrees?",
+          answer: 135,
+        },
+        {
+          topic: "Radians (Area)",
+          text: "A sector of a circle has a radius of \\( 6\\text{ cm} \\) and an angle of \\( 1.5\\text{ radians} \\). What is the area of the sector in \\( \\text{cm}^2 \\)?",
+          answer: 27,
+        },
+        {
+          topic: "Factor Theorem",
+          text: "Given that \\( (x - 2) \\) is a factor of \\( f(x) = x^3 - 4x^2 + kx + 6 \\), find the value of the constant \\( k \\).",
+          answer: 1,
+        },
+        {
+          topic: "Parametric Equations",
+          text: "A curve has parametric equations \\( x = t^2 + 1 \\) and \\( y = t^3 - t \\). Find the value of \\( \\frac{dy}{dx} \\) when \\( t = 2 \\). (Give your answer as a decimal).",
+          answer: 2.75,
+        },
+        {
+          topic: "Reciprocal Trig Equations",
+          text: "Solve the equation \\( \\sec(\\theta) = 2 \\) for \\( 0^\\circ \\le \\theta \\le 360^\\circ \\). What is the largest solution in degrees?",
+          answer: 300,
+        },
+        {
+          topic: "Remainder Theorem",
+          text: "Find the remainder when the polynomial \\( P(x) = 2x^3 - 3x^2 + 4x - 5 \\) is divided by \\( (x + 1) \\).",
+          answer: -14,
+        },
+        {
+          topic: "Addition Formulae",
+          text: "The angles \\( A \\) and \\( B \\) are acute. Given that \\( \\sin(A) = \\frac{3}{5} \\) and \\( \\cos(B) = \\frac{5}{13} \\), the exact value of \\( \\sin(A+B) \\) can be written as \\( \\frac{k}{65} \\). What is the value of \\( k \\)?",
+          answer: 63,
+        },
+        {
+          topic: "Radians (Arc-length)",
+          text: "An arc of a circle has a length of \\( 12\\text{ cm} \\) and subtends an angle of \\( 0.8\\text{ radians} \\) at the centre. Find the radius of the circle in cm.",
+          answer: 15,
+        },
+        {
+          topic: "Straight Lines (Distance)",
+          text: "The distance between the points \\( (2, a) \\) and \\( (5, 7) \\) is \\( 5 \\). Given that \\( a > 7 \\), find the value of \\( a \\).",
+          answer: 11,
+        },
+        {
+          topic: "Double-Angle Formulae",
+          text: "Solve the equation \\( \\cos(2\\theta) + 3\\sin(\\theta) = 2 \\) for \\( 0^\\circ < \\theta < 90^\\circ \\). What is the value of \\( \\theta \\) in degrees?",
+          answer: 30,
+        },
+      ];
+
+      const quizArea = document.getElementById("quiz-area");
+      const mountainNodes = document.getElementById("mountain-nodes");
+
+      let currentIndex = 0;
+      let gameState = "playing";
+
+      function getPathPosition(index) {
+        const startX = 15;
+        const startY = 85;
+        const endX = 50;
+        const endY = 15;
+        const progress = index / questions.length;
+
+        return {
+          left: `${startX + (endX - startX) * progress}%`,
+          top: `${startY + (endY - startY) * progress}%`,
+        };
+      }
+
+      function restartQuiz() {
+        currentIndex = 0;
+        gameState = "playing";
+        render();
+      }
+
+      function handleSubmit(event) {
+        event.preventDefault();
+        if (gameState !== "playing") return;
+
+        const input = document.getElementById("answer-input");
+        const userAnswer = Number.parseFloat(input.value);
+        if (Number.isNaN(userAnswer)) return;
+
+        const correctAnswer = questions[currentIndex].answer;
+        if (Math.abs(userAnswer - correctAnswer) < 0.001) {
+          if (currentIndex === questions.length - 1) {
+            gameState = "won";
+            currentIndex = questions.length;
+          } else {
+            currentIndex += 1;
+          }
+        } else {
+          gameState = "wrong";
+        }
+
+        render();
+      }
+
+      function renderQuestion() {
+        const q = questions[currentIndex];
+        const progress = (currentIndex / questions.length) * 100;
+
+        quizArea.innerHTML = `
+          <div class="meta"><strong>${q.topic}</strong> • Question ${currentIndex + 1}/${questions.length}</div>
+          <div class="bar"><div class="bar-fill" style="width:${progress}%"></div></div>
+          <div id="question-box" class="question">${q.text}</div>
+          <form id="answer-form">
+            <input id="answer-input" type="number" step="any" placeholder="Enter your answer" aria-label="Answer input" required />
+            <button type="submit">Submit</button>
+          </form>
+        `;
+
+        const form = document.getElementById("answer-form");
+        form.addEventListener("submit", handleSubmit);
+      }
+
+      function renderEndState() {
+        if (gameState === "wrong") {
+          quizArea.innerHTML = `
+            <div class="state wrong shake">
+              <h2>Not this time!</h2>
+              <p>You slipped on question ${currentIndex + 1}. Restart and climb again.</p>
+              <button id="restart-btn">Restart Quiz</button>
+            </div>
+          `;
+        }
+
+        if (gameState === "won") {
+          quizArea.innerHTML = `
+            <div class="state won">
+              <h2>Summit reached! 🎉</h2>
+              <p>You answered all ${questions.length} questions correctly.</p>
+              <button id="restart-btn">Play Again</button>
+            </div>
+          `;
+        }
+
+        document.getElementById("restart-btn").addEventListener("click", restartQuiz);
+      }
+
+      function renderMountain() {
+        mountainNodes.innerHTML = "";
+
+        for (let i = 0; i <= questions.length; i += 1) {
+          const position = getPathPosition(i);
+          const reached = currentIndex >= i;
+          const active = gameState === "playing" && currentIndex === i;
+          const isPeak = i === questions.length;
+
+          const node = document.createElement("div");
+          node.className = `node${reached ? " reached" : ""}${active ? " active" : ""}${isPeak ? " peak" : ""}`;
+          node.style.left = position.left;
+          node.style.top = position.top;
+          mountainNodes.appendChild(node);
+        }
+      }
+
+      function render() {
+        if (gameState === "playing") {
+          renderQuestion();
+        } else {
+          renderEndState();
+        }
+
+        renderMountain();
+
+        if (window.MathJax?.typesetPromise) {
+          window.MathJax.typesetPromise().catch(() => {});
+        }
+      }
+
+      render();
+    </script>
+  </body>
+</html>
