@@ -64,22 +64,62 @@
       }
       .path {
         position: relative;
-        height: 90px;
+        height: 280px;
         margin: 20px 0;
         border: 1px solid #334155;
-        border-radius: 12px;
-        background: rgba(15, 23, 42, 0.8);
+        border-radius: 16px;
+        background: linear-gradient(180deg, #0b1222 0%, #1e293b 50%, #334155 100%);
+        overflow: hidden;
+      }
+      .path-svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .route-base {
+        fill: none;
+        stroke: rgba(148, 163, 184, 0.55);
+        stroke-width: 4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 7 8;
+      }
+      .route-progress {
+        fill: none;
+        stroke: #67e8f9;
+        stroke-width: 6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        transition: stroke-dashoffset 0.45s ease;
+      }
+      #path-nodes {
+        position: absolute;
+        inset: 0;
       }
       .node {
         position: absolute;
-        width: 10px;
-        height: 10px;
+        width: 14px;
+        height: 14px;
         border-radius: 50%;
         transform: translate(-50%, -50%);
-        background: #64748b;
+        background: #334155;
+        border: 2px solid #64748b;
+        z-index: 2;
       }
       .node.done {
-        background: var(--success);
+        border-color: #67e8f9;
+        background: #06b6d4;
+      }
+      .node.active {
+        box-shadow: 0 0 0 4px rgba(103, 232, 249, 0.28);
+      }
+      .node.peak {
+        width: 22px;
+        height: 22px;
+        background: #f59e0b;
+        border-color: #fde68a;
       }
       .player {
         position: absolute;
@@ -87,8 +127,23 @@
         height: 14px;
         border-radius: 50%;
         transform: translate(-50%, -50%);
-        background: var(--accent);
-        box-shadow: 0 0 12px var(--accent);
+        background: #ecfeff;
+        box-shadow: 0 0 0 3px rgba(236, 254, 255, 0.3);
+        z-index: 3;
+        transition:
+          left 0.35s ease,
+          top 0.35s ease;
+      }
+      .player::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--accent-dark);
       }
       .panel {
         background: var(--panel);
@@ -125,7 +180,7 @@
       }
       .options {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
       }
       .option {
@@ -183,7 +238,32 @@
       <h1>Computer Science A Level Revision Quiz</h1>
       <p class="subtitle">Logic, Internet and Trees • 25 Questions</p>
 
-      <div class="path" id="path"></div>
+      <div class="path" id="path">
+        <svg class="path-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="skyFadeCs" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#0f172a"></stop>
+              <stop offset="100%" stop-color="#1e293b"></stop>
+            </linearGradient>
+            <linearGradient id="mountainShadeBackCs" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#334155"></stop>
+              <stop offset="100%" stop-color="#1e293b"></stop>
+            </linearGradient>
+            <linearGradient id="mountainShadeFrontCs" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#475569"></stop>
+              <stop offset="100%" stop-color="#334155"></stop>
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="100" height="100" fill="url(#skyFadeCs)"></rect>
+          <circle cx="80" cy="14" r="6" fill="#cffafe" opacity="0.8"></circle>
+          <polygon points="0,92 26,54 43,72 59,35 80,66 100,92" fill="url(#mountainShadeBackCs)" opacity="0.95"></polygon>
+          <polygon points="0,92 18,66 33,84 56,30 74,70 100,92" fill="url(#mountainShadeFrontCs)" opacity="0.98"></polygon>
+          <path d="M12 90 C 18 84, 21 83, 24 78 C 28 74, 31 72, 35 66 C 40 61, 46 57, 51 50 C 56 44, 60 41, 65 35 C 70 29, 74 25, 78 20 C 82 16, 86 14, 89 12" class="route-base"></path>
+          <path id="route-progress" d="M12 90 C 18 84, 21 83, 24 78 C 28 74, 31 72, 35 66 C 40 61, 46 57, 51 50 C 56 44, 60 41, 65 35 C 70 29, 74 25, 78 20 C 82 16, 86 14, 89 12" class="route-progress"></path>
+        </svg>
+        <div id="path-nodes"></div>
+        <div class="player" id="player" aria-hidden="true"></div>
+      </div>
 
       <main class="panel" id="panel"></main>
     </div>
@@ -429,7 +509,19 @@
       let gameState = "loading";
 
       const panel = document.getElementById("panel");
-      const path = document.getElementById("path");
+      const pathNodes = document.getElementById("path-nodes");
+      const player = document.getElementById("player");
+      const routeProgress = document.getElementById("route-progress");
+
+      const routePoints = [
+        { x: 12, y: 90 },
+        { x: 24, y: 78 },
+        { x: 35, y: 66 },
+        { x: 51, y: 50 },
+        { x: 65, y: 35 },
+        { x: 78, y: 20 },
+        { x: 89, y: 12 },
+      ];
 
       function shuffleArray(array) {
         const newArray = [...array];
@@ -441,15 +533,18 @@
       }
 
       function getPathPosition(index) {
-        const startX = 15;
-        const startY = 85;
-        const endX = 50;
-        const endY = 15;
         const progress =
-          gameQuestions.length > 0 ? index / gameQuestions.length : 0;
+          gameQuestions.length > 0 ? Math.max(0, Math.min(index / gameQuestions.length, 1)) : 0;
+        const scaled = progress * (routePoints.length - 1);
+        const segment = Math.min(Math.floor(scaled), routePoints.length - 2);
+        const localProgress = scaled - segment;
+        const from = routePoints[segment];
+        const to = routePoints[segment + 1];
+        const x = from.x + (to.x - from.x) * localProgress;
+        const y = from.y + (to.y - from.y) * localProgress;
         return {
-          left: `${startX + (endX - startX) * progress}%`,
-          top: `${startY + (endY - startY) * progress}%`,
+          left: `${x}%`,
+          top: `${y}%`,
         };
       }
 
@@ -461,21 +556,24 @@
       }
 
       function renderPath() {
-        path.innerHTML = "";
-        gameQuestions.forEach((_, index) => {
-          const node = document.createElement("div");
-          node.className = `node ${index < currentIndex ? "done" : ""}`;
-          Object.assign(node.style, getPathPosition(index));
-          path.appendChild(node);
-        });
+        pathNodes.innerHTML = "";
 
-        const player = document.createElement("div");
-        player.className = "player";
-        Object.assign(
-          player.style,
-          getPathPosition(Math.min(currentIndex, gameQuestions.length - 1)),
-        );
-        path.appendChild(player);
+        const completion = gameQuestions.length > 0 ? currentIndex / gameQuestions.length : 0;
+        const routeLength = routeProgress.getTotalLength();
+        routeProgress.style.strokeDasharray = `${routeLength}`;
+        routeProgress.style.strokeDashoffset = `${routeLength * (1 - completion)}`;
+
+        for (let index = 0; index <= gameQuestions.length; index += 1) {
+          const node = document.createElement("div");
+          const done = index <= currentIndex;
+          const active = gameState === "playing" && index === currentIndex;
+          const peak = index === gameQuestions.length;
+          node.className = `node${done ? " done" : ""}${active ? " active" : ""}${peak ? " peak" : ""}`;
+          Object.assign(node.style, getPathPosition(index));
+          pathNodes.appendChild(node);
+        }
+
+        Object.assign(player.style, getPathPosition(currentIndex));
       }
 
       function handleRestart() {
