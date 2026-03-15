@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recursive MergeSort Trace Table Stepper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useMemo, useState } = React;
+
+      const mergeSortLines = [
+        "FUNCTION MergeSort(L, S, E)",
+        "IF S < E THEN",
+        "  M ← (S + E) DIV 2",
+        "  L1 ← MergeSort(L, S, M)",
+        "  L2 ← MergeSort(L, M + 1, E)",
+        "  RETURN Merge(L1, L2)",
+        "ELSE",
+        "  RETURN Append([], L[S])",
+        "ENDIF",
+        "ENDFUNCTION"
+      ];
+      const mergeLines = [
+        "FUNCTION Merge(L1, L2)",
+        "L3 ← []",
+        "WHILE Len(L1) > 0 AND Len(L2) > 0",
+        "  IF L1[1] < L2[1] THEN",
+        "    L3 ← Append(L2[1], L3)",
+        "    L2 ← RemoveFirstItem(L2)",
+        "  ELSE",
+        "    L3 ← Append(L1[1], L3)",
+        "    L1 ← RemoveFirstItem(L1)",
+        "  ENDIF",
+        "ENDWHILE",
+        "WHILE Len(L1) > 0",
+        "  L3 ← Append(L1[1], L3)",
+        "  L1 ← RemoveFirstItem(L1)",
+        "ENDWHILE",
+        "WHILE Len(L2) > 0",
+        "  L3 ← Append(L2[1], L3)",
+        "  L2 ← RemoveFirstItem(L2)",
+        "ENDWHILE",
+        "RETURN L3",
+        "ENDFUNCTION"
+      ];
+
+      const initialRows = [
+        {"call":"1","S":"1","E":"5","M":"3","list":""},
+        {"call":"2","S":"1","E":"3","M":"2","list":""},
+        {"call":"3","S":"1","E":"2","M":"1","list":""},
+        {"call":"4","S":"1","E":"1","M":"","list":"[6]"},
+        {"call":"3","S":"1","E":"2","M":"1","list":""},
+        {"call":"5","S":"2","E":"2","M":"","list":"[3]"},
+        {"call":"3","S":"","E":"","M":"","list":""},
+        {"call":"2","S":"","E":"","M":"","list":""},
+        {"call":"6","S":"","E":"","M":"","list":""},
+        {"call":"2","S":"","E":"","M":"","list":""},
+        {"call":"1","S":"","E":"","M":"","list":""},
+        {"call":"7","S":"","E":"","M":"","list":""},
+        {"call":"8","S":"","E":"","M":"","list":""},
+        {"call":"7","S":"","E":"","M":"","list":""},
+        {"call":"9","S":"","E":"","M":"","list":""},
+        {"call":"7","S":"","E":"","M":"","list":""},
+        {"call":"1","S":"","E":"","M":"","list":""}
+      ];
+
+      const steps = [
+        {"code":"ms","line":6,"note":"Call 3 is restored from the call stack, so row 7 gets S, E and M before the merge result is known.","context":"Call 3: MergeSort(L, 1, 2)","vars":{"L1":"[6]","L2":"[3]"},"updates":[{"row":7,"values":{"S":"1","E":"2","M":"1"}}],"rowFocus":7},
+        {"code":"m","line":2,"note":"Start Merge with an empty output list.","context":"Merge([6], [3])","vars":{"L1":"[6]","L2":"[3]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Both lists still contain items, so continue the loop.","context":"Merge([6], [3])","vars":{"L1":"[6]","L2":"[3]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":4,"note":"Compare the first items: 6 < 3 is false.","context":"Merge([6], [3])","vars":{"L1":"[6]","L2":"[3]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":8,"note":"Take the first item from L1 and append it to L3.","context":"Merge([6], [3])","vars":{"L1":"[6]","L2":"[3]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":9,"note":"Remove that first item from L1.","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[3]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Now the main loop stops because L1 is empty.","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[3]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":12,"note":"There are no items left in L1, so skip this loop.","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[3]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":16,"note":"L2 still contains an item, so enter this loop.","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[3]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":17,"note":"Append the remaining item from L2 to L3.","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[3]","L3":"[6, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":18,"note":"Remove that first item from L2.","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[]","L3":"[6, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":16,"note":"L2 is now empty, so this loop ends.","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[]","L3":"[6, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":20,"note":"Merge returns [6, 3].","context":"Merge([6], [3])","vars":{"L1":"[]","L2":"[]","L3":"[6, 3]"},"updates":null,"rowFocus":null},
+        {"code":"ms","line":6,"note":"Call 3 now returns its merged list, so the list returned is added to row 7.","context":"Call 3: MergeSort(L, 1, 2)","vars":{"returned":"[6, 3]"},"updates":[{"row":7,"values":{"list":"[6, 3]"}}],"rowFocus":7},
+        {"code":"ms","line":5,"note":"Back in call 2, the left half is done, so it now makes the right recursive call.","context":"Call 2: MergeSort(L, 1, 3)","vars":{"M":"2"},"updates":[{"row":8,"values":{"S":"1","E":"3","M":"2"}}],"rowFocus":8},
+        {"code":"ms","line":1,"note":"Enter call 6 for the single item at position 3.","context":"Call 6: MergeSort(L, 3, 3)","vars":null,"updates":[{"row":9,"values":{"S":"3","E":"3"}}],"rowFocus":9},
+        {"code":"ms","line":2,"note":"Check the condition S < E. Here 3 < 3 is false, so this is a base case.","context":"Call 6: MergeSort(L, 3, 3)","vars":{"S":"3","E":"3"},"updates":null,"rowFocus":9},
+        {"code":"ms","line":8,"note":"Return a one-item list containing L[3] = 4.","context":"Call 6: MergeSort(L, 3, 3)","vars":{"returned":"[4]"},"updates":[{"row":9,"values":{"list":"[4]"}}],"rowFocus":9},
+        {"code":"ms","line":6,"note":"Call 2 is restored from the call stack, so row 10 gets S, E and M before the merge result is known.","context":"Call 2: MergeSort(L, 1, 3)","vars":{"L1":"[6, 3]","L2":"[4]"},"updates":[{"row":10,"values":{"S":"1","E":"3","M":"2"}}],"rowFocus":10},
+        {"code":"m","line":2,"note":"Start the merge with an empty output list.","context":"Merge([6, 3], [4])","vars":{"L1":"[6, 3]","L2":"[4]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Both lists still contain items, so continue the loop.","context":"Merge([6, 3], [4])","vars":{"L1":"[6, 3]","L2":"[4]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":4,"note":"Compare the first items: 6 < 4 is false.","context":"Merge([6, 3], [4])","vars":{"L1":"[6, 3]","L2":"[4]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":8,"note":"Take the first item from L1 and append it to L3.","context":"Merge([6, 3], [4])","vars":{"L1":"[6, 3]","L2":"[4]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":9,"note":"Remove that first item from L1.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[4]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Both lists still contain items, so continue again.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[4]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":4,"note":"Compare the first items: 3 < 4 is true.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[4]","L3":"[6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":5,"note":"Take the first item from L2 and append it to L3.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[4]","L3":"[6, 4]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":6,"note":"Remove that first item from L2.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[]","L3":"[6, 4]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"The main loop now stops because L2 is empty.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[]","L3":"[6, 4]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":12,"note":"L1 still contains an item, so enter this loop.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[]","L3":"[6, 4]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":13,"note":"Append the remaining item from L1 to L3.","context":"Merge([6, 3], [4])","vars":{"L1":"[3]","L2":"[]","L3":"[6, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":14,"note":"Remove that first item from L1.","context":"Merge([6, 3], [4])","vars":{"L1":"[]","L2":"[]","L3":"[6, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":12,"note":"L1 is now empty, so this loop ends.","context":"Merge([6, 3], [4])","vars":{"L1":"[]","L2":"[]","L3":"[6, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":16,"note":"L2 is already empty, so skip this loop.","context":"Merge([6, 3], [4])","vars":{"L1":"[]","L2":"[]","L3":"[6, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":20,"note":"Merge returns [6, 4, 3].","context":"Merge([6, 3], [4])","vars":{"L1":"[]","L2":"[]","L3":"[6, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"ms","line":6,"note":"Call 2 now returns its merged list, so the list returned is added to row 10.","context":"Call 2: MergeSort(L, 1, 3)","vars":{"returned":"[6, 4, 3]"},"updates":[{"row":10,"values":{"list":"[6, 4, 3]"}}],"rowFocus":10},
+        {"code":"ms","line":5,"note":"Back in call 1, the left half is done, so it now makes the right recursive call.","context":"Call 1: MergeSort(L, 1, 5)","vars":{"M":"3"},"updates":[{"row":11,"values":{"S":"1","E":"5","M":"3"}}],"rowFocus":11},
+        {"code":"ms","line":1,"note":"Enter call 7 for the sub-list from positions 4 to 5.","context":"Call 7: MergeSort(L, 4, 5)","vars":null,"updates":null,"rowFocus":12},
+        {"code":"ms","line":2,"note":"Check S < E. Here 4 < 5 is true, so keep splitting.","context":"Call 7: MergeSort(L, 4, 5)","vars":{"S":"4","E":"5"},"updates":null,"rowFocus":12},
+        {"code":"ms","line":3,"note":"Calculate the midpoint: M = (4 + 5) DIV 2 = 4.","context":"Call 7: MergeSort(L, 4, 5)","vars":{"M":"4"},"updates":[{"row":12,"values":{"S":"4","E":"5","M":"4"}}],"rowFocus":12},
+        {"code":"ms","line":4,"note":"Make the left recursive call for positions 4 to 4.","context":"Call 7: MergeSort(L, 4, 5)","vars":{"M":"4"},"updates":null,"rowFocus":12},
+        {"code":"ms","line":1,"note":"Enter call 8 for the single item at position 4.","context":"Call 8: MergeSort(L, 4, 4)","vars":null,"updates":[{"row":13,"values":{"S":"4","E":"4"}}],"rowFocus":13},
+        {"code":"ms","line":2,"note":"Check the condition S < E. Here 4 < 4 is false, so this is a base case.","context":"Call 8: MergeSort(L, 4, 4)","vars":{"S":"4","E":"4"},"updates":null,"rowFocus":13},
+        {"code":"ms","line":8,"note":"Return a one-item list containing L[4] = 8.","context":"Call 8: MergeSort(L, 4, 4)","vars":{"returned":"[8]"},"updates":[{"row":13,"values":{"list":"[8]"}}],"rowFocus":13},
+        {"code":"ms","line":5,"note":"Back in call 7, the left half is done, so it now makes the right recursive call.","context":"Call 7: MergeSort(L, 4, 5)","vars":{"M":"4"},"updates":[{"row":14,"values":{"S":"4","E":"5","M":"4"}}],"rowFocus":14},
+        {"code":"ms","line":1,"note":"Enter call 9 for the single item at position 5.","context":"Call 9: MergeSort(L, 5, 5)","vars":null,"updates":[{"row":15,"values":{"S":"5","E":"5"}}],"rowFocus":15},
+        {"code":"ms","line":2,"note":"Check the condition S < E. Here 5 < 5 is false, so this is a base case.","context":"Call 9: MergeSort(L, 5, 5)","vars":{"S":"5","E":"5"},"updates":null,"rowFocus":15},
+        {"code":"ms","line":8,"note":"Return a one-item list containing L[5] = 5.","context":"Call 9: MergeSort(L, 5, 5)","vars":{"returned":"[5]"},"updates":[{"row":15,"values":{"list":"[5]"}}],"rowFocus":15},
+        {"code":"ms","line":6,"note":"Call 7 is restored from the call stack, so row 16 gets S, E and M before the merge result is known.","context":"Call 7: MergeSort(L, 4, 5)","vars":{"L1":"[8]","L2":"[5]"},"updates":[{"row":16,"values":{"S":"4","E":"5","M":"4"}}],"rowFocus":16},
+        {"code":"m","line":2,"note":"Start Merge with an empty output list.","context":"Merge([8], [5])","vars":{"L1":"[8]","L2":"[5]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Both lists still contain items, so continue the loop.","context":"Merge([8], [5])","vars":{"L1":"[8]","L2":"[5]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":4,"note":"Compare the first items: 8 < 5 is false.","context":"Merge([8], [5])","vars":{"L1":"[8]","L2":"[5]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":8,"note":"Take the first item from L1 and append it to L3.","context":"Merge([8], [5])","vars":{"L1":"[8]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":9,"note":"Remove that first item from L1.","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Now the main loop stops because L1 is empty.","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":12,"note":"There are no items left in L1, so skip this loop.","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":16,"note":"L2 still contains an item, so enter this loop.","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":17,"note":"Append the remaining item from L2 to L3.","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[5]","L3":"[8, 5]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":18,"note":"Remove that first item from L2.","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[]","L3":"[8, 5]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":16,"note":"L2 is now empty, so this loop ends.","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[]","L3":"[8, 5]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":20,"note":"Merge returns [8, 5].","context":"Merge([8], [5])","vars":{"L1":"[]","L2":"[]","L3":"[8, 5]"},"updates":null,"rowFocus":null},
+        {"code":"ms","line":6,"note":"Call 7 now returns its merged list, so the list returned is added to row 16.","context":"Call 7: MergeSort(L, 4, 5)","vars":{"returned":"[8, 5]"},"updates":[{"row":16,"values":{"list":"[8, 5]"}}],"rowFocus":16},
+        {"code":"ms","line":6,"note":"Call 1 is restored from the call stack, so row 17 gets S, E and M before the final merged list is known.","context":"Call 1: MergeSort(L, 1, 5)","vars":{"L1":"[6, 4, 3]","L2":"[8, 5]"},"updates":[{"row":17,"values":{"S":"1","E":"5","M":"3"}}],"rowFocus":17},
+        {"code":"m","line":2,"note":"Start the final merge with an empty output list.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[8, 5]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Both lists still contain items, so continue the loop.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[8, 5]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":4,"note":"Compare the first items: 6 < 8 is true.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[8, 5]","L3":"[]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":5,"note":"Take the first item from L2 and append it to L3.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[8, 5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":6,"note":"Remove that first item from L2.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Both lists still contain items, so continue again.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":4,"note":"Compare the first items: 6 < 5 is false.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[5]","L3":"[8]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":8,"note":"Take the first item from L1 and append it to L3.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[6, 4, 3]","L2":"[5]","L3":"[8, 6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":9,"note":"Remove that first item from L1.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[5]","L3":"[8, 6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"Both lists still contain items, so continue again.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[5]","L3":"[8, 6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":4,"note":"Compare the first items: 4 < 5 is true.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[5]","L3":"[8, 6]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":5,"note":"Take the first item from L2 and append it to L3.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[5]","L3":"[8, 6, 5]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":6,"note":"Remove that first item from L2.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[]","L3":"[8, 6, 5]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":3,"note":"The main loop now stops because L2 is empty.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[]","L3":"[8, 6, 5]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":12,"note":"L1 still contains items, so enter this loop.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[]","L3":"[8, 6, 5]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":13,"note":"Append the next item from L1 to L3.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[4, 3]","L2":"[]","L3":"[8, 6, 5, 4]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":14,"note":"Remove that first item from L1.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[3]","L2":"[]","L3":"[8, 6, 5, 4]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":12,"note":"L1 still contains one more item, so continue the loop.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[3]","L2":"[]","L3":"[8, 6, 5, 4]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":13,"note":"Append the final remaining item from L1 to L3.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[3]","L2":"[]","L3":"[8, 6, 5, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":14,"note":"Remove that first item from L1.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[]","L2":"[]","L3":"[8, 6, 5, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":12,"note":"L1 is now empty, so this loop ends.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[]","L2":"[]","L3":"[8, 6, 5, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":16,"note":"L2 is already empty, so skip this loop.","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[]","L2":"[]","L3":"[8, 6, 5, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"m","line":20,"note":"Merge returns [8, 6, 5, 4, 3].","context":"Merge([6, 4, 3], [8, 5])","vars":{"L1":"[]","L2":"[]","L3":"[8, 6, 5, 4, 3]"},"updates":null,"rowFocus":null},
+        {"code":"ms","line":6,"note":"Call 1 now returns its final merged list, so the list returned is added to row 17.","context":"Call 1: MergeSort(L, 1, 5)","vars":{"returned":"[8, 6, 5, 4, 3]"},"updates":[{"row":17,"values":{"list":"[8, 6, 5, 4, 3]"}}],"rowFocus":17}
+      ];
+
+      function CodeBlock({ title, lines, activeCode, blockKey, activeLine }) {
+        return (
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <div className="text-sm font-semibold text-slate-800">{title}</div>
+            </div>
+            <div className="overflow-x-auto p-3">
+              <div className="min-w-[420px] font-mono text-sm">
+                {lines.map((line, index) => {
+                  const lineNumber = index + 1;
+                  const isActive = activeCode === blockKey && activeLine === lineNumber;
+                  return (
+                    <div
+                      key={lineNumber}
+                      className={`grid grid-cols-[40px_1fr] items-start gap-3 rounded-lg px-2 py-1.5 transition ${isActive ? "bg-amber-100 ring-1 ring-amber-300" : "hover:bg-slate-50"}`}
+                    >
+                      <div className="text-right text-slate-400">{lineNumber}</div>
+                      <div className="whitespace-pre text-slate-800">{line}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function TraceTable({ rows, activeRow, activeUpdates }) {
+        const changedCells = new Set();
+        activeUpdates.forEach((update) => {
+          Object.keys(update.values).forEach((key) => changedCells.add(`${update.row}-${key}`));
+        });
+
+        const headings = [
+          { key: "call", label: "Call number" },
+          { key: "S", label: "S" },
+          { key: "E", label: "E" },
+          { key: "M", label: "M" },
+          { key: "list", label: "List returned" },
+        ];
+
+        return (
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <div className="text-sm font-semibold text-slate-800">Trace table</div>
+            </div>
+            <div className="overflow-auto">
+              <table className="min-w-full border-collapse text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-medium text-slate-500">Row</th>
+                    {headings.map((heading) => (
+                      <th key={heading.key} className="border-b border-r border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500">
+                        {heading.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, rowIndex) => {
+                    const displayRow = rowIndex + 1;
+                    const isActiveRow = activeRow === displayRow;
+                    return (
+                      <tr key={displayRow} className={isActiveRow ? "bg-blue-50/70" : displayRow % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
+                        <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-inherit px-2 py-2 text-center text-xs font-semibold text-slate-500">
+                          {displayRow}
+                        </td>
+                        {headings.map((heading) => {
+                          const changed = changedCells.has(`${displayRow}-${heading.key}`);
+                          return (
+                            <td
+                              key={heading.key}
+                              className={`border-b border-r border-slate-200 px-3 py-2 font-mono text-slate-800 transition ${heading.key === "list" ? "min-w-[220px]" : "min-w-[54px]"} ${changed ? "bg-emerald-100 font-semibold ring-1 ring-inset ring-emerald-300" : ""}`}
+                            >
+                              {row[heading.key] || " "}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+      function SmallCard({ title, children }) {
+        return (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</div>
+            <div className="text-sm text-slate-800">{children}</div>
+          </div>
+        );
+      }
+
+      function MergeSortTraceStepper() {
+        const [stepIndex, setStepIndex] = useState(-1);
+        const activeStep = stepIndex >= 0 ? steps[stepIndex] : null;
+
+        const rows = useMemo(() => {
+          const nextRows = initialRows.map((row) => ({ ...row }));
+          for (let i = 0; i <= stepIndex; i += 1) {
+            const updates = steps[i]?.updates || [];
+            updates.forEach((update) => {
+              const target = nextRows[update.row - 1];
+              if (!target) return;
+              Object.entries(update.values).forEach(([key, value]) => {
+                target[key] = value;
+              });
+            });
+          }
+          return nextRows;
+        }, [stepIndex]);
+
+        const activeUpdates = activeStep?.updates || [];
+        const revealedRows = rows.filter((row) => row.list || (row.S && row.E && row.M)).length;
+        const vars = activeStep?.vars ? Object.entries(activeStep.vars) : [];
+
+        return (
+          <div className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-6">
+            <div className="mx-auto max-w-7xl space-y-4">
+              <div className="rounded-3xl bg-slate-900 p-5 text-white shadow-lg">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <div className="text-2xl font-semibold">Recursive MergeSort trace table stepper</div>
+                    <div className="mt-2 max-w-3xl text-sm text-slate-300">
+                      This starts from the exam&apos;s given state: the first six rows are already provided. Use <span className="font-semibold text-white">Step</span> to follow the remaining execution one line at a time and watch the missing rows fill in at the correct moments.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setStepIndex((current) => Math.max(-1, current - 1))} className="rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10">Previous</button>
+                    <button onClick={() => setStepIndex(-1)} className="rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10">Reset</button>
+                    <button onClick={() => setStepIndex((current) => Math.min(steps.length - 1, current + 1))} className="rounded-xl bg-amber-300 px-5 py-2 text-sm font-semibold text-slate-900 transition hover:bg-amber-200">Step</button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl bg-white/10 px-4 py-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-300">Progress</div>
+                    <div className="mt-1 text-lg font-semibold">{stepIndex < 0 ? 0 : stepIndex + 1} / {steps.length} steps</div>
+                  </div>
+                  <div className="rounded-2xl bg-white/10 px-4 py-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-300">Rows revealed</div>
+                    <div className="mt-1 text-lg font-semibold">{revealedRows} / 17 rows with values</div>
+                  </div>
+                  <div className="rounded-2xl bg-white/10 px-4 py-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-300">Current line</div>
+                    <div className="mt-1 text-lg font-semibold">
+                      {activeStep ? `${activeStep.code === "ms" ? "MergeSort" : "Merge"} line ${activeStep.line}` : "Ready to begin"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+                <div className="space-y-4">
+                  <CodeBlock title="Figure 1 — MergeSort" lines={mergeSortLines} activeCode={activeStep?.code} blockKey="ms" activeLine={activeStep?.line} />
+                  <CodeBlock title="Figure 2 — Merge" lines={mergeLines} activeCode={activeStep?.code} blockKey="m" activeLine={activeStep?.line} />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SmallCard title="Current context">
+                      {activeStep ? activeStep.context : "Press Step to continue from the point where the first six rows have already been completed."}
+                    </SmallCard>
+                    <SmallCard title="What this line is doing">
+                      {activeStep ? activeStep.note : "The next highlighted line will show the remaining recursive calls and merges needed to finish the trace table."}
+                    </SmallCard>
+                  </div>
+
+                  <SmallCard title="Current values">
+                    {vars.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {vars.map(([key, value]) => (
+                          <div key={key} className="rounded-xl bg-slate-100 px-3 py-2 font-mono text-sm text-slate-800">
+                            <span className="font-semibold">{key}</span>: {value}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-slate-500">No local values are being shown yet.</div>
+                    )}
+                  </SmallCard>
+
+                  <TraceTable rows={rows} activeRow={activeStep?.rowFocus || null} activeUpdates={activeUpdates} />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+                The highlighted row shows the call currently being resumed or completed. Green cells are new values added on the current step.
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<MergeSortTraceStepper />);
+    </script>
+  </body>
+</html>
