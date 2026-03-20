@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SQL Practice Activity 2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8">
+    <div id="app"></div>
+
+    <script>
+      const questions = [
+        {
+          id: 1,
+          type: "SELECT columns",
+          difficulty: "Easy",
+          prompt: "Show the Surname and Tutor for all students in YearGroup 12.",
+          tables: [
+            {
+              name: "Student",
+              columns: ["StudentID", "Surname", "YearGroup", "Tutor"],
+              rows: [
+                [1001, "Khan", 12, "12A"],
+                [1002, "Patel", 13, "13C"],
+                [1003, "Jones", 12, "12B"],
+                [1004, "Smith", 11, "11D"],
+              ],
+            },
+          ],
+          expectedSQL: "SELECT Surname, Tutor\nFROM Student\nWHERE YearGroup = 12;",
+          notes: "Equivalent answers are fine if they return the same columns and rows.",
+        },
+        {
+          id: 2,
+          type: "WHERE with AND",
+          difficulty: "Easy",
+          prompt: "Show the Title of every Computing book that is currently in stock.",
+          tables: [
+            {
+              name: "Book",
+              columns: ["BookID", "Title", "Subject", "InStock"],
+              rows: [
+                [1, "Algorithms Unlocked", "Computing", "Yes"],
+                [2, "Macbeth", "Drama", "No"],
+                [3, "SQL Basics", "Computing", "Yes"],
+                [4, "Poetry Anthology", "English", "Yes"],
+              ],
+            },
+          ],
+          expectedSQL: "SELECT Title\nFROM Book\nWHERE Subject = 'Computing' AND InStock = 'Yes';",
+        },
+        {
+          id: 3,
+          type: "WHERE with OR",
+          difficulty: "Easy",
+          prompt: "Show the Destination and Cost for trips for YearGroup 12 or YearGroup 13.",
+          tables: [
+            {
+              name: "Trip",
+              columns: ["TripID", "Destination", "YearGroup", "Cost"],
+              rows: [
+                [1, "Berlin", 12, 450],
+                [2, "Bletchley Park", 11, 35],
+                [3, "CERN", 13, 520],
+                [4, "London", 12, 40],
+              ],
+            },
+          ],
+          expectedSQL: "SELECT Destination, Cost\nFROM Trip\nWHERE YearGroup = 12 OR YearGroup = 13;",
+        },
+        {
+          id: 4,
+          type: "ORDER BY",
+          difficulty: "Easy",
+          prompt: "Show the StudentID and Mark for all Computer Science results, with the highest mark first.",
+          tables: [
+            {
+              name: "ExamResult",
+              columns: ["ResultID", "StudentID", "Subject", "Mark"],
+              rows: [
+                [1, 1001, "Computer Science", 83],
+                [2, 1002, "Mathematics", 91],
+                [3, 1003, "Computer Science", 77],
+                [4, 1004, "Computer Science", 96],
+              ],
+            },
+          ],
+          expectedSQL:
+            "SELECT StudentID, Mark\nFROM ExamResult\nWHERE Subject = 'Computer Science'\nORDER BY Mark DESC;",
+        },
+        {
+          id: 5,
+          type: "LIKE wildcard",
+          difficulty: "Easy",
+          prompt: "Show the ClubName for clubs whose name starts with 'Cod'.",
+          tables: [
+            {
+              name: "Club",
+              columns: ["ClubID", "ClubName", "MeetingDay", "Room"],
+              rows: [
+                [1, "Code Club", "Tuesday", "A1"],
+                [2, "Choir", "Thursday", "Hall"],
+                [3, "Coding Clinic", "Monday", "B2"],
+                [4, "Chess Club", "Wednesday", "C1"],
+              ],
+            },
+          ],
+          expectedSQL: "SELECT ClubName\nFROM Club\nWHERE ClubName LIKE 'Cod%';",
+        },
+        {
+          id: 6,
+          type: "COUNT aggregate",
+          difficulty: "Easy",
+          prompt: "Count how many detentions lasted 30 minutes.",
+          tables: [
+            {
+              name: "Detention",
+              columns: ["DetentionID", "StudentID", "Reason", "Minutes"],
+              rows: [
+                [1, 1001, "Late", 15],
+                [2, 1003, "Missing homework", 30],
+                [3, 1004, "Uniform", 30],
+                [4, 1002, "Late", 15],
+              ],
+            },
+          ],
+          expectedSQL: "SELECT COUNT(*)\nFROM Detention\nWHERE Minutes = 30;",
+        },
+        {
+          id: 7,
+          type: "AVG aggregate",
+          difficulty: "Easy",
+          prompt: "Find the average Cost of all Laptop devices.",
+          tables: [
+            {
+              name: "Device",
+              columns: ["DeviceID", "Type", "PurchaseYear", "Cost"],
+              rows: [
+                [1, "Laptop", 2024, 850],
+                [2, "Tablet", 2025, 310],
+                [3, "Laptop", 2023, 920],
+                [4, "Projector", 2022, 450],
+              ],
+            },
+          ],
+          expectedSQL: "SELECT AVG(Cost)\nFROM Device\nWHERE Type = 'Laptop';",
+        },
+        {
+          id: 8,
+          type: "GROUP BY with SUM",
+          difficulty: "Medium",
+          prompt: "Show each House and the total Points it has scored.",
+          tables: [
+            {
+              name: "HousePoints",
+              columns: ["House", "Event", "Points"],
+              rows: [
+                ["Red", "Drama", 5],
+                ["Blue", "Sport", 10],
+                ["Red", "Quiz", 8],
+                ["Green", "Music", 6],
+                ["Blue", "Debate", 4],
+              ],
+            },
+          ],
+          expectedSQL: "SELECT House, SUM(Points)\nFROM HousePoints\nGROUP BY House;",
+          notes: "Some students may add an alias such as AS TotalPoints. That is still fine.",
+        },
+        {
+          id: 9,
+          type: "INSERT",
+          difficulty: "Easy",
+          prompt:
+            "Insert a new row with AssignmentID 105, Title 'Binary Quiz', Subject 'Computer Science', and DueDate '2026-04-18'.",
+          tables: [
+            {
+              name: "Assignment",
+              columns: ["AssignmentID", "Title", "Subject", "DueDate"],
+              rows: [
+                [101, "Binary Basics", "Computer Science", "2026-04-03"],
+                [102, "Poetry Notes", "English", "2026-04-05"],
+                [103, "Forces Sheet", "Physics", "2026-04-07"],
+                [104, "Matrices Review", "Mathematics", "2026-04-10"],
+              ],
+            },
+          ],
+          expectedSQL:
+            "INSERT INTO Assignment (AssignmentID, Title, Subject, DueDate)\nVALUES (105, 'Binary Quiz', 'Computer Science', '2026-04-18');",
+        },
+        {
+          id: 10,
+          type: "UPDATE",
+          difficulty: "Easy",
+          prompt: "Change the Status of LockerID 204 to 'Out of order'.",
+          tables: [
+            {
+              name: "Locker",
+              columns: ["LockerID", "StudentID", "Floor", "Status"],
+              rows: [
+                [201, 1001, "Ground", "Working"],
+                [202, 1002, "Ground", "Working"],
+                [204, 1003, "First", "Working"],
+                [205, 1004, "First", "Reserved"],
+              ],
+            },
+          ],
+          expectedSQL: "UPDATE Locker\nSET Status = 'Out of order'\nWHERE LockerID = 204;",
+        },
+        {
+          id: 11,
+          type: "DELETE",
+          difficulty: "Easy",
+          prompt: "Delete the record for VisitorID 3.",
+          tables: [
+            {
+              name: "Visitor",
+              columns: ["VisitorID", "Name", "Purpose", "SignedOut"],
+              rows: [
+                [1, "Mrs Green", "Music talk", "No"],
+                [2, "Mr Shah", "Site visit", "Yes"],
+                [3, "Dr Cole", "Careers lecture", "Yes"],
+                [4, "Ms Fox", "Meeting", "No"],
+              ],
+            },
+          ],
+          expectedSQL: "DELETE FROM Visitor\nWHERE VisitorID = 3;",
+        },
+        {
+          id: 12,
+          type: "CREATE TABLE",
+          difficulty: "Medium",
+          prompt:
+            "Define a new table called ClubAttendance with these fields: AttendanceID integer primary key, StudentID integer, ClubName text up to 30 characters, Attended text up to 3 characters.",
+          requirements: [
+            ["Field", "Requirement"],
+            ["AttendanceID", "INT, primary key"],
+            ["StudentID", "INT"],
+            ["ClubName", "VARCHAR(30)"],
+            ["Attended", "VARCHAR(3)"],
+          ],
+          expectedSQL:
+            "CREATE TABLE ClubAttendance (\n  AttendanceID INT PRIMARY KEY,\n  StudentID INT,\n  ClubName VARCHAR(30),\n  Attended VARCHAR(3)\n);",
+          notes: "Equivalent data types may be acceptable depending on the SQL dialect used in class.",
+        },
+        {
+          id: 13,
+          type: "Two-table join",
+          difficulty: "Harder",
+          prompt:
+            "Show the Surname and BookTitle for books that have not been returned. Use the simple AQA-style join syntax with both table names in FROM and the join condition in WHERE.",
+          tables: [
+            {
+              name: "Student",
+              columns: ["StudentID", "Surname", "House"],
+              rows: [
+                [1001, "Khan", "Red"],
+                [1002, "Patel", "Blue"],
+                [1003, "Jones", "Green"],
+                [1004, "Smith", "Red"],
+              ],
+            },
+            {
+              name: "Borrow",
+              columns: ["BorrowID", "StudentID", "BookTitle", "Returned"],
+              rows: [
+                [1, 1002, "Database Design", "No"],
+                [2, 1001, "Hamlet", "Yes"],
+                [3, 1004, "Python Primer", "No"],
+                [4, 1003, "AI Ethics", "Yes"],
+              ],
+            },
+          ],
+          expectedSQL:
+            "SELECT Student.Surname, Borrow.BookTitle\nFROM Student, Borrow\nWHERE Student.StudentID = Borrow.StudentID\nAND Borrow.Returned = 'No';",
+        },
+        {
+          id: 14,
+          type: "Two-table join with ORDER BY",
+          difficulty: "Harder",
+          prompt:
+            "Show the CourseName and StudentID for students predicted A*, ordered by CourseName. Use the simple AQA-style join syntax.",
+          tables: [
+            {
+              name: "Course",
+              columns: ["CourseID", "CourseName", "Room"],
+              rows: [
+                ["CS1", "Computer Science", "Lab 1"],
+                ["MA1", "Further Maths", "M3"],
+                ["PH1", "Physics", "S2"],
+              ],
+            },
+            {
+              name: "Enrolment",
+              columns: ["EnrolmentID", "StudentID", "CourseID", "PredictedGrade"],
+              rows: [
+                [1, 1001, "CS1", "A"],
+                [2, 1002, "MA1", "A*"],
+                [3, 1003, "CS1", "A*"],
+                [4, 1004, "PH1", "B"],
+              ],
+            },
+          ],
+          expectedSQL:
+            "SELECT Course.CourseName, Enrolment.StudentID\nFROM Course, Enrolment\nWHERE Course.CourseID = Enrolment.CourseID\nAND Enrolment.PredictedGrade = 'A*'\nORDER BY Course.CourseName;",
+        },
+      ];
+
+      const state = {
+        index: 0,
+        stage: "answer",
+        answers: Array(questions.length).fill(""),
+        marks: Array(questions.length).fill(null),
+      };
+
+      function badge(content, tone = "slate") {
+        const tones = {
+          slate: "bg-slate-100 text-slate-700 border-slate-200",
+          blue: "bg-blue-50 text-blue-700 border-blue-200",
+          amber: "bg-amber-50 text-amber-700 border-amber-200",
+          emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
+          rose: "bg-rose-50 text-rose-700 border-rose-200",
+        };
+
+        return `<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${tones[tone]}">${content}</span>`;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function dataTable(table) {
+        return `
+          <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <div class="font-semibold text-slate-800">Table: ${escapeHtml(table.name)}</div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead class="bg-slate-100 text-slate-700">
+                  <tr>
+                    ${table.columns
+                      .map(
+                        (column) =>
+                          `<th class="px-4 py-3 text-left font-semibold whitespace-nowrap">${escapeHtml(column)}</th>`
+                      )
+                      .join("")}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${table.rows
+                    .map(
+                      (row) => `
+                        <tr class="border-t border-slate-100">
+                          ${row
+                            .map(
+                              (cell) =>
+                                `<td class="px-4 py-3 whitespace-nowrap text-slate-700">${escapeHtml(cell)}</td>`
+                            )
+                            .join("")}
+                        </tr>`
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      function requirementsTable(requirements) {
+        return `
+          <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <div class="font-semibold text-slate-800">Table requirements</div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <tbody>
+                  ${requirements
+                    .map(
+                      (row, rowIndex) => `
+                        <tr class="border-t border-slate-100 ${rowIndex === 0 ? "first:border-t-0" : ""}">
+                          <td class="px-4 py-3 font-semibold text-slate-700 w-48">${escapeHtml(row[0])}</td>
+                          <td class="px-4 py-3 text-slate-700">${escapeHtml(row[1])}</td>
+                        </tr>`
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      function sqlBlock(label, value) {
+        return `
+          <div class="rounded-2xl border border-slate-200 bg-slate-950 text-slate-100 shadow-sm overflow-hidden">
+            <div class="border-b border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300">${escapeHtml(label)}</div>
+            <pre class="p-4 text-sm leading-6 whitespace-pre-wrap overflow-x-auto">${value ? escapeHtml(value) : "(No SQL entered)"}</pre>
+          </div>
+        `;
+      }
+
+      function difficultyTone(level) {
+        if (level === "Harder") return "rose";
+        if (level === "Medium") return "amber";
+        return "blue";
+      }
+
+      function markQuestion(isRight) {
+        state.marks[state.index] = isRight;
+
+        if (state.index === questions.length - 1) {
+          state.stage = "finished";
+          render();
+          return;
+        }
+
+        state.index += 1;
+        state.stage = "answer";
+        render();
+      }
+
+      function restart() {
+        state.index = 0;
+        state.stage = "answer";
+        state.answers = Array(questions.length).fill("");
+        state.marks = Array(questions.length).fill(null);
+        render();
+      }
+
+      function render() {
+        const current = questions[state.index];
+        const completed = state.marks.filter((mark) => mark !== null).length;
+        const score = state.marks.filter(Boolean).length;
+        const percent = Math.round((score / questions.length) * 100);
+        const progress = state.stage === "finished" ? 100 : Math.round((state.index / questions.length) * 100);
+        const missed = questions.filter((_, questionIndex) => state.marks[questionIndex] === false);
+
+        document.getElementById("app").innerHTML = `
+          <div class="mx-auto max-w-7xl space-y-6">
+            <div class="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div class="p-6 md:p-8">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div class="space-y-3 max-w-3xl">
+                    <div class="flex flex-wrap gap-2">
+                      ${badge("U6th AQA A Level Computer Science", "blue")}
+                      ${badge("Interactive SQL practice", "emerald")}
+                    </div>
+                    <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">SQL Practice Activity 2</h1>
+                    <p class="text-slate-600 leading-7">
+                      Work through each exam-style prompt, write your SQL, then click the compare button.
+                      You will see your answer beside a model answer and decide whether yours is right or wrong.
+                    </p>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3 min-w-[240px]">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Score</div>
+                      <div class="mt-1 text-2xl font-bold">${score} / ${questions.length}</div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Marked</div>
+                      <div class="mt-1 text-2xl font-bold">${completed}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div class="flex items-center justify-between text-sm text-slate-600">
+                    <span>Progress</span>
+                    <span>${progress}%</span>
+                  </div>
+                  <div class="mt-2 h-3 w-full rounded-full bg-slate-200 overflow-hidden">
+                    <div
+                      class="h-full rounded-full bg-slate-800 transition-all"
+                      style="width: ${state.stage === "finished" ? 100 : Math.max(6, progress)}%"
+                    ></div>
+                  </div>
+                </div>
+
+                <div class="mt-6 grid gap-3 md:grid-cols-4 text-sm">
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div class="font-semibold">What is covered?</div>
+                    <div class="mt-2 text-slate-600">SELECT, WHERE, ORDER BY, LIKE, aggregates, GROUP BY, INSERT, UPDATE, DELETE, CREATE TABLE and two-table joins.</div>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div class="font-semibold">Marking rule</div>
+                    <div class="mt-2 text-slate-600">Whitespace, line breaks and sensible aliases do not matter if the SQL is logically equivalent.</div>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div class="font-semibold">String values</div>
+                    <div class="mt-2 text-slate-600">Use single quotes around text values such as 'Yes' or 'Computer Science'.</div>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div class="font-semibold">Join style</div>
+                    <div class="mt-2 text-slate-600">For the harder questions, use the simple comma-separated FROM syntax with the join written in WHERE.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            ${state.stage !== "finished"
+              ? `
+                <div class="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+                  <div class="space-y-6">
+                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                      <div class="flex flex-wrap items-center gap-2">
+                        ${badge(`Question ${state.index + 1} of ${questions.length}`, "slate")}
+                        ${badge(current.difficulty, difficultyTone(current.difficulty))}
+                        ${badge(current.type, "emerald")}
+                      </div>
+
+                      <h2 class="mt-4 text-2xl font-bold tracking-tight">Task</h2>
+                      <p class="mt-3 text-slate-700 leading-7">${escapeHtml(current.prompt)}</p>
+                      ${current.notes
+                        ? `<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">${escapeHtml(current.notes)}</div>`
+                        : ""}
+                    </div>
+
+                    ${current.tables && current.tables.length > 0
+                      ? `<div class="space-y-4">${current.tables.map(dataTable).join("")}</div>`
+                      : ""}
+
+                    ${current.requirements ? requirementsTable(current.requirements) : ""}
+                  </div>
+
+                  <div class="space-y-6">
+                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8 sticky top-6">
+                      ${state.stage === "answer"
+                        ? `
+                          <h3 class="text-xl font-bold">Write your SQL</h3>
+                          <p class="mt-2 text-sm text-slate-600">Enter your answer below, then click the button to compare it with the model answer.</p>
+                          <textarea
+                            id="sql-answer"
+                            spellcheck="false"
+                            class="mt-4 min-h-[280px] w-full rounded-2xl border border-slate-300 bg-slate-50 p-4 font-mono text-sm leading-6 outline-none focus:ring-2 focus:ring-slate-300"
+                            placeholder="Type SQL for question ${state.index + 1} here..."
+                          >${escapeHtml(state.answers[state.index])}</textarea>
+                          <button
+                            id="compare-button"
+                            class="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+                          >
+                            Next: compare my answer
+                          </button>
+                        `
+                        : `
+                          <div class="space-y-4">
+                            <h3 class="text-xl font-bold">Compare answers</h3>
+                            <p class="text-sm text-slate-600 leading-6">Read both versions carefully. If your SQL would produce the same correct result, mark it right. If not, mark it wrong.</p>
+                            ${sqlBlock("Your SQL", state.answers[state.index])}
+                            ${sqlBlock("Expected SQL", current.expectedSQL)}
+                            <div class="grid grid-cols-2 gap-3 pt-2">
+                              <button
+                                id="right-button"
+                                class="rounded-2xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-500 transition"
+                              >
+                                Right
+                              </button>
+                              <button
+                                id="wrong-button"
+                                class="rounded-2xl bg-rose-600 px-4 py-3 font-semibold text-white hover:bg-rose-500 transition"
+                              >
+                                Wrong
+                              </button>
+                            </div>
+                          </div>
+                        `}
+                    </div>
+                  </div>
+                </div>
+              `
+              : `
+                <div class="space-y-6">
+                  <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <div class="flex flex-wrap gap-2">
+                          ${badge("Finished", "slate")}
+                          ${badge(`${percent}%`, percent >= 80 ? "emerald" : percent >= 60 ? "amber" : "rose")}
+                        </div>
+                        <h2 class="mt-3 text-3xl font-bold tracking-tight">Final score: ${score} / ${questions.length}</h2>
+                        <p class="mt-2 text-slate-600 leading-7 max-w-3xl">Use the review below to spot patterns. Aim to be fluent with the command words, field names, quote marks and join conditions.</p>
+                      </div>
+                      <button
+                        id="restart-button"
+                        class="rounded-2xl bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800 transition"
+                      >
+                        Restart activity
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="grid gap-6 lg:grid-cols-[0.85fr,1.15fr]">
+                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                      <h3 class="text-xl font-bold">At a glance</h3>
+                      <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div class="text-xs uppercase tracking-wide text-slate-500">Correct</div>
+                          <div class="mt-1 text-3xl font-bold">${score}</div>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div class="text-xs uppercase tracking-wide text-slate-500">To revisit</div>
+                          <div class="mt-1 text-3xl font-bold">${questions.length - score}</div>
+                        </div>
+                      </div>
+
+                      <div class="mt-6">
+                        <h4 class="font-semibold">Question outcomes</h4>
+                        <div class="mt-3 space-y-2">
+                          ${questions
+                            .map(
+                              (question, questionIndex) => `
+                                <div class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                                  <div>
+                                    <div class="font-medium">Q${questionIndex + 1}. ${escapeHtml(question.type)}</div>
+                                    <div class="text-sm text-slate-500">${escapeHtml(question.difficulty)}</div>
+                                  </div>
+                                  ${badge(state.marks[questionIndex] ? "Right" : "Wrong", state.marks[questionIndex] ? "emerald" : "rose")}
+                                </div>`
+                            )
+                            .join("")}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                      <h3 class="text-xl font-bold">Review the ones you marked wrong</h3>
+                      ${missed.length === 0
+                        ? `<div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800">Excellent. You marked every question right.</div>`
+                        : `
+                          <div class="mt-4 space-y-4">
+                            ${missed
+                              .map((question) => {
+                                const questionIndex = questions.findIndex((item) => item.id === question.id);
+                                return `
+                                  <div class="rounded-2xl border border-slate-200 overflow-hidden">
+                                    <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                                      <div class="font-semibold">Q${questionIndex + 1}. ${escapeHtml(question.type)}</div>
+                                      <div class="text-sm text-slate-600 mt-1">${escapeHtml(question.prompt)}</div>
+                                    </div>
+                                    <div class="p-4 space-y-4">
+                                      ${sqlBlock("Your SQL", state.answers[questionIndex])}
+                                      ${sqlBlock("Expected SQL", question.expectedSQL)}
+                                    </div>
+                                  </div>
+                                `;
+                              })
+                              .join("")}
+                          </div>
+                        `}
+                    </div>
+                  </div>
+                </div>
+              `}
+          </div>
+        `;
+
+        const sqlAnswer = document.getElementById("sql-answer");
+        if (sqlAnswer) {
+          sqlAnswer.addEventListener("input", (event) => {
+            state.answers[state.index] = event.target.value;
+          });
+        }
+
+        const compareButton = document.getElementById("compare-button");
+        if (compareButton) {
+          compareButton.addEventListener("click", () => {
+            state.stage = "review";
+            render();
+          });
+        }
+
+        const rightButton = document.getElementById("right-button");
+        if (rightButton) {
+          rightButton.addEventListener("click", () => markQuestion(true));
+        }
+
+        const wrongButton = document.getElementById("wrong-button");
+        if (wrongButton) {
+          wrongButton.addEventListener("click", () => markQuestion(false));
+        }
+
+        const restartButton = document.getElementById("restart-button");
+        if (restartButton) {
+          restartButton.addEventListener("click", restart);
+        }
+      }
+
+      render();
+    </script>
+  </body>
+</html>
