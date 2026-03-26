@@ -857,11 +857,29 @@
       }
 
       function renderInstructionSet() {
-        const header = "<tr><th>Instruction</th><th>Description</th></tr>";
-        const body = instructionSetRows
-          .map(([instruction, description]) => `<tr><td><code>${instruction}</code></td><td>${description}</td></tr>`)
-          .join("");
-        ui.instructionSetTable.innerHTML = `${header}${body}`;
+        ui.instructionSetTable.textContent = "";
+
+        const headerRow = document.createElement("tr");
+        const instructionHeader = document.createElement("th");
+        instructionHeader.textContent = "Instruction";
+        const descriptionHeader = document.createElement("th");
+        descriptionHeader.textContent = "Description";
+        headerRow.append(instructionHeader, descriptionHeader);
+        ui.instructionSetTable.appendChild(headerRow);
+
+        instructionSetRows.forEach(([instruction, description]) => {
+          const row = document.createElement("tr");
+          const instructionCell = document.createElement("td");
+          const descriptionCell = document.createElement("td");
+          const instructionCode = document.createElement("code");
+
+          instructionCode.textContent = instruction;
+          descriptionCell.textContent = description;
+
+          instructionCell.appendChild(instructionCode);
+          row.append(instructionCell, descriptionCell);
+          ui.instructionSetTable.appendChild(row);
+        });
       }
 
       function populateSelectors() {
