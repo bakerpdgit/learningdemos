@@ -57,7 +57,7 @@
       }
       .button-row {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 0.5rem;
         margin-bottom: 0.8rem;
       }
@@ -134,7 +134,7 @@
   </head>
   <body>
     <header>
-      <h1>AQA Assembly Challenges (Literal AQA Instruction Set Simulator)</h1>
+      <h1>AQA Assembly Challenges</h1>
     </header>
     <main>
       <section class="panel">
@@ -154,6 +154,7 @@
           <button id="stepBtn">STEP</button>
           <button id="resetBtn">RESET SCENARIO</button>
           <button id="testBtn" class="success">TEST SCENARIO</button>
+          <button id="solutionBtn">LOAD SOLUTION</button>
         </div>
         <textarea id="editor" spellcheck="false"></textarea>
         <div class="small">Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; immediate values must use decimal <code>#</code>; only registers <code>R1..R12</code>; memory refs are decimal addresses <code>100..199</code>.</div>
@@ -169,6 +170,7 @@
         <div class="tables">
           <div>
             <h3>Registers (R1-R12)</h3>
+            <label class="small"><input type="checkbox" id="binaryToggle" /> View registers in binary</label>
             <table id="registerTable"></table>
           </div>
           <div>
@@ -205,7 +207,7 @@
         {
           id: 2,
           title: "Absolute difference",
-          prompt: "Store |memory[130] - memory[131]| into memory[132].",
+          prompt: "Store |memory[130] - memory[131]| into memory[132]. Here || means absolute value, e.g. |-7| = 7.",
           starter: "START:\n\tLDR R1, 130\n\tLDR R2, 131\n\tCMP R1, R2\n\tBGT FIRSTBIG\n\tSUB R3, R2, R1\n\tB STORE\nFIRSTBIG:\n\tSUB R3, R1, R2\nSTORE:\n\tSTR R3, 132\n\tHALT",
           scenarios: [
             { name: "A: first larger", registers: {}, memory: {130: 30, 131: 11}, check: (s) => s.memory[132] === 19 },
@@ -225,10 +227,10 @@
         {
           id: 4,
           title: "Multiply by repeated addition",
-          prompt: "Compute memory[150] * memory[151] using a loop (no shift shortcut) and store in memory[152].",
+          prompt: "Compute memory[150] * memory[151] using a loop and store in memory[152].",
           starter: "START:\n\tLDR R1, 150\n\tLDR R2, 151\n\tMOV R3, #0\nLOOP:\n\tCMP R2, #0\n\tBEQ DONE\n\tADD R3, R3, R1\n\tSUB R2, R2, #1\n\tB LOOP\nDONE:\n\tSTR R3, 152\n\tHALT",
           scenarios: [
-            { name:"A: 6 x 4", registers:{}, memory:{150:6,151:4}, check:(s)=>s.memory[152]===24 },
+            { name:"A: 6 x 5", registers:{}, memory:{150:6,151:5}, check:(s)=>s.memory[152]===30 },
             { name:"B: multiply by zero", registers:{}, memory:{150:17,151:0}, check:(s)=>s.memory[152]===0 }
           ]
         },
@@ -255,7 +257,7 @@
         {
           id: 7,
           title: "Shift-based scaling",
-          prompt: "Calculate (memory[180] << 2) + (memory[181] >> 1), store in memory[182].",
+          prompt: "Calculate (memory[180] << 2) + (memory[181] >> 1), store in memory[182]. Here << means left shift (×2 each shift) and >> means right shift (÷2 each shift, integer).",
           starter: "START:\n\tLDR R1, 180\n\tLDR R2, 181\n\tLSL R3, R1, #2\n\tLSR R4, R2, #1\n\tADD R5, R3, R4\n\tSTR R5, 182\n\tHALT",
           scenarios: [
             { name:"A: odd right shift", registers:{}, memory:{180:3,181:9}, check:(s)=>s.memory[182]===((3<<2)+(9>>>1)) },
@@ -326,6 +328,8 @@
         stepBtn: document.getElementById("stepBtn"),
         resetBtn: document.getElementById("resetBtn"),
         testBtn: document.getElementById("testBtn"),
+        solutionBtn: document.getElementById("solutionBtn"),
+        binaryToggle: document.getElementById("binaryToggle"),
         registerTable: document.getElementById("registerTable"),
         memoryTable: document.getElementById("memoryTable"),
         pc: document.getElementById("pc"),
@@ -343,7 +347,8 @@
         crashed: false,
         crashMessage: "",
         program: null,
-        runTimer: null
+        runTimer: null,
+        stepPending: false
       };
 
       function toInt32(v) { return v | 0; }
@@ -394,11 +399,20 @@
           ui.machineState.textContent = "Stopped";
         }
 
-        let rHtml = "<tr>";
-        for (let i = 1; i <= 12; i += 1) rHtml += `<th>R${i}</th>`;
-        rHtml += "</tr><tr>";
-        for (let i = 1; i <= 12; i += 1) rHtml += `<td>${state.registers[i]}</td>`;
-        rHtml += "</tr>";
+        let rHtml = "";
+        if (ui.binaryToggle.checked) {
+          rHtml += "<tr><th>Register</th><th>Value (binary)</th></tr>";
+          for (let i = 1; i <= 12; i += 1) {
+            const binary = (state.registers[i] >>> 0).toString(2).padStart(32, "0");
+            rHtml += `<tr><td>R${i}</td><td>0b${binary}</td></tr>`;
+          }
+        } else {
+          rHtml += "<tr>";
+          for (let i = 1; i <= 12; i += 1) rHtml += `<th>R${i}</th>`;
+          rHtml += "</tr><tr>";
+          for (let i = 1; i <= 12; i += 1) rHtml += `<td>${state.registers[i]}</td>`;
+          rHtml += "</tr>";
+        }
         ui.registerTable.innerHTML = rHtml;
 
         let mHtml = "";
@@ -638,6 +652,23 @@
         if (state.halted) setStatus(`HALT reached at line ${ins.lineNo}.`, "ok");
       }
 
+      function lineRange(lineNo) {
+        const lines = ui.editor.value.replace(/\r/g, "").split("\n");
+        let start = 0;
+        for (let i = 0; i < lineNo - 1; i += 1) start += lines[i].length + 1;
+        return { start, end: start + (lines[lineNo - 1] || "").length };
+      }
+
+      function highlightCurrentInstruction() {
+        if (!state.program) return;
+        const ins = state.program.instructions[state.pc];
+        if (!ins) return;
+        const range = lineRange(ins.lineNo);
+        ui.editor.focus();
+        ui.editor.selectionStart = range.start;
+        ui.editor.selectionEnd = range.end;
+      }
+
       function crash(msg) {
         state.crashed = true;
         state.running = false;
@@ -703,6 +734,7 @@
       }
 
       function stepOnce() {
+        if (state.stepPending) return;
         if (state.running) {
           state.running = false;
           clearInterval(state.runTimer);
@@ -715,7 +747,13 @@
         }
         if (state.halted || state.crashed) resetMachineFromScenario();
         if (!prepareProgram()) return;
-        executeInstruction();
+        highlightCurrentInstruction();
+        state.stepPending = true;
+        setTimeout(() => {
+          executeInstruction();
+          highlightCurrentInstruction();
+          state.stepPending = false;
+        }, 80);
       }
 
       function runForTesting() {
@@ -750,7 +788,14 @@
       function renderChallenge() {
         const challenge = challengeData[Number(ui.problemSelect.value)];
         ui.challengeText.innerHTML = `<strong>Problem ${challenge.id} of 12 — ${challenge.title}</strong><pre>${challenge.prompt}</pre>`;
+        ui.editor.value = "";
+      }
+
+      function loadSolution() {
+        const challenge = challengeData[Number(ui.problemSelect.value)];
         ui.editor.value = challenge.starter;
+        state.program = null;
+        setStatus("Worked solution loaded into the editor.");
       }
 
       function populateSelectors() {
@@ -772,6 +817,8 @@
       ui.runBtn.addEventListener("click", runProgram);
       ui.stepBtn.addEventListener("click", stepOnce);
       ui.testBtn.addEventListener("click", testScenario);
+      ui.solutionBtn.addEventListener("click", loadSolution);
+      ui.binaryToggle.addEventListener("change", updateTables);
 
       ui.editor.addEventListener("keydown", (event) => {
         if (event.key === "Tab") {
