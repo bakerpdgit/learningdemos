@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA Assembly Challenges Simulator</title>
+    <style>
+      :root {
+        --bg: #f3f6fb;
+        --panel: #ffffff;
+        --ink: #1f2937;
+        --accent: #2563eb;
+        --danger: #b91c1c;
+        --ok: #047857;
+        --border: #d1d5db;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+      header {
+        background: var(--accent);
+        color: white;
+        padding: 1rem 1.2rem;
+      }
+      header h1 { margin: 0; font-size: 1.3rem; }
+      main {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 1rem;
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(500px, 1.1fr) minmax(420px, 0.9fr);
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.9rem;
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6rem;
+        margin-bottom: 0.8rem;
+      }
+      .controls label { font-weight: 600; font-size: 0.9rem; display:block; margin-bottom:0.3rem; }
+      select, button {
+        width: 100%;
+        border-radius: 6px;
+        border: 1px solid #9ca3af;
+        padding: 0.5rem;
+        font-size: 0.95rem;
+      }
+      .button-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+        margin-bottom: 0.8rem;
+      }
+      button {
+        background: #f9fafb;
+        cursor: pointer;
+      }
+      button:hover { background: #f3f4f6; }
+      button.primary { background: var(--accent); color:white; border-color: #1e40af; }
+      button.warning { background:#fef2f2; border-color:#fca5a5; color:#7f1d1d; }
+      button.success { background:#ecfdf5; border-color:#6ee7b7; color:#065f46; }
+      #editor {
+        width: 100%;
+        min-height: 330px;
+        resize: vertical;
+        border: 1px solid #9ca3af;
+        border-radius: 6px;
+        padding: 0.7rem;
+        tab-size: 4;
+        font-family: Consolas, Monaco, "Courier New", monospace;
+        white-space: pre;
+        line-height: 1.3;
+      }
+      .challenge-text {
+        margin: 0.6rem 0 0.8rem;
+        padding: 0.6rem;
+        border: 1px solid var(--border);
+        background: #f8fafc;
+        border-radius: 6px;
+      }
+      .challenge-text pre {
+        margin: 0.4rem 0 0;
+        white-space: pre-wrap;
+        font-family: Consolas, Monaco, "Courier New", monospace;
+      }
+      .status {
+        margin-top: 0.8rem;
+        border: 1px solid var(--border);
+        background: #f8fafc;
+        border-radius: 6px;
+        padding: 0.6rem;
+        min-height: 88px;
+      }
+      .status.ok { border-color: #34d399; background: #ecfdf5; }
+      .status.error { border-color: #f87171; background: #fef2f2; }
+      .small { font-size:0.84rem; color:#374151; }
+      .tables {
+        display: grid;
+        gap: 0.8rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+      }
+      th, td {
+        border: 1px solid #d1d5db;
+        padding: 0.25rem 0.35rem;
+        text-align: center;
+      }
+      th { background: #eff6ff; }
+      #memoryTable td.row-label { background:#f1f5f9; font-weight:600; }
+      .crash { color: var(--danger); font-weight: 700; }
+      .halt { color: var(--ok); font-weight: 700; }
+      .meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap:0.6rem;
+        margin-bottom: 0.6rem;
+      }
+      .meta div { padding:0.45rem; border:1px solid var(--border); border-radius: 6px; background:#f9fafb; }
+      @media (max-width: 1200px) { main { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>AQA Assembly Challenges (Literal AQA Instruction Set Simulator)</h1>
+    </header>
+    <main>
+      <section class="panel">
+        <div class="controls">
+          <div>
+            <label for="problemSelect">Challenge</label>
+            <select id="problemSelect"></select>
+          </div>
+          <div>
+            <label for="scenarioSelect">Scenario</label>
+            <select id="scenarioSelect"></select>
+          </div>
+        </div>
+        <div id="challengeText" class="challenge-text"></div>
+        <div class="button-row">
+          <button id="runBtn" class="primary">RUN</button>
+          <button id="stepBtn">STEP</button>
+          <button id="resetBtn">RESET SCENARIO</button>
+          <button id="testBtn" class="success">TEST SCENARIO</button>
+        </div>
+        <textarea id="editor" spellcheck="false"></textarea>
+        <div class="small">Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; immediate values must use decimal <code>#</code>; only registers <code>R1..R12</code>; memory refs are decimal addresses <code>100..199</code>.</div>
+        <div id="status" class="status">Ready.</div>
+      </section>
+
+      <section class="panel">
+        <div class="meta">
+          <div><strong>PC:</strong> <span id="pc">0</span></div>
+          <div><strong>CMP Flag:</strong> <span id="cmpFlag">N/A</span></div>
+          <div><strong>State:</strong> <span id="machineState">Stopped</span></div>
+        </div>
+        <div class="tables">
+          <div>
+            <h3>Registers (R1-R12)</h3>
+            <table id="registerTable"></table>
+          </div>
+          <div>
+            <h3>Memory 100-199 (10x10)</h3>
+            <table id="memoryTable"></table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const MAX_STEPS = 10000;
+      const challengeData = [
+        {
+          id: 1,
+          title: "Conditional overwrite from two memory cells",
+          prompt: "Load memory[120] and memory[121], add them, and if the sum is greater than memory[122], store the sum in memory[122].",
+          starter: "START:\n\tLDR R1, 120\n\tLDR R2, 121\n\tADD R3, R1, R2\n\tLDR R4, 122\n\tCMP R3, R4\n\tBGT OVERWRITE\n\tHALT\nOVERWRITE:\n\tSTR R3, 122\n\tHALT",
+          scenarios: [
+            {
+              name: "A: overwrite expected",
+              registers: {},
+              memory: {120: 9, 121: 8, 122: 12},
+              check: (state) => state.memory[122] === 17
+            },
+            {
+              name: "B: no overwrite",
+              registers: {},
+              memory: {120: 4, 121: 3, 122: 20},
+              check: (state) => state.memory[122] === 20
+            }
+          ]
+        },
+        {
+          id: 2,
+          title: "Absolute difference",
+          prompt: "Store |memory[130] - memory[131]| into memory[132].",
+          starter: "START:\n\tLDR R1, 130\n\tLDR R2, 131\n\tCMP R1, R2\n\tBGT FIRSTBIG\n\tSUB R3, R2, R1\n\tB STORE\nFIRSTBIG:\n\tSUB R3, R1, R2\nSTORE:\n\tSTR R3, 132\n\tHALT",
+          scenarios: [
+            { name: "A: first larger", registers: {}, memory: {130: 30, 131: 11}, check: (s) => s.memory[132] === 19 },
+            { name: "B: second larger", registers: {}, memory: {130: 7, 131: 16}, check: (s) => s.memory[132] === 9 }
+          ]
+        },
+        {
+          id: 3,
+          title: "Count matching values across fixed cells",
+          prompt: "Count how many of memory[140], memory[141], memory[142], memory[143], memory[144] equal memory[145]. Store count in memory[146].",
+          starter: "START:\n\tMOV R2, #0\n\tLDR R3, 145\n\tLDR R4, 140\n\tCMP R4, R3\n\tBNE C141\n\tADD R2, R2, #1\nC141:\n\tLDR R4, 141\n\tCMP R4, R3\n\tBNE C142\n\tADD R2, R2, #1\nC142:\n\tLDR R4, 142\n\tCMP R4, R3\n\tBNE C143\n\tADD R2, R2, #1\nC143:\n\tLDR R4, 143\n\tCMP R4, R3\n\tBNE C144\n\tADD R2, R2, #1\nC144:\n\tLDR R4, 144\n\tCMP R4, R3\n\tBNE END\n\tADD R2, R2, #1\nEND:\n\tSTR R2, 146\n\tHALT",
+          scenarios: [
+            { name: "A: three matches", registers: {}, memory: {140: 2,141: 9,142: 2,143: 2,144: 8,145:2}, check: (s)=>s.memory[146]===3 },
+            { name: "B: zero matches", registers: {}, memory: {140: 1,141:3,142:5,143:7,144:9,145:2}, check: (s)=>s.memory[146]===0 }
+          ]
+        },
+        {
+          id: 4,
+          title: "Multiply by repeated addition",
+          prompt: "Compute memory[150] * memory[151] using a loop (no shift shortcut) and store in memory[152].",
+          starter: "START:\n\tLDR R1, 150\n\tLDR R2, 151\n\tMOV R3, #0\nLOOP:\n\tCMP R2, #0\n\tBEQ DONE\n\tADD R3, R3, R1\n\tSUB R2, R2, #1\n\tB LOOP\nDONE:\n\tSTR R3, 152\n\tHALT",
+          scenarios: [
+            { name:"A: 6 x 4", registers:{}, memory:{150:6,151:4}, check:(s)=>s.memory[152]===24 },
+            { name:"B: multiply by zero", registers:{}, memory:{150:17,151:0}, check:(s)=>s.memory[152]===0 }
+          ]
+        },
+        {
+          id: 5,
+          title: "Bit mask extract",
+          prompt: "Use AND to isolate the lowest 4 bits of memory[160], store result in memory[161].",
+          starter: "START:\n\tLDR R1, 160\n\tAND R2, R1, #15\n\tSTR R2, 161\n\tHALT",
+          scenarios: [
+            { name:"A: mixed bits", registers:{}, memory:{160:173}, check:(s)=>s.memory[161]===(173 & 15) },
+            { name:"B: already small", registers:{}, memory:{160:12}, check:(s)=>s.memory[161]===12 }
+          ]
+        },
+        {
+          id: 6,
+          title: "Build bit pattern",
+          prompt: "Create value (memory[170] OR memory[171]) XOR memory[172], store in memory[173].",
+          starter: "START:\n\tLDR R1, 170\n\tLDR R2, 171\n\tLDR R3, 172\n\tORR R4, R1, R2\n\tEOR R5, R4, R3\n\tSTR R5, 173\n\tHALT",
+          scenarios: [
+            { name:"A: non-trivial", registers:{}, memory:{170:10,171:12,172:7}, check:(s)=>s.memory[173]===((10|12)^7) },
+            { name:"B: zero xor", registers:{}, memory:{170:5,171:2,172:0}, check:(s)=>s.memory[173]===(5|2) }
+          ]
+        },
+        {
+          id: 7,
+          title: "Shift-based scaling",
+          prompt: "Calculate (memory[180] << 2) + (memory[181] >> 1), store in memory[182].",
+          starter: "START:\n\tLDR R1, 180\n\tLDR R2, 181\n\tLSL R3, R1, #2\n\tLSR R4, R2, #1\n\tADD R5, R3, R4\n\tSTR R5, 182\n\tHALT",
+          scenarios: [
+            { name:"A: odd right shift", registers:{}, memory:{180:3,181:9}, check:(s)=>s.memory[182]===((3<<2)+(9>>>1)) },
+            { name:"B: zero case", registers:{}, memory:{180:0,181:1}, check:(s)=>s.memory[182]===0 }
+          ]
+        },
+        {
+          id: 8,
+          title: "Two's complement invert and add one",
+          prompt: "Produce two's complement negation of memory[183] using MVN and ADD #1. Store in memory[184].",
+          starter: "START:\n\tLDR R1, 183\n\tMVN R2, R1\n\tADD R2, R2, #1\n\tSTR R2, 184\n\tHALT",
+          scenarios: [
+            { name:"A: value 9", registers:{}, memory:{183:9}, check:(s)=>s.memory[184]===(-9|0) },
+            { name:"B: zero", registers:{}, memory:{183:0}, check:(s)=>s.memory[184]===0 }
+          ]
+        },
+        {
+          id: 9,
+          title: "Minimum of three values",
+          prompt: "Find min(memory[185], memory[186], memory[187]) and store it in memory[188].",
+          starter: "START:\n\tLDR R1, 185\n\tLDR R2, 186\n\tLDR R3, 187\n\tMOV R4, R1\n\tCMP R2, R4\n\tBLT TAKE2\n\tB C3\nTAKE2:\n\tMOV R4, R2\nC3:\n\tCMP R3, R4\n\tBLT TAKE3\n\tB DONE\nTAKE3:\n\tMOV R4, R3\nDONE:\n\tSTR R4, 188\n\tHALT",
+          scenarios: [
+            { name:"A: third smallest", registers:{}, memory:{185:8,186:10,187:2}, check:(s)=>s.memory[188]===2 },
+            { name:"B: first smallest", registers:{}, memory:{185:1,186:9,187:5}, check:(s)=>s.memory[188]===1 }
+          ]
+        },
+        {
+          id: 10,
+          title: "Challenge in AQA pseudocode: clamp to range",
+          prompt: "Convert this pseudocode:\nIF M[190] < 0 THEN\n    M[191] <- 0\nELSE\n    IF M[190] > 255 THEN\n        M[191] <- 255\n    ELSE\n        M[191] <- M[190]\n    ENDIF\nENDIF",
+          starter: "START:\n\tLDR R1, 190\n\tCMP R1, #0\n\tBLT LOW\n\tCMP R1, #255\n\tBGT HIGH\n\tSTR R1, 191\n\tHALT\nLOW:\n\tMOV R2, #0\n\tSTR R2, 191\n\tHALT\nHIGH:\n\tMOV R2, #255\n\tSTR R2, 191\n\tHALT",
+          scenarios: [
+            { name:"A: below range", registers:{}, memory:{190:-6}, check:(s)=>s.memory[191]===0 },
+            { name:"B: above range", registers:{}, memory:{190:400}, check:(s)=>s.memory[191]===255 },
+            { name:"C: inside range", registers:{}, memory:{190:77}, check:(s)=>s.memory[191]===77 }
+          ]
+        },
+        {
+          id: 11,
+          title: "Count set bits in low nibble",
+          prompt: "Count how many of the lowest 4 bits of memory[192] are 1. Store count in memory[193].",
+          starter: "START:\n\tLDR R1, 192\n\tMOV R2, #0\n\tMOV R3, #0\nLOOP:\n\tCMP R3, #4\n\tBEQ DONE\n\tAND R4, R1, #1\n\tADD R2, R2, R4\n\tLSR R1, R1, #1\n\tADD R3, R3, #1\n\tB LOOP\nDONE:\n\tSTR R2, 193\n\tHALT",
+          scenarios: [
+            { name:"A: 1101b", registers:{}, memory:{192:13}, check:(s)=>s.memory[193]===3 },
+            { name:"B: 0000b", registers:{}, memory:{192:0}, check:(s)=>s.memory[193]===0 }
+          ]
+        },
+        {
+          id: 12,
+          title: "Hard: compare weighted sums and set flag",
+          prompt: "Compute A=(M[194]<<1)+M[195], B=(M[196]<<1)+M[197]. If A==B set M[198]=0, if A>B set M[198]=1, else set M[198]=-1.",
+          starter: "START:\n\tLDR R1, 194\n\tLDR R2, 195\n\tLDR R3, 196\n\tLDR R4, 197\n\tLSL R5, R1, #1\n\tADD R5, R5, R2\n\tLSL R6, R3, #1\n\tADD R6, R6, R4\n\tCMP R5, R6\n\tBEQ EQCASE\n\tBGT GTCASE\n\tMOV R7, #-1\n\tSTR R7, 198\n\tHALT\nEQCASE:\n\tMOV R7, #0\n\tSTR R7, 198\n\tHALT\nGTCASE:\n\tMOV R7, #1\n\tSTR R7, 198\n\tHALT",
+          scenarios: [
+            { name:"A: A>B", registers:{}, memory:{194:7,195:1,196:2,197:5}, check:(s)=>s.memory[198]===1 },
+            { name:"B: A<B", registers:{}, memory:{194:1,195:0,196:3,197:0}, check:(s)=>s.memory[198]===-1 },
+            { name:"C: A==B", registers:{}, memory:{194:4,195:1,196:2,197:5}, check:(s)=>s.memory[198]===0 }
+          ]
+        }
+      ];
+
+      const ui = {
+        problemSelect: document.getElementById("problemSelect"),
+        scenarioSelect: document.getElementById("scenarioSelect"),
+        challengeText: document.getElementById("challengeText"),
+        editor: document.getElementById("editor"),
+        status: document.getElementById("status"),
+        runBtn: document.getElementById("runBtn"),
+        stepBtn: document.getElementById("stepBtn"),
+        resetBtn: document.getElementById("resetBtn"),
+        testBtn: document.getElementById("testBtn"),
+        registerTable: document.getElementById("registerTable"),
+        memoryTable: document.getElementById("memoryTable"),
+        pc: document.getElementById("pc"),
+        cmpFlag: document.getElementById("cmpFlag"),
+        machineState: document.getElementById("machineState")
+      };
+
+      const state = {
+        registers: Array(13).fill(0),
+        memory: Array(100).fill(0),
+        pc: 0,
+        cmp: null,
+        running: false,
+        halted: false,
+        crashed: false,
+        crashMessage: "",
+        program: null,
+        runTimer: null
+      };
+
+      function toInt32(v) { return v | 0; }
+      function setStatus(message, kind = "") {
+        ui.status.className = "status" + (kind ? ` ${kind}` : "");
+        ui.status.innerHTML = message;
+      }
+
+      function resetMachineFromScenario() {
+        const challenge = challengeData[Number(ui.problemSelect.value)];
+        const scenario = challenge.scenarios[Number(ui.scenarioSelect.value)];
+        state.registers = Array(13).fill(0);
+        state.memory = Array(100).fill(0);
+        Object.entries(scenario.registers).forEach(([reg, value]) => {
+          const idx = Number(reg.replace("R", ""));
+          if (idx >= 1 && idx <= 12) state.registers[idx] = toInt32(value);
+        });
+        Object.entries(scenario.memory).forEach(([addrStr, value]) => {
+          const addr = Number(addrStr);
+          if (addr >= 100 && addr <= 199) state.memory[addr - 100] = toInt32(value);
+        });
+        state.pc = 0;
+        state.cmp = null;
+        state.running = false;
+        state.halted = false;
+        state.crashed = false;
+        state.crashMessage = "";
+        if (state.runTimer) {
+          clearInterval(state.runTimer);
+          state.runTimer = null;
+        }
+        ui.runBtn.textContent = "RUN";
+        ui.stepBtn.textContent = "STEP";
+        updateTables();
+        setStatus("Scenario reset. Ready to run.");
+      }
+
+      function updateTables() {
+        ui.pc.textContent = String(state.pc);
+        ui.cmpFlag.textContent = state.cmp === null ? "N/A" : (state.cmp > 0 ? "GT" : state.cmp < 0 ? "LT" : "EQ");
+        if (state.crashed) {
+          ui.machineState.innerHTML = `<span class='crash'>CRASHED</span>`;
+        } else if (state.halted) {
+          ui.machineState.innerHTML = `<span class='halt'>HALTED</span>`;
+        } else if (state.running) {
+          ui.machineState.textContent = "Running";
+        } else {
+          ui.machineState.textContent = "Stopped";
+        }
+
+        let rHtml = "<tr>";
+        for (let i = 1; i <= 12; i += 1) rHtml += `<th>R${i}</th>`;
+        rHtml += "</tr><tr>";
+        for (let i = 1; i <= 12; i += 1) rHtml += `<td>${state.registers[i]}</td>`;
+        rHtml += "</tr>";
+        ui.registerTable.innerHTML = rHtml;
+
+        let mHtml = "";
+        for (let row = 0; row < 10; row += 1) {
+          const base = 100 + row * 10;
+          mHtml += "<tr>";
+          mHtml += `<td class='row-label'>${base}</td>`;
+          for (let col = 0; col < 10; col += 1) {
+            mHtml += `<td>${state.memory[row * 10 + col]}</td>`;
+          }
+          mHtml += "</tr>";
+        }
+        ui.memoryTable.innerHTML = mHtml;
+      }
+
+      function parseRegister(token, lineNo) {
+        const m = /^R(\d{1,2})$/.exec(token);
+        if (!m) throw new Error(`Line ${lineNo}: invalid register '${token}'. Use R1..R12.`);
+        const idx = Number(m[1]);
+        if (idx < 1 || idx > 12) throw new Error(`Line ${lineNo}: register out of range '${token}'. Only R1..R12 exist.`);
+        return idx;
+      }
+
+      function parseOperand2(token, lineNo) {
+        if (/^#-?\d+$/.test(token)) return { type: "imm", value: Number(token.slice(1)) };
+        if (/^R\d{1,2}$/.test(token)) return { type: "reg", value: parseRegister(token, lineNo) };
+        throw new Error(`Line ${lineNo}: invalid operand2 '${token}'. Use #decimal or Rm.`);
+      }
+
+      function parseMemoryRef(token, lineNo) {
+        if (!/^-?\d+$/.test(token)) throw new Error(`Line ${lineNo}: invalid memory reference '${token}'. Must be decimal address 100..199.`);
+        const addr = Number(token);
+        if (addr < 100 || addr > 199) throw new Error(`Line ${lineNo}: memory address ${addr} out of range (100..199).`);
+        return addr;
+      }
+
+      function parseProgram(source) {
+        const lines = source.replace(/\r/g, "").split("\n");
+        const instructions = [];
+        const labels = {};
+
+        for (let i = 0; i < lines.length; i += 1) {
+          const raw = lines[i];
+          const lineNo = i + 1;
+          if (raw.trim() === "") continue;
+
+          if (/^\s*;/.test(raw)) continue;
+
+          const trimmed = raw.trim();
+          if (trimmed.endsWith(":")) {
+            if (/^\s/.test(raw)) throw new Error(`Line ${lineNo}: labels must not be indented.`);
+            const labelName = trimmed.slice(0, -1);
+            if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(labelName)) throw new Error(`Line ${lineNo}: invalid label name '${labelName}'.`);
+            if (labels[labelName] !== undefined) throw new Error(`Line ${lineNo}: duplicate label '${labelName}'.`);
+            labels[labelName] = instructions.length;
+            continue;
+          }
+
+          if (/^[A-Za-z_][A-Za-z0-9_]*\s+/.test(raw) && !/^\s/.test(raw)) {
+            throw new Error(`Line ${lineNo}: instruction lines must be indented. If this is a label, add ':'.`);
+          }
+          if (!/^\s/.test(raw)) {
+            throw new Error(`Line ${lineNo}: instruction lines must be indented with spaces or tab.`);
+          }
+
+          const body = trimmed;
+          const spaceIdx = body.indexOf(" ");
+          const op = (spaceIdx === -1 ? body : body.slice(0, spaceIdx)).toUpperCase();
+          const argText = spaceIdx === -1 ? "" : body.slice(spaceIdx + 1).trim();
+          const args = argText === "" ? [] : argText.split(",").map((a) => a.trim()).filter((a) => a !== "");
+
+          const inst = { op, args, lineNo, text: trimmed };
+
+          switch (op) {
+            case "HALT":
+              if (args.length !== 0) throw new Error(`Line ${lineNo}: HALT takes no operands.`);
+              break;
+            case "LDR":
+            case "STR":
+              if (args.length !== 2) throw new Error(`Line ${lineNo}: ${op} needs 2 operands.`);
+              parseRegister(args[0], lineNo);
+              parseMemoryRef(args[1], lineNo);
+              break;
+            case "MOV":
+            case "MVN":
+              if (args.length !== 2) throw new Error(`Line ${lineNo}: ${op} needs 2 operands.`);
+              parseRegister(args[0], lineNo);
+              parseOperand2(args[1], lineNo);
+              break;
+            case "ADD":
+            case "SUB":
+            case "AND":
+            case "ORR":
+            case "EOR":
+            case "LSL":
+            case "LSR":
+              if (args.length !== 3) throw new Error(`Line ${lineNo}: ${op} needs 3 operands.`);
+              parseRegister(args[0], lineNo);
+              parseRegister(args[1], lineNo);
+              parseOperand2(args[2], lineNo);
+              break;
+            case "CMP":
+              if (args.length !== 2) throw new Error(`Line ${lineNo}: CMP needs 2 operands.`);
+              parseRegister(args[0], lineNo);
+              parseOperand2(args[1], lineNo);
+              break;
+            case "B":
+            case "BEQ":
+            case "BNE":
+            case "BGT":
+            case "BLT":
+              if (args.length !== 1) throw new Error(`Line ${lineNo}: ${op} needs one label.`);
+              if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(args[0])) throw new Error(`Line ${lineNo}: invalid label reference '${args[0]}'.`);
+              break;
+            default:
+              throw new Error(`Line ${lineNo}: instruction '${op}' is not in the AQA set.`);
+          }
+
+          instructions.push(inst);
+        }
+
+        instructions.forEach((ins) => {
+          if (["B", "BEQ", "BNE", "BGT", "BLT"].includes(ins.op)) {
+            if (labels[ins.args[0]] === undefined) throw new Error(`Line ${ins.lineNo}: branch target label '${ins.args[0]}' not found.`);
+          }
+        });
+
+        return { instructions, labels };
+      }
+
+      function operandValue(op2, lineNo) {
+        if (op2.type === "imm") return toInt32(op2.value);
+        if (op2.type === "reg") return toInt32(state.registers[op2.value]);
+        throw new Error(`Line ${lineNo}: internal operand error.`);
+      }
+
+      function executeInstruction() {
+        if (!state.program) state.program = parseProgram(ui.editor.value);
+        const { instructions, labels } = state.program;
+
+        if (state.pc < 0 || state.pc >= instructions.length) {
+          crash(`Program crashed: execution moved beyond last instruction without HALT.`);
+          return;
+        }
+
+        const ins = instructions[state.pc];
+        const nextPc = state.pc + 1;
+
+        try {
+          switch (ins.op) {
+            case "HALT":
+              state.halted = true;
+              state.running = false;
+              break;
+            case "LDR": {
+              const rd = parseRegister(ins.args[0], ins.lineNo);
+              const addr = parseMemoryRef(ins.args[1], ins.lineNo);
+              state.registers[rd] = toInt32(state.memory[addr - 100]);
+              state.pc = nextPc;
+              break;
+            }
+            case "STR": {
+              const rd = parseRegister(ins.args[0], ins.lineNo);
+              const addr = parseMemoryRef(ins.args[1], ins.lineNo);
+              state.memory[addr - 100] = toInt32(state.registers[rd]);
+              state.pc = nextPc;
+              break;
+            }
+            case "MOV":
+            case "MVN": {
+              const rd = parseRegister(ins.args[0], ins.lineNo);
+              const op2 = parseOperand2(ins.args[1], ins.lineNo);
+              let value = operandValue(op2, ins.lineNo);
+              if (ins.op === "MVN") value = ~value;
+              state.registers[rd] = toInt32(value);
+              state.pc = nextPc;
+              break;
+            }
+            case "ADD":
+            case "SUB":
+            case "AND":
+            case "ORR":
+            case "EOR":
+            case "LSL":
+            case "LSR": {
+              const rd = parseRegister(ins.args[0], ins.lineNo);
+              const rn = parseRegister(ins.args[1], ins.lineNo);
+              const op2 = parseOperand2(ins.args[2], ins.lineNo);
+              const a = toInt32(state.registers[rn]);
+              const b = operandValue(op2, ins.lineNo);
+              let out;
+              if (ins.op === "ADD") out = a + b;
+              else if (ins.op === "SUB") out = a - b;
+              else if (ins.op === "AND") out = a & b;
+              else if (ins.op === "ORR") out = a | b;
+              else if (ins.op === "EOR") out = a ^ b;
+              else if (ins.op === "LSL") out = a << b;
+              else out = a >>> b;
+              state.registers[rd] = toInt32(out);
+              state.pc = nextPc;
+              break;
+            }
+            case "CMP": {
+              const rn = parseRegister(ins.args[0], ins.lineNo);
+              const op2 = parseOperand2(ins.args[1], ins.lineNo);
+              const a = toInt32(state.registers[rn]);
+              const b = operandValue(op2, ins.lineNo);
+              state.cmp = a === b ? 0 : a > b ? 1 : -1;
+              state.pc = nextPc;
+              break;
+            }
+            case "B":
+            case "BEQ":
+            case "BNE":
+            case "BGT":
+            case "BLT": {
+              const label = ins.args[0];
+              let take = false;
+              if (ins.op === "B") take = true;
+              else if (state.cmp === null) throw new Error(`Line ${ins.lineNo}: conditional branch used before CMP.`);
+              else if (ins.op === "BEQ") take = state.cmp === 0;
+              else if (ins.op === "BNE") take = state.cmp !== 0;
+              else if (ins.op === "BGT") take = state.cmp > 0;
+              else if (ins.op === "BLT") take = state.cmp < 0;
+              state.pc = take ? labels[label] : nextPc;
+              break;
+            }
+            default:
+              throw new Error(`Line ${ins.lineNo}: unsupported instruction '${ins.op}'.`);
+          }
+        } catch (error) {
+          crash(`Program crashed at line ${ins.lineNo}: ${error.message}`);
+          return;
+        }
+
+        updateTables();
+        if (state.halted) setStatus(`HALT reached at line ${ins.lineNo}.`, "ok");
+      }
+
+      function crash(msg) {
+        state.crashed = true;
+        state.running = false;
+        state.halted = false;
+        state.crashMessage = msg;
+        if (state.runTimer) {
+          clearInterval(state.runTimer);
+          state.runTimer = null;
+        }
+        ui.runBtn.textContent = "RUN";
+        ui.stepBtn.textContent = "STEP";
+        setStatus(`<span class='crash'>${msg}</span>`, "error");
+        updateTables();
+      }
+
+      function prepareProgram() {
+        try {
+          state.program = parseProgram(ui.editor.value);
+          return true;
+        } catch (error) {
+          crash(`Program crashed during parsing: ${error.message}`);
+          return false;
+        }
+      }
+
+      function runProgram() {
+        if (state.running) {
+          state.running = false;
+          clearInterval(state.runTimer);
+          state.runTimer = null;
+          ui.runBtn.textContent = "RUN";
+          setStatus("Run stopped.");
+          updateTables();
+          return;
+        }
+        if (state.halted || state.crashed) resetMachineFromScenario();
+        if (!prepareProgram()) return;
+
+        state.running = true;
+        ui.runBtn.textContent = "STOP";
+        setStatus("Running...");
+        let steps = 0;
+        state.runTimer = setInterval(() => {
+          if (!state.running) return;
+          if (state.halted || state.crashed) {
+            state.running = false;
+            clearInterval(state.runTimer);
+            state.runTimer = null;
+            ui.runBtn.textContent = "RUN";
+            return;
+          }
+          executeInstruction();
+          steps += 1;
+          if (steps > MAX_STEPS) crash(`Program crashed: exceeded ${MAX_STEPS} execution steps (possible infinite loop).`);
+          if (state.halted || state.crashed) {
+            state.running = false;
+            clearInterval(state.runTimer);
+            state.runTimer = null;
+            ui.runBtn.textContent = "RUN";
+          }
+        }, 120);
+        updateTables();
+      }
+
+      function stepOnce() {
+        if (state.running) {
+          state.running = false;
+          clearInterval(state.runTimer);
+          state.runTimer = null;
+          ui.stepBtn.textContent = "STEP";
+          ui.runBtn.textContent = "RUN";
+          setStatus("Execution stopped.");
+          updateTables();
+          return;
+        }
+        if (state.halted || state.crashed) resetMachineFromScenario();
+        if (!prepareProgram()) return;
+        executeInstruction();
+      }
+
+      function runForTesting() {
+        resetMachineFromScenario();
+        if (!prepareProgram()) return;
+        let steps = 0;
+        while (!state.halted && !state.crashed && steps <= MAX_STEPS) {
+          executeInstruction();
+          steps += 1;
+        }
+        if (!state.halted && !state.crashed) {
+          crash(`Program crashed: exceeded ${MAX_STEPS} execution steps in test mode.`);
+        }
+      }
+
+      function testScenario() {
+        runForTesting();
+        if (state.crashed) {
+          setStatus(`<span class='crash'>TEST FAILED: program crashed. ${state.crashMessage}</span>`, "error");
+          return;
+        }
+        const challenge = challengeData[Number(ui.problemSelect.value)];
+        const scenario = challenge.scenarios[Number(ui.scenarioSelect.value)];
+        const ok = scenario.check({ registers: state.registers.slice(), memory: Object.fromEntries(state.memory.map((v, i) => [i + 100, v])) });
+        if (ok) {
+          setStatus(`✅ TEST PASSED for Challenge ${challenge.id} (${scenario.name}).`, "ok");
+        } else {
+          setStatus(`❌ TEST FAILED for Challenge ${challenge.id} (${scenario.name}): resulting machine state was not as expected.`, "error");
+        }
+      }
+
+      function renderChallenge() {
+        const challenge = challengeData[Number(ui.problemSelect.value)];
+        ui.challengeText.innerHTML = `<strong>Problem ${challenge.id} of 12 — ${challenge.title}</strong><pre>${challenge.prompt}</pre>`;
+        ui.editor.value = challenge.starter;
+      }
+
+      function populateSelectors() {
+        ui.problemSelect.innerHTML = challengeData.map((c, i) => `<option value='${i}'>Problem ${c.id}: ${c.title}</option>`).join("");
+      }
+
+      function populateScenarios() {
+        const challenge = challengeData[Number(ui.problemSelect.value)];
+        ui.scenarioSelect.innerHTML = challenge.scenarios.map((s, i) => `<option value='${i}'>${s.name}</option>`).join("");
+      }
+
+      ui.problemSelect.addEventListener("change", () => {
+        populateScenarios();
+        renderChallenge();
+        resetMachineFromScenario();
+      });
+      ui.scenarioSelect.addEventListener("change", resetMachineFromScenario);
+      ui.resetBtn.addEventListener("click", resetMachineFromScenario);
+      ui.runBtn.addEventListener("click", runProgram);
+      ui.stepBtn.addEventListener("click", stepOnce);
+      ui.testBtn.addEventListener("click", testScenario);
+
+      ui.editor.addEventListener("keydown", (event) => {
+        if (event.key === "Tab") {
+          event.preventDefault();
+          const start = ui.editor.selectionStart;
+          const end = ui.editor.selectionEnd;
+          const value = ui.editor.value;
+          ui.editor.value = `${value.slice(0, start)}\t${value.slice(end)}`;
+          ui.editor.selectionStart = ui.editor.selectionEnd = start + 1;
+        }
+      });
+
+      populateSelectors();
+      populateScenarios();
+      renderChallenge();
+      resetMachineFromScenario();
+      updateTables();
+    </script>
+  </body>
+</html>
