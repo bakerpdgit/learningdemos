@@ -57,7 +57,7 @@
       }
       .button-row {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(6, 1fr);
         gap: 0.5rem;
         margin-bottom: 0.8rem;
       }
@@ -129,6 +129,19 @@
         margin-bottom: 0.6rem;
       }
       .meta div { padding:0.45rem; border:1px solid var(--border); border-radius: 6px; background:#f9fafb; }
+      dialog {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        width: min(1000px, 96vw);
+        max-height: 86vh;
+        padding: 0;
+      }
+      dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+      .dialog-inner { padding: 1rem; overflow: auto; max-height: 86vh; }
+      .instruction-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
+      .instruction-table th, .instruction-table td { border: 1px solid var(--border); padding: 0.45rem; text-align: left; vertical-align: top; }
+      .instruction-table th { background: #f8fafc; }
+      .dialog-actions { display:flex; justify-content:flex-end; margin-top: 0.8rem; }
       @media (max-width: 1200px) { main { grid-template-columns: 1fr; } }
     </style>
   </head>
@@ -155,9 +168,10 @@
           <button id="resetBtn">RESET SCENARIO</button>
           <button id="testBtn" class="success">TEST SCENARIO</button>
           <button id="solutionBtn">LOAD SOLUTION</button>
+          <button id="instructionSetBtn">VIEW INSTRUCTION SET</button>
         </div>
         <textarea id="editor" spellcheck="false"></textarea>
-        <div class="small">Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; immediate values must use decimal <code>#</code>; only registers <code>R1..R12</code>; memory refs are decimal addresses <code>100..199</code>.</div>
+        <div class="small">Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; immediate values must use decimal <code>#</code>; only registers <code>R0..R12</code>; memory refs are decimal addresses <code>100..199</code>. Registers and memory cells are implemented internally as 16-bit signed integers, so values outside <code>-32768..32767</code> overflow and wrap.</div>
         <div id="status" class="status">Ready.</div>
       </section>
 
@@ -169,7 +183,7 @@
         </div>
         <div class="tables">
           <div>
-            <h3>Registers (R1-R12)</h3>
+            <h3>Registers (R0-R12)</h3>
             <label class="small"><input type="checkbox" id="binaryToggle" /> View registers in binary</label>
             <table id="registerTable"></table>
           </div>
@@ -180,9 +194,46 @@
         </div>
       </section>
     </main>
+    <dialog id="instructionDialog">
+      <div class="dialog-inner">
+        <h2>Instruction set</h2>
+        <table class="instruction-table" id="instructionSetTable">
+          <tr><th>Instruction</th><th>Description</th></tr>
+        </table>
+        <h3>Labels</h3>
+        <p>A label is placed in the code by writing an identifier followed by a colon (<code>:</code>). To refer to a label, place the label identifier after the branch instruction.</p>
+        <h3>Interpretation of &lt;operand2&gt;</h3>
+        <ul>
+          <li><code>#</code> — use the decimal value specified after the <code>#</code> (for example, <code>#25</code> means decimal value 25).</li>
+          <li><code>Rm</code> — use the value stored in register <code>m</code> (for example, <code>R6</code> means use the value stored in register 6).</li>
+        </ul>
+        <p>The available general purpose registers that the programmer can use are numbered 0 to 12.</p>
+        <div class="dialog-actions">
+          <button id="closeInstructionDialog">Close</button>
+        </div>
+      </div>
+    </dialog>
 
     <script>
       const MAX_STEPS = 10000;
+      const INT_BITS = 16;
+      const instructionSetRows = [
+        ["LDR Rd, <memory ref>", "Load the value stored in the memory location specified by <memory ref> into register d."],
+        ["STR Rd, <memory ref>", "Store the value that is in register d into the memory location specified by <memory ref>."],
+        ["ADD Rd, Rn, <operand2>", "Add the value specified in <operand2> to the value in register n and store the result in register d."],
+        ["SUB Rd, Rn, <operand2>", "Subtract the value specified by <operand2> from the value in register n and store the result in register d."],
+        ["MOV Rd, <operand2>", "Copy the value specified by <operand2> into register d."],
+        ["CMP Rn, <operand2>", "Compare the value stored in register n with the value specified by <operand2>."],
+        ["B <label>", "Always branch to the instruction at position <label> in the program."],
+        ["B<condition> <label>", "Branch to the instruction at position <label> if the last comparison met the criterion specified by <condition>. Possible values for <condition> are EQ (equal), NE (not equal), GT (greater than), LT (less than)."],
+        ["AND Rd, Rn, <operand2>", "Perform a bitwise logical AND operation between the value in register n and the value specified by <operand2> and store the result in register d."],
+        ["ORR Rd, Rn, <operand2>", "Perform a bitwise logical OR operation between the value in register n and the value specified by <operand2> and store the result in register d."],
+        ["EOR Rd, Rn, <operand2>", "Perform a bitwise logical XOR (exclusive or) operation between the value in register n and the value specified by <operand2> and store the result in register d."],
+        ["MVN Rd, <operand2>", "Perform a bitwise logical NOT operation on the value specified by <operand2> and store the result in register d."],
+        ["LSL Rd, Rn, <operand2>", "Logically shift left the value stored in register n by the number of bits specified by <operand2> and store the result in register d."],
+        ["LSR Rd, Rn, <operand2>", "Logically shift right the value stored in register n by the number of bits specified by <operand2> and store the result in register d."],
+        ["HALT", "Stops the execution of the program."]
+      ];
       const challengeData = [
         {
           id: 1,
@@ -329,12 +380,16 @@
         resetBtn: document.getElementById("resetBtn"),
         testBtn: document.getElementById("testBtn"),
         solutionBtn: document.getElementById("solutionBtn"),
+        instructionSetBtn: document.getElementById("instructionSetBtn"),
         binaryToggle: document.getElementById("binaryToggle"),
         registerTable: document.getElementById("registerTable"),
         memoryTable: document.getElementById("memoryTable"),
         pc: document.getElementById("pc"),
         cmpFlag: document.getElementById("cmpFlag"),
-        machineState: document.getElementById("machineState")
+        machineState: document.getElementById("machineState"),
+        instructionDialog: document.getElementById("instructionDialog"),
+        instructionSetTable: document.getElementById("instructionSetTable"),
+        closeInstructionDialog: document.getElementById("closeInstructionDialog")
       };
 
       const state = {
@@ -351,7 +406,10 @@
         stepPending: false
       };
 
-      function toInt32(v) { return v | 0; }
+      function toInt16(value) {
+        const normalized = Number(value) & 0xFFFF;
+        return normalized >= 0x8000 ? normalized - 0x10000 : normalized;
+      }
       function setStatus(message, kind = "") {
         ui.status.className = "status" + (kind ? ` ${kind}` : "");
         ui.status.innerHTML = message;
@@ -364,11 +422,11 @@
         state.memory = Array(100).fill(0);
         Object.entries(scenario.registers).forEach(([reg, value]) => {
           const idx = Number(reg.replace("R", ""));
-          if (idx >= 1 && idx <= 12) state.registers[idx] = toInt32(value);
+          if (idx >= 0 && idx <= 12) state.registers[idx] = toInt16(value);
         });
         Object.entries(scenario.memory).forEach(([addrStr, value]) => {
           const addr = Number(addrStr);
-          if (addr >= 100 && addr <= 199) state.memory[addr - 100] = toInt32(value);
+          if (addr >= 100 && addr <= 199) state.memory[addr - 100] = toInt16(value);
         });
         state.pc = 0;
         state.cmp = null;
@@ -402,15 +460,15 @@
         let rHtml = "";
         if (ui.binaryToggle.checked) {
           rHtml += "<tr><th>Register</th><th>Value (binary)</th></tr>";
-          for (let i = 1; i <= 12; i += 1) {
-            const binary = (state.registers[i] >>> 0).toString(2).padStart(32, "0");
+          for (let i = 0; i <= 12; i += 1) {
+            const binary = (state.registers[i] & 0xFFFF).toString(2).padStart(INT_BITS, "0");
             rHtml += `<tr><td>R${i}</td><td>0b${binary}</td></tr>`;
           }
         } else {
           rHtml += "<tr>";
-          for (let i = 1; i <= 12; i += 1) rHtml += `<th>R${i}</th>`;
+          for (let i = 0; i <= 12; i += 1) rHtml += `<th>R${i}</th>`;
           rHtml += "</tr><tr>";
-          for (let i = 1; i <= 12; i += 1) rHtml += `<td>${state.registers[i]}</td>`;
+          for (let i = 0; i <= 12; i += 1) rHtml += `<td>${state.registers[i]}</td>`;
           rHtml += "</tr>";
         }
         ui.registerTable.innerHTML = rHtml;
@@ -430,9 +488,9 @@
 
       function parseRegister(token, lineNo) {
         const m = /^R(\d{1,2})$/.exec(token);
-        if (!m) throw new Error(`Line ${lineNo}: invalid register '${token}'. Use R1..R12.`);
+        if (!m) throw new Error(`Line ${lineNo}: invalid register '${token}'. Use R0..R12.`);
         const idx = Number(m[1]);
-        if (idx < 1 || idx > 12) throw new Error(`Line ${lineNo}: register out of range '${token}'. Only R1..R12 exist.`);
+        if (idx < 0 || idx > 12) throw new Error(`Line ${lineNo}: register out of range '${token}'. Only R0..R12 exist.`);
         return idx;
       }
 
@@ -544,8 +602,8 @@
       }
 
       function operandValue(op2, lineNo) {
-        if (op2.type === "imm") return toInt32(op2.value);
-        if (op2.type === "reg") return toInt32(state.registers[op2.value]);
+        if (op2.type === "imm") return toInt16(op2.value);
+        if (op2.type === "reg") return toInt16(state.registers[op2.value]);
         throw new Error(`Line ${lineNo}: internal operand error.`);
       }
 
@@ -570,14 +628,14 @@
             case "LDR": {
               const rd = parseRegister(ins.args[0], ins.lineNo);
               const addr = parseMemoryRef(ins.args[1], ins.lineNo);
-              state.registers[rd] = toInt32(state.memory[addr - 100]);
+              state.registers[rd] = toInt16(state.memory[addr - 100]);
               state.pc = nextPc;
               break;
             }
             case "STR": {
               const rd = parseRegister(ins.args[0], ins.lineNo);
               const addr = parseMemoryRef(ins.args[1], ins.lineNo);
-              state.memory[addr - 100] = toInt32(state.registers[rd]);
+              state.memory[addr - 100] = toInt16(state.registers[rd]);
               state.pc = nextPc;
               break;
             }
@@ -587,7 +645,7 @@
               const op2 = parseOperand2(ins.args[1], ins.lineNo);
               let value = operandValue(op2, ins.lineNo);
               if (ins.op === "MVN") value = ~value;
-              state.registers[rd] = toInt32(value);
+              state.registers[rd] = toInt16(value);
               state.pc = nextPc;
               break;
             }
@@ -601,7 +659,7 @@
               const rd = parseRegister(ins.args[0], ins.lineNo);
               const rn = parseRegister(ins.args[1], ins.lineNo);
               const op2 = parseOperand2(ins.args[2], ins.lineNo);
-              const a = toInt32(state.registers[rn]);
+              const a = toInt16(state.registers[rn]);
               const b = operandValue(op2, ins.lineNo);
               let out;
               if (ins.op === "ADD") out = a + b;
@@ -611,14 +669,14 @@
               else if (ins.op === "EOR") out = a ^ b;
               else if (ins.op === "LSL") out = a << b;
               else out = a >>> b;
-              state.registers[rd] = toInt32(out);
+              state.registers[rd] = toInt16(out);
               state.pc = nextPc;
               break;
             }
             case "CMP": {
               const rn = parseRegister(ins.args[0], ins.lineNo);
               const op2 = parseOperand2(ins.args[1], ins.lineNo);
-              const a = toInt32(state.registers[rn]);
+              const a = toInt16(state.registers[rn]);
               const b = operandValue(op2, ins.lineNo);
               state.cmp = a === b ? 0 : a > b ? 1 : -1;
               state.pc = nextPc;
@@ -798,6 +856,14 @@
         setStatus("Worked solution loaded into the editor.");
       }
 
+      function renderInstructionSet() {
+        const header = "<tr><th>Instruction</th><th>Description</th></tr>";
+        const body = instructionSetRows
+          .map(([instruction, description]) => `<tr><td><code>${instruction}</code></td><td>${description}</td></tr>`)
+          .join("");
+        ui.instructionSetTable.innerHTML = `${header}${body}`;
+      }
+
       function populateSelectors() {
         ui.problemSelect.innerHTML = challengeData.map((c, i) => `<option value='${i}'>Problem ${c.id}: ${c.title}</option>`).join("");
       }
@@ -818,6 +884,8 @@
       ui.stepBtn.addEventListener("click", stepOnce);
       ui.testBtn.addEventListener("click", testScenario);
       ui.solutionBtn.addEventListener("click", loadSolution);
+      ui.instructionSetBtn.addEventListener("click", () => ui.instructionDialog.showModal());
+      ui.closeInstructionDialog.addEventListener("click", () => ui.instructionDialog.close());
       ui.binaryToggle.addEventListener("change", updateTables);
 
       ui.editor.addEventListener("keydown", (event) => {
@@ -833,6 +901,7 @@
 
       populateSelectors();
       populateScenarios();
+      renderInstructionSet();
       renderChallenge();
       resetMachineFromScenario();
       updateTables();
