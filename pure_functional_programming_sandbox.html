@@ -146,10 +146,10 @@
       </section>
 
       <section class="card">
-        <h2 class="title">Live Output / Console</h2>
-        <div id="console" class="console muted">Type code and click Run.</div>
+        <h2 class="title">Output</h2>
+        <div id="console" class="console muted">Click Run to evaluate your code.</div>
         <h3>Submit Result</h3>
-        <div id="submitResult" class="console muted">Submit will run your code and the hidden test.</div>
+        <div id="submitResult" class="console muted">Submit checks whether your final output equals the expected value.</div>
       </section>
     </div>
   </div>
@@ -490,11 +490,12 @@ map square nums</code></pre>
       const defs = lines.slice(0, -1);
       const last = lines[lines.length - 1];
 
+      const valueDefs = [];
       for (const d of defs) {
         const def = splitDefinition(d.text, d.lineNo);
         if (!def) throw new LangError("Syntax", `Only definitions are allowed before the final expression (line ${d.lineNo}).`, d.lineNo);
         if (def.params.length === 0) {
-          env[def.name] = evaluateAST(def.body, env, { steps: 0, maxSteps: 20000 });
+          valueDefs.push(def);
         } else {
           if (!fns[def.name]) fns[def.name] = { arity: def.params.length, clauses: [] };
           if (fns[def.name].arity !== def.params.length) throw new LangError("Syntax", `All clauses of '${def.name}' must have the same number of parameters.`, d.lineNo);
@@ -528,6 +529,9 @@ map square nums</code></pre>
           }
         };
         env[name] = fn;
+      }
+      for (const def of valueDefs) {
+        env[def.name] = evaluateAST(def.body, env, { steps: 0, maxSteps: 20000 });
       }
 
       const finalExpr = splitDefinition(last.text, last.lineNo)
@@ -567,7 +571,7 @@ map square nums</code></pre>
     const loadStarter = () => {
       const task = tasks[Number(ui.taskSelect.value)];
       ui.editor.value = task.starter;
-      runCode();
+      showConsole("Click Run to evaluate your code.", "muted");
     };
 
     const showSolution = () => {
@@ -582,35 +586,37 @@ map square nums</code></pre>
     };
 
     const runCode = () => {
-      try {
-        const { result } = runProgram(ui.editor.value);
-        const text = formatValue(result);
-        showConsole(`Output:\n${text}`, result && result.__kind === "fn" ? "warn" : "ok");
-      } catch (err) {
-        if (err instanceof LangError) {
-          showConsole(`${err.kind} Error${err.line ? ` (line ${err.line})` : ""}: ${err.message}`, "err");
-        } else {
-          showConsole(`Unexpected Error: ${err.message}`, "err");
+      showConsole("Running...", "muted");
+      window.clearTimeout(runCode._t);
+      runCode._t = window.setTimeout(() => {
+        try {
+          const { result } = runProgram(ui.editor.value);
+          const text = formatValue(result);
+          showConsole(`Output:\n${text}`, result && result.__kind === "fn" ? "warn" : "ok");
+        } catch (err) {
+          if (err instanceof LangError) {
+            showConsole(`${err.kind} Error${err.line ? ` (line ${err.line})` : ""}: ${err.message}`, "err");
+          } else {
+            showConsole(`Unexpected Error: ${err.message}`, "err");
+          }
         }
-      }
+      }, 200);
     };
 
     const submit = () => {
       const task = tasks[Number(ui.taskSelect.value)];
       try {
-        const { env } = runProgram(ui.editor.value);
-        const hiddenAst = parseExpression(task.hidden, 1);
-        const got = evaluateAST(hiddenAst, env, { steps: 0, maxSteps: 20000 });
+        const { result: got } = runProgram(ui.editor.value);
         const pass = equalish(got, task.expected);
         if (pass) {
           ui.submitResult.className = "console ok";
-          ui.submitResult.textContent = `Success! Hidden test passed.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
+          ui.submitResult.textContent = `Success! Your output matches the expected value.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
           ui.successBurst.classList.remove("play");
           void ui.successBurst.offsetWidth;
           ui.successBurst.classList.add("play");
         } else {
           ui.submitResult.className = "console warn";
-          ui.submitResult.textContent = `Not yet. Hidden test did not match.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
+          ui.submitResult.textContent = `Not yet. Your output does not match the expected value.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
         }
       } catch (err) {
         ui.submitResult.className = "console err";
@@ -631,7 +637,6 @@ map square nums</code></pre>
     ui.loadTaskBtn.addEventListener("click", loadStarter);
     ui.runBtn.addEventListener("click", runCode);
     ui.submitBtn.addEventListener("click", submit);
-    ui.editor.addEventListener("input", () => { showConsole("Running...", "muted"); window.clearTimeout(runCode._t); runCode._t = window.setTimeout(runCode, 250); });
     ui.guideBtn.addEventListener("click", () => ui.guideDialog.showModal());
     ui.closeGuideBtn.addEventListener("click", () => ui.guideDialog.close());
     ui.solutionBtn.addEventListener("click", showSolution);
