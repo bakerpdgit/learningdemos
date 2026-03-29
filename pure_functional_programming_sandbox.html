@@ -132,6 +132,7 @@
       <select id="taskSelect"></select>
       <button id="loadTaskBtn">Load Task Starter</button>
       <button id="guideBtn">Guide</button>
+      <button id="solutionBtn">View Solution</button>
       <button id="runBtn">Run</button>
       <button id="submitBtn">Submit</button>
       <span id="successBurst" class="success-burst">✅ Success!</span>
@@ -161,6 +162,8 @@
       <li>Partial app: <code>addFive = add 5</code></li>
       <li>Pattern matching: <code>f [] = 0</code>, <code>f (x:xs) = ...</code></li>
       <li>Cons operator: <code>x : xs</code></li>
+      <li>Operator literals as functions: <code>(+)</code>, <code>(*)</code>, <code>(==)</code>, etc.</li>
+      <li>Operator sections: <code>(/2)</code> means <code>\x -> x / 2</code>, <code>(2/)</code> means <code>\x -> 2 / x</code>.</li>
       <li>Built-ins: <code>map</code>, <code>filter</code>, <code>fold</code> where fold is <code>fold op start list</code></li>
       <li>Last non-empty line is evaluated as the output expression.</li>
     </ul>
@@ -170,21 +173,26 @@ nums = [1,2,3]
 map square nums</code></pre>
     <button id="closeGuideBtn">Close</button>
   </dialog>
+  <dialog id="solutionDialog">
+    <h2>Task Solution</h2>
+    <pre><code id="solutionCode"></code></pre>
+    <button id="closeSolutionBtn">Close</button>
+  </dialog>
 
   <script>
     const tasks = [
-      { id: 1, name: "Convert", description: "Write toC f where C = (F-32) * 5/9.", data: "", starter: "toC f = (f - 32) * 5 / 9\ntoC 77", hidden: "toC 77", expected: 25 },
-      { id: 2, name: "Square Map", description: "Use map and square to square nums.", data: "nums = [1,2,3]", starter: "nums = [1,2,3]\nsquare x = x * x\nmap square nums", hidden: "map square nums", expected: [1,4,9] },
-      { id: 3, name: "Filter High", description: "Keep values > 100 in prices.", data: "prices = [5, 120, 80, 200]", starter: "prices = [5,120,80,200]\nhigh x = x > 100\nfilter high prices", hidden: "filter high prices", expected: [120,200] },
-      { id: 4, name: "Recursive Len", description: "Define len [] = 0 and len (x:xs) recursively.", data: "", starter: "len [] = 0\nlen (x:xs) = 1 + len xs\nlen [1,1,1]", hidden: "len [1,1,1]", expected: 3 },
-      { id: 5, name: "Total Sum", description: "Use fold to sum vals.", data: "vals = [10,20,30]", starter: "vals = [10,20,30]\nadd x y = x + y\nfold add 0 vals", hidden: "fold add 0 vals", expected: 60 },
-      { id: 6, name: "Partial Add", description: "Create addFive by partially applying add.", data: "", starter: "add x y = x + y\naddFive = add 5\naddFive 10", hidden: "addFive 10", expected: 15 },
-      { id: 7, name: "Discount", description: "Use map with partially applied multiply 0.8.", data: "items = [10,20]", starter: "items = [10,20]\nmultiply x y = x * y\ndiscount = multiply 0.8\nmap discount items", hidden: "map discount items", expected: [8,16] },
-      { id: 8, name: "Head/Tail", description: "Write getFirst (x:xs) = x.", data: "myList = [9,8,7]", starter: "myList = [9,8,7]\ngetFirst (x:xs) = x\ngetFirst myList", hidden: "getFirst myList", expected: 9 },
-      { id: 9, name: "Logic Check", description: "isEven n = n % 2 == 0. Filter nums.", data: "nums = [1,2,3,4]", starter: "nums = [1,2,3,4]\nisEven n = n % 2 == 0\nfilter isEven nums", hidden: "filter isEven nums", expected: [2,4] },
-      { id: 10, name: "Product", description: "Write a recursive function to multiply a list.", data: "factors = [2,3,4]", starter: "factors = [2,3,4]\nproduct [] = 1\nproduct (x:xs) = x * product xs\nresult = product factors\nresult", hidden: "result", expected: 24 },
-      { id: 11, name: "Contains", description: "Recursive function to check if x is in list.", data: "", starter: "contains x [] = False\ncontains x (y:ys) = (x == y) || contains x ys\ncontains 3 [1,2,3]", hidden: "contains 3 [1,2,3]", expected: true },
-      { id: 12, name: "Pipeline", description: "Filter for > 5, then map double.", data: "raw = [2,6,3,8]", starter: "raw = [2,6,3,8]\nmoreThanFive x = x > 5\ndouble x = x * 2\nmap double (filter moreThanFive raw)", hidden: "map double (filter moreThanFive raw)", expected: [12,16] }
+      { id: 1, name: "Convert", description: "Write toC f where C = (F-32) * 5/9.", data: "", starter: "toC f =\n\ntoC 77", solution: "toC f = (f - 32) * 5 / 9\ntoC 77", hidden: "toC 77", expected: 25 },
+      { id: 2, name: "Square Map", description: "Use map and square to square nums.", data: "nums = [1,2,3]", starter: "nums = [1,2,3]\nsquare x =\n\nmap square nums", solution: "nums = [1,2,3]\nsquare x = x * x\nmap square nums", hidden: "map square nums", expected: [1,4,9] },
+      { id: 3, name: "Filter High", description: "Keep values > 100 in prices.", data: "prices = [5, 120, 80, 200]", starter: "prices = [5,120,80,200]\nhigh x =\n\nfilter high prices", solution: "prices = [5,120,80,200]\nhigh x = x > 100\nfilter high prices", hidden: "filter high prices", expected: [120,200] },
+      { id: 4, name: "Recursive Len", description: "Define len [] = 0 and len (x:xs) recursively.", data: "", starter: "len [] =\nlen (x:xs) =\n\nlen [1,1,1]", solution: "len [] = 0\nlen (x:xs) = 1 + len xs\nlen [1,1,1]", hidden: "len [1,1,1]", expected: 3 },
+      { id: 5, name: "Total Sum", description: "Use fold to sum vals.", data: "vals = [10,20,30]", starter: "vals = [10,20,30]\nadd x y =\n\nfold add 0 vals", solution: "vals = [10,20,30]\nadd x y = x + y\nfold add 0 vals", hidden: "fold add 0 vals", expected: 60 },
+      { id: 6, name: "Partial Add", description: "Create addFive by partially applying add.", data: "", starter: "add x y =\naddFive =\n\naddFive 10", solution: "add x y = x + y\naddFive = add 5\naddFive 10", hidden: "addFive 10", expected: 15 },
+      { id: 7, name: "Discount", description: "Use map with partially applied multiply 0.8.", data: "items = [10,20]", starter: "items = [10,20]\nmultiply x y =\ndiscount =\n\nmap discount items", solution: "items = [10,20]\nmultiply x y = x * y\ndiscount = multiply 0.8\nmap discount items", hidden: "map discount items", expected: [8,16] },
+      { id: 8, name: "Head/Tail", description: "Write getFirst (x:xs) = x.", data: "myList = [9,8,7]", starter: "myList = [9,8,7]\ngetFirst (x:xs) =\n\ngetFirst myList", solution: "myList = [9,8,7]\ngetFirst (x:xs) = x\ngetFirst myList", hidden: "getFirst myList", expected: 9 },
+      { id: 9, name: "Logic Check", description: "isEven n = n % 2 == 0. Filter nums.", data: "nums = [1,2,3,4]", starter: "nums = [1,2,3,4]\nisEven n =\n\nfilter isEven nums", solution: "nums = [1,2,3,4]\nisEven n = n % 2 == 0\nfilter isEven nums", hidden: "filter isEven nums", expected: [2,4] },
+      { id: 10, name: "Product", description: "Write a recursive function to multiply a list.", data: "factors = [2,3,4]", starter: "factors = [2,3,4]\nproduct [] =\nproduct (x:xs) =\nresult = product factors\nresult", solution: "factors = [2,3,4]\nproduct [] = 1\nproduct (x:xs) = x * product xs\nresult = product factors\nresult", hidden: "result", expected: 24 },
+      { id: 11, name: "Contains", description: "Recursive function to check if x is in list.", data: "", starter: "contains x [] =\ncontains x (y:ys) =\n\ncontains 3 [1,2,3]", solution: "contains x [] = False\ncontains x (y:ys) = (x == y) || contains x ys\ncontains 3 [1,2,3]", hidden: "contains 3 [1,2,3]", expected: true },
+      { id: 12, name: "Pipeline", description: "Filter for > 5, then map double.", data: "raw = [2,6,3,8]", starter: "raw = [2,6,3,8]\nmoreThanFive x =\ndouble x =\n\nmap double (filter moreThanFive raw)", solution: "raw = [2,6,3,8]\nmoreThanFive x = x > 5\ndouble x = x * 2\nmap double (filter moreThanFive raw)", hidden: "map double (filter moreThanFive raw)", expected: [12,16] }
     ];
 
     class LangError extends Error {
@@ -239,6 +247,8 @@ map square nums</code></pre>
       const match = (t) => (tokens[p] && tokens[p].t === t ? (p += 1, true) : false);
       const isAtomStart = (tk) => tk && ["NUMBER", "IDENT", "(", "["].includes(tk.t);
 
+      const operators = Object.keys({ "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, "<": 4, ">=": 4, "<=": 4, ":": 5, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7 });
+
       const atom = () => {
         const tk = peek();
         if (!tk) throw new LangError("Syntax", `Unexpected end of expression on line ${lineNo}.`, lineNo);
@@ -248,6 +258,26 @@ map square nums</code></pre>
           return { k: "var", n: tk.v, line: lineNo };
         }
         if (match("(")) {
+          if (peek() && operators.includes(peek().t)) {
+            const op = peek().t;
+            p += 1;
+            if (match(")")) return { k: "oplit", op, line: lineNo };
+            const sectionValue = expr(0);
+            eat(")");
+            return { k: "section_right", op, value: sectionValue, line: lineNo };
+          }
+          const start = p;
+          try {
+            const lhs = atom();
+            if (peek() && operators.includes(peek().t) && tokens[p + 1] && tokens[p + 1].t === ")") {
+              const op = peek().t;
+              p += 1;
+              eat(")");
+              return { k: "section_left", op, value: lhs, line: lineNo };
+            }
+          } catch (_) {
+          }
+          p = start;
           const e = expr(0);
           eat(")");
           return e;
@@ -371,6 +401,56 @@ map square nums</code></pre>
 
     const equalish = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+    const evaluateBinary = (op, l, r, line) => {
+      const nums = () => {
+        if (typeof l !== "number" || typeof r !== "number") {
+          const leftType = Array.isArray(l) ? "List" : typeof l;
+          const rightType = Array.isArray(r) ? "List" : typeof r;
+          throw new LangError("Type", `You tried to ${op === "+" ? "add" : "combine"} a ${leftType} to a ${rightType} on line ${line}.`, line);
+        }
+      };
+      if (op === ":") {
+        if (!Array.isArray(r)) throw new LangError("Type", `Right side of ':' must be a List on line ${line}.`, line);
+        return [l, ...r];
+      }
+      switch (op) {
+        case "+": nums(); return l + r;
+        case "-": nums(); return l - r;
+        case "*": nums(); return l * r;
+        case "/": nums(); return l / r;
+        case "%": nums(); return l % r;
+        case "==": return equalish(l, r);
+        case "!=": return !equalish(l, r);
+        case ">": nums(); return l > r;
+        case "<": nums(); return l < r;
+        case ">=": nums(); return l >= r;
+        case "<=": nums(); return l <= r;
+        case "&&": return truthy(l) && truthy(r);
+        case "||": return truthy(l) || truthy(r);
+        default: throw new LangError("Syntax", `Unsupported operator '${op}' on line ${line}.`, line);
+      }
+    };
+
+    const makeBinaryFunction = (op, fixed, side, line) => ({
+      __kind: "fn",
+      arity: 1,
+      got: [],
+      call: (arg) => side === "left"
+        ? evaluateBinary(op, fixed, arg, line)
+        : evaluateBinary(op, arg, fixed, line)
+    });
+
+    const makeOperatorLiteral = (op, line) => ({
+      __kind: "fn",
+      arity: 2,
+      got: [],
+      call: function(arg, ctx) {
+        const next = [...this.got, arg];
+        if (next.length < 2) return { ...this, got: next };
+        return evaluateBinary(op, next[0], next[1], line || ctx.line);
+      }
+    });
+
     const evaluateAST = (ast, env, state) => {
       state.steps += 1;
       if (state.steps > state.maxSteps) {
@@ -383,38 +463,15 @@ map square nums</code></pre>
           if (ast.n in env) return env[ast.n];
           throw new LangError("Reference", `You used '${ast.n}', but '${ast.n}' hasn't been defined yet.`, ast.line);
         }
+        case "oplit": return makeOperatorLiteral(ast.op, ast.line);
+        case "section_right": return makeBinaryFunction(ast.op, evaluateAST(ast.value, env, state), "right", ast.line);
+        case "section_left": return makeBinaryFunction(ast.op, evaluateAST(ast.value, env, state), "left", ast.line);
         case "list": return ast.items.map((x) => evaluateAST(x, env, state));
         case "call": return applyOne(evaluateAST(ast.f, env, state), evaluateAST(ast.a, env, state), { line: ast.line });
         case "bin": {
           const l = evaluateAST(ast.l, env, state);
           const r = evaluateAST(ast.r, env, state);
-          const nums = () => {
-            if (typeof l !== "number" || typeof r !== "number") {
-              const leftType = Array.isArray(l) ? "List" : typeof l;
-              const rightType = Array.isArray(r) ? "List" : typeof r;
-              throw new LangError("Type", `You tried to ${ast.op === "+" ? "add" : "combine"} a ${leftType} to a ${rightType} on line ${ast.line}.`, ast.line);
-            }
-          };
-          if (ast.op === ":") {
-            if (!Array.isArray(r)) throw new LangError("Type", `Right side of ':' must be a List on line ${ast.line}.`, ast.line);
-            return [l, ...r];
-          }
-          switch (ast.op) {
-            case "+": nums(); return l + r;
-            case "-": nums(); return l - r;
-            case "*": nums(); return l * r;
-            case "/": nums(); return l / r;
-            case "%": nums(); return l % r;
-            case "==": return equalish(l, r);
-            case "!=": return !equalish(l, r);
-            case ">": nums(); return l > r;
-            case "<": nums(); return l < r;
-            case ">=": nums(); return l >= r;
-            case "<=": nums(); return l <= r;
-            case "&&": return truthy(l) && truthy(r);
-            case "||": return truthy(l) || truthy(r);
-            default: throw new LangError("Syntax", `Unsupported operator '${ast.op}' on line ${ast.line}.`, ast.line);
-          }
+          return evaluateBinary(ast.op, l, r, ast.line);
         }
         default:
           throw new LangError("Syntax", "Unknown expression type.", ast.line);
@@ -494,7 +551,11 @@ map square nums</code></pre>
       successBurst: document.getElementById("successBurst"),
       guideBtn: document.getElementById("guideBtn"),
       guideDialog: document.getElementById("guideDialog"),
-      closeGuideBtn: document.getElementById("closeGuideBtn")
+      closeGuideBtn: document.getElementById("closeGuideBtn"),
+      solutionBtn: document.getElementById("solutionBtn"),
+      solutionDialog: document.getElementById("solutionDialog"),
+      solutionCode: document.getElementById("solutionCode"),
+      closeSolutionBtn: document.getElementById("closeSolutionBtn")
     };
 
     const renderTask = () => {
@@ -507,6 +568,12 @@ map square nums</code></pre>
       const task = tasks[Number(ui.taskSelect.value)];
       ui.editor.value = task.starter;
       runCode();
+    };
+
+    const showSolution = () => {
+      const task = tasks[Number(ui.taskSelect.value)];
+      ui.solutionCode.textContent = task.solution;
+      ui.solutionDialog.showModal();
     };
 
     const showConsole = (message, cls = "muted") => {
@@ -567,6 +634,8 @@ map square nums</code></pre>
     ui.editor.addEventListener("input", () => { showConsole("Running...", "muted"); window.clearTimeout(runCode._t); runCode._t = window.setTimeout(runCode, 250); });
     ui.guideBtn.addEventListener("click", () => ui.guideDialog.showModal());
     ui.closeGuideBtn.addEventListener("click", () => ui.guideDialog.close());
+    ui.solutionBtn.addEventListener("click", showSolution);
+    ui.closeSolutionBtn.addEventListener("click", () => ui.solutionDialog.close());
 
     renderTask();
     loadStarter();
