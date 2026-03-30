@@ -205,6 +205,7 @@
               <button class="token" data-token="1">1</button>
               <button id="backspace-step" class="secondary" type="button">Backspace</button>
               <button id="clear-step" class="secondary" type="button">Clear</button>
+              <button id="set-current-step" class="secondary" type="button">Set to current</button>
               <button id="submit-step" type="button">Submit</button>
             </div>
           </div>
@@ -238,6 +239,7 @@
         submit: document.getElementById("submit-step"),
         backspace: document.getElementById("backspace-step"),
         clear: document.getElementById("clear-step"),
+        setCurrent: document.getElementById("set-current-step"),
         status: document.getElementById("status"),
         steps: document.getElementById("steps"),
         showAnswer: document.getElementById("show-answer"),
@@ -367,6 +369,20 @@
         const sym = expr.type === "and" ? " \\cdot " : " + ";
         const text = `${toLatex(expr.left, here)}${sym}${toLatex(expr.right, here)}`;
         return here < parent ? `(${text})` : text;
+      }
+
+      function exprToTokens(expr, parent = 0) {
+        if (expr.type === "var") return [expr.name];
+        if (expr.type === "const") return [String(expr.value)];
+        if (expr.type === "not") {
+          const inner = exprToTokens(expr.value, 3);
+          if (expr.value.type === "and" || expr.value.type === "or") return ["¬", "(", ...inner, ")"];
+          return ["¬", ...inner];
+        }
+        const here = precedence(expr);
+        const op = expr.type === "and" ? "." : "+";
+        const text = [...exprToTokens(expr.left, here), op, ...exprToTokens(expr.right, here)];
+        return here < parent ? ["(", ...text, ")"] : text;
       }
 
       function parse(input) {
@@ -762,6 +778,7 @@
 
       function reset(difficulty) {
         state = generateProblem(difficulty);
+        state.current = clone(state.problem);
         ui.steps.innerHTML = "";
         ui.simplificationPanel.classList.remove("solved");
         renderExpr(ui.problemExpr, state.problem);
@@ -808,6 +825,7 @@
           }
 
           addStep(expr);
+          state.current = clone(expr);
           const g = gateCount(expr);
           if (g === state.minimalGates) {
             setStatus(`Excellent: minimal solution reached in ${g} gates. Problem complete.`, "good");
@@ -843,6 +861,12 @@
       ui.clear.addEventListener("click", () => {
         editorTokens = [];
         renderEditor();
+      });
+      ui.setCurrent.addEventListener("click", () => {
+        if (!state) return;
+        editorTokens = exprToTokens(state.current || state.problem);
+        renderEditor();
+        setStatus("Editor set to the current simplification line.", "good");
       });
       document.addEventListener("keydown", (e) => {
         const keyMap = {
