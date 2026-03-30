@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA Boolean Algebra Simplifier</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+    <style>
+      :root {
+        --bg: #f1f5f9;
+        --panel: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --line: #dbe1ea;
+        --primary: #1d4ed8;
+        --good: #15803d;
+        --bad: #dc2626;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      main {
+        max-width: 1000px;
+        margin: 1rem auto 2rem;
+        padding: 0 1rem;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        overflow: hidden;
+      }
+      .header,
+      .section {
+        padding: 1rem 1.25rem;
+      }
+      .header {
+        border-bottom: 1px solid var(--line);
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.4rem;
+      }
+      .sub {
+        margin: 0.3rem 0 0;
+        color: var(--muted);
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+      }
+      button {
+        border: 0;
+        background: var(--primary);
+        color: #fff;
+        font-weight: 700;
+        border-radius: 10px;
+        padding: 0.65rem 0.9rem;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #475569;
+      }
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0.9rem;
+        background: #f8fafc;
+      }
+      .problem {
+        margin-bottom: 0.9rem;
+      }
+      .expr {
+        font-size: 1.25rem;
+        min-height: 2.1rem;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .input-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+      }
+      .editor-shell {
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 0.7rem;
+        min-height: 2.6rem;
+        background: white;
+      }
+      .editor-shell.bad {
+        animation: badflash 0.35s ease;
+        border-color: var(--bad);
+        background: #fff1f2;
+      }
+      .editor-text {
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 0.95rem;
+        word-break: break-word;
+      }
+      .editor-preview {
+        margin-top: 0.5rem;
+        min-height: 1.6rem;
+      }
+      .editor-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+      }
+      .token {
+        background: #334155;
+      }
+      input[type="text"] {
+        flex: 1;
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 0.7rem;
+        font-size: 1rem;
+      }
+      @keyframes badflash {
+        from {
+          transform: translateX(-2px);
+        }
+        50% {
+          transform: translateX(2px);
+        }
+        to {
+          transform: translateX(0);
+        }
+      }
+      .status {
+        min-height: 1.2rem;
+        margin-top: 0.55rem;
+        font-size: 0.95rem;
+      }
+      .status.good {
+        color: var(--good);
+      }
+      .status.bad {
+        color: var(--bad);
+      }
+      ol {
+        padding-left: 1.1rem;
+      }
+      li {
+        margin-bottom: 0.55rem;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <div class="header">
+          <h1>AQA Boolean Algebra Simplifier</h1>
+          <p class="sub">
+            Enter each line in word notation (e.g. <strong>NOT(A AND B) OR NOT C</strong>). Accepted lines are rendered in AQA style using
+            <strong>.</strong> for AND, <strong>+</strong> for OR, and overline for NOT.
+          </p>
+        </div>
+        <div class="section">
+          <div class="controls">
+            <button data-diff="easy">New Easy</button>
+            <button data-diff="medium">New Medium</button>
+            <button data-diff="hard">New Hard</button>
+            <button id="show-answer" class="secondary">Show Best Answer</button>
+          </div>
+        </div>
+        <div class="section problem">
+          <div class="panel">
+            <div><strong>Generated problem:</strong></div>
+            <div id="problem-expr" class="expr"></div>
+            <div id="problem-meta" class="meta"></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="input-row">
+            <div id="editor-shell" class="editor-shell">
+              <div id="editor-text" class="editor-text"></div>
+              <div id="editor-preview" class="editor-preview"></div>
+            </div>
+            <div class="editor-toolbar">
+              <button class="token" data-token="A">A</button>
+              <button class="token" data-token="B">B</button>
+              <button class="token" data-token="C">C</button>
+              <button class="token" data-token="D">D</button>
+              <button class="token" data-token="NOT">NOT</button>
+              <button class="token" data-token="AND">AND</button>
+              <button class="token" data-token="OR">OR</button>
+              <button class="token" data-token="(">(</button>
+              <button class="token" data-token=")">)</button>
+              <button class="token" data-token="0">0</button>
+              <button class="token" data-token="1">1</button>
+              <button id="backspace-step" class="secondary" type="button">Backspace</button>
+              <button id="clear-step" class="secondary" type="button">Clear</button>
+              <button id="submit-step" type="button">Submit</button>
+            </div>
+          </div>
+          <div class="hint">Build each line using the statement editor, then submit it for equivalence checking.</div>
+          <div id="status" class="status"></div>
+        </div>
+        <div class="section">
+          <div class="panel">
+            <strong>Simplification progression</strong>
+            <ol id="steps"></ol>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script>
+      const VARS = ["A", "B", "C", "D"];
+      const TARGETS = {
+        easy: [5, 7],
+        medium: [8, 11],
+        hard: [12, 15],
+      };
+
+      const ui = {
+        problemExpr: document.getElementById("problem-expr"),
+        problemMeta: document.getElementById("problem-meta"),
+        editorShell: document.getElementById("editor-shell"),
+        editorText: document.getElementById("editor-text"),
+        editorPreview: document.getElementById("editor-preview"),
+        submit: document.getElementById("submit-step"),
+        backspace: document.getElementById("backspace-step"),
+        clear: document.getElementById("clear-step"),
+        status: document.getElementById("status"),
+        steps: document.getElementById("steps"),
+        showAnswer: document.getElementById("show-answer"),
+      };
+
+      let state = null;
+      let editorTokens = [];
+
+      function node(type, data = {}) {
+        return { type, ...data };
+      }
+
+      function clone(expr) {
+        return JSON.parse(JSON.stringify(expr));
+      }
+
+      function gateCount(expr) {
+        if (expr.type === "var" || expr.type === "const") return 0;
+        if (expr.type === "not") return 1 + gateCount(expr.value);
+        return 1 + gateCount(expr.left) + gateCount(expr.right);
+      }
+
+      function normalize(expr) {
+        if (expr.type === "var" || expr.type === "const") return expr;
+        if (expr.type === "not") return node("not", { value: normalize(expr.value) });
+        const left = normalize(expr.left);
+        const right = normalize(expr.right);
+        const parts = flatten(expr.type, [left, right]).sort((a, b) => key(a).localeCompare(key(b)));
+        return build(expr.type, parts);
+      }
+
+      function flatten(type, exprs) {
+        const out = [];
+        for (const e of exprs) {
+          if (e.type === type) out.push(...flatten(type, [e.left, e.right]));
+          else out.push(e);
+        }
+        return out;
+      }
+
+      function build(type, parts) {
+        return parts.reduce((acc, cur) => (acc ? node(type, { left: acc, right: cur }) : cur), null);
+      }
+
+      function key(expr) {
+        if (expr.type === "var") return expr.name;
+        if (expr.type === "const") return String(expr.value);
+        if (expr.type === "not") return `!${key(expr.value)}`;
+        return `(${key(expr.left)}${expr.type === "and" ? "." : "+"}${key(expr.right)})`;
+      }
+
+      function sameExpr(a, b) {
+        return key(normalize(a)) === key(normalize(b));
+      }
+
+      function evalExpr(expr, env) {
+        switch (expr.type) {
+          case "var":
+            return Boolean(env[expr.name]);
+          case "const":
+            return Boolean(expr.value);
+          case "not":
+            return !evalExpr(expr.value, env);
+          case "and":
+            return evalExpr(expr.left, env) && evalExpr(expr.right, env);
+          case "or":
+            return evalExpr(expr.left, env) || evalExpr(expr.right, env);
+          default:
+            throw new Error("unknown type");
+        }
+      }
+
+      function varSet(expr, out = new Set()) {
+        if (expr.type === "var") out.add(expr.name);
+        else if (expr.type === "not") varSet(expr.value, out);
+        else if (expr.type === "and" || expr.type === "or") {
+          varSet(expr.left, out);
+          varSet(expr.right, out);
+        }
+        return out;
+      }
+
+      function truthSig(expr, vars) {
+        let sig = "";
+        for (let mask = 0; mask < 1 << vars.length; mask++) {
+          const env = {};
+          vars.forEach((v, i) => (env[v] = (mask >> i) & 1));
+          sig += evalExpr(expr, env) ? "1" : "0";
+        }
+        return sig;
+      }
+
+      function equivalent(a, b) {
+        const vars = [...new Set([...varSet(a), ...varSet(b)])].sort();
+        return truthSig(a, vars) === truthSig(b, vars);
+      }
+
+      function precedence(expr) {
+        if (expr.type === "or") return 1;
+        if (expr.type === "and") return 2;
+        if (expr.type === "not") return 3;
+        return 4;
+      }
+
+      function toWord(expr, parent = 0) {
+        if (expr.type === "var") return expr.name;
+        if (expr.type === "const") return String(expr.value);
+        if (expr.type === "not") {
+          const inner = toWord(expr.value, 3);
+          return `NOT(${inner})`;
+        }
+        const sym = expr.type === "and" ? " AND " : " OR ";
+        const here = precedence(expr);
+        const text = `${toWord(expr.left, here)}${sym}${toWord(expr.right, here)}`;
+        return here < parent ? `(${text})` : text;
+      }
+
+      function toLatex(expr, parent = 0) {
+        if (expr.type === "var") return expr.name;
+        if (expr.type === "const") return expr.value ? "1" : "0";
+        if (expr.type === "not") {
+          const v = toLatex(expr.value, 3);
+          return `\\overline{${v}}`;
+        }
+        const here = precedence(expr);
+        const sym = expr.type === "and" ? " \\cdot " : " + ";
+        const text = `${toLatex(expr.left, here)}${sym}${toLatex(expr.right, here)}`;
+        return here < parent ? `(${text})` : text;
+      }
+
+      function parse(input) {
+        const tokens = tokenize(input);
+        let i = 0;
+        function peek() {
+          return tokens[i];
+        }
+        function consume(type) {
+          if (!peek() || peek().type !== type) throw new Error(`Expected ${type}`);
+          return tokens[i++];
+        }
+        function parseOr() {
+          let left = parseAnd();
+          while (peek() && peek().type === "OR") {
+            consume("OR");
+            left = node("or", { left, right: parseAnd() });
+          }
+          return left;
+        }
+        function parseAnd() {
+          let left = parseUnary();
+          while (peek() && peek().type === "AND") {
+            consume("AND");
+            left = node("and", { left, right: parseUnary() });
+          }
+          return left;
+        }
+        function parseUnary() {
+          if (peek() && peek().type === "NOT") {
+            consume("NOT");
+            if (peek() && peek().type === "LP") {
+              consume("LP");
+              const e = parseOr();
+              consume("RP");
+              return node("not", { value: e });
+            }
+            return node("not", { value: parseUnary() });
+          }
+          return parsePrimary();
+        }
+        function parsePrimary() {
+          const t = peek();
+          if (!t) throw new Error("Unexpected end");
+          if (t.type === "VAR") {
+            consume("VAR");
+            return node("var", { name: t.value });
+          }
+          if (t.type === "CONST") {
+            consume("CONST");
+            return node("const", { value: Number(t.value) });
+          }
+          if (t.type === "LP") {
+            consume("LP");
+            const e = parseOr();
+            consume("RP");
+            return e;
+          }
+          throw new Error("Unexpected token");
+        }
+        const expr = parseOr();
+        if (i !== tokens.length) throw new Error("Unexpected trailing input");
+        return normalize(expr);
+      }
+
+      function tokenize(s) {
+        const out = [];
+        let i = 0;
+        while (i < s.length) {
+          const c = s[i];
+          if (/\s/.test(c)) {
+            i++;
+            continue;
+          }
+          if (c === "(") {
+            out.push({ type: "LP" });
+            i++;
+            continue;
+          }
+          if (c === ")") {
+            out.push({ type: "RP" });
+            i++;
+            continue;
+          }
+          if (c === "+") {
+            out.push({ type: "OR" });
+            i++;
+            continue;
+          }
+          if (c === ".") {
+            out.push({ type: "AND" });
+            i++;
+            continue;
+          }
+          const m = s.slice(i).match(/^(NOT|AND|OR|[A-D]|[01])/i);
+          if (!m) throw new Error(`Invalid token near '${s.slice(i, i + 8)}'`);
+          const raw = m[1].toUpperCase();
+          i += m[1].length;
+          if (raw === "NOT" || raw === "AND" || raw === "OR") out.push({ type: raw });
+          else if (raw === "0" || raw === "1") out.push({ type: "CONST", value: raw });
+          else out.push({ type: "VAR", value: raw });
+        }
+        return out;
+      }
+
+      function simplify(expr) {
+        function pass(e) {
+          if (e.type === "var" || e.type === "const") return e;
+          if (e.type === "not") {
+            const inner = pass(e.value);
+            if (inner.type === "not") return pass(inner.value);
+            if (inner.type === "const") return node("const", { value: inner.value ? 0 : 1 });
+            if (inner.type === "and") return pass(node("or", { left: node("not", { value: inner.left }), right: node("not", { value: inner.right }) }));
+            if (inner.type === "or") return pass(node("and", { left: node("not", { value: inner.left }), right: node("not", { value: inner.right }) }));
+            return node("not", { value: inner });
+          }
+
+          const left = pass(e.left);
+          const right = pass(e.right);
+          const op = e.type;
+          const n = normalize(node(op, { left, right }));
+          const l = n.left;
+          const r = n.right;
+
+          if (op === "and") {
+            if ((l.type === "const" && l.value === 0) || (r.type === "const" && r.value === 0)) return node("const", { value: 0 });
+            if (l.type === "const" && l.value === 1) return r;
+            if (r.type === "const" && r.value === 1) return l;
+            if (sameExpr(l, r)) return l;
+            if (sameExpr(l, node("not", { value: r })) || sameExpr(r, node("not", { value: l }))) return node("const", { value: 0 });
+            if (l.type === "or" && (sameExpr(l.left, r) || sameExpr(l.right, r))) return r;
+            if (r.type === "or" && (sameExpr(r.left, l) || sameExpr(r.right, l))) return l;
+            return n;
+          }
+
+          if (op === "or") {
+            if ((l.type === "const" && l.value === 1) || (r.type === "const" && r.value === 1)) return node("const", { value: 1 });
+            if (l.type === "const" && l.value === 0) return r;
+            if (r.type === "const" && r.value === 0) return l;
+            if (sameExpr(l, r)) return l;
+            if (sameExpr(l, node("not", { value: r })) || sameExpr(r, node("not", { value: l }))) return node("const", { value: 1 });
+            if (l.type === "and" && (sameExpr(l.left, r) || sameExpr(l.right, r))) return r;
+            if (r.type === "and" && (sameExpr(r.left, l) || sameExpr(r.right, l))) return l;
+            return n;
+          }
+
+          return n;
+        }
+
+        let cur = normalize(expr);
+        for (let i = 0; i < 24; i++) {
+          const next = normalize(pass(cur));
+          if (sameExpr(cur, next)) return next;
+          cur = next;
+        }
+        return cur;
+      }
+
+      function hasDoubleNegation(expr) {
+        if (expr.type === "not") {
+          if (expr.value.type === "not") return true;
+          return hasDoubleNegation(expr.value);
+        }
+        if (expr.type === "and" || expr.type === "or") return hasDoubleNegation(expr.left) || hasDoubleNegation(expr.right);
+        return false;
+      }
+
+      function randomPick(a) {
+        return a[Math.floor(Math.random() * a.length)];
+      }
+
+      function randomVar(maxVars) {
+        return VARS[Math.floor(Math.random() * maxVars)];
+      }
+
+      function baseExpression(maxVars) {
+        const a = node("var", { name: randomVar(maxVars) });
+        const b = node("var", { name: randomVar(maxVars) });
+        const c = node("var", { name: randomVar(maxVars) });
+        const choices = [
+          node("or", { left: clone(a), right: clone(b) }),
+          node("and", { left: clone(a), right: clone(b) }),
+          node("or", { left: clone(a), right: node("and", { left: clone(b), right: clone(c) }) }),
+          node("and", { left: clone(a), right: node("or", { left: clone(b), right: clone(c) }) }),
+          node("not", { value: node("and", { left: clone(a), right: clone(b) }) }),
+          node("not", { value: node("or", { left: clone(a), right: clone(b) }) }),
+        ];
+        return normalize(randomPick(choices));
+      }
+
+      function mapExpr(expr, fn) {
+        const replaced = fn(expr);
+        if (replaced) return replaced;
+        if (expr.type === "not") return node("not", { value: mapExpr(expr.value, fn) });
+        if (expr.type === "and" || expr.type === "or") return node(expr.type, { left: mapExpr(expr.left, fn), right: mapExpr(expr.right, fn) });
+        return clone(expr);
+      }
+
+      function expansions(expr, maxVars) {
+        const options = [];
+        const v = node("var", { name: randomVar(maxVars) });
+
+        options.push(mapExpr(expr, (e) => e === expr && node("and", { left: clone(e), right: node("const", { value: 1 }) })));
+        options.push(mapExpr(expr, (e) => e === expr && node("or", { left: clone(e), right: node("const", { value: 0 }) })));
+
+        if (expr.type === "or") {
+          options.push(node("or", { left: clone(expr.left), right: node("and", { left: node("not", { value: clone(expr.left) }), right: clone(expr.right) }) }));
+        }
+        if (expr.type === "and") {
+          options.push(node("and", { left: clone(expr.left), right: node("or", { left: node("not", { value: clone(expr.left) }), right: clone(expr.right) }) }));
+        }
+
+        if (expr.type === "and" && expr.right.type === "or") {
+          options.push(
+            node("or", {
+              left: node("and", { left: clone(expr.left), right: clone(expr.right.left) }),
+              right: node("and", { left: clone(expr.left), right: clone(expr.right.right) }),
+            }),
+          );
+        }
+        if (expr.type === "or" && expr.right.type === "and") {
+          options.push(
+            node("and", {
+              left: node("or", { left: clone(expr.left), right: clone(expr.right.left) }),
+              right: node("or", { left: clone(expr.left), right: clone(expr.right.right) }),
+            }),
+          );
+        }
+
+        options.push(node("or", { left: clone(expr), right: node("and", { left: clone(v), right: node("not", { value: clone(v) }) }) }));
+
+        const filtered = options.map((e) => normalize(e)).filter((e) => equivalent(e, expr) && gateCount(e) > gateCount(expr) && !hasDoubleNegation(e));
+        return filtered;
+      }
+
+      function bruteMinimalEquivalent(target, maxVars = 4, maxCost = 7) {
+        const vars = [...varSet(target)].sort();
+        const poolVars = (vars.length ? vars : VARS.slice(0, maxVars)).slice(0, maxVars);
+        const targetSig = truthSig(target, poolVars);
+
+        const byCost = new Map();
+        const seen = new Map();
+
+        function add(cost, expr) {
+          const n = normalize(expr);
+          const k = key(n);
+          if (seen.has(k)) return;
+          seen.set(k, true);
+          if (!byCost.has(cost)) byCost.set(cost, []);
+          byCost.get(cost).push(n);
+        }
+
+        for (const v of poolVars) add(0, node("var", { name: v }));
+        add(0, node("const", { value: 0 }));
+        add(0, node("const", { value: 1 }));
+
+        for (let cost = 1; cost <= maxCost; cost++) {
+          for (let c = 0; c < cost; c++) {
+            const arr = byCost.get(c) || [];
+            for (const e of arr) add(cost, node("not", { value: e }));
+          }
+          for (let c1 = 0; c1 < cost; c1++) {
+            for (let c2 = 0; c2 < cost; c2++) {
+              if (1 + c1 + c2 !== cost) continue;
+              for (const e1 of byCost.get(c1) || []) {
+                for (const e2 of byCost.get(c2) || []) {
+                  add(cost, node("and", { left: e1, right: e2 }));
+                  add(cost, node("or", { left: e1, right: e2 }));
+                }
+              }
+            }
+          }
+          for (const e of byCost.get(cost) || []) {
+            if (truthSig(e, poolVars) === targetSig) return { expr: simplify(e), gates: gateCount(simplify(e)) };
+          }
+        }
+        const s = simplify(target);
+        return { expr: s, gates: gateCount(s) };
+      }
+
+      function generateProblem(difficulty) {
+        const [low, high] = TARGETS[difficulty];
+        const maxVars = difficulty === "easy" ? 3 : 4;
+        let best = null;
+
+        for (let attempt = 0; attempt < 45; attempt++) {
+          let answer = simplify(baseExpression(maxVars));
+          const minimal = bruteMinimalEquivalent(answer, maxVars, 7);
+          answer = simplify(minimal.expr);
+          let current = clone(answer);
+
+          for (let i = 0; i < 16; i++) {
+            const exps = expansions(current, maxVars);
+            if (!exps.length) break;
+            const weighted = exps.sort((a, b) => Math.abs((low + high) / 2 - gateCount(a)) - Math.abs((low + high) / 2 - gateCount(b)));
+            current = weighted[Math.floor(Math.random() * Math.min(3, weighted.length))];
+            if (gateCount(current) >= high) break;
+          }
+
+          const gates = gateCount(current);
+          if (gates >= low && gates <= high && !hasDoubleNegation(current)) {
+            return {
+              difficulty,
+              problem: current,
+              answer,
+              minimalGates: gateCount(answer),
+              problemGates: gates,
+            };
+          }
+          if (!best || Math.abs(gates - (low + high) / 2) < Math.abs(best.problemGates - (low + high) / 2)) {
+            best = {
+              difficulty,
+              problem: current,
+              answer,
+              minimalGates: gateCount(answer),
+              problemGates: gates,
+            };
+          }
+        }
+        return best;
+      }
+
+      function renderExpr(el, expr) {
+        katex.render(toLatex(expr), el, { throwOnError: false });
+      }
+
+      function addStep(expr, label = "") {
+        const li = document.createElement("li");
+        if (label) {
+          const span = document.createElement("span");
+          span.textContent = label + " ";
+          li.appendChild(span);
+        }
+        const holder = document.createElement("span");
+        li.appendChild(holder);
+        renderExpr(holder, expr);
+        ui.steps.appendChild(li);
+      }
+
+      function setStatus(msg, kind = "") {
+        ui.status.className = `status ${kind}`.trim();
+        ui.status.textContent = msg;
+      }
+
+      function reset(difficulty) {
+        state = generateProblem(difficulty);
+        ui.steps.innerHTML = "";
+        renderExpr(ui.problemExpr, state.problem);
+        ui.problemMeta.textContent = `${difficulty.toUpperCase()} • generated gates: ${state.problemGates} • best possible gates: ${state.minimalGates}`;
+        addStep(state.problem, "Start:");
+        setStatus("New problem generated. Enter an equivalent line to begin simplifying.");
+        editorTokens = [];
+        renderEditor();
+      }
+
+      function renderEditor() {
+        const txt = editorTokens.join(" ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+        ui.editorText.textContent = txt || "Build your line with the buttons above.";
+        ui.editorShell.classList.remove("bad");
+        if (!txt) {
+          ui.editorPreview.textContent = "";
+          return;
+        }
+        try {
+          const expr = parse(txt);
+          renderExpr(ui.editorPreview, expr);
+        } catch {
+          ui.editorPreview.textContent = "Incomplete/invalid expression.";
+        }
+      }
+
+      function addToken(token) {
+        if (token === "NOT") {
+          editorTokens.push("NOT", "(");
+          return;
+        }
+        editorTokens.push(token);
+      }
+
+      function currentEditorText() {
+        return editorTokens.join(" ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+      }
+
+      function submitStep() {
+        if (!state) return;
+        const txt = currentEditorText().trim();
+        if (!txt) return;
+
+        try {
+          const expr = parse(txt);
+          if (!equivalent(expr, state.problem)) {
+            throw new Error("Not equivalent to the original expression.");
+          }
+
+          addStep(expr);
+          const g = gateCount(expr);
+          if (g === state.minimalGates) {
+            setStatus(`Excellent: minimal solution reached in ${g} gates. Problem complete.`, "good");
+          } else {
+            setStatus(`Accepted. Equivalent and valid. Current gates: ${g}. Keep simplifying toward ${state.minimalGates}.`, "good");
+          }
+          editorTokens = [];
+          renderEditor();
+        } catch (err) {
+          setStatus(`Invalid step: ${err.message}`, "bad");
+          ui.editorShell.classList.remove("bad");
+          void ui.editorShell.offsetWidth;
+          ui.editorShell.classList.add("bad");
+        }
+      }
+
+      document.querySelectorAll("button[data-token]").forEach((b) => {
+        b.addEventListener("click", () => {
+          addToken(b.dataset.token);
+          renderEditor();
+        });
+      });
+      document.querySelectorAll("button[data-diff]").forEach((b) => {
+        b.addEventListener("click", () => reset(b.dataset.diff));
+      });
+      ui.submit.addEventListener("click", submitStep);
+      ui.backspace.addEventListener("click", () => {
+        if (!editorTokens.length) return;
+        const last = editorTokens.pop();
+        if (last === "(" && editorTokens[editorTokens.length - 1] === "NOT") editorTokens.pop();
+        renderEditor();
+      });
+      ui.clear.addEventListener("click", () => {
+        editorTokens = [];
+        renderEditor();
+      });
+      document.addEventListener("keydown", (e) => {
+        const keyMap = {
+          a: "A",
+          b: "B",
+          c: "C",
+          d: "D",
+          "(": "(",
+          ")": ")",
+          "0": "0",
+          "1": "1",
+        };
+        if (keyMap[e.key.toLowerCase()]) {
+          addToken(keyMap[e.key.toLowerCase()]);
+          renderEditor();
+        } else if (e.key === "Enter") {
+          submitStep();
+        } else if (e.key === "Backspace") {
+          if (editorTokens.length) {
+            editorTokens.pop();
+            renderEditor();
+          }
+        }
+      });
+      ui.showAnswer.addEventListener("click", () => {
+        if (!state) return;
+        addStep(simplify(state.answer), "Best answer:");
+        setStatus(`Best known minimum uses ${state.minimalGates} gates.`, "good");
+      });
+
+      reset("easy");
+    </script>
+  </body>
+</html>
