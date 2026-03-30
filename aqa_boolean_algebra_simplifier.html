@@ -101,13 +101,15 @@
         background: #fff1f2;
       }
       .editor-text {
-        font-family: "Consolas", "Courier New", monospace;
-        font-size: 0.95rem;
-        word-break: break-word;
+        color: var(--muted);
+        font-size: 0.9rem;
       }
       .editor-preview {
-        margin-top: 0.5rem;
-        min-height: 1.6rem;
+        min-height: 2.2rem;
+      }
+      .panel.solved {
+        background: #dcfce7;
+        border-color: #86efac;
       }
       .editor-toolbar {
         display: flex;
@@ -164,8 +166,8 @@
         <div class="header">
           <h1>AQA Boolean Algebra Simplifier</h1>
           <p class="sub">
-            Enter each line in word notation (e.g. <strong>NOT(A AND B) OR NOT C</strong>). Accepted lines are rendered in AQA style using
-            <strong>.</strong> for AND, <strong>+</strong> for OR, and overline for NOT.
+            Build each line directly in the rendered equation editor using Boolean symbols. Use
+            <strong>·</strong> for AND, <strong>+</strong> for OR, and overline/¬ for NOT.
           </p>
         </div>
         <div class="section">
@@ -186,17 +188,17 @@
         <div class="section">
           <div class="input-row">
             <div id="editor-shell" class="editor-shell">
-              <div id="editor-text" class="editor-text"></div>
               <div id="editor-preview" class="editor-preview"></div>
+              <div id="editor-text" class="editor-text"></div>
             </div>
             <div class="editor-toolbar">
               <button class="token" data-token="A">A</button>
               <button class="token" data-token="B">B</button>
               <button class="token" data-token="C">C</button>
               <button class="token" data-token="D">D</button>
-              <button class="token" data-token="NOT">NOT</button>
-              <button class="token" data-token="AND">AND</button>
-              <button class="token" data-token="OR">OR</button>
+              <button class="token" data-token="¬">¬</button>
+              <button class="token" data-token=".">·</button>
+              <button class="token" data-token="+">+</button>
               <button class="token" data-token="(">(</button>
               <button class="token" data-token=")">)</button>
               <button class="token" data-token="0">0</button>
@@ -206,11 +208,11 @@
               <button id="submit-step" type="button">Submit</button>
             </div>
           </div>
-          <div class="hint">Build each line using the statement editor, then submit it for equivalence checking.</div>
+          <div class="hint">Build each line with the symbol buttons; the live equation above is exactly what will be checked.</div>
           <div id="status" class="status"></div>
         </div>
         <div class="section">
-          <div class="panel">
+          <div id="simplification-panel" class="panel">
             <strong>Simplification progression</strong>
             <ol id="steps"></ol>
           </div>
@@ -239,6 +241,7 @@
         status: document.getElementById("status"),
         steps: document.getElementById("steps"),
         showAnswer: document.getElementById("show-answer"),
+        simplificationPanel: document.getElementById("simplification-panel"),
       };
 
       let state = null;
@@ -448,13 +451,18 @@
             i++;
             continue;
           }
-          if (c === "+") {
+          if (c === "+" || c === "∨") {
             out.push({ type: "OR" });
             i++;
             continue;
           }
-          if (c === ".") {
+          if (c === "." || c === "·" || c === "∧") {
             out.push({ type: "AND" });
+            i++;
+            continue;
+          }
+          if (c === "¬" || c === "!") {
+            out.push({ type: "NOT" });
             i++;
             continue;
           }
@@ -644,6 +652,29 @@
         return { expr: s, gates: gateCount(s) };
       }
 
+      function countCompoundNegations(expr) {
+        if (expr.type === "not") {
+          const self = expr.value.type === "and" || expr.value.type === "or" ? 1 : 0;
+          return self + countCompoundNegations(expr.value);
+        }
+        if (expr.type === "and" || expr.type === "or") return countCompoundNegations(expr.left) + countCompoundNegations(expr.right);
+        return 0;
+      }
+
+      function hasNestedCompoundNegation(expr) {
+        if (expr.type === "not" && (expr.value.type === "and" || expr.value.type === "or")) {
+          return countCompoundNegations(expr.value) > 0;
+        }
+        if (expr.type === "not") return hasNestedCompoundNegation(expr.value);
+        if (expr.type === "and" || expr.type === "or") return hasNestedCompoundNegation(expr.left) || hasNestedCompoundNegation(expr.right);
+        return false;
+      }
+
+      function hardNegationRequirement(expr, difficulty) {
+        if (difficulty !== "hard") return true;
+        return countCompoundNegations(expr) >= 2 && hasNestedCompoundNegation(expr);
+      }
+
       function generateProblem(difficulty) {
         const [low, high] = TARGETS[difficulty];
         const maxVars = difficulty === "easy" ? 3 : 4;
@@ -664,7 +695,7 @@
           }
 
           const gates = gateCount(current);
-          if (gates >= low && gates <= high && !hasDoubleNegation(current)) {
+          if (gates >= low && gates <= high && !hasDoubleNegation(current) && hardNegationRequirement(current, difficulty)) {
             return {
               difficulty,
               problem: current,
@@ -682,6 +713,27 @@
               problemGates: gates,
             };
           }
+        }
+        if (difficulty === "hard" && (!best || !hardNegationRequirement(best.problem, difficulty))) {
+          const a = node("var", { name: randomVar(maxVars) });
+          const b = node("var", { name: randomVar(maxVars) });
+          const c = node("var", { name: randomVar(maxVars) });
+          const fallback = normalize(
+            node("not", {
+              value: node("and", {
+                left: node("not", { value: node("or", { left: clone(a), right: clone(b) }) }),
+                right: node("not", { value: node("or", { left: clone(c), right: node("not", { value: node("and", { left: clone(a), right: clone(b) }) }) }) }),
+              }),
+            }),
+          );
+          const answer = simplify(fallback);
+          return {
+            difficulty,
+            problem: fallback,
+            answer,
+            minimalGates: gateCount(answer),
+            problemGates: gateCount(fallback),
+          };
         }
         return best;
       }
@@ -711,6 +763,7 @@
       function reset(difficulty) {
         state = generateProblem(difficulty);
         ui.steps.innerHTML = "";
+        ui.simplificationPanel.classList.remove("solved");
         renderExpr(ui.problemExpr, state.problem);
         ui.problemMeta.textContent = `${difficulty.toUpperCase()} • generated gates: ${state.problemGates} • best possible gates: ${state.minimalGates}`;
         addStep(state.problem, "Start:");
@@ -720,8 +773,8 @@
       }
 
       function renderEditor() {
-        const txt = editorTokens.join(" ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
-        ui.editorText.textContent = txt || "Build your line with the buttons above.";
+        const txt = currentEditorText();
+        ui.editorText.textContent = txt || "Use the symbol buttons to build an expression.";
         ui.editorShell.classList.remove("bad");
         if (!txt) {
           ui.editorPreview.textContent = "";
@@ -736,10 +789,6 @@
       }
 
       function addToken(token) {
-        if (token === "NOT") {
-          editorTokens.push("NOT", "(");
-          return;
-        }
         editorTokens.push(token);
       }
 
@@ -762,6 +811,7 @@
           const g = gateCount(expr);
           if (g === state.minimalGates) {
             setStatus(`Excellent: minimal solution reached in ${g} gates. Problem complete.`, "good");
+            ui.simplificationPanel.classList.add("solved");
           } else {
             setStatus(`Accepted. Equivalent and valid. Current gates: ${g}. Keep simplifying toward ${state.minimalGates}.`, "good");
           }
@@ -787,8 +837,7 @@
       ui.submit.addEventListener("click", submitStep);
       ui.backspace.addEventListener("click", () => {
         if (!editorTokens.length) return;
-        const last = editorTokens.pop();
-        if (last === "(" && editorTokens[editorTokens.length - 1] === "NOT") editorTokens.pop();
+        editorTokens.pop();
         renderEditor();
       });
       ui.clear.addEventListener("click", () => {
@@ -808,6 +857,15 @@
         };
         if (keyMap[e.key.toLowerCase()]) {
           addToken(keyMap[e.key.toLowerCase()]);
+          renderEditor();
+        } else if (e.key === "." || e.key === "*") {
+          addToken(".");
+          renderEditor();
+        } else if (e.key === "+") {
+          addToken("+");
+          renderEditor();
+        } else if (e.key === "!" ) {
+          addToken("¬");
           renderEditor();
         } else if (e.key === "Enter") {
           submitStep();
