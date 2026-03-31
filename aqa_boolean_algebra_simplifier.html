@@ -100,10 +100,6 @@
         border-color: var(--bad);
         background: #fff1f2;
       }
-      .editor-text {
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
       .editor-input {
         width: 100%;
         border: 1px solid #cbd5e1;
@@ -167,6 +163,35 @@
         color: var(--muted);
         font-size: 0.9rem;
       }
+      dialog.answer-dialog {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1rem 1.1rem;
+        max-width: 680px;
+        width: min(92vw, 680px);
+      }
+      .answer-dialog::backdrop {
+        background: rgba(15, 23, 42, 0.45);
+      }
+      .answer-title {
+        margin: 0 0 0.75rem;
+      }
+      .answer-expression {
+        margin: 0.35rem 0 0.9rem;
+        padding: 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        font-family: "Consolas", "Menlo", monospace;
+        font-size: 1.3rem;
+        letter-spacing: 0.04em;
+        word-spacing: 0.2em;
+        background: #f8fafc;
+        min-height: 2.1rem;
+      }
+      .answer-dialog .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
     </style>
   </head>
   <body>
@@ -199,7 +224,6 @@
             <div id="editor-shell" class="editor-shell">
               <div id="editor-preview" class="editor-preview"></div>
               <input id="editor-input" class="editor-input" type="text" spellcheck="false" autocomplete="off" placeholder="Type directly here or use the symbol buttons…" />
-              <div id="editor-text" class="editor-text"></div>
             </div>
             <div class="editor-toolbar">
               <button class="token" data-token="A">A</button>
@@ -230,6 +254,13 @@
         </div>
       </section>
     </main>
+    <dialog id="answer-dialog" class="answer-dialog">
+      <h3 class="answer-title">Best Answer</h3>
+      <div id="answer-expression" class="answer-expression"></div>
+      <div class="dialog-actions">
+        <button id="close-answer" class="secondary" type="button">Close</button>
+      </div>
+    </dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script>
@@ -244,7 +275,6 @@
         problemExpr: document.getElementById("problem-expr"),
         problemMeta: document.getElementById("problem-meta"),
         editorShell: document.getElementById("editor-shell"),
-        editorText: document.getElementById("editor-text"),
         editorPreview: document.getElementById("editor-preview"),
         editorInput: document.getElementById("editor-input"),
         submit: document.getElementById("submit-step"),
@@ -255,6 +285,9 @@
         steps: document.getElementById("steps"),
         showAnswer: document.getElementById("show-answer"),
         simplificationPanel: document.getElementById("simplification-panel"),
+        answerDialog: document.getElementById("answer-dialog"),
+        answerExpression: document.getElementById("answer-expression"),
+        closeAnswer: document.getElementById("close-answer"),
       };
 
       let state = null;
@@ -455,7 +488,7 @@
         }
         const expr = parseOr();
         if (i !== tokens.length) throw new Error("Unexpected trailing input");
-        return normalize(expr);
+        return expr;
       }
 
       function tokenize(s) {
@@ -526,6 +559,7 @@
             if ((l.type === "const" && l.value === 0) || (r.type === "const" && r.value === 0)) return node("const", { value: 0 });
             if (l.type === "const" && l.value === 1) return r;
             if (r.type === "const" && r.value === 1) return l;
+            if (l.type === "not" && r.type === "not") return pass(node("not", { value: node("or", { left: l.value, right: r.value }) }));
             if (sameExpr(l, r)) return l;
             if (sameExpr(l, node("not", { value: r })) || sameExpr(r, node("not", { value: l }))) return node("const", { value: 0 });
             if (l.type === "or" && (sameExpr(l.left, r) || sameExpr(l.right, r))) return r;
@@ -537,6 +571,7 @@
             if ((l.type === "const" && l.value === 1) || (r.type === "const" && r.value === 1)) return node("const", { value: 1 });
             if (l.type === "const" && l.value === 0) return r;
             if (r.type === "const" && r.value === 0) return l;
+            if (l.type === "not" && r.type === "not") return pass(node("not", { value: node("and", { left: l.value, right: r.value }) }));
             if (sameExpr(l, r)) return l;
             if (sameExpr(l, node("not", { value: r })) || sameExpr(r, node("not", { value: l }))) return node("const", { value: 1 });
             if (l.type === "and" && (sameExpr(l.left, r) || sameExpr(l.right, r))) return r;
@@ -802,7 +837,6 @@
 
       function renderEditor() {
         const txt = currentEditorText();
-        ui.editorText.textContent = txt || "Expression preview will appear above.";
         ui.editorShell.classList.remove("bad");
         if (!txt) {
           ui.editorPreview.textContent = "";
@@ -910,9 +944,12 @@
       });
       ui.showAnswer.addEventListener("click", () => {
         if (!state) return;
-        addStep(simplify(state.answer), "Best answer:");
+        const best = simplify(state.answer);
+        ui.answerExpression.textContent = exprToTokens(best).join(" ");
+        ui.answerDialog.showModal();
         setStatus(`Best known minimum uses ${state.minimalGates} gates.`, "good");
       });
+      ui.closeAnswer.addEventListener("click", () => ui.answerDialog.close());
 
       reset("easy");
     </script>
