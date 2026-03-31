@@ -104,6 +104,15 @@
         color: var(--muted);
         font-size: 0.9rem;
       }
+      .editor-input {
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 0.6rem 0.7rem;
+        font-size: 1rem;
+        font-family: "Consolas", "Menlo", monospace;
+        box-sizing: border-box;
+      }
       .editor-preview {
         min-height: 2.2rem;
       }
@@ -189,6 +198,7 @@
           <div class="input-row">
             <div id="editor-shell" class="editor-shell">
               <div id="editor-preview" class="editor-preview"></div>
+              <input id="editor-input" class="editor-input" type="text" spellcheck="false" autocomplete="off" placeholder="Type directly here or use the symbol buttons…" />
               <div id="editor-text" class="editor-text"></div>
             </div>
             <div class="editor-toolbar">
@@ -209,7 +219,7 @@
               <button id="submit-step" type="button">Submit</button>
             </div>
           </div>
-          <div class="hint">Build each line with the symbol buttons; the live equation above is exactly what will be checked.</div>
+          <div class="hint">You can type directly and move the cursor anywhere, or insert symbols using the buttons.</div>
           <div id="status" class="status"></div>
         </div>
         <div class="section">
@@ -236,6 +246,7 @@
         editorShell: document.getElementById("editor-shell"),
         editorText: document.getElementById("editor-text"),
         editorPreview: document.getElementById("editor-preview"),
+        editorInput: document.getElementById("editor-input"),
         submit: document.getElementById("submit-step"),
         backspace: document.getElementById("backspace-step"),
         clear: document.getElementById("clear-step"),
@@ -247,7 +258,6 @@
       };
 
       let state = null;
-      let editorTokens = [];
 
       function node(type, data = {}) {
         return { type, ...data };
@@ -785,13 +795,14 @@
         ui.problemMeta.textContent = `${difficulty.toUpperCase()} • generated gates: ${state.problemGates} • best possible gates: ${state.minimalGates}`;
         addStep(state.problem, "Start:");
         setStatus("New problem generated. Enter an equivalent line to begin simplifying.");
-        editorTokens = [];
+        ui.editorInput.value = "";
         renderEditor();
+        ui.editorInput.focus();
       }
 
       function renderEditor() {
         const txt = currentEditorText();
-        ui.editorText.textContent = txt || "Use the symbol buttons to build an expression.";
+        ui.editorText.textContent = txt || "Expression preview will appear above.";
         ui.editorShell.classList.remove("bad");
         if (!txt) {
           ui.editorPreview.textContent = "";
@@ -806,11 +817,17 @@
       }
 
       function addToken(token) {
-        editorTokens.push(token);
+        const input = ui.editorInput;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? input.value.length;
+        input.value = `${input.value.slice(0, start)}${token}${input.value.slice(end)}`;
+        const next = start + token.length;
+        input.setSelectionRange(next, next);
+        input.focus();
       }
 
       function currentEditorText() {
-        return editorTokens.join(" ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+        return ui.editorInput.value;
       }
 
       function submitStep() {
@@ -833,8 +850,9 @@
           } else {
             setStatus(`Accepted. Equivalent and valid. Current gates: ${g}. Keep simplifying toward ${state.minimalGates}.`, "good");
           }
-          editorTokens = [];
+          ui.editorInput.value = "";
           renderEditor();
+          ui.editorInput.focus();
         } catch (err) {
           setStatus(`Invalid step: ${err.message}`, "bad");
           ui.editorShell.classList.remove("bad");
@@ -854,50 +872,40 @@
       });
       ui.submit.addEventListener("click", submitStep);
       ui.backspace.addEventListener("click", () => {
-        if (!editorTokens.length) return;
-        editorTokens.pop();
+        const input = ui.editorInput;
+        const start = input.selectionStart ?? 0;
+        const end = input.selectionEnd ?? 0;
+        if (start !== end) {
+          input.value = `${input.value.slice(0, start)}${input.value.slice(end)}`;
+          input.setSelectionRange(start, start);
+        } else if (start > 0) {
+          input.value = `${input.value.slice(0, start - 1)}${input.value.slice(end)}`;
+          input.setSelectionRange(start - 1, start - 1);
+        }
+        input.focus();
         renderEditor();
       });
       ui.clear.addEventListener("click", () => {
-        editorTokens = [];
+        ui.editorInput.value = "";
         renderEditor();
+        ui.editorInput.focus();
       });
       ui.setCurrent.addEventListener("click", () => {
         if (!state) return;
-        editorTokens = exprToTokens(state.current || state.problem);
+        ui.editorInput.value = exprToTokens(state.current || state.problem).join("");
         renderEditor();
+        ui.editorInput.focus();
         setStatus("Editor set to the current simplification line.", "good");
       });
-      document.addEventListener("keydown", (e) => {
-        const keyMap = {
-          a: "A",
-          b: "B",
-          c: "C",
-          d: "D",
-          "(": "(",
-          ")": ")",
-          "0": "0",
-          "1": "1",
-        };
-        if (keyMap[e.key.toLowerCase()]) {
-          addToken(keyMap[e.key.toLowerCase()]);
-          renderEditor();
-        } else if (e.key === "." || e.key === "*") {
+      ui.editorInput.addEventListener("input", renderEditor);
+      ui.editorInput.addEventListener("keydown", (e) => {
+        if (e.key === "*") {
+          e.preventDefault();
           addToken(".");
           renderEditor();
-        } else if (e.key === "+") {
-          addToken("+");
-          renderEditor();
-        } else if (e.key === "!" ) {
-          addToken("¬");
-          renderEditor();
         } else if (e.key === "Enter") {
+          e.preventDefault();
           submitStep();
-        } else if (e.key === "Backspace") {
-          if (editorTokens.length) {
-            editorTokens.pop();
-            renderEditor();
-          }
         }
       });
       ui.showAnswer.addEventListener("click", () => {
