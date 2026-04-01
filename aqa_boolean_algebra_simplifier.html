@@ -307,6 +307,11 @@
         medium: [8, 11],
         hard: [12, 15],
       };
+      const MINIMAL_GATE_FLOOR = {
+        easy: 1,
+        medium: 2,
+        hard: 3,
+      };
 
       const ui = {
         problemExpr: document.getElementById("problem-expr"),
@@ -602,8 +607,6 @@
             const inner = pass(e.value);
             if (inner.type === "not") return pass(inner.value);
             if (inner.type === "const") return node("const", { value: inner.value ? 0 : 1 });
-            if (inner.type === "and") return pass(node("or", { left: node("not", { value: inner.left }), right: node("not", { value: inner.right }) }));
-            if (inner.type === "or") return pass(node("and", { left: node("not", { value: inner.left }), right: node("not", { value: inner.right }) }));
             return node("not", { value: inner });
           }
 
@@ -615,6 +618,9 @@
           const r = n.right;
 
           if (op === "and") {
+            if (l.type === "not" && r.type === "not") {
+              return pass(node("not", { value: node("or", { left: l.value, right: r.value }) }));
+            }
             if (hasComplementPair(flatten("and", [l, r]))) return node("const", { value: 0 });
             if ((l.type === "const" && l.value === 0) || (r.type === "const" && r.value === 0)) return node("const", { value: 0 });
             if (l.type === "const" && l.value === 1) return r;
@@ -627,6 +633,9 @@
           }
 
           if (op === "or") {
+            if (l.type === "not" && r.type === "not") {
+              return pass(node("not", { value: node("and", { left: l.value, right: r.value }) }));
+            }
             if (hasComplementPair(flatten("or", [l, r]))) return node("const", { value: 1 });
             if ((l.type === "const" && l.value === 1) || (r.type === "const" && r.value === 1)) return node("const", { value: 1 });
             if (l.type === "const" && l.value === 0) return r;
@@ -797,6 +806,7 @@
 
       function generateProblem(difficulty) {
         const [low, high] = TARGETS[difficulty];
+        const minMinimalGates = MINIMAL_GATE_FLOOR[difficulty] || 1;
         const maxVars = difficulty === "easy" ? 3 : 4;
         let best = null;
 
@@ -815,7 +825,7 @@
           }
 
           const gates = gateCount(current);
-          if (gates >= low && gates <= high && !hasDoubleNegation(current) && hardNegationRequirement(current, difficulty) && (difficulty !== "hard" || gateCount(answer) >= 2)) {
+          if (gates >= low && gates <= high && !hasDoubleNegation(current) && hardNegationRequirement(current, difficulty) && gateCount(answer) >= minMinimalGates) {
             return {
               difficulty,
               problem: current,
@@ -824,7 +834,7 @@
               problemGates: gates,
             };
           }
-          if ((difficulty !== "hard" || gateCount(answer) >= 2) && (!best || Math.abs(gates - (low + high) / 2) < Math.abs(best.problemGates - (low + high) / 2))) {
+          if (gateCount(answer) >= minMinimalGates && (!best || Math.abs(gates - (low + high) / 2) < Math.abs(best.problemGates - (low + high) / 2))) {
             best = {
               difficulty,
               problem: current,
@@ -834,7 +844,7 @@
             };
           }
         }
-        if (difficulty === "hard" && (!best || !hardNegationRequirement(best.problem, difficulty) || gateCount(best.answer) < 2)) {
+        if (difficulty === "hard" && (!best || !hardNegationRequirement(best.problem, difficulty) || gateCount(best.answer) < minMinimalGates)) {
           const picks = [...VARS.slice(0, maxVars)].sort(() => Math.random() - 0.5);
           const [aName, bName, cName] = [picks[0] || "A", picks[1] || "B", picks[2] || "C"];
           const a = node("var", { name: aName });
