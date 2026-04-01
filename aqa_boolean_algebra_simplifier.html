@@ -418,7 +418,7 @@
         if (expr.type === "var") return [expr.name];
         if (expr.type === "const") return [String(expr.value)];
         if (expr.type === "not") {
-          const inner = exprToTokens(expr.value, 3);
+          const inner = exprToTokens(expr.value, 0);
           if (expr.value.type === "and" || expr.value.type === "or") return ["¬", "(", ...inner, ")"];
           return ["¬", ...inner];
         }
@@ -756,7 +756,7 @@
           }
 
           const gates = gateCount(current);
-          if (gates >= low && gates <= high && !hasDoubleNegation(current) && hardNegationRequirement(current, difficulty)) {
+          if (gates >= low && gates <= high && !hasDoubleNegation(current) && hardNegationRequirement(current, difficulty) && (difficulty !== "hard" || gateCount(answer) >= 2)) {
             return {
               difficulty,
               problem: current,
@@ -765,7 +765,7 @@
               problemGates: gates,
             };
           }
-          if (!best || Math.abs(gates - (low + high) / 2) < Math.abs(best.problemGates - (low + high) / 2)) {
+          if ((difficulty !== "hard" || gateCount(answer) >= 2) && (!best || Math.abs(gates - (low + high) / 2) < Math.abs(best.problemGates - (low + high) / 2))) {
             best = {
               difficulty,
               problem: current,
@@ -775,10 +775,12 @@
             };
           }
         }
-        if (difficulty === "hard" && (!best || !hardNegationRequirement(best.problem, difficulty))) {
-          const a = node("var", { name: randomVar(maxVars) });
-          const b = node("var", { name: randomVar(maxVars) });
-          const c = node("var", { name: randomVar(maxVars) });
+        if (difficulty === "hard" && (!best || !hardNegationRequirement(best.problem, difficulty) || gateCount(best.answer) < 2)) {
+          const picks = [...VARS.slice(0, maxVars)].sort(() => Math.random() - 0.5);
+          const [aName, bName, cName] = [picks[0] || "A", picks[1] || "B", picks[2] || "C"];
+          const a = node("var", { name: aName });
+          const b = node("var", { name: bName });
+          const c = node("var", { name: cName });
           const fallback = normalize(
             node("not", {
               value: node("and", {
