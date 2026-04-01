@@ -192,6 +192,35 @@
         display: flex;
         justify-content: flex-end;
       }
+      dialog.loading-dialog {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1rem 1.1rem;
+        width: min(92vw, 360px);
+      }
+      .loading-dialog::backdrop {
+        background: rgba(15, 23, 42, 0.45);
+      }
+      .loading-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: center;
+        text-align: center;
+      }
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border: 4px solid #cbd5e1;
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
     </style>
   </head>
   <body>
@@ -261,6 +290,14 @@
         <button id="close-answer" class="secondary" type="button">Close</button>
       </div>
     </dialog>
+    <dialog id="loading-dialog" class="loading-dialog">
+      <div class="loading-content">
+        <div class="spinner" aria-hidden="true"></div>
+        <strong id="loading-title">Generating problem…</strong>
+        <div id="loading-meta" class="meta">Please wait while we build a valid expression.</div>
+        <button id="cancel-generate" class="secondary" type="button">Cancel</button>
+      </div>
+    </dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script>
@@ -288,9 +325,14 @@
         answerDialog: document.getElementById("answer-dialog"),
         answerExpression: document.getElementById("answer-expression"),
         closeAnswer: document.getElementById("close-answer"),
+        loadingDialog: document.getElementById("loading-dialog"),
+        loadingTitle: document.getElementById("loading-title"),
+        loadingMeta: document.getElementById("loading-meta"),
+        cancelGenerate: document.getElementById("cancel-generate"),
       };
 
       let state = null;
+      let generationController = null;
 
       function node(type, data = {}) {
         return { type, ...data };
@@ -823,18 +865,76 @@
         ui.status.textContent = msg;
       }
 
-      function reset(difficulty) {
-        state = generateProblem(difficulty);
+      function setGenerationButtonsEnabled(enabled) {
+        document.querySelectorAll("button[data-diff]").forEach((b) => {
+          b.disabled = !enabled;
+        });
+      }
+
+      async function yieldToUI() {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      function showLoading(difficulty) {
+        ui.loadingTitle.textContent = `Generating ${difficulty} problem…`;
+        ui.loadingMeta.textContent = "Please wait while we build a valid expression.";
+        if (!ui.loadingDialog.open) ui.loadingDialog.showModal();
+      }
+
+      function hideLoading() {
+        if (ui.loadingDialog.open) ui.loadingDialog.close();
+      }
+
+      async function generateProblemUntilFound(difficulty, controller) {
+        let attempts = 0;
+        while (true) {
+          if (controller.cancelled) return null;
+          const candidate = generateProblem(difficulty);
+          attempts++;
+          if (candidate) {
+            return { problem: candidate, attempts };
+          }
+          if (attempts % 2 === 0) {
+            ui.loadingMeta.textContent = `Still generating… attempts: ${attempts}`;
+            await yieldToUI();
+          }
+        }
+      }
+
+      async function reset(difficulty) {
+        if (generationController) {
+          generationController.cancelled = true;
+        }
+        const controller = { cancelled: false };
+        generationController = controller;
+        setGenerationButtonsEnabled(false);
+        showLoading(difficulty);
+        const result = await generateProblemUntilFound(difficulty, controller);
+        if (!result || controller.cancelled) {
+          if (generationController === controller) {
+            setStatus("Generation cancelled.", "bad");
+            setGenerationButtonsEnabled(true);
+            hideLoading();
+            generationController = null;
+          }
+          return;
+        }
+        state = result.problem;
         state.current = clone(state.problem);
         ui.steps.innerHTML = "";
         ui.simplificationPanel.classList.remove("solved");
         renderExpr(ui.problemExpr, state.problem);
         ui.problemMeta.textContent = `${difficulty.toUpperCase()} • generated gates: ${state.problemGates} • best possible gates: ${state.minimalGates}`;
         addStep(state.problem, "Start:");
-        setStatus("New problem generated. Enter an equivalent line to begin simplifying.");
+        setStatus(`New problem generated in ${result.attempts} attempt(s). Enter an equivalent line to begin simplifying.`, "good");
         ui.editorInput.value = "";
         renderEditor();
         ui.editorInput.focus();
+        if (generationController === controller) {
+          setGenerationButtonsEnabled(true);
+          hideLoading();
+          generationController = null;
+        }
       }
 
       function renderEditor() {
@@ -904,7 +1004,9 @@
         });
       });
       document.querySelectorAll("button[data-diff]").forEach((b) => {
-        b.addEventListener("click", () => reset(b.dataset.diff));
+        b.addEventListener("click", () => {
+          void reset(b.dataset.diff);
+        });
       });
       ui.submit.addEventListener("click", submitStep);
       ui.backspace.addEventListener("click", () => {
@@ -952,8 +1054,12 @@
         setStatus(`Best known minimum uses ${state.minimalGates} gates.`, "good");
       });
       ui.closeAnswer.addEventListener("click", () => ui.answerDialog.close());
+      ui.cancelGenerate.addEventListener("click", () => {
+        if (!generationController) return;
+        generationController.cancelled = true;
+      });
 
-      reset("easy");
+      void reset("easy");
     </script>
   </body>
 </html>
