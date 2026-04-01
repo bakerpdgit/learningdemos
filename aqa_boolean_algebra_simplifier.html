@@ -579,6 +579,23 @@
       }
 
       function simplify(expr) {
+        function hasComplementPair(parts) {
+          const positive = new Set();
+          const negative = new Set();
+          for (const p of parts) {
+            if (p.type === "not") {
+              const innerKey = key(p.value);
+              if (positive.has(innerKey)) return true;
+              negative.add(innerKey);
+              continue;
+            }
+            const partKey = key(p);
+            if (negative.has(partKey)) return true;
+            positive.add(partKey);
+          }
+          return false;
+        }
+
         function pass(e) {
           if (e.type === "var" || e.type === "const") return e;
           if (e.type === "not") {
@@ -598,6 +615,7 @@
           const r = n.right;
 
           if (op === "and") {
+            if (hasComplementPair(flatten("and", [l, r]))) return node("const", { value: 0 });
             if ((l.type === "const" && l.value === 0) || (r.type === "const" && r.value === 0)) return node("const", { value: 0 });
             if (l.type === "const" && l.value === 1) return r;
             if (r.type === "const" && r.value === 1) return l;
@@ -609,6 +627,7 @@
           }
 
           if (op === "or") {
+            if (hasComplementPair(flatten("or", [l, r]))) return node("const", { value: 1 });
             if ((l.type === "const" && l.value === 1) || (r.type === "const" && r.value === 1)) return node("const", { value: 1 });
             if (l.type === "const" && l.value === 0) return r;
             if (r.type === "const" && r.value === 0) return l;
