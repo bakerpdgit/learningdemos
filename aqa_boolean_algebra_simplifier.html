@@ -232,6 +232,13 @@
               <input id="editor-input" class="editor-input" type="text" spellcheck="false" autocomplete="off" placeholder="Type directly here or use the symbol buttons…" />
             </div>
             <div class="editor-toolbar">
+              <button id="set-current-step" class="secondary" type="button">Set to current</button>
+              <button class="token" data-token="¬">¬</button>
+              <button class="token" data-token=".">·</button>
+              <button class="token" data-token="+">+</button>
+              <button class="token" data-token="^">⊕</button>
+              <button class="token" data-token="(">(</button>
+              <button class="token" data-token=")">)</button>
               <button class="token" data-token="A">A</button>
               <button class="token" data-token="B">B</button>
               <button class="token" data-token="C">C</button>
@@ -240,16 +247,8 @@
               <button class="token" data-token="X">X</button>
               <button class="token" data-token="Y">Y</button>
               <button class="token" data-token="Z">Z</button>
-              <button class="token" data-token="¬">¬</button>
-              <button class="token" data-token=".">·</button>
-              <button class="token" data-token="+">+</button>
-              <button class="token" data-token="(">(</button>
-              <button class="token" data-token=")">)</button>
               <button class="token" data-token="0">0</button>
               <button class="token" data-token="1">1</button>
-              <button id="backspace-step" class="secondary" type="button">Backspace</button>
-              <button id="clear-step" class="secondary" type="button">Clear</button>
-              <button id="set-current-step" class="secondary" type="button">Set to current</button>
               <button id="submit-step" type="button">Submit</button>
             </div>
           </div>
@@ -275,7 +274,7 @@
     <script>
       const QUESTION_BANK = [
         { id: "Q1", question: "(X + Y) . (X + ¬Y)", answer: "X" },
-        { id: "Q2", question: "¬(¬(A . (¬B + 0)) . ¬(¬A . (B + B)))", answer: "A . ¬B + ¬A . B" },
+        { id: "Q2", question: "¬(¬(A . (¬B + 0)) . ¬(¬A . (B + B)))", answer: "A ^ B" },
         { id: "Q3", question: "A . (A + C) . ¬A + ¬(¬A . ¬(A . B))", answer: "A" },
         { id: "Q4", question: "¬(¬A . ¬B)", answer: "A + B" },
         { id: "Q5", question: "¬(A + B . ¬B + C . A)", answer: "¬A" },
@@ -289,7 +288,7 @@
         { id: "Q13", question: "¬(¬(A . (A + 1)) . ¬B) . ¬(¬A + ¬(B + 0))", answer: "A . B" },
         { id: "Q14", question: "¬(¬A + B . C + B . ¬C) + C . (A + ¬A . (B + 1))", answer: "C + A . ¬B" },
         { id: "Q15", question: "A . ¬B + B . ¬(¬A + (¬B . C))", answer: "A" },
-        { id: "Q16", question: "¬A . (B . C . D + B . C . ¬D + B) + ¬(¬A + B)", answer: "A . ¬B + ¬A . B" },
+        { id: "Q16", question: "¬A . (B . C . D + B . C . ¬D + B) + ¬(¬A + B)", answer: "A ^ B" },
       ];
 
       const ui = {
@@ -300,8 +299,6 @@
         editorPreview: document.getElementById("editor-preview"),
         editorInput: document.getElementById("editor-input"),
         submit: document.getElementById("submit-step"),
-        backspace: document.getElementById("backspace-step"),
-        clear: document.getElementById("clear-step"),
         setCurrent: document.getElementById("set-current-step"),
         status: document.getElementById("status"),
         steps: document.getElementById("steps"),
@@ -325,6 +322,7 @@
       function gateCount(expr) {
         if (expr.type === "var" || expr.type === "const") return 0;
         if (expr.type === "not") return 1 + gateCount(expr.value);
+        if (expr.type === "xor") return 1 + gateCount(expr.left) + gateCount(expr.right);
         return 1 + gateCount(expr.left) + gateCount(expr.right);
       }
 
@@ -354,7 +352,8 @@
         if (expr.type === "var") return expr.name;
         if (expr.type === "const") return String(expr.value);
         if (expr.type === "not") return `!${key(expr.value)}`;
-        return `(${key(expr.left)}${expr.type === "and" ? "." : "+"}${key(expr.right)})`;
+        const op = expr.type === "and" ? "." : expr.type === "xor" ? "^" : "+";
+        return `(${key(expr.left)}${op}${key(expr.right)})`;
       }
 
       function sameExpr(a, b) {
@@ -373,6 +372,8 @@
             return evalExpr(expr.left, env) && evalExpr(expr.right, env);
           case "or":
             return evalExpr(expr.left, env) || evalExpr(expr.right, env);
+          case "xor":
+            return evalExpr(expr.left, env) !== evalExpr(expr.right, env);
           default:
             throw new Error("unknown type");
         }
@@ -381,7 +382,7 @@
       function varSet(expr, out = new Set()) {
         if (expr.type === "var") out.add(expr.name);
         else if (expr.type === "not") varSet(expr.value, out);
-        else if (expr.type === "and" || expr.type === "or") {
+        else if (expr.type === "and" || expr.type === "or" || expr.type === "xor") {
           varSet(expr.left, out);
           varSet(expr.right, out);
         }
@@ -403,10 +404,18 @@
         return truthSig(a, vars) === truthSig(b, vars);
       }
 
+      function isWrapNeeded(parentType, child) {
+        if (child.type === "var" || child.type === "const" || child.type === "not") return false;
+        if (parentType === "and") return child.type === "or" || child.type === "xor";
+        if (parentType === "xor") return child.type === "or";
+        return false;
+      }
+
       function precedence(expr) {
         if (expr.type === "or") return 1;
-        if (expr.type === "and") return 2;
-        if (expr.type === "not") return 3;
+        if (expr.type === "xor") return 2;
+        if (expr.type === "and") return 3;
+        if (expr.type === "not") return 4;
         return 4;
       }
 
@@ -417,7 +426,7 @@
           const inner = toWord(expr.value, 3);
           return `NOT(${inner})`;
         }
-        const sym = expr.type === "and" ? " AND " : " OR ";
+        const sym = expr.type === "and" ? " AND " : expr.type === "xor" ? " XOR " : " OR ";
         const here = precedence(expr);
         const text = `${toWord(expr.left, here)}${sym}${toWord(expr.right, here)}`;
         return here < parent ? `(${text})` : text;
@@ -431,23 +440,27 @@
           return `\\overline{${v}}`;
         }
         const here = precedence(expr);
-        const sym = expr.type === "and" ? " \\cdot " : " + ";
+        const sym = expr.type === "and" ? " \\cdot " : expr.type === "xor" ? " \\oplus " : " + ";
         const text = `${toLatex(expr.left, here)}${sym}${toLatex(expr.right, here)}`;
         return here < parent ? `(${text})` : text;
       }
 
-      function exprToTokens(expr, parent = 0) {
-        if (expr.type === "var") return [expr.name];
-        if (expr.type === "const") return [String(expr.value)];
+      function exprToText(expr, parentType = null) {
+        if (expr.type === "var") return expr.name;
+        if (expr.type === "const") return String(expr.value);
         if (expr.type === "not") {
-          const inner = exprToTokens(expr.value, 0);
-          if (expr.value.type === "and" || expr.value.type === "or") return ["¬", "(", ...inner, ")"];
-          return ["¬", ...inner];
+          const inner = exprToText(expr.value, "not");
+          if (expr.value.type === "and" || expr.value.type === "or" || expr.value.type === "xor") return `¬(${inner})`;
+          return `¬${inner}`;
         }
-        const here = precedence(expr);
-        const op = expr.type === "and" ? "." : "+";
-        const text = [...exprToTokens(expr.left, here), op, ...exprToTokens(expr.right, here)];
-        return here < parent ? ["(", ...text, ")"] : text;
+        const op = expr.type === "and" ? "." : expr.type === "xor" ? "^" : " + ";
+        let left = exprToText(expr.left, expr.type);
+        let right = exprToText(expr.right, expr.type);
+        if (isWrapNeeded(expr.type, expr.left)) left = `(${left})`;
+        if (isWrapNeeded(expr.type, expr.right)) right = `(${right})`;
+        const combined = `${left}${op}${right}`;
+        if (!parentType) return combined;
+        return isWrapNeeded(parentType, expr) ? `(${combined})` : combined;
       }
 
       function parse(input) {
@@ -461,10 +474,18 @@
           return tokens[i++];
         }
         function parseOr() {
-          let left = parseAnd();
+          let left = parseXor();
           while (peek() && peek().type === "OR") {
             consume("OR");
-            left = node("or", { left, right: parseAnd() });
+            left = node("or", { left, right: parseXor() });
+          }
+          return left;
+        }
+        function parseXor() {
+          let left = parseAnd();
+          while (peek() && peek().type === "XOR") {
+            consume("XOR");
+            left = node("xor", { left, right: parseAnd() });
           }
           return left;
         }
@@ -534,6 +555,11 @@
           }
           if (c === "+" || c === "∨") {
             out.push({ type: "OR" });
+            i++;
+            continue;
+          }
+          if (c === "^" || c === "⊕") {
+            out.push({ type: "XOR" });
             i++;
             continue;
           }
@@ -654,7 +680,7 @@
         ui.problemMeta.textContent = `${selected.id} • starting gates: ${state.problemGates} • target minimum gates: ${state.minimalGates}`;
         addStep(state.problem, "Start:");
         setStatus(`${selected.id} loaded. Enter an equivalent line to begin simplifying.`, "good");
-        ui.editorInput.value = "";
+        ui.editorInput.value = exprToText(state.current);
         renderEditor();
         ui.editorInput.focus();
       }
@@ -730,7 +756,7 @@
           } else {
             setStatus(`Accepted. Equivalent and valid. Current gates: ${g}. Keep simplifying toward ${state.minimalGates}.`, "good");
           }
-          ui.editorInput.value = "";
+          ui.editorInput.value = exprToText(state.current);
           renderEditor();
           ui.editorInput.focus();
         } catch (err) {
@@ -751,28 +777,9 @@
         loadQuestion(Number(ui.questionSelect.value));
       });
       ui.submit.addEventListener("click", submitStep);
-      ui.backspace.addEventListener("click", () => {
-        const input = ui.editorInput;
-        const start = input.selectionStart ?? 0;
-        const end = input.selectionEnd ?? 0;
-        if (start !== end) {
-          input.value = `${input.value.slice(0, start)}${input.value.slice(end)}`;
-          input.setSelectionRange(start, start);
-        } else if (start > 0) {
-          input.value = `${input.value.slice(0, start - 1)}${input.value.slice(end)}`;
-          input.setSelectionRange(start - 1, start - 1);
-        }
-        input.focus();
-        renderEditor();
-      });
-      ui.clear.addEventListener("click", () => {
-        ui.editorInput.value = "";
-        renderEditor();
-        ui.editorInput.focus();
-      });
       ui.setCurrent.addEventListener("click", () => {
         if (!state) return;
-        ui.editorInput.value = exprToTokens(state.current || state.problem).join("");
+        ui.editorInput.value = exprToText(state.current || state.problem);
         renderEditor();
         ui.editorInput.focus();
         setStatus("Editor set to the current simplification line.", "good");
@@ -791,7 +798,7 @@
       ui.showAnswer.addEventListener("click", () => {
         if (!state) return;
         const best = simplify(state.answer);
-        ui.answerExpression.textContent = exprToTokens(best).join(" ");
+        ui.answerExpression.textContent = exprToText(best);
         ui.answerDialog.showModal();
         setStatus(`Best known minimum uses ${state.minimalGates} gates.`, "good");
       });
