@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AQA Floating Point Practice</title>
+  <style>
+    :root {
+      --primary: #1565c0;
+      --primary-light: #1e88e5;
+      --success: #2e7d32;
+      --error: #c62828;
+      --warning: #e65100;
+      --bg: #f3f6fb;
+      --card: #ffffff;
+      --border: #cfd8dc;
+      --muted: #546e7a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: #1a1a2e; min-height: 100vh; }
+    header { background: var(--primary); color: white; padding: 1rem 2rem; text-align: center; }
+    header h1 { font-size: 1.55rem; margin-bottom: 0.2rem; }
+    header p { font-size: 0.88rem; opacity: 0.85; }
+    .home-link { display: inline-block; margin-top: 0.4rem; color: rgba(255,255,255,0.75); text-decoration: none; font-size: 0.82rem; }
+    .home-link:hover { color: white; }
+    main { max-width: 900px; margin: 1.75rem auto; padding: 0 1rem 3rem; }
+
+    /* ── Cards ── */
+    .card { background: var(--card); border-radius: 10px; padding: 1.4rem 1.6rem; box-shadow: 0 2px 8px rgba(0,0,0,0.09); margin-bottom: 1.25rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 0.5rem; flex-wrap: wrap; }
+    .card-header h2 { font-size: 1.05rem; color: var(--primary); }
+    .badge { background: var(--primary); color: white; border-radius: 5px; padding: 0.2rem 0.65rem; font-size: 0.77rem; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; }
+
+    /* ── Question box ── */
+    .q-box { font-size: 1.02rem; line-height: 1.55; padding: 0.85rem 1.1rem; background: #f0f4ff; border-left: 4px solid var(--primary); border-radius: 4px; margin-bottom: 1.1rem; }
+
+    /* ── Section titles ── */
+    .sec-title { font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.5rem; }
+
+    /* ── Bit cells ── */
+    .fp-wrap { display: flex; flex-direction: column; gap: 0.55rem; margin: 0.6rem 0; }
+    .fp-row { display: flex; align-items: center; flex-wrap: nowrap; gap: 2px; }
+    .row-label { font-size: 0.8rem; font-weight: 600; color: var(--muted); min-width: 105px; text-align: right; padding-right: 0.55rem; flex-shrink: 0; }
+    .bit-cell {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 42px; height: 46px;
+      border: 2px solid var(--border); border-radius: 6px;
+      font-size: 1.25rem; font-weight: 800; font-family: Consolas, "Courier New", monospace;
+      background: #f5f7fa; color: #333; user-select: none;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .bit-cell.editable { cursor: pointer; background: #fff; border-color: #90caf9; }
+    .bit-cell.editable:hover { background: #e3f2fd; border-color: var(--primary); }
+    .bit-cell.editable:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(21,101,192,0.18); }
+    .bit-cell[data-v="1"] { color: var(--primary); }
+    .bit-cell.ok { border-color: #43a047; background: #f1f8e9; color: #1b5e20; }
+    .bit-cell.err { border-color: #ef5350; background: #fff5f5; color: #b71c1c; }
+    .bpt { font-size: 1.5rem; font-weight: 900; color: var(--warning); margin: 0 1px; line-height: 1; align-self: flex-end; padding-bottom: 3px; flex-shrink: 0; }
+    .bit-hint { font-size: 0.77rem; color: var(--muted); margin-top: 0.25rem; }
+
+    /* ── Text input ── */
+    .text-ans { font-size: 1.05rem; padding: 0.55rem 0.9rem; border: 2px solid #90caf9; border-radius: 8px; width: 240px; font-family: Consolas, monospace; margin-top: 0.2rem; }
+    .text-ans:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(21,101,192,0.18); }
+    .text-ans.ok { border-color: #43a047; background: #f1f8e9; }
+    .text-ans.err { border-color: #ef5350; background: #fff5f5; }
+
+    hr.sep { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
+    /* ── Buttons ── */
+    .btn { padding: 0.58rem 1.35rem; border: none; border-radius: 8px; font-size: 0.93rem; font-weight: 600; cursor: pointer; transition: filter 0.12s, transform 0.08s; }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { filter: brightness(1.12); }
+    .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
+    .btn-outline:hover { background: #e8f0fe; }
+    .btn-new { background: #37474f; color: white; }
+    .btn-new:hover { filter: brightness(1.15); }
+    .btn-row { display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: 1.1rem; }
+
+    /* ── Feedback ── */
+    .fb { display: none; margin-top: 0.9rem; padding: 0.9rem 1rem; border-radius: 8px; font-size: 0.93rem; line-height: 1.5; }
+    .fb.ok  { display: block; background: #f1f8e9; border: 1px solid #a5d6a7; color: var(--success); }
+    .fb.err { display: block; background: #fff5f5; border: 1px solid #ffcdd2; color: var(--error); }
+
+    /* ── Solution ── */
+    .sol { display: none; margin-top: 0.9rem; padding: 1rem; border-radius: 8px; background: #fafafa; border: 1px solid #c5cae9; font-size: 0.91rem; line-height: 1.65; }
+    .sol.on { display: block; }
+    .sol code { background: #e8eaf6; padding: 0.1em 0.35em; border-radius: 3px; font-family: Consolas, monospace; font-size: 0.95em; }
+
+    /* ── Score strip ── */
+    .score-strip { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.6rem; }
+    .score-items { display: flex; gap: 1.5rem; }
+    .score-item { font-size: 0.88rem; color: var(--muted); }
+    .score-item strong { color: #1a1a2e; font-size: 1rem; }
+
+    @media (max-width: 520px) {
+      .bit-cell { width: 34px; height: 38px; font-size: 1rem; }
+      .row-label { min-width: 80px; font-size: 0.72rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>AQA Floating Point Practice</h1>
+  <p>Two's complement floating point — A Level Computer Science</p>
+  <a class="home-link" href="index.html">&#8592; Back to Learning Demos</a>
+</header>
+
+<main>
+  <!-- Score / new question -->
+  <div class="card">
+    <div class="score-strip">
+      <div class="score-items">
+        <div class="score-item">Attempted&#160;<strong id="sAttempted">0</strong></div>
+        <div class="score-item">Correct&#160;<strong id="sCorrect">0</strong></div>
+      </div>
+      <button class="btn btn-new" onclick="newQuestion()">&#9654;&#160;New Question</button>
+    </div>
+  </div>
+
+  <!-- Question card -->
+  <div class="card" id="qCard">
+    <div class="card-header">
+      <h2 id="qTypeLabel">Question</h2>
+      <span class="badge" id="qBadge">&#8212;</span>
+    </div>
+    <div class="q-box" id="qText">Press <strong>New Question</strong> to begin.</div>
+
+    <!-- Read-only FP display (normalise / FP-to-decimal) -->
+    <div id="dispSec" style="display:none">
+      <div class="sec-title" id="dispTitle">Given floating point number:</div>
+      <div class="fp-wrap" id="dispFP"></div>
+    </div>
+
+    <hr class="sep" id="sep1" style="display:none"/>
+
+    <!-- Answer section -->
+    <div id="ansSec" style="display:none">
+      <div class="sec-title" id="ansTitle">Your answer:</div>
+
+      <!-- Bit-cell answer -->
+      <div id="bitAnsSec" style="display:none">
+        <div class="fp-wrap" id="ansFP"></div>
+        <p class="bit-hint">Click a bit to toggle 0&#8596;1. Tab or arrow keys also work. The orange <strong>.</strong> marks the binary point.</p>
+      </div>
+
+      <!-- Text answer -->
+      <div id="txtAnsSec" style="display:none">
+        <input type="text" class="text-ans" id="txtAns" placeholder="e.g. 3.75 or -0.5"/>
+        <p class="bit-hint" id="txtHint"></p>
+      </div>
+    </div>
+
+    <div class="btn-row" id="btnRow" style="display:none">
+      <button class="btn btn-primary" id="submitBtn" onclick="handleSubmit()">Check Answer</button>
+      <button class="btn btn-outline" id="solBtn" onclick="showSolution()" style="display:none">Show Solution</button>
+      <button class="btn btn-new" onclick="newQuestion()">Next Question</button>
+    </div>
+
+    <div class="fb" id="fb"></div>
+    <div class="sol" id="solBox"></div>
+  </div>
+</main>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════
+//  CORE MATHS
+// ══════════════════════════════════════════════════════
+
+function tc2int(bits) {
+  // Two's complement bits → signed integer
+  const n = bits.length;
+  let v = -bits[0] * (1 << (n - 1));
+  for (let i = 1; i < n; i++) v += bits[i] * (1 << (n - 1 - i));
+  return v;
+}
+
+function int2tc(value, nBits) {
+  // Signed integer → two's complement bit array (MSB first)
+  const lo = -(1 << (nBits - 1)), hi = (1 << (nBits - 1)) - 1;
+  if (value < lo || value > hi) return null;
+  const mod = 1 << nBits;
+  let v = ((value % mod) + mod) % mod;
+  const bits = [];
+  for (let i = nBits - 1; i >= 0; i--) { bits.push((v >> i) & 1); }
+  return bits;
+}
+
+function mantVal(bits) {
+  // Mantissa bits → numeric value  (binary point after bit 0)
+  let v = -bits[0];
+  for (let i = 1; i < bits.length; i++) v += bits[i] * Math.pow(2, -i);
+  return v;
+}
+
+function fp2dec(mBits, eBits) {
+  return mantVal(mBits) * Math.pow(2, tc2int(eBits));
+}
+
+function isNorm(mBits) {
+  return mBits.length < 2 || mBits[0] !== mBits[1];
+}
+
+// Convert a numeric value → normalised FP. Returns {mantissa, exponent} or null.
+function val2fp(value, mCount, eCount) {
+  if (value === 0) return { mantissa: new Array(mCount).fill(0), exponent: new Array(eCount).fill(0) };
+  const neg = value < 0;
+  let mant = value, exp = 0;
+  // Scale: positive → [0.5,1), negative → [-1,-0.5]
+  while (Math.abs(mant) > 1 + 1e-10) { mant /= 2; exp++; }
+  while (Math.abs(mant) < 0.5 - 1e-10) { mant *= 2; exp--; }
+  // Clamp -1 edge
+  if (neg && Math.abs(mant + 1) < 1e-10) mant = -1;
+  const eMin = -(1 << (eCount - 1)), eMax = (1 << (eCount - 1)) - 1;
+  if (exp < eMin || exp > eMax) return null;
+  const mBits = [];
+  if (!neg) {
+    mBits.push(0);
+    let r = mant;
+    for (let i = 1; i < mCount; i++) {
+      r *= 2; const b = r >= 1 - 1e-10 ? 1 : 0; mBits.push(b); if (b) r -= 1;
+    }
+  } else {
+    mBits.push(1);
+    let r = mant + 1; // in [0, 0.5]
+    for (let i = 1; i < mCount; i++) {
+      r *= 2; const b = r >= 1 - 1e-10 ? 1 : 0; mBits.push(b); if (b) r -= 1;
+    }
+  }
+  const eBits = int2tc(exp, eCount);
+  if (!eBits) return null;
+  const back = fp2dec(mBits, eBits);
+  if (Math.abs(back - value) > Math.max(Math.abs(value) * 1e-8, 1e-11)) return null;
+  return { mantissa: mBits, exponent: eBits };
+}
+
+// Enumerate all normalised representable values (sorted ascending)
+function normVals(mCount, eCount) {
+  const n = mCount + eCount;
+  const total = 1 << n;
+  const out = [];
+  for (let code = 0; code < total; code++) {
+    const mBits = [], eBits = [];
+    for (let i = 0; i < mCount; i++) mBits.push((code >> (n - 1 - i)) & 1);
+    for (let i = 0; i < eCount; i++) eBits.push((code >> (eCount - 1 - i)) & 1);
+    if (!isNorm(mBits)) continue;
+    out.push({ val: fp2dec(mBits, eBits), mBits, eBits });
+  }
+  out.sort((a, b) => a.val - b.val);
+  return out;
+}
+
+// ══════════════════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════════════════
+
+function rnd(lo, hi) { return Math.floor(Math.random() * (hi - lo + 1)) + lo; }
+
+function fmtNum(v) {
+  if (v === 0) return '0';
+  return parseFloat(v.toPrecision(10)).toString();
+}
+
+function bitCfg() {
+  const total = rnd(8, 12);
+  const eCount = total <= 9 ? 3 : 4;
+  return { mCount: total - eCount, eCount, total };
+}
+
+function randNormMant(mCount, sign) {
+  // sign: 0=positive(01…), 1=negative(10…), undefined=random
+  const s = sign !== undefined ? sign : rnd(0, 1);
+  const bits = [s, 1 - s];
+  for (let i = 2; i < mCount; i++) bits.push(rnd(0, 1));
+  return bits;
+}
+
+// ══════════════════════════════════════════════════════
+//  QUESTION GENERATORS
+// ══════════════════════════════════════════════════════
+
+function genDecToFP(mCount, eCount) {
+  const eMax = (1 << (eCount - 1)) - 1;
+  const eMin = -(1 << (eCount - 1));
+  const expLo = Math.max(eMin, -3), expHi = Math.min(eMax, 4);
+  const exp = rnd(expLo, expHi);
+  const mBits = randNormMant(mCount);
+  const eBits = int2tc(exp, eCount);
+  const value = fp2dec(mBits, eBits);
+  return {
+    type: 'decToFP', mCount, eCount,
+    qText: `Convert the denary value <strong>${fmtNum(value)}</strong> into floating point form using a <strong>${mCount}-bit two's complement mantissa</strong> and a <strong>${eCount}-bit two's complement exponent</strong>. The binary point is after the sign (first) bit of the mantissa.`,
+    ansM: mBits, ansE: eBits, value,
+    sol: solDecToFP(value, mBits, eBits, mCount, eCount)
+  };
+}
+
+function genFPToDec(mCount, eCount) {
+  const eMax = (1 << (eCount - 1)) - 1;
+  const eMin = -(1 << (eCount - 1));
+  const exp = rnd(Math.max(eMin, -3), Math.min(eMax, 4));
+  const mBits = randNormMant(mCount);
+  const eBits = int2tc(exp, eCount);
+  const value = fp2dec(mBits, eBits);
+  return {
+    type: 'fpToDec', mCount, eCount,
+    qText: `What denary value does the following floating point number represent? (${mCount}-bit two's complement mantissa, ${eCount}-bit two's complement exponent; binary point after the first bit of the mantissa.)`,
+    dispM: mBits, dispE: eBits, decAns: value,
+    sol: solFPToDec(mBits, eBits, mCount, eCount, value)
+  };
+}
+
+function genNormalise(mCount, eCount) {
+  const eMax = (1 << (eCount - 1)) - 1;
+  const eMin = -(1 << (eCount - 1));
+  for (let tries = 0; tries < 80; tries++) {
+    const shift = rnd(1, 2);
+    const expBase = rnd(eMin, eMax - shift);
+    const mb = randNormMant(mCount);
+    // Zero out the last `shift` bits so right-shift is lossless
+    for (let k = mCount - shift; k < mCount; k++) mb[k] = 0;
+    const eBits = int2tc(expBase, eCount);
+    const shiftedExp = expBase + shift;
+    const newE = int2tc(shiftedExp, eCount);
+    if (!eBits || !newE) continue;
+    // Right-shift mantissa: prepend `shift` copies of sign bit
+    const shifted = [];
+    for (let i = 0; i < shift; i++) shifted.push(mb[0]);
+    for (let i = 0; i < mCount - shift; i++) shifted.push(mb[i]);
+    if (isNorm(shifted)) continue; // should always be non-normalised
+    const origVal = fp2dec(mb, eBits);
+    const shiftVal = fp2dec(shifted, newE);
+    if (Math.abs(origVal - shiftVal) > 1e-10) continue;
+    return {
+      type: 'normalise', mCount, eCount,
+      qText: `The following floating point number is <strong>not normalised</strong>. Write it in normalised form using the same ${mCount}-bit two's complement mantissa and ${eCount}-bit two's complement exponent. (Binary point after first bit of mantissa.)`,
+      dispM: shifted, dispE: newE,
+      ansM: mb, ansE: eBits, value: origVal,
+      sol: solNormalise(shifted, newE, mb, eBits, mCount, eCount, origVal, shift)
+    };
+  }
+  return null;
+}
+
+function genRange(mCount, eCount) {
+  const eMax = (1 << (eCount - 1)) - 1;
+  const eMin = -(1 << (eCount - 1));
+  // Largest positive: 0.111…1 × 2^eMax
+  const maxMant = mantVal([0, ...new Array(mCount - 1).fill(1)]);
+  const maxPos = maxMant * Math.pow(2, eMax);
+  // Smallest positive normalised: 0.100…0 × 2^eMin
+  const minPos = 0.5 * Math.pow(2, eMin);
+  // Most negative: 1.000…0 × 2^eMax = -1 × 2^eMax
+  const mostNeg = -Math.pow(2, eMax);
+
+  const opts = [
+    {
+      q: `What is the <strong>largest positive value</strong> that can be represented in a floating point system with a ${mCount}-bit two's complement mantissa and ${eCount}-bit two's complement exponent?`,
+      ans: maxPos,
+      hint: `Use mantissa 0${'1'.repeat(mCount-1)} (= ${fmtNum(maxMant)}) and exponent ${'0'.repeat(1)}${'1'.repeat(eCount-1)} (= ${eMax}).`,
+      sol: solRangeMax(mCount, eCount, maxMant, eMax, maxPos)
+    },
+    {
+      q: `What is the <strong>smallest positive normalised value</strong> that can be represented in a floating point system with a ${mCount}-bit two's complement mantissa and ${eCount}-bit two's complement exponent?`,
+      ans: minPos,
+      hint: `Use mantissa 01${'0'.repeat(mCount-2)} (= 0.5) and exponent 1${'0'.repeat(eCount-1)} (= ${eMin}).`,
+      sol: solRangeMin(mCount, eCount, eMin, minPos)
+    },
+    {
+      q: `What is the <strong>most negative value</strong> (largest negative magnitude) that can be represented in a floating point system with a ${mCount}-bit two's complement mantissa and ${eCount}-bit two's complement exponent?`,
+      ans: mostNeg,
+      hint: `Use mantissa 1${'0'.repeat(mCount-1)} (= −1) and exponent ${'0'.repeat(1)}${'1'.repeat(eCount-1)} (= ${eMax}).`,
+      sol: solRangeNeg(mCount, eCount, eMax, mostNeg)
+    }
+  ];
+  const o = opts[rnd(0, 2)];
+  return {
+    type: 'range', mCount, eCount,
+    qText: o.q, decAns: o.ans, hint: o.hint, sol: o.sol
+  };
+}
+
+function genClosest(mCount, eCount) {
+  const all = normVals(mCount, eCount).filter(e => e.val > 0);
+  if (all.length < 2) return null;
+  for (let tries = 0; tries < 60; tries++) {
+    const idx = rnd(0, all.length - 2);
+    const A = all[idx], B = all[idx + 1];
+    const gap = B.val - A.val;
+    if (gap < 1e-10) continue;
+    // r not near 0.5 to avoid ambiguity
+    const r = Math.random() < 0.5 ? 0.18 + Math.random() * 0.24 : 0.58 + Math.random() * 0.24;
+    const target = A.val + gap * r;
+    // Make sure target is not accidentally exactly representable
+    const check = val2fp(target, mCount, eCount);
+    if (check) continue;
+    const decPlaces = Math.max(2, Math.ceil(-Math.log10(gap)) + 2);
+    const tgtStr = target.toFixed(Math.min(decPlaces, 7));
+    const answer = r < 0.5 ? A : B;
+    return {
+      type: 'closest', mCount, eCount,
+      qText: `The value <strong>${tgtStr}</strong> cannot be exactly represented in a floating point system with a ${mCount}-bit two's complement mantissa and ${eCount}-bit two's complement exponent. Give the bit pattern of the <strong>closest representable value</strong>.`,
+      ansM: answer.mBits, ansE: answer.eBits, target,
+      closerTo: r < 0.5 ? A : B,
+      sol: solClosest(target, A, B, r, mCount, eCount)
+    };
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════════════════
+//  SOLUTION BUILDERS
+// ══════════════════════════════════════════════════════
+
+function solDecToFP(value, mBits, eBits, mCount, eCount) {
+  const exp = tc2int(eBits);
+  const mVal = mantVal(mBits);
+  const neg = value < 0;
+  let s = `<b>Step 1 — Identify sign and scale.</b><br>`;
+  s += `${fmtNum(value)} is ${neg ? 'negative' : 'positive'}, so the sign bit will be ${neg ? '1' : '0'}.<br>`;
+  s += `We need M × 2<sup>E</sup> = ${fmtNum(value)} with M normalised (${neg ? '1.0…' : '0.1…'}).<br><br>`;
+  s += `<b>Step 2 — Find E.</b><br>`;
+  s += `Scale until |M| ∈ [0.5, 1]: E = <strong>${exp}</strong> → two's complement (${eCount} bits) = <code>${eBits.join('')}</code><br><br>`;
+  s += `<b>Step 3 — Encode mantissa M = ${fmtNum(mVal)}.</b><br>`;
+  if (!neg) {
+    s += `Positive: bit 0 = 0, then expand 0.${mBits.slice(1).join('')} in binary:<br>`;
+  } else {
+    s += `Negative two's complement: bit 0 = 1. Remaining bits encode ${fmtNum(mVal)} + 1 = ${fmtNum(mVal + 1)}:<br>`;
+  }
+  s += `Mantissa bits: <code>${mBits[0]}</code><strong>.</strong><code>${mBits.slice(1).join('')}</code><br><br>`;
+  s += `<b>Answer:</b> Mantissa <code>${mBits.join('')}</code> &nbsp; Exponent <code>${eBits.join('')}</code>`;
+  return s;
+}
+
+function solFPToDec(mBits, eBits, mCount, eCount, value) {
+  const exp = tc2int(eBits);
+  const mVal = mantVal(mBits);
+  let s = `<b>Step 1 — Decode the exponent.</b><br>`;
+  s += `Exponent bits <code>${eBits.join('')}</code>: `;
+  if (eBits[0] === 0) {
+    const mag = eBits.slice(1).reduce((a, b, i) => a + b * (1 << (eCount - 2 - i)), 0);
+    s += `positive; value = ${mag} = <strong>${exp}</strong><br><br>`;
+  } else {
+    s += `negative (two's complement); value = <strong>${exp}</strong><br><br>`;
+  }
+  s += `<b>Step 2 — Decode the mantissa</b> (binary point after bit 0).<br>`;
+  s += `Bits: <code>${mBits[0]}</code><strong>.</strong><code>${mBits.slice(1).join('')}</code><br>`;
+  if (mBits[0] === 0) {
+    const terms = mBits.slice(1).map((b, i) => b ? `2<sup>−${i+1}</sup>` : null).filter(Boolean);
+    s += `= 0 + ${terms.join(' + ') || '0'} = <strong>${fmtNum(mVal)}</strong><br><br>`;
+  } else {
+    const terms = mBits.slice(1).map((b, i) => b ? `2<sup>−${i+1}</sup>` : null).filter(Boolean);
+    s += `= −1 + ${terms.join(' + ') || '0'} = <strong>${fmtNum(mVal)}</strong><br><br>`;
+  }
+  s += `<b>Step 3 — Calculate value.</b><br>`;
+  s += `${fmtNum(mVal)} × 2<sup>${exp}</sup> = ${fmtNum(mVal)} × ${Math.pow(2, exp)} = <strong>${fmtNum(value)}</strong>`;
+  return s;
+}
+
+function solNormalise(shM, shE, normM, normE, mCount, eCount, value, shift) {
+  const origExp = tc2int(shE);
+  const newExp = tc2int(normE);
+  let s = `<b>Step 1 — Identify the problem.</b><br>`;
+  s += `Mantissa <code>${shM[0]}.${shM.slice(1).join('')}</code> starts with <strong>${shM[0]}${shM[1]}</strong> — `;
+  s += shM[0] === shM[1] ? `both the same, so it is <em>not normalised</em>.<br><br>` : `(unexpected)<br><br>`;
+  s += `<b>Step 2 — Left-shift mantissa by ${shift} bit${shift > 1 ? 's' : ''}.</b><br>`;
+  s += `<code>${shM.join('')}</code> → <code>${normM.join('')}</code><br>`;
+  s += `Normalised: starts with ${normM[0]}${normM[1]} ✓<br><br>`;
+  s += `<b>Step 3 — Adjust exponent.</b><br>`;
+  s += `Each left-shift ÷ mantissa by 2, so exponent must decrease by ${shift}:<br>`;
+  s += `${origExp} − ${shift} = ${newExp} → <code>${normE.join('')}</code><br><br>`;
+  s += `<b>Answer:</b> Mantissa <code>${normM.join('')}</code> &nbsp; Exponent <code>${normE.join('')}</code><br>`;
+  s += `Value = ${fmtNum(value)}`;
+  return s;
+}
+
+function solRangeMax(mCount, eCount, maxMant, eMax, maxPos) {
+  const mStr = '0' + '1'.repeat(mCount - 1);
+  const eStr = '0' + '1'.repeat(eCount - 1);
+  let s = `<b>Largest positive:</b> maximise mantissa and exponent.<br>`;
+  s += `Largest positive normalised mantissa: <code>${mStr}</code> = ${fmtNum(maxMant)}<br>`;
+  s += `Largest exponent: <code>${eStr}</code> = ${eMax}<br>`;
+  s += `Value = ${fmtNum(maxMant)} × 2<sup>${eMax}</sup> = <strong>${fmtNum(maxPos)}</strong>`;
+  return s;
+}
+
+function solRangeMin(mCount, eCount, eMin, minPos) {
+  const mStr = '01' + '0'.repeat(mCount - 2);
+  const eStr = '1' + '0'.repeat(eCount - 1);
+  let s = `<b>Smallest positive normalised:</b> minimise mantissa and exponent.<br>`;
+  s += `Smallest positive normalised mantissa: <code>${mStr}</code> = 0.5<br>`;
+  s += `Most negative exponent: <code>${eStr}</code> = ${eMin}<br>`;
+  s += `Value = 0.5 × 2<sup>${eMin}</sup> = <strong>${fmtNum(minPos)}</strong>`;
+  return s;
+}
+
+function solRangeNeg(mCount, eCount, eMax, mostNeg) {
+  const mStr = '1' + '0'.repeat(mCount - 1);
+  const eStr = '0' + '1'.repeat(eCount - 1);
+  let s = `<b>Most negative:</b> most negative mantissa, largest exponent.<br>`;
+  s += `Most negative mantissa: <code>${mStr}</code> = −1<br>`;
+  s += `Largest exponent: <code>${eStr}</code> = ${eMax}<br>`;
+  s += `Value = −1 × 2<sup>${eMax}</sup> = <strong>${fmtNum(mostNeg)}</strong>`;
+  return s;
+}
+
+function solClosest(target, A, B, r, mCount, eCount) {
+  const dA = Math.abs(target - A.val), dB = Math.abs(target - B.val);
+  const ans = r < 0.5 ? A : B;
+  let s = `<b>Step 1 — Find the two nearest representable values.</b><br>`;
+  s += `Just below: ${fmtNum(A.val)} → mantissa <code>${A.mBits.join('')}</code>, exponent <code>${A.eBits.join('')}</code><br>`;
+  s += `Just above: ${fmtNum(B.val)} → mantissa <code>${B.mBits.join('')}</code>, exponent <code>${B.eBits.join('')}</code><br><br>`;
+  s += `<b>Step 2 — Compare distances.</b><br>`;
+  s += `Distance to ${fmtNum(A.val)}: ${fmtNum(dA)}<br>`;
+  s += `Distance to ${fmtNum(B.val)}: ${fmtNum(dB)}<br><br>`;
+  s += `<b>Step 3 — Choose closer value.</b><br>`;
+  s += `${fmtNum(ans.val)} is closer.<br>`;
+  s += `<b>Answer:</b> Mantissa <code>${ans.mBits.join('')}</code> &nbsp; Exponent <code>${ans.eBits.join('')}</code>`;
+  return s;
+}
+
+// ══════════════════════════════════════════════════════
+//  UI RENDERING
+// ══════════════════════════════════════════════════════
+
+function renderFPRows(container, mCount, eCount, mBits, eBits, editable) {
+  container.innerHTML = '';
+
+  // Mantissa row
+  const mRow = document.createElement('div');
+  mRow.className = 'fp-row';
+  const mLbl = document.createElement('span');
+  mLbl.className = 'row-label';
+  mLbl.textContent = `Mantissa (${mCount} bits):`;
+  mRow.appendChild(mLbl);
+  for (let i = 0; i < mCount; i++) {
+    const cell = mkCell(mBits ? mBits[i] : 0, editable, 'm', i);
+    mRow.appendChild(cell);
+    if (i === 0) {
+      const dot = document.createElement('span');
+      dot.className = 'bpt'; dot.textContent = '.';
+      mRow.appendChild(dot);
+    }
+  }
+  container.appendChild(mRow);
+
+  // Exponent row
+  const eRow = document.createElement('div');
+  eRow.className = 'fp-row';
+  const eLbl = document.createElement('span');
+  eLbl.className = 'row-label';
+  eLbl.textContent = `Exponent (${eCount} bits):`;
+  eRow.appendChild(eLbl);
+  for (let i = 0; i < eCount; i++) {
+    eRow.appendChild(mkCell(eBits ? eBits[i] : 0, editable, 'e', i));
+  }
+  container.appendChild(eRow);
+}
+
+function mkCell(val, editable, row, idx) {
+  const c = document.createElement('span');
+  c.className = 'bit-cell' + (editable ? ' editable' : '');
+  c.textContent = val;
+  c.dataset.v = val;
+  c.dataset.row = row;
+  c.dataset.idx = idx;
+  if (editable) {
+    c.tabIndex = 0;
+    c.addEventListener('click', () => toggleCell(c));
+    c.addEventListener('keydown', e => {
+      if (e.key === '0' || e.key === '1') { e.preventDefault(); setCell(c, +e.key); }
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleCell(c); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const cells = [...document.querySelectorAll('#ansFP .bit-cell.editable')];
+        const ci = cells.indexOf(c);
+        const next = cells[ci + (e.key === 'ArrowRight' ? 1 : -1)];
+        if (next) next.focus();
+      }
+    });
+  }
+  return c;
+}
+
+function toggleCell(c) { setCell(c, c.textContent === '0' ? 1 : 0); }
+function setCell(c, v) {
+  c.textContent = v; c.dataset.v = v;
+  c.classList.remove('ok', 'err');
+}
+
+function getInputBits(container, row) {
+  return [...container.querySelectorAll(`.bit-cell[data-row="${row}"]`)].map(c => +c.dataset.v);
+}
+
+// ══════════════════════════════════════════════════════
+//  STATE & FLOW
+// ══════════════════════════════════════════════════════
+
+let CQ = null;          // current question
+let answered = false;
+let wrongCount = 0;
+let scoreAtt = 0, scoreCor = 0;
+
+const TYPE_LABEL = {
+  decToFP: 'Decimal → Floating Point',
+  fpToDec: 'Floating Point → Decimal',
+  normalise: 'Normalise',
+  range: 'Range Calculation',
+  closest: 'Closest Representation'
+};
+
+function newQuestion() {
+  answered = false; wrongCount = 0;
+  const { mCount, eCount, total } = bitCfg();
+
+  // Weighted type selection
+  const weights = [0, 0, 0, 1, 1, 1, 2, 2, 3, 4];
+  let type = weights[rnd(0, weights.length - 1)];
+  let q = null;
+  for (let t = 0; t < 6 && !q; t++) {
+    try {
+      if (type === 0) q = genDecToFP(mCount, eCount);
+      else if (type === 1) q = genFPToDec(mCount, eCount);
+      else if (type === 2) q = genNormalise(mCount, eCount);
+      else if (type === 3) q = genRange(mCount, eCount);
+      else if (type === 4) q = genClosest(mCount, eCount);
+    } catch(e) { console.error(e); }
+    if (!q) type = rnd(0, 1);
+  }
+  if (!q) q = genDecToFP(mCount, eCount);
+  CQ = q;
+  renderQ(q);
+}
+
+function renderQ(q) {
+  const { mCount, eCount } = q;
+  document.getElementById('qTypeLabel').textContent = TYPE_LABEL[q.type] || 'Question';
+  document.getElementById('qBadge').textContent = `${mCount}m + ${eCount}e = ${mCount + eCount} bits`;
+  document.getElementById('qText').innerHTML = q.qText;
+
+  // Reset all panels
+  ['dispSec','sep1','ansSec','bitAnsSec','txtAnsSec','btnRow'].forEach(id =>
+    document.getElementById(id).style.display = 'none');
+  const fb = document.getElementById('fb');
+  fb.className = 'fb'; fb.innerHTML = '';
+  const sol = document.getElementById('solBox');
+  sol.className = 'sol'; sol.innerHTML = '';
+  const solBtn = document.getElementById('solBtn');
+  solBtn.style.display = 'none';
+  const subBtn = document.getElementById('submitBtn');
+  subBtn.textContent = 'Check Answer'; subBtn.style.display = '';
+  const txtAns = document.getElementById('txtAns');
+  txtAns.value = ''; txtAns.className = 'text-ans';
+  txtAns.onkeydown = e => { if (e.key === 'Enter') handleSubmit(); };
+
+  if (q.type === 'fpToDec') {
+    show('dispSec'); show('sep1');
+    document.getElementById('dispTitle').textContent = 'Floating point number to decode:';
+    renderFPRows(document.getElementById('dispFP'), mCount, eCount, q.dispM, q.dispE, false);
+    show('ansSec');
+    document.getElementById('ansTitle').textContent = 'Enter the denary value:';
+    show('txtAnsSec');
+    document.getElementById('txtHint').textContent = 'Enter the exact decimal (e.g. 3.75 or −0.5)';
+
+  } else if (q.type === 'normalise') {
+    show('dispSec'); show('sep1');
+    document.getElementById('dispTitle').textContent = 'Non-normalised floating point number:';
+    renderFPRows(document.getElementById('dispFP'), mCount, eCount, q.dispM, q.dispE, false);
+    show('ansSec');
+    document.getElementById('ansTitle').textContent = 'Enter the normalised form:';
+    show('bitAnsSec');
+    renderFPRows(document.getElementById('ansFP'), mCount, eCount, null, null, true);
+
+  } else if (q.type === 'range') {
+    show('ansSec');
+    document.getElementById('ansTitle').textContent = 'Your answer:';
+    show('txtAnsSec');
+    document.getElementById('txtHint').textContent = q.hint + ' Enter as a decimal (e.g. 0.03125).';
+
+  } else {
+    // decToFP, closest
+    show('ansSec');
+    document.getElementById('ansTitle').textContent = 'Enter your floating point answer:';
+    show('bitAnsSec');
+    renderFPRows(document.getElementById('ansFP'), mCount, eCount, null, null, true);
+  }
+  show('btnRow');
+}
+
+function show(id) { document.getElementById(id).style.display = ''; }
+
+// ══════════════════════════════════════════════════════
+//  ANSWER CHECKING
+// ══════════════════════════════════════════════════════
+
+function handleSubmit() {
+  if (!CQ) return;
+  if (answered) { newQuestion(); return; }
+  const q = CQ;
+  const fb = document.getElementById('fb');
+  const ansFP = document.getElementById('ansFP');
+
+  let correct = false;
+
+  if (q.type === 'fpToDec' || q.type === 'range') {
+    const raw = document.getElementById('txtAns').value.trim();
+    const sv = parseFloat(raw);
+    if (isNaN(sv)) {
+      fb.className = 'fb err';
+      fb.innerHTML = 'Please enter a valid number (e.g. 3.75).';
+      return;
+    }
+    const tol = Math.max(Math.abs(q.decAns) * 1e-6, 1e-9);
+    correct = Math.abs(sv - q.decAns) <= tol;
+    document.getElementById('txtAns').className = 'text-ans ' + (correct ? 'ok' : 'err');
+    if (correct) {
+      fb.className = 'fb ok';
+      fb.innerHTML = `&#10003; Correct! The answer is <strong>${fmtNum(q.decAns)}</strong>.`;
+    } else {
+      fb.className = 'fb err';
+      fb.innerHTML = `&#10007; Not quite (you entered ${fmtNum(sv)}). Try again or view the solution.`;
+    }
+
+  } else {
+    const stM = getInputBits(ansFP, 'm');
+    const stE = getInputBits(ansFP, 'e');
+    const mOk = arrEq(stM, q.ansM);
+    const eOk = arrEq(stE, q.ansE);
+    correct = mOk && eOk;
+
+    // Colour cells
+    [...ansFP.querySelectorAll('.bit-cell')].forEach(c => {
+      const exp = c.dataset.row === 'm' ? q.ansM[+c.dataset.idx] : q.ansE[+c.dataset.idx];
+      c.classList.remove('ok', 'err');
+      c.classList.add(+c.dataset.v === exp ? 'ok' : 'err');
+    });
+
+    if (correct) {
+      fb.className = 'fb ok';
+      let msg = `&#10003; Correct! Mantissa <code>${q.ansM.join('')}</code> &nbsp; Exponent <code>${q.ansE.join('')}</code>`;
+      if (q.value !== undefined) msg += ` = ${fmtNum(q.value)}`;
+      fb.innerHTML = msg;
+    } else {
+      fb.className = 'fb err';
+      fb.innerHTML = `&#10007; Not quite — cells highlighted in red are wrong. Try again or view the solution.`;
+    }
+  }
+
+  scoreAtt++;
+  if (correct) {
+    scoreCor++;
+    answered = true;
+    document.getElementById('submitBtn').textContent = 'Next Question';
+  } else {
+    wrongCount++;
+    if (wrongCount >= 1) document.getElementById('solBtn').style.display = '';
+  }
+  document.getElementById('sAttempted').textContent = scoreAtt;
+  document.getElementById('sCorrect').textContent = scoreCor;
+}
+
+function showSolution() {
+  if (!CQ) return;
+  const box = document.getElementById('solBox');
+  box.className = 'sol on';
+  box.innerHTML = '<b>Solution:</b><br><br>' + CQ.sol;
+
+  // If bit answer, fill in correct bits read-only style
+  if (['decToFP','normalise','closest'].includes(CQ.type)) {
+    const ansFP = document.getElementById('ansFP');
+    [...ansFP.querySelectorAll('.bit-cell')].forEach(c => {
+      const exp = c.dataset.row === 'm' ? CQ.ansM[+c.dataset.idx] : CQ.ansE[+c.dataset.idx];
+      c.textContent = exp; c.dataset.v = exp;
+      c.classList.remove('ok','err');
+    });
+  }
+
+  answered = true;
+  document.getElementById('submitBtn').textContent = 'Next Question';
+  document.getElementById('solBtn').style.display = 'none';
+}
+
+function arrEq(a, b) { return a.length === b.length && a.every((v, i) => v === b[i]); }
+
+// ══════════════════════════════════════════════════════
+//  KEYBOARD SHORTCUT: Enter = submit, N = new
+// ══════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Enter') handleSubmit();
+  else if (e.key === 'n' || e.key === 'N') newQuestion();
+});
+
+// ── Start ──
+newQuestion();
+</script>
+</body>
+</html>
