@@ -192,34 +192,12 @@
         display: flex;
         justify-content: flex-end;
       }
-      dialog.loading-dialog {
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 1rem 1.1rem;
-        width: min(92vw, 360px);
-      }
-      .loading-dialog::backdrop {
-        background: rgba(15, 23, 42, 0.45);
-      }
-      .loading-content {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        align-items: center;
-        text-align: center;
-      }
-      .spinner {
-        width: 34px;
-        height: 34px;
-        border: 4px solid #cbd5e1;
-        border-top-color: var(--primary);
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
+      select {
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 0.5rem 0.65rem;
+        font-size: 1rem;
+        background: white;
       }
     </style>
   </head>
@@ -235,15 +213,14 @@
         </div>
         <div class="section">
           <div class="controls">
-            <button data-diff="easy">New Easy</button>
-            <button data-diff="medium">New Medium</button>
-            <button data-diff="hard">New Hard</button>
+            <label for="question-select"><strong>Question:</strong></label>
+            <select id="question-select"></select>
             <button id="show-answer" class="secondary">Show Best Answer</button>
           </div>
         </div>
         <div class="section problem">
           <div class="panel">
-            <div><strong>Generated problem:</strong></div>
+            <div><strong>Selected problem:</strong></div>
             <div id="problem-expr" class="expr"></div>
             <div id="problem-meta" class="meta"></div>
           </div>
@@ -259,6 +236,10 @@
               <button class="token" data-token="B">B</button>
               <button class="token" data-token="C">C</button>
               <button class="token" data-token="D">D</button>
+              <button class="token" data-token="W">W</button>
+              <button class="token" data-token="X">X</button>
+              <button class="token" data-token="Y">Y</button>
+              <button class="token" data-token="Z">Z</button>
               <button class="token" data-token="¬">¬</button>
               <button class="token" data-token=".">·</button>
               <button class="token" data-token="+">+</button>
@@ -290,32 +271,31 @@
         <button id="close-answer" class="secondary" type="button">Close</button>
       </div>
     </dialog>
-    <dialog id="loading-dialog" class="loading-dialog">
-      <div class="loading-content">
-        <div class="spinner" aria-hidden="true"></div>
-        <strong id="loading-title">Generating problem…</strong>
-        <div id="loading-meta" class="meta">Please wait while we build a valid expression.</div>
-        <button id="cancel-generate" class="secondary" type="button">Cancel</button>
-      </div>
-    </dialog>
-
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script>
-      const VARS = ["A", "B", "C", "D"];
-      const TARGETS = {
-        easy: [5, 7],
-        medium: [8, 11],
-        hard: [12, 15],
-      };
-      const MINIMAL_GATE_FLOOR = {
-        easy: 1,
-        medium: 2,
-        hard: 3,
-      };
+      const QUESTION_BANK = [
+        { id: "Q1", question: "(X + Y) . (X + ¬Y)", answer: "X" },
+        { id: "Q2", question: "¬(¬(A . (¬B + 0)) . ¬(¬A . (B + B)))", answer: "A . ¬B + ¬A . B" },
+        { id: "Q3", question: "A . (A + C) . ¬A + ¬(¬A . ¬(A . B))", answer: "A" },
+        { id: "Q4", question: "¬(¬A . ¬B)", answer: "A + B" },
+        { id: "Q5", question: "¬(A + B . ¬B + C . A)", answer: "¬A" },
+        { id: "Q6", question: "(A + ¬B) . ¬(¬A + B)", answer: "A . ¬B" },
+        { id: "Q7", question: "(A + ¬B) . B", answer: "A . B" },
+        { id: "Q8", question: "¬(¬A + ¬B) + B . ¬A . (¬C + C)", answer: "B" },
+        { id: "Q9", question: "¬W . X . Z + W . Z + X . Y . ¬Z + ¬W . X . Y . 1", answer: "X . Y + X . Z + W . Z" },
+        { id: "Q10", question: "¬(¬(¬A + A . (A + B)) + (¬B . ¬C))", answer: "B + C" },
+        { id: "Q11", question: "(A + B) . (B + C . (D + ¬D))", answer: "B + (A . C)" },
+        { id: "Q12", question: "¬(¬(¬B . A) . ¬B) + A . B", answer: "A + B" },
+        { id: "Q13", question: "¬(¬(A . (A + 1)) . ¬B) . ¬(¬A + ¬(B + 0))", answer: "A . B" },
+        { id: "Q14", question: "¬(¬A + B . C + B . ¬C) + C . (A + ¬A . (B + 1))", answer: "C + A . ¬B" },
+        { id: "Q15", question: "A . ¬B + B . ¬(¬A + (¬B . C))", answer: "A" },
+        { id: "Q16", question: "¬A . (B . C . D + B . C . ¬D + B) + ¬(¬A + B)", answer: "A . ¬B + ¬A . B" },
+      ];
 
       const ui = {
         problemExpr: document.getElementById("problem-expr"),
         problemMeta: document.getElementById("problem-meta"),
+        questionSelect: document.getElementById("question-select"),
         editorShell: document.getElementById("editor-shell"),
         editorPreview: document.getElementById("editor-preview"),
         editorInput: document.getElementById("editor-input"),
@@ -330,14 +310,9 @@
         answerDialog: document.getElementById("answer-dialog"),
         answerExpression: document.getElementById("answer-expression"),
         closeAnswer: document.getElementById("close-answer"),
-        loadingDialog: document.getElementById("loading-dialog"),
-        loadingTitle: document.getElementById("loading-title"),
-        loadingMeta: document.getElementById("loading-meta"),
-        cancelGenerate: document.getElementById("cancel-generate"),
       };
 
       let state = null;
-      let generationController = null;
 
       function node(type, data = {}) {
         return { type, ...data };
@@ -572,7 +547,7 @@
             i++;
             continue;
           }
-          const m = s.slice(i).match(/^(NOT|AND|OR|[A-D]|[01])/i);
+          const m = s.slice(i).match(/^(NOT|AND|OR|[A-Z]|[01])/i);
           if (!m) throw new Error(`Invalid token near '${s.slice(i, i + 8)}'`);
           const raw = m[1].toUpperCase();
           i += m[1].length;
@@ -659,215 +634,29 @@
         return cur;
       }
 
-      function hasDoubleNegation(expr) {
-        if (expr.type === "not") {
-          if (expr.value.type === "not") return true;
-          return hasDoubleNegation(expr.value);
-        }
-        if (expr.type === "and" || expr.type === "or") return hasDoubleNegation(expr.left) || hasDoubleNegation(expr.right);
-        return false;
-      }
+      function loadQuestion(index) {
+        const selected = QUESTION_BANK[index];
+        const problem = parse(selected.question);
+        const answer = parse(selected.answer);
 
-      function randomPick(a) {
-        return a[Math.floor(Math.random() * a.length)];
-      }
+        state = {
+          id: selected.id,
+          problem,
+          answer,
+          minimalGates: gateCount(answer),
+          problemGates: gateCount(problem),
+        };
+        state.current = clone(state.problem);
 
-      function randomVar(maxVars) {
-        return VARS[Math.floor(Math.random() * maxVars)];
-      }
-
-      function baseExpression(maxVars) {
-        const a = node("var", { name: randomVar(maxVars) });
-        const b = node("var", { name: randomVar(maxVars) });
-        const c = node("var", { name: randomVar(maxVars) });
-        const choices = [
-          node("or", { left: clone(a), right: clone(b) }),
-          node("and", { left: clone(a), right: clone(b) }),
-          node("or", { left: clone(a), right: node("and", { left: clone(b), right: clone(c) }) }),
-          node("and", { left: clone(a), right: node("or", { left: clone(b), right: clone(c) }) }),
-          node("not", { value: node("and", { left: clone(a), right: clone(b) }) }),
-          node("not", { value: node("or", { left: clone(a), right: clone(b) }) }),
-        ];
-        return normalize(randomPick(choices));
-      }
-
-      function mapExpr(expr, fn) {
-        const replaced = fn(expr);
-        if (replaced) return replaced;
-        if (expr.type === "not") return node("not", { value: mapExpr(expr.value, fn) });
-        if (expr.type === "and" || expr.type === "or") return node(expr.type, { left: mapExpr(expr.left, fn), right: mapExpr(expr.right, fn) });
-        return clone(expr);
-      }
-
-      function expansions(expr, maxVars) {
-        const options = [];
-        const v = node("var", { name: randomVar(maxVars) });
-
-        options.push(mapExpr(expr, (e) => e === expr && node("and", { left: clone(e), right: node("const", { value: 1 }) })));
-        options.push(mapExpr(expr, (e) => e === expr && node("or", { left: clone(e), right: node("const", { value: 0 }) })));
-
-        if (expr.type === "or") {
-          options.push(node("or", { left: clone(expr.left), right: node("and", { left: node("not", { value: clone(expr.left) }), right: clone(expr.right) }) }));
-        }
-        if (expr.type === "and") {
-          options.push(node("and", { left: clone(expr.left), right: node("or", { left: node("not", { value: clone(expr.left) }), right: clone(expr.right) }) }));
-        }
-
-        if (expr.type === "and" && expr.right.type === "or") {
-          options.push(
-            node("or", {
-              left: node("and", { left: clone(expr.left), right: clone(expr.right.left) }),
-              right: node("and", { left: clone(expr.left), right: clone(expr.right.right) }),
-            }),
-          );
-        }
-        if (expr.type === "or" && expr.right.type === "and") {
-          options.push(
-            node("and", {
-              left: node("or", { left: clone(expr.left), right: clone(expr.right.left) }),
-              right: node("or", { left: clone(expr.left), right: clone(expr.right.right) }),
-            }),
-          );
-        }
-
-        options.push(node("or", { left: clone(expr), right: node("and", { left: clone(v), right: node("not", { value: clone(v) }) }) }));
-
-        const filtered = options.map((e) => normalize(e)).filter((e) => equivalent(e, expr) && gateCount(e) > gateCount(expr) && !hasDoubleNegation(e));
-        return filtered;
-      }
-
-      function bruteMinimalEquivalent(target, maxVars = 4, maxCost = 7) {
-        const vars = [...varSet(target)].sort();
-        const poolVars = (vars.length ? vars : VARS.slice(0, maxVars)).slice(0, maxVars);
-        const targetSig = truthSig(target, poolVars);
-
-        const byCost = new Map();
-        const seen = new Map();
-
-        function add(cost, expr) {
-          const n = normalize(expr);
-          const k = key(n);
-          if (seen.has(k)) return;
-          seen.set(k, true);
-          if (!byCost.has(cost)) byCost.set(cost, []);
-          byCost.get(cost).push(n);
-        }
-
-        for (const v of poolVars) add(0, node("var", { name: v }));
-        add(0, node("const", { value: 0 }));
-        add(0, node("const", { value: 1 }));
-
-        for (let cost = 1; cost <= maxCost; cost++) {
-          for (let c = 0; c < cost; c++) {
-            const arr = byCost.get(c) || [];
-            for (const e of arr) add(cost, node("not", { value: e }));
-          }
-          for (let c1 = 0; c1 < cost; c1++) {
-            for (let c2 = 0; c2 < cost; c2++) {
-              if (1 + c1 + c2 !== cost) continue;
-              for (const e1 of byCost.get(c1) || []) {
-                for (const e2 of byCost.get(c2) || []) {
-                  add(cost, node("and", { left: e1, right: e2 }));
-                  add(cost, node("or", { left: e1, right: e2 }));
-                }
-              }
-            }
-          }
-          for (const e of byCost.get(cost) || []) {
-            if (truthSig(e, poolVars) === targetSig) return { expr: simplify(e), gates: gateCount(simplify(e)) };
-          }
-        }
-        const s = simplify(target);
-        return { expr: s, gates: gateCount(s) };
-      }
-
-      function countCompoundNegations(expr) {
-        if (expr.type === "not") {
-          const self = expr.value.type === "and" || expr.value.type === "or" ? 1 : 0;
-          return self + countCompoundNegations(expr.value);
-        }
-        if (expr.type === "and" || expr.type === "or") return countCompoundNegations(expr.left) + countCompoundNegations(expr.right);
-        return 0;
-      }
-
-      function hasNestedCompoundNegation(expr) {
-        if (expr.type === "not" && (expr.value.type === "and" || expr.value.type === "or")) {
-          return countCompoundNegations(expr.value) > 0;
-        }
-        if (expr.type === "not") return hasNestedCompoundNegation(expr.value);
-        if (expr.type === "and" || expr.type === "or") return hasNestedCompoundNegation(expr.left) || hasNestedCompoundNegation(expr.right);
-        return false;
-      }
-
-      function hardNegationRequirement(expr, difficulty) {
-        if (difficulty !== "hard") return true;
-        return countCompoundNegations(expr) >= 2 && hasNestedCompoundNegation(expr);
-      }
-
-      function generateProblem(difficulty) {
-        const [low, high] = TARGETS[difficulty];
-        const minMinimalGates = MINIMAL_GATE_FLOOR[difficulty] || 1;
-        const maxVars = difficulty === "easy" ? 3 : 4;
-        let best = null;
-
-        for (let attempt = 0; attempt < 45; attempt++) {
-          let answer = simplify(baseExpression(maxVars));
-          const minimal = bruteMinimalEquivalent(answer, maxVars, 7);
-          answer = simplify(minimal.expr);
-          let current = clone(answer);
-
-          for (let i = 0; i < 16; i++) {
-            const exps = expansions(current, maxVars);
-            if (!exps.length) break;
-            const weighted = exps.sort((a, b) => Math.abs((low + high) / 2 - gateCount(a)) - Math.abs((low + high) / 2 - gateCount(b)));
-            current = weighted[Math.floor(Math.random() * Math.min(3, weighted.length))];
-            if (gateCount(current) >= high) break;
-          }
-
-          const gates = gateCount(current);
-          if (gates >= low && gates <= high && !hasDoubleNegation(current) && hardNegationRequirement(current, difficulty) && gateCount(answer) >= minMinimalGates) {
-            return {
-              difficulty,
-              problem: current,
-              answer,
-              minimalGates: gateCount(answer),
-              problemGates: gates,
-            };
-          }
-          if (gateCount(answer) >= minMinimalGates && (!best || Math.abs(gates - (low + high) / 2) < Math.abs(best.problemGates - (low + high) / 2))) {
-            best = {
-              difficulty,
-              problem: current,
-              answer,
-              minimalGates: gateCount(answer),
-              problemGates: gates,
-            };
-          }
-        }
-        if (difficulty === "hard" && (!best || !hardNegationRequirement(best.problem, difficulty) || gateCount(best.answer) < minMinimalGates)) {
-          const picks = [...VARS.slice(0, maxVars)].sort(() => Math.random() - 0.5);
-          const [aName, bName, cName] = [picks[0] || "A", picks[1] || "B", picks[2] || "C"];
-          const a = node("var", { name: aName });
-          const b = node("var", { name: bName });
-          const c = node("var", { name: cName });
-          const fallback = normalize(
-            node("not", {
-              value: node("and", {
-                left: node("not", { value: node("or", { left: clone(a), right: clone(b) }) }),
-                right: node("not", { value: node("or", { left: clone(c), right: node("not", { value: node("and", { left: clone(a), right: clone(b) }) }) }) }),
-              }),
-            }),
-          );
-          const answer = simplify(fallback);
-          return {
-            difficulty,
-            problem: fallback,
-            answer,
-            minimalGates: gateCount(answer),
-            problemGates: gateCount(fallback),
-          };
-        }
-        return best;
+        ui.steps.innerHTML = "";
+        ui.simplificationPanel.classList.remove("solved");
+        renderExpr(ui.problemExpr, state.problem);
+        ui.problemMeta.textContent = `${selected.id} • starting gates: ${state.problemGates} • target minimum gates: ${state.minimalGates}`;
+        addStep(state.problem, "Start:");
+        setStatus(`${selected.id} loaded. Enter an equivalent line to begin simplifying.`, "good");
+        ui.editorInput.value = "";
+        renderEditor();
+        ui.editorInput.focus();
       }
 
       function renderExpr(el, expr) {
@@ -890,78 +679,6 @@
       function setStatus(msg, kind = "") {
         ui.status.className = `status ${kind}`.trim();
         ui.status.textContent = msg;
-      }
-
-      function setGenerationButtonsEnabled(enabled) {
-        document.querySelectorAll("button[data-diff]").forEach((b) => {
-          b.disabled = !enabled;
-        });
-      }
-
-      async function yieldToUI() {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-
-      function showLoading(difficulty) {
-        ui.loadingTitle.textContent = `Generating ${difficulty} problem…`;
-        ui.loadingMeta.textContent = "Please wait while we build a valid expression.";
-        if (!ui.loadingDialog.open) ui.loadingDialog.showModal();
-      }
-
-      function hideLoading() {
-        if (ui.loadingDialog.open) ui.loadingDialog.close();
-      }
-
-      async function generateProblemUntilFound(difficulty, controller) {
-        let attempts = 0;
-        while (true) {
-          if (controller.cancelled) return null;
-          const candidate = generateProblem(difficulty);
-          attempts++;
-          if (candidate) {
-            return { problem: candidate, attempts };
-          }
-          if (attempts % 2 === 0) {
-            ui.loadingMeta.textContent = `Still generating… attempts: ${attempts}`;
-            await yieldToUI();
-          }
-        }
-      }
-
-      async function reset(difficulty) {
-        if (generationController) {
-          generationController.cancelled = true;
-        }
-        const controller = { cancelled: false };
-        generationController = controller;
-        setGenerationButtonsEnabled(false);
-        showLoading(difficulty);
-        const result = await generateProblemUntilFound(difficulty, controller);
-        if (!result || controller.cancelled) {
-          if (generationController === controller) {
-            setStatus("Generation cancelled.", "bad");
-            setGenerationButtonsEnabled(true);
-            hideLoading();
-            generationController = null;
-          }
-          return;
-        }
-        state = result.problem;
-        state.current = clone(state.problem);
-        ui.steps.innerHTML = "";
-        ui.simplificationPanel.classList.remove("solved");
-        renderExpr(ui.problemExpr, state.problem);
-        ui.problemMeta.textContent = `${difficulty.toUpperCase()} • generated gates: ${state.problemGates} • best possible gates: ${state.minimalGates}`;
-        addStep(state.problem, "Start:");
-        setStatus(`New problem generated in ${result.attempts} attempt(s). Enter an equivalent line to begin simplifying.`, "good");
-        ui.editorInput.value = "";
-        renderEditor();
-        ui.editorInput.focus();
-        if (generationController === controller) {
-          setGenerationButtonsEnabled(true);
-          hideLoading();
-          generationController = null;
-        }
       }
 
       function renderEditor() {
@@ -1030,10 +747,8 @@
           renderEditor();
         });
       });
-      document.querySelectorAll("button[data-diff]").forEach((b) => {
-        b.addEventListener("click", () => {
-          void reset(b.dataset.diff);
-        });
+      ui.questionSelect.addEventListener("change", () => {
+        loadQuestion(Number(ui.questionSelect.value));
       });
       ui.submit.addEventListener("click", submitStep);
       ui.backspace.addEventListener("click", () => {
@@ -1081,12 +796,14 @@
         setStatus(`Best known minimum uses ${state.minimalGates} gates.`, "good");
       });
       ui.closeAnswer.addEventListener("click", () => ui.answerDialog.close());
-      ui.cancelGenerate.addEventListener("click", () => {
-        if (!generationController) return;
-        generationController.cancelled = true;
+      QUESTION_BANK.forEach((item, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = item.id;
+        ui.questionSelect.appendChild(option);
       });
-
-      void reset("easy");
+      ui.questionSelect.value = "0";
+      loadQuestion(0);
     </script>
   </body>
 </html>
