@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA Boolean Algebra Simplifier</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+    />
     <style>
       :root {
         --bg: #f1f5f9;
@@ -204,8 +207,10 @@
         <div class="header">
           <h1>AQA Boolean Algebra Simplifier</h1>
           <p class="sub">
-            Build each line directly in the rendered equation editor using Boolean symbols. Use
-            <strong>·</strong> for AND, <strong>+</strong> for OR, and overline/¬ for NOT.
+            Simplify in small steps, submitting each simpler line as you go
+            until you reach the fully simplified expression. Use
+            <strong>·</strong> for AND, <strong>+</strong> for OR, and
+            overline/¬ for NOT.
           </p>
         </div>
         <div class="section">
@@ -226,10 +231,19 @@
           <div class="input-row">
             <div id="editor-shell" class="editor-shell">
               <div id="editor-preview" class="editor-preview"></div>
-              <input id="editor-input" class="editor-input" type="text" spellcheck="false" autocomplete="off" placeholder="Type directly here or use the symbol buttons…" />
+              <input
+                id="editor-input"
+                class="editor-input"
+                type="text"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="Type directly here or use the symbol buttons…"
+              />
             </div>
             <div class="editor-toolbar">
-              <button id="set-current-step" class="secondary" type="button">Set to current</button>
+              <button id="set-current-step" class="secondary" type="button">
+                Set to current
+              </button>
               <button class="token" data-token="¬">¬</button>
               <button class="token" data-token=".">·</button>
               <button class="token" data-token="+">+</button>
@@ -249,7 +263,10 @@
               <button id="submit-step" type="button">Submit</button>
             </div>
           </div>
-          <div class="hint">You can type directly and move the cursor anywhere, or insert symbols using the buttons.</div>
+          <div class="hint">
+            You can type directly and move the cursor anywhere, or insert
+            symbols using the buttons.
+          </div>
           <div id="status" class="status"></div>
         </div>
         <div class="section">
@@ -271,21 +288,53 @@
     <script>
       const QUESTION_BANK = [
         { id: "Q1", question: "(X + Y) . (X + ¬Y)", answer: "X" },
-        { id: "Q2", question: "¬(¬(A . (¬B + 0)) . ¬(¬A . (B + B)))", answer: "A ^ B" },
-        { id: "Q3", question: "A . (A + C) . ¬A + ¬(¬A . ¬(A . B))", answer: "A" },
+        {
+          id: "Q2",
+          question: "¬(¬(A . (¬B + 0)) . ¬(¬A . (B + B)))",
+          answer: "A ^ B",
+        },
+        {
+          id: "Q3",
+          question: "A . (A + C) . ¬A + ¬(¬A . ¬(A . B))",
+          answer: "A",
+        },
         { id: "Q4", question: "¬(¬A . ¬B)", answer: "A + B" },
         { id: "Q5", question: "¬(A + B . ¬B + C . A)", answer: "¬A" },
         { id: "Q6", question: "(A + ¬B) . ¬(¬A + B)", answer: "A . ¬B" },
         { id: "Q7", question: "(A + ¬B) . B", answer: "A . B" },
         { id: "Q8", question: "¬(¬A + ¬B) + B . ¬A . (¬C + C)", answer: "B" },
-        { id: "Q9", question: "¬W . X . Z + W . Z + X . Y . ¬Z + ¬W . X . Y . 1", answer: "X . Y + X . Z + W . Z" },
-        { id: "Q10", question: "¬(¬(¬A + A . (A + B)) + (¬B . ¬C))", answer: "B + C" },
-        { id: "Q11", question: "(A + B) . (B + C . (D + ¬D))", answer: "B + (A . C)" },
+        {
+          id: "Q9",
+          question: "¬W . X . Z + W . Z + X . Y . ¬Z + ¬W . X . Y . 1",
+          answer: "X . Y + X . Z + W . Z",
+        },
+        {
+          id: "Q10",
+          question: "¬(¬(¬A + A . (A + B)) + (¬B . ¬C))",
+          answer: "B + C",
+        },
+        {
+          id: "Q11",
+          question: "(A + B) . (B + C . (D + ¬D))",
+          answer: "B + (A . C)",
+        },
         { id: "Q12", question: "¬(¬(¬B . A) . ¬B) + A . B", answer: "A + B" },
-        { id: "Q13", question: "¬(¬(A . (A + 1)) . ¬B) . ¬(¬A + ¬(B + 0))", answer: "A . B" },
-        { id: "Q14", question: "¬(¬A + B . C + B . ¬C) + C . (A + ¬A . (B + 1))", answer: "C + A . ¬B" },
+        {
+          id: "Q13",
+          question: "¬(¬(A . (A + 1)) . ¬B) . ¬(¬A + ¬(B + 0))",
+          answer: "A . B",
+        },
+        {
+          id: "Q14",
+          question: "¬(¬A + B . C + B . ¬C) + C . (A + ¬A . (B + 1))",
+          answer: "C + A . ¬B",
+        },
         { id: "Q15", question: "A . ¬B + B . ¬(¬A + (¬B . C))", answer: "A" },
-        { id: "Q16", question: "¬A . (B . C . D + B . C . ¬D + B) + ¬(¬A + B)", answer: "A ^ B" },
+        {
+          id: "Q16",
+          question: "¬A . (B . C . D + B . C . ¬D + B) + ¬(¬A + B)",
+          answer: "A ^ B",
+        },
       ];
 
       const ui = {
@@ -319,16 +368,20 @@
       function gateCount(expr) {
         if (expr.type === "var" || expr.type === "const") return 0;
         if (expr.type === "not") return 1 + gateCount(expr.value);
-        if (expr.type === "xor") return 1 + gateCount(expr.left) + gateCount(expr.right);
+        if (expr.type === "xor")
+          return 1 + gateCount(expr.left) + gateCount(expr.right);
         return 1 + gateCount(expr.left) + gateCount(expr.right);
       }
 
       function normalize(expr) {
         if (expr.type === "var" || expr.type === "const") return expr;
-        if (expr.type === "not") return node("not", { value: normalize(expr.value) });
+        if (expr.type === "not")
+          return node("not", { value: normalize(expr.value) });
         const left = normalize(expr.left);
         const right = normalize(expr.right);
-        const parts = flatten(expr.type, [left, right]).sort((a, b) => key(a).localeCompare(key(b)));
+        const parts = flatten(expr.type, [left, right]).sort((a, b) =>
+          key(a).localeCompare(key(b)),
+        );
         return build(expr.type, parts);
       }
 
@@ -342,7 +395,10 @@
       }
 
       function build(type, parts) {
-        return parts.reduce((acc, cur) => (acc ? node(type, { left: acc, right: cur }) : cur), null);
+        return parts.reduce(
+          (acc, cur) => (acc ? node(type, { left: acc, right: cur }) : cur),
+          null,
+        );
       }
 
       function key(expr) {
@@ -379,7 +435,11 @@
       function varSet(expr, out = new Set()) {
         if (expr.type === "var") out.add(expr.name);
         else if (expr.type === "not") varSet(expr.value, out);
-        else if (expr.type === "and" || expr.type === "or" || expr.type === "xor") {
+        else if (
+          expr.type === "and" ||
+          expr.type === "or" ||
+          expr.type === "xor"
+        ) {
           varSet(expr.left, out);
           varSet(expr.right, out);
         }
@@ -402,8 +462,14 @@
       }
 
       function isWrapNeeded(parentType, child) {
-        if (child.type === "var" || child.type === "const" || child.type === "not") return false;
-        if (parentType === "and") return child.type === "or" || child.type === "xor";
+        if (
+          child.type === "var" ||
+          child.type === "const" ||
+          child.type === "not"
+        )
+          return false;
+        if (parentType === "and")
+          return child.type === "or" || child.type === "xor";
         if (parentType === "xor") return child.type === "or";
         return false;
       }
@@ -423,7 +489,12 @@
           const inner = toWord(expr.value, 3);
           return `NOT(${inner})`;
         }
-        const sym = expr.type === "and" ? " AND " : expr.type === "xor" ? " XOR " : " OR ";
+        const sym =
+          expr.type === "and"
+            ? " AND "
+            : expr.type === "xor"
+              ? " XOR "
+              : " OR ";
         const here = precedence(expr);
         const text = `${toWord(expr.left, here)}${sym}${toWord(expr.right, here)}`;
         return here < parent ? `(${text})` : text;
@@ -437,7 +508,12 @@
           return `\\overline{${v}}`;
         }
         const here = precedence(expr);
-        const sym = expr.type === "and" ? " \\cdot " : expr.type === "xor" ? " \\oplus " : " + ";
+        const sym =
+          expr.type === "and"
+            ? " \\cdot "
+            : expr.type === "xor"
+              ? " \\oplus "
+              : " + ";
         const text = `${toLatex(expr.left, here)}${sym}${toLatex(expr.right, here)}`;
         return here < parent ? `(${text})` : text;
       }
@@ -447,10 +523,16 @@
         if (expr.type === "const") return String(expr.value);
         if (expr.type === "not") {
           const inner = exprToText(expr.value, "not");
-          if (expr.value.type === "and" || expr.value.type === "or" || expr.value.type === "xor") return `¬(${inner})`;
+          if (
+            expr.value.type === "and" ||
+            expr.value.type === "or" ||
+            expr.value.type === "xor"
+          )
+            return `¬(${inner})`;
           return `¬${inner}`;
         }
-        const op = expr.type === "and" ? "." : expr.type === "xor" ? "^" : " + ";
+        const op =
+          expr.type === "and" ? "." : expr.type === "xor" ? "^" : " + ";
         let left = exprToText(expr.left, expr.type);
         let right = exprToText(expr.right, expr.type);
         if (isWrapNeeded(expr.type, expr.left)) left = `(${left})`;
@@ -467,7 +549,8 @@
           return tokens[i];
         }
         function consume(type) {
-          if (!peek() || peek().type !== type) throw new Error(`Expected ${type}`);
+          if (!peek() || peek().type !== type)
+            throw new Error(`Expected ${type}`);
           return tokens[i++];
         }
         function parseOr() {
@@ -574,8 +657,10 @@
           if (!m) throw new Error(`Invalid token near '${s.slice(i, i + 8)}'`);
           const raw = m[1].toUpperCase();
           i += m[1].length;
-          if (raw === "NOT" || raw === "AND" || raw === "OR") out.push({ type: raw });
-          else if (raw === "0" || raw === "1") out.push({ type: "CONST", value: raw });
+          if (raw === "NOT" || raw === "AND" || raw === "OR")
+            out.push({ type: raw });
+          else if (raw === "0" || raw === "1")
+            out.push({ type: "CONST", value: raw });
           else out.push({ type: "VAR", value: raw });
         }
         return out;
@@ -604,7 +689,8 @@
           if (e.type === "not") {
             const inner = pass(e.value);
             if (inner.type === "not") return pass(inner.value);
-            if (inner.type === "const") return node("const", { value: inner.value ? 0 : 1 });
+            if (inner.type === "const")
+              return node("const", { value: inner.value ? 0 : 1 });
             return node("not", { value: inner });
           }
 
@@ -617,31 +703,73 @@
 
           if (op === "and") {
             if (l.type === "not" && r.type === "not") {
-              return pass(node("not", { value: node("or", { left: l.value, right: r.value }) }));
+              return pass(
+                node("not", {
+                  value: node("or", { left: l.value, right: r.value }),
+                }),
+              );
             }
-            if (hasComplementPair(flatten("and", [l, r]))) return node("const", { value: 0 });
-            if ((l.type === "const" && l.value === 0) || (r.type === "const" && r.value === 0)) return node("const", { value: 0 });
+            if (hasComplementPair(flatten("and", [l, r])))
+              return node("const", { value: 0 });
+            if (
+              (l.type === "const" && l.value === 0) ||
+              (r.type === "const" && r.value === 0)
+            )
+              return node("const", { value: 0 });
             if (l.type === "const" && l.value === 1) return r;
             if (r.type === "const" && r.value === 1) return l;
             if (sameExpr(l, r)) return l;
-            if (sameExpr(l, node("not", { value: r })) || sameExpr(r, node("not", { value: l }))) return node("const", { value: 0 });
-            if (l.type === "or" && (sameExpr(l.left, r) || sameExpr(l.right, r))) return r;
-            if (r.type === "or" && (sameExpr(r.left, l) || sameExpr(r.right, l))) return l;
+            if (
+              sameExpr(l, node("not", { value: r })) ||
+              sameExpr(r, node("not", { value: l }))
+            )
+              return node("const", { value: 0 });
+            if (
+              l.type === "or" &&
+              (sameExpr(l.left, r) || sameExpr(l.right, r))
+            )
+              return r;
+            if (
+              r.type === "or" &&
+              (sameExpr(r.left, l) || sameExpr(r.right, l))
+            )
+              return l;
             return n;
           }
 
           if (op === "or") {
             if (l.type === "not" && r.type === "not") {
-              return pass(node("not", { value: node("and", { left: l.value, right: r.value }) }));
+              return pass(
+                node("not", {
+                  value: node("and", { left: l.value, right: r.value }),
+                }),
+              );
             }
-            if (hasComplementPair(flatten("or", [l, r]))) return node("const", { value: 1 });
-            if ((l.type === "const" && l.value === 1) || (r.type === "const" && r.value === 1)) return node("const", { value: 1 });
+            if (hasComplementPair(flatten("or", [l, r])))
+              return node("const", { value: 1 });
+            if (
+              (l.type === "const" && l.value === 1) ||
+              (r.type === "const" && r.value === 1)
+            )
+              return node("const", { value: 1 });
             if (l.type === "const" && l.value === 0) return r;
             if (r.type === "const" && r.value === 0) return l;
             if (sameExpr(l, r)) return l;
-            if (sameExpr(l, node("not", { value: r })) || sameExpr(r, node("not", { value: l }))) return node("const", { value: 1 });
-            if (l.type === "and" && (sameExpr(l.left, r) || sameExpr(l.right, r))) return r;
-            if (r.type === "and" && (sameExpr(r.left, l) || sameExpr(r.right, l))) return l;
+            if (
+              sameExpr(l, node("not", { value: r })) ||
+              sameExpr(r, node("not", { value: l }))
+            )
+              return node("const", { value: 1 });
+            if (
+              l.type === "and" &&
+              (sameExpr(l.left, r) || sameExpr(l.right, r))
+            )
+              return r;
+            if (
+              r.type === "and" &&
+              (sameExpr(r.left, l) || sameExpr(r.right, l))
+            )
+              return l;
             return n;
           }
 
@@ -676,7 +804,10 @@
         renderExpr(ui.problemExpr, state.problem);
         ui.problemMeta.textContent = `${selected.id} • starting gates: ${state.problemGates} • target minimum gates: ${state.minimalGates}`;
         addStep(state.problem, "Start:");
-        setStatus(`${selected.id} loaded. Enter an equivalent line to begin simplifying.`, "good");
+        setStatus(
+          `${selected.id} loaded. Enter an equivalent line to begin simplifying.`,
+          "good",
+        );
         ui.editorInput.value = exprToText(state.current);
         renderEditor();
         ui.editorInput.focus();
@@ -748,10 +879,16 @@
           state.current = clone(expr);
           const g = gateCount(expr);
           if (g === state.minimalGates) {
-            setStatus(`Excellent: minimal solution reached in ${g} gates. Problem complete.`, "good");
+            setStatus(
+              `Excellent: minimal solution reached in ${g} gates. Problem complete.`,
+              "good",
+            );
             ui.simplificationPanel.classList.add("solved");
           } else {
-            setStatus(`Accepted. Equivalent and valid. Current gates: ${g}. Keep simplifying toward ${state.minimalGates}.`, "good");
+            setStatus(
+              `Accepted. Equivalent and valid. Current gates: ${g}. Keep simplifying toward ${state.minimalGates}.`,
+              "good",
+            );
           }
           ui.editorInput.value = exprToText(state.current);
           renderEditor();
@@ -797,7 +934,10 @@
         const best = simplify(state.answer);
         renderExpr(ui.answerExpression, best);
         ui.answerDialog.showModal();
-        setStatus(`Best known minimum uses ${state.minimalGates} gates.`, "good");
+        setStatus(
+          `Best known minimum uses ${state.minimalGates} gates.`,
+          "good",
+        );
       });
       ui.closeAnswer.addEventListener("click", () => ui.answerDialog.close());
       QUESTION_BANK.forEach((item, index) => {
