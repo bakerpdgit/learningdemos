@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DHCP Interactive – AQA A Level Computer Science</title>
+  <style>
+    :root {
+      --primary: #1565c0;
+      --primary-light: #1e88e5;
+      --secondary: #00838f;
+      --success: #2e7d32;
+      --error: #c62828;
+      --bg: #f3f6fb;
+      --card-bg: #ffffff;
+      --border: #cfd8dc;
+      --text-muted: #546e7a;
+      --discover: #f57c00;
+      --offer: #1565c0;
+      --request: #6a1b9a;
+      --ack: #2e7d32;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 1rem 2rem;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    header h1 { font-size: 1.75rem; margin-bottom: 0.2rem; }
+    header p { font-size: 0.9rem; opacity: 0.85; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.85rem 1rem;
+      background: white;
+      border-bottom: 2px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 0.55rem 1.3rem;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .tab-btn:hover:not(.active) {
+      background: #e3f2fd;
+      border-color: var(--primary-light);
+      color: var(--primary);
+    }
+
+    /* ── Panels ── */
+    .tab-panel { display: none; max-width: 1060px; margin: 0 auto; padding: 1.5rem; }
+    .tab-panel.active { display: block; }
+
+    /* ── Info cards ── */
+    .info-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.4rem 1.6rem;
+      margin-bottom: 1.4rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+      border-left: 4px solid var(--primary);
+    }
+    .info-card h2 {
+      color: var(--primary);
+      margin-bottom: 0.7rem;
+      font-size: 1.15rem;
+    }
+    .info-card p { line-height: 1.75; margin-bottom: 0.5rem; }
+    .info-card ul { margin: 0.4rem 0 0.4rem 1.5rem; line-height: 1.85; }
+    .info-card code {
+      background: #e3f2fd;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+
+    .key-term {
+      background: #e3f2fd;
+      color: var(--primary);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    /* ── Simulation wrapper ── */
+    .sim-wrapper {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.4rem 1.6rem;
+      margin-bottom: 1.4rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+    }
+    .sim-wrapper h2 { color: var(--primary); margin-bottom: 0.5rem; font-size: 1.15rem; }
+    .sim-wrapper > p { font-size: 0.88rem; color: #555; margin-bottom: 1rem; }
+
+    /* DORA step indicators */
+    .dora-steps {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .dora-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      opacity: 0.3;
+      transition: opacity 0.35s;
+    }
+    .dora-step.done { opacity: 0.65; }
+    .dora-step.active { opacity: 1; }
+    .step-circle {
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.2rem; color: white;
+    }
+    .step-circle.d { background: var(--discover); }
+    .step-circle.o { background: var(--offer); }
+    .step-circle.r { background: var(--request); }
+    .step-circle.a { background: var(--ack); }
+    .step-label { font-size: 0.75rem; font-weight: 600; color: #444; }
+
+    /* Canvas */
+    #doraCanvas {
+      display: block;
+      width: 100%;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: #f8fbff;
+    }
+
+    /* Sim controls */
+    .sim-controls {
+      display: flex;
+      gap: 0.65rem;
+      margin-top: 0.9rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .sim-btn {
+      padding: 0.55rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .sim-btn.primary { background: var(--primary); color: white; }
+    .sim-btn.primary:hover { background: var(--primary-light); }
+    .sim-btn.secondary { background: #eceff1; color: #333; border: 1px solid var(--border); }
+    .sim-btn.secondary:hover { background: #cfd8dc; }
+    .sim-btn:disabled { opacity: 0.45; cursor: default; }
+    #stepCounter { font-size: 0.82rem; color: #666; margin-left: 0.25rem; }
+
+    /* Step info box */
+    .step-info {
+      margin-top: 0.9rem;
+      padding: 0.9rem 1.1rem;
+      border-radius: 8px;
+      background: #f5f5f5;
+      border-left: 4px solid var(--border);
+      min-height: 72px;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .step-info.discover { border-left-color: var(--discover); background: #fff3e0; }
+    .step-info.offer    { border-left-color: var(--offer);    background: #e3f2fd; }
+    .step-info.request  { border-left-color: var(--request);  background: #f3e5f5; }
+    .step-info.ack      { border-left-color: var(--ack);      background: #e8f5e9; }
+    .step-info h3 { font-size: 0.97rem; margin-bottom: 0.35rem; color: #1a1a2e; }
+    .step-info p { font-size: 0.88rem; line-height: 1.65; color: #333; }
+
+    /* ── Mode cards ── */
+    .modes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 1.2rem;
+      margin-bottom: 1.4rem;
+    }
+    .mode-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.2rem 1.3rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+      border-top: 4px solid;
+    }
+    .mode-card.manual   { border-top-color: #c62828; }
+    .mode-card.auto-alloc { border-top-color: #1565c0; }
+    .mode-card.dynamic  { border-top-color: #2e7d32; }
+    .mode-card h3 { font-size: 1.05rem; margin-bottom: 0.65rem; }
+    .mode-card.manual h3     { color: #c62828; }
+    .mode-card.auto-alloc h3 { color: #1565c0; }
+    .mode-card.dynamic h3    { color: #2e7d32; }
+    .mode-card p { font-size: 0.88rem; line-height: 1.7; color: #444; margin-bottom: 0.4rem; }
+    .mode-tag {
+      display: inline-block;
+      padding: 0.12rem 0.5rem;
+      border-radius: 20px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      margin: 0.2rem 0.1rem;
+    }
+    .mode-tag.pro { background: #e8f5e9; color: #2e7d32; }
+    .mode-tag.con { background: #ffebee; color: #c62828; }
+
+    /* ── Comparison table ── */
+    .cmp-table { width: 100%; border-collapse: collapse; font-size: 0.87rem; margin-top: 0.5rem; }
+    .cmp-table th, .cmp-table td {
+      padding: 0.55rem 0.75rem;
+      border: 1px solid #cfd8dc;
+      text-align: center;
+    }
+    .cmp-table thead tr { background: #e3f2fd; }
+    .cmp-table tbody tr:nth-child(even) { background: #fafafa; }
+    .cmp-table td:first-child { text-align: left; font-weight: 500; }
+
+    /* ── Quiz ── */
+    .quiz-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.4rem 1.6rem;
+      margin-bottom: 1.4rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+    }
+    .quiz-card h2 {
+      color: var(--primary);
+      font-size: 1.15rem;
+      border-bottom: 2px solid #e3f2fd;
+      padding-bottom: 0.5rem;
+      margin-bottom: 0.9rem;
+    }
+    .quiz-card > p { font-size: 0.85rem; color: #666; margin-bottom: 1rem; }
+
+    .question {
+      margin-bottom: 1.1rem;
+      padding: 0.9rem 1rem;
+      background: #fafafa;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .question p.qtext { font-size: 0.93rem; margin-bottom: 0.55rem; line-height: 1.75; }
+    .question input[type="text"] {
+      padding: 0.38rem 0.65rem;
+      border: 2px solid var(--border);
+      border-radius: 5px;
+      font-size: 0.88rem;
+      min-width: 160px;
+      outline: none;
+      transition: border-color 0.2s;
+      vertical-align: middle;
+    }
+    .question input[type="text"]:focus { border-color: var(--primary-light); }
+    .question input.correct { border-color: var(--success); background: #e8f5e9; color: var(--success); }
+    .question input.wrong   { border-color: var(--error);   background: #ffebee; color: var(--error); }
+    .feedback {
+      display: inline-block;
+      margin-left: 0.4rem;
+      font-size: 0.83rem;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+    .feedback.correct { color: var(--success); }
+    .feedback.wrong   { color: var(--error); }
+    .hint { font-size: 0.78rem; color: #888; font-style: italic; margin-top: 0.35rem; }
+
+    .check-btn {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.6rem 1.4rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.92rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .check-btn:hover { background: var(--primary-light); }
+
+    .score-display {
+      display: inline-block;
+      margin-top: 0.75rem;
+      margin-left: 1rem;
+      padding: 0.45rem 1rem;
+      background: #e3f2fd;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--primary);
+      vertical-align: middle;
+    }
+
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.3rem; }
+      .tab-btn { padding: 0.45rem 0.8rem; font-size: 0.82rem; }
+      .dora-step .step-label { font-size: 0.68rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>DHCP Interactive</h1>
+  <p>AQA A Level Computer Science — Dynamic Host Configuration Protocol</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" id="tabBtn0" onclick="showTab(0)">1. Role of DHCP</button>
+  <button class="tab-btn"        id="tabBtn1" onclick="showTab(1)">2. DORA Process</button>
+  <button class="tab-btn"        id="tabBtn2" onclick="showTab(2)">3. Allocation Modes</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 0 — ROLE OF DHCP
+═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="panel0">
+
+  <div class="info-card">
+    <h2>What is DHCP?</h2>
+    <p><span class="key-term">DHCP</span> stands for <strong>Dynamic Host Configuration Protocol</strong>. It is an <strong>application layer</strong> protocol used to automatically configure devices joining an IP network.</p>
+    <p>When a new device joins a network it needs several pieces of information before it can communicate:</p>
+    <ul>
+      <li>An <strong>IP address</strong> – its unique address on the local network</li>
+      <li>A <strong>subnet mask</strong> – identifies which part of the IP address is the network portion</li>
+      <li>A <strong>default gateway</strong> – the IP address of the router used to reach other networks</li>
+      <li>A <strong>DNS server address</strong> – used to resolve domain names to IP addresses</li>
+      <li>A <strong>lease time</strong> – how long the assigned IP address is valid for</li>
+    </ul>
+    <p>DHCP <strong>automates this entire process</strong>, removing the need for an administrator to manually configure every device. A <span class="key-term">DHCP server</span> maintains a pool of available IP addresses and assigns them dynamically to clients that request them.</p>
+  </div>
+
+  <div class="info-card" style="border-left-color: var(--secondary);">
+    <h2>Why is DHCP Important?</h2>
+    <p>Without DHCP, every device joining the network would need its IP address and network settings configured individually by an administrator. On a large network with hundreds of devices — many of which connect and disconnect frequently — manual configuration would be impractical and error-prone.</p>
+    <p>DHCP also prevents <strong>duplicate IP address conflicts</strong>, since the server tracks all allocated addresses and ensures each is issued only once at a time.</p>
+  </div>
+
+  <div class="quiz-card">
+    <h2>Test Your Knowledge – Role of DHCP</h2>
+    <p>Fill in the missing words. Answers are not case-sensitive.</p>
+
+    <div class="question">
+      <p class="qtext">1. DHCP stands for <input type="text" id="q0_0a" placeholder="?"> Host Configuration Protocol.</p>
+      <span class="feedback" id="fb0_0"></span>
+      <p class="hint">The 'D' refers to the fact that addresses are assigned automatically rather than fixed.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">2. DHCP operates at the <input type="text" id="q0_1a" placeholder="?"> layer of the TCP/IP model.</p>
+      <span class="feedback" id="fb0_1"></span>
+      <p class="hint">The same layer as HTTP, FTP and DNS.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">3. As well as an IP address, a DHCP server also provides the <input type="text" id="q0_2a" placeholder="?"> and the <input type="text" id="q0_2b" placeholder="?">.</p>
+      <span class="feedback" id="fb0_2"></span>
+      <p class="hint">One defines the network boundary; the other is the address of the router to reach external networks.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">4. The DHCP server manages a <input type="text" id="q0_3a" placeholder="?"> of available IP addresses, from which it allocates addresses to clients.</p>
+      <span class="feedback" id="fb0_3"></span>
+      <p class="hint">A collective noun for a reserved set of resources ready to be assigned.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">5. Without DHCP, a network administrator would need to <input type="text" id="q0_4a" placeholder="?"> configure the IP address of each device.</p>
+      <span class="feedback" id="fb0_4"></span>
+      <p class="hint">The opposite of automatic.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">6. DHCP prevents <input type="text" id="q0_5a" placeholder="?"> IP addresses from occurring on the network, since the server tracks all allocations.</p>
+      <span class="feedback" id="fb0_5"></span>
+      <p class="hint">What happens when two devices accidentally share the same address?</p>
+    </div>
+
+    <button class="check-btn" onclick="checkQuiz(0)">Check Answers</button>
+    <span class="score-display" id="score0" style="display:none;"></span>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 1 — DORA PROCESS
+═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel1">
+
+  <div class="sim-wrapper">
+    <h2>The DORA Process — Network Simulation</h2>
+    <p>Click <strong>Next Step</strong> to step through DHCP configuration one message at a time, or use <strong>Auto Play</strong> to watch the full sequence.</p>
+
+    <div class="dora-steps">
+      <div class="dora-step" id="ds0">
+        <div class="step-circle d">D</div>
+        <span class="step-label">Discover</span>
+      </div>
+      <div class="dora-step" id="ds1">
+        <div class="step-circle o">O</div>
+        <span class="step-label">Offer</span>
+      </div>
+      <div class="dora-step" id="ds2">
+        <div class="step-circle r">R</div>
+        <span class="step-label">Request</span>
+      </div>
+      <div class="dora-step" id="ds3">
+        <div class="step-circle a">A</div>
+        <span class="step-label">Acknowledge</span>
+      </div>
+    </div>
+
+    <canvas id="doraCanvas" height="270"></canvas>
+
+    <div class="sim-controls">
+      <button class="sim-btn primary" id="btnNext"  onclick="nextStep()">▶ Next Step</button>
+      <button class="sim-btn primary" id="btnAuto"  onclick="autoPlay()">⏩ Auto Play</button>
+      <button class="sim-btn secondary"              onclick="resetSim()">↺ Reset</button>
+      <span id="stepCounter">Step 0 / 4</span>
+    </div>
+
+    <div class="step-info" id="stepInfo">
+      <h3>Ready to Start</h3>
+      <p>A new device has connected to the network. It has no IP address yet. Click <strong>Next Step</strong> to begin the DHCP negotiation.</p>
+    </div>
+  </div>
+
+  <!-- DORA explainers -->
+  <div class="info-card" style="border-left-color: var(--discover);">
+    <h2 style="color:var(--discover);">Step 1 — Discover (DHCPDISCOVER)</h2>
+    <p>The new client device <strong>broadcasts</strong> a <span class="key-term">DHCPDISCOVER</span> message across the network. Because the client has no IP address yet, it uses source address <code>0.0.0.0</code> and sends to the broadcast address <code>255.255.255.255</code>, so every device on the subnet receives the message.</p>
+    <p>The message is asking: <em>"Is there a DHCP server on this network? I need an IP address."</em></p>
+  </div>
+
+  <div class="info-card" style="border-left-color: var(--offer);">
+    <h2 style="color:var(--offer);">Step 2 — Offer (DHCPOFFER)</h2>
+    <p>Any DHCP server that receives the DHCPDISCOVER responds with a <span class="key-term">DHCPOFFER</span>. The offer includes:</p>
+    <ul>
+      <li>An available <strong>IP address</strong> from the server's pool</li>
+      <li>The <strong>subnet mask</strong></li>
+      <li>The <strong>default gateway</strong></li>
+      <li>The <strong>DNS server address</strong></li>
+      <li>The <strong>lease duration</strong> — how long the client may use the offered address</li>
+    </ul>
+    <p>If multiple DHCP servers exist on the network, the client may receive several offers. It will typically accept the first one that arrives.</p>
+  </div>
+
+  <div class="info-card" style="border-left-color: var(--request);">
+    <h2 style="color:var(--request);">Step 3 — Request (DHCPREQUEST)</h2>
+    <p>The client sends a <span class="key-term">DHCPREQUEST</span> message — again as a <strong>broadcast</strong> — to indicate which server's offer it is accepting. Broadcasting this message serves two purposes:</p>
+    <ul>
+      <li>It tells the <strong>chosen server</strong> to formalise the assignment.</li>
+      <li>It notifies any <strong>other DHCP servers</strong> that their offers were declined, allowing them to release the addresses they had reserved.</li>
+    </ul>
+    <p>The DHCPREQUEST includes the IP address of the chosen server so that all servers can identify whether their offer was accepted.</p>
+  </div>
+
+  <div class="info-card" style="border-left-color: var(--ack);">
+    <h2 style="color:var(--ack);">Step 4 — Acknowledge (DHCPACK)</h2>
+    <p>The chosen DHCP server sends a <span class="key-term">DHCPACK</span> (acknowledgement) back to the client, confirming that the IP address is now formally assigned. The client may now use all the configuration information provided.</p>
+    <p>The DHCPACK also confirms the <strong>lease period</strong>. Before the lease expires the device must either renew it or request a new address, ensuring the IP pool does not become exhausted by stale allocations.</p>
+  </div>
+
+  <div class="quiz-card">
+    <h2>Test Your Knowledge – DORA Process</h2>
+    <p>Fill in the missing words. Answers are not case-sensitive.</p>
+
+    <div class="question">
+      <p class="qtext">1. The four stages of DHCP address negotiation are known by the acronym <input type="text" id="q1_0a" placeholder="?">.</p>
+      <span class="feedback" id="fb1_0"></span>
+      <p class="hint">Discover, Offer, Request, Acknowledge — take the first letter of each.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">2. In the Discover step the client uses the source IP address <input type="text" id="q1_1a" placeholder="?"> because it has not yet been assigned an IP address.</p>
+      <span class="feedback" id="fb1_1"></span>
+      <p class="hint">All zeros — a special address meaning "unknown/unassigned".</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">3. The DHCPDISCOVER message is sent to the <input type="text" id="q1_2a" placeholder="?"> address <code>255.255.255.255</code> so that all devices on the subnet receive it.</p>
+      <span class="feedback" id="fb1_2"></span>
+      <p class="hint">A message addressed to every device on the network simultaneously.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">4. As well as an IP address, the DHCPOFFER includes the <input type="text" id="q1_3a" placeholder="?"> — the length of time for which the offered IP address may be used.</p>
+      <span class="feedback" id="fb1_3"></span>
+      <p class="hint">Think of renting something for a fixed period of time.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">5. The DHCPREQUEST is sent as a <input type="text" id="q1_4a" placeholder="?"> so that any other DHCP servers that made an offer know their offer was not accepted and can release the reserved IP.</p>
+      <span class="feedback" id="fb1_4"></span>
+      <p class="hint">The same type of message as DHCPDISCOVER — not directed at a single host.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">6. The final message in the DORA sequence is the <input type="text" id="q1_5a" placeholder="?"> (DHCPACK), confirming the IP address assignment to the client.</p>
+      <span class="feedback" id="fb1_5"></span>
+      <p class="hint">The 'A' in DORA — a confirmation that an action has been completed.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">7. Both DHCPDISCOVER and DHCPREQUEST are <input type="text" id="q1_6a" placeholder="?"> messages because the client does not yet have a confirmed IP address it can use for direct communication.</p>
+      <span class="feedback" id="fb1_6"></span>
+      <p class="hint">They are sent to every device on the network, not a specific host.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">8. The full name of DHCPACK is DHCP <input type="text" id="q1_7a" placeholder="?">.</p>
+      <span class="feedback" id="fb1_7"></span>
+      <p class="hint">It is a confirmation — a reply that says "received and confirmed".</p>
+    </div>
+
+    <button class="check-btn" onclick="checkQuiz(1)">Check Answers</button>
+    <span class="score-display" id="score1" style="display:none;"></span>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 2 — ALLOCATION MODES
+═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel2">
+
+  <div class="info-card">
+    <h2>Three Modes of IP Allocation</h2>
+    <p>A DHCP server can operate in three different allocation modes, which determine how IP addresses from the pool are assigned to client devices:</p>
+  </div>
+
+  <div class="modes-grid">
+
+    <div class="mode-card manual">
+      <h3>Manual Allocation</h3>
+      <p>The network administrator <strong>pre-configures</strong> the DHCP server by creating a mapping between each device's <strong>MAC address</strong> and a specific IP address.</p>
+      <p>When a device sends a DHCPDISCOVER, the server checks its MAC address and always returns the same pre-assigned IP. The address does not come from the general pool.</p>
+      <p style="margin-top:0.5rem;"><strong>Also called:</strong> static allocation or DHCP reservation.</p>
+      <div style="margin-top:0.65rem;">
+        <span class="mode-tag pro">✓ Always same IP per device</span>
+        <span class="mode-tag pro">✓ Predictable — good for servers/printers</span>
+        <span class="mode-tag con">✗ Requires manual admin effort</span>
+        <span class="mode-tag con">✗ Does not scale to large networks</span>
+      </div>
+    </div>
+
+    <div class="mode-card auto-alloc">
+      <h3>Automatic Allocation</h3>
+      <p>The DHCP server <strong>permanently assigns</strong> an IP address from its pool to a device the first time it connects. The assignment is remembered, so the same device always gets the same IP address on future connections.</p>
+      <p>Unlike manual allocation, no pre-configuration is required. Unlike dynamic allocation, the address is never returned to the pool for reuse.</p>
+      <div style="margin-top:0.65rem;">
+        <span class="mode-tag pro">✓ Automatic — no pre-config needed</span>
+        <span class="mode-tag pro">✓ Consistent IP after first connection</span>
+        <span class="mode-tag con">✗ Addresses never returned to pool</span>
+        <span class="mode-tag con">✗ Pool can become exhausted</span>
+      </div>
+    </div>
+
+    <div class="mode-card dynamic">
+      <h3>Dynamic Allocation</h3>
+      <p>The DHCP server assigns an IP address from its pool for a <strong>limited period</strong> — the <strong>lease period</strong>. When the lease expires, the device must request a new IP, which may be a different address. The old address is returned to the pool for reuse.</p>
+      <p>This is the <strong>most common</strong> form of DHCP, used on most home and business networks.</p>
+      <div style="margin-top:0.65rem;">
+        <span class="mode-tag pro">✓ Efficient reuse of the IP pool</span>
+        <span class="mode-tag pro">✓ Scales to large, changing networks</span>
+        <span class="mode-tag con">✗ IP address may change over time</span>
+        <span class="mode-tag con">✗ Renewal required when lease expires</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="info-card" style="border-left-color: var(--secondary); padding-bottom: 0.75rem;">
+    <h2>Comparison</h2>
+    <div style="overflow-x:auto;">
+      <table class="cmp-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Feature</th>
+            <th style="color:#c62828;">Manual</th>
+            <th style="color:#1565c0;">Automatic</th>
+            <th style="color:#2e7d32;">Dynamic</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>How IP is assigned</td>
+            <td>Pre-configured by admin (MAC → IP)</td>
+            <td>Automatically on first connect</td>
+            <td>Automatically from pool</td>
+          </tr>
+          <tr>
+            <td>Same IP every time?</td>
+            <td>✓ Yes</td>
+            <td>✓ Yes (after first use)</td>
+            <td>✗ May change</td>
+          </tr>
+          <tr>
+            <td>Address returned to pool?</td>
+            <td>✗ No</td>
+            <td>✗ No</td>
+            <td>✓ Yes (on expiry)</td>
+          </tr>
+          <tr>
+            <td>Lease period used?</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>✓ Yes</td>
+          </tr>
+          <tr>
+            <td>Admin effort</td>
+            <td>High (per device)</td>
+            <td>Low</td>
+            <td>Low</td>
+          </tr>
+          <tr>
+            <td>Scalability</td>
+            <td>Low</td>
+            <td>Medium</td>
+            <td>High</td>
+          </tr>
+          <tr>
+            <td>Best used for</td>
+            <td>Servers, printers, fixed devices</td>
+            <td>Small, stable networks</td>
+            <td>Home/business LANs</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="quiz-card">
+    <h2>Test Your Knowledge – Allocation Modes</h2>
+    <p>Fill in the missing words. Answers are not case-sensitive.</p>
+
+    <div class="question">
+      <p class="qtext">1. In <input type="text" id="q2_0a" placeholder="?"> allocation the administrator pre-configures a specific IP address for each device's MAC address before any connection is made.</p>
+      <span class="feedback" id="fb2_0"></span>
+    </div>
+
+    <div class="question">
+      <p class="qtext">2. In <input type="text" id="q2_1a" placeholder="?"> allocation the server permanently assigns an IP from its pool the first time a device connects, and the same address is given on every subsequent connection.</p>
+      <span class="feedback" id="fb2_1"></span>
+    </div>
+
+    <div class="question">
+      <p class="qtext">3. In <input type="text" id="q2_2a" placeholder="?"> allocation the server assigns an IP for a limited period known as the <input type="text" id="q2_2b" placeholder="?">.</p>
+      <span class="feedback" id="fb2_2"></span>
+    </div>
+
+    <div class="question">
+      <p class="qtext">4. In manual allocation, each device is uniquely identified to the DHCP server by its <input type="text" id="q2_3a" placeholder="?"> address.</p>
+      <span class="feedback" id="fb2_3"></span>
+      <p class="hint">Media Access Control — a hardware address burned into the network interface card.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">5. The most common type of DHCP allocation, used in most home and business networks, is <input type="text" id="q2_4a" placeholder="?"> allocation.</p>
+      <span class="feedback" id="fb2_4"></span>
+    </div>
+
+    <div class="question">
+      <p class="qtext">6. In dynamic allocation, when the <input type="text" id="q2_5a" placeholder="?"> expires the device must request a new IP address, which may differ from the previous one.</p>
+      <span class="feedback" id="fb2_5"></span>
+      <p class="hint">The time period for which a dynamically assigned IP address is valid.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">7. An advantage of dynamic allocation over automatic allocation is that IP addresses are <input type="text" id="q2_6a" placeholder="?"> to the pool when they are no longer needed, making efficient use of the available address space.</p>
+      <span class="feedback" id="fb2_6"></span>
+      <p class="hint">The addresses go back to where they came from.</p>
+    </div>
+
+    <div class="question">
+      <p class="qtext">8. Manual allocation is also sometimes called <input type="text" id="q2_7a" placeholder="?"> allocation because the IP address does not change.</p>
+      <span class="feedback" id="fb2_7"></span>
+      <p class="hint">The opposite of dynamic or changing.</p>
+    </div>
+
+    <button class="check-btn" onclick="checkQuiz(2)">Check Answers</button>
+    <span class="score-display" id="score2" style="display:none;"></span>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════ -->
+<script>
+// ────────────────────────────────────────────────────────────
+// TAB MANAGEMENT
+// ────────────────────────────────────────────────────────────
+function showTab(idx) {
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('panel' + i).classList.toggle('active', i === idx);
+    document.getElementById('tabBtn' + i).classList.toggle('active', i === idx);
+  }
+  if (idx === 1) setTimeout(setupCanvas, 60);
+}
+
+// ────────────────────────────────────────────────────────────
+// QUIZ DATA
+// ────────────────────────────────────────────────────────────
+// Each entry: { ids:[...], accepted:[[row1],[row2],...], fb:'fbId', hint:'...' }
+// For single input: ids has one element; accepted is an array of single-element arrays.
+// For paired inputs: ids has two elements; accepted is array of [v1,v2] pairs (any order accepted).
+
+const QUIZZES = [
+  // Tab 0
+  [
+    { ids:['q0_0a'], accepted:[['dynamic']], fb:'fb0_0' },
+    { ids:['q0_1a'], accepted:[['application']], fb:'fb0_1' },
+    {
+      ids:['q0_2a','q0_2b'],
+      accepted:[
+        ['subnet mask','default gateway'],
+        ['default gateway','subnet mask']
+      ],
+      fb:'fb0_2',
+      sample:'subnet mask / default gateway'
+    },
+    { ids:['q0_3a'], accepted:[['pool']], fb:'fb0_3' },
+    { ids:['q0_4a'], accepted:[['manually','manual']], fb:'fb0_4' },
+    { ids:['q0_5a'], accepted:[['duplicate']], fb:'fb0_5' },
+  ],
+  // Tab 1
+  [
+    { ids:['q1_0a'], accepted:[['dora']], fb:'fb1_0' },
+    { ids:['q1_1a'], accepted:[['0.0.0.0']], fb:'fb1_1' },
+    { ids:['q1_2a'], accepted:[['broadcast']], fb:'fb1_2' },
+    { ids:['q1_3a'], accepted:[['lease','lease period','lease time','lease duration']], fb:'fb1_3' },
+    { ids:['q1_4a'], accepted:[['broadcast']], fb:'fb1_4' },
+    { ids:['q1_5a'], accepted:[['acknowledge','acknowledgement','acknowledgment']], fb:'fb1_5' },
+    { ids:['q1_6a'], accepted:[['broadcast','broadcasts']], fb:'fb1_6' },
+    { ids:['q1_7a'], accepted:[['acknowledge','acknowledgement','acknowledgment']], fb:'fb1_7' },
+  ],
+  // Tab 2
+  [
+    { ids:['q2_0a'], accepted:[['manual','static']], fb:'fb2_0' },
+    { ids:['q2_1a'], accepted:[['automatic']], fb:'fb2_1' },
+    {
+      ids:['q2_2a','q2_2b'],
+      accepted:[
+        ['dynamic','lease period'],
+        ['dynamic','lease time'],
+        ['dynamic','lease']
+      ],
+      fb:'fb2_2',
+      sample:'dynamic / lease period'
+    },
+    { ids:['q2_3a'], accepted:[['mac','mac address','media access control']], fb:'fb2_3' },
+    { ids:['q2_4a'], accepted:[['dynamic']], fb:'fb2_4' },
+    { ids:['q2_5a'], accepted:[['lease','lease period','lease time']], fb:'fb2_5' },
+    { ids:['q2_6a'], accepted:[['returned','released']], fb:'fb2_6' },
+    { ids:['q2_7a'], accepted:[['static','manual']], fb:'fb2_7' },
+  ]
+];
+
+// Check a single question object and return whether it was correct
+function checkOneQuestion(q) {
+  const vals = q.ids.map(id => (document.getElementById(id)?.value || '').trim().toLowerCase());
+
+  let isOk;
+  if (q.ids.length === 1) {
+    isOk = q.accepted.some(row => row[0] === vals[0]);
+  } else {
+    isOk = q.accepted.some(row => row.every((a, i) => a === vals[i]));
+  }
+
+  q.ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('correct', 'wrong');
+    el.classList.add(isOk ? 'correct' : 'wrong');
+  });
+
+  const fbEl = document.getElementById(q.fb);
+  if (fbEl) {
+    if (isOk) {
+      fbEl.textContent = '✓ Correct!';
+      fbEl.className = 'feedback correct';
+    } else {
+      const sample = q.sample || q.accepted[0].join(' / ');
+      fbEl.textContent = `✗ Answer: ${sample}`;
+      fbEl.className = 'feedback wrong';
+    }
+  }
+  return isOk;
+}
+
+// Check all questions in a tab and show score
+function checkQuiz(tabIdx) {
+  const questions = QUIZZES[tabIdx];
+  let correct = 0;
+  questions.forEach(q => { if (checkOneQuestion(q)) correct++; });
+
+  const scoreEl = document.getElementById('score' + tabIdx);
+  if (scoreEl) {
+    scoreEl.style.display = 'inline-block';
+    const total = questions.length;
+    scoreEl.textContent = `Score: ${correct} / ${total}`;
+    scoreEl.style.background = correct === total ? '#e8f5e9' : '#e3f2fd';
+    scoreEl.style.color      = correct === total ? '#2e7d32' : '#1565c0';
+  }
+}
+
+// Enter on a single input marks just that question
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+  const inputId = e.target.id; // e.g. "q1_3a" or "q0_2b"
+  // Parse tab index and question index from the ID pattern q{tab}_{qIdx}{letter}
+  const m = inputId.match(/^q(\d+)_(\d+)/);
+  if (!m) return;
+  const tabIdx = parseInt(m[1]);
+  const qIdx   = parseInt(m[2]);
+  const q = QUIZZES[tabIdx]?.[qIdx];
+  if (q) checkOneQuestion(q);
+});
+
+// ────────────────────────────────────────────────────────────
+// DORA CANVAS SIMULATION
+// ────────────────────────────────────────────────────────────
+const DORA_STEPS = [
+  {
+    label:'DHCPDISCOVER', color:'#f57c00', cls:'discover',
+    dir:'→', isBcast:true,
+    title:'Step 1 — Discover (DHCPDISCOVER)',
+    desc:'The client broadcasts DHCPDISCOVER to 255.255.255.255 from source 0.0.0.0 — all devices on the subnet receive it, including the DHCP server.'
+  },
+  {
+    label:'DHCPOFFER', color:'#1565c0', cls:'offer',
+    dir:'←', isBcast:false,
+    title:'Step 2 — Offer (DHCPOFFER)',
+    desc:'The DHCP server replies with DHCPOFFER, proposing an IP address, subnet mask, default gateway, DNS server, and lease duration.'
+  },
+  {
+    label:'DHCPREQUEST', color:'#6a1b9a', cls:'request',
+    dir:'→', isBcast:true,
+    title:'Step 3 — Request (DHCPREQUEST)',
+    desc:'The client broadcasts DHCPREQUEST accepting the offer. Broadcasting notifies all DHCP servers — those whose offers were declined can release their reserved addresses.'
+  },
+  {
+    label:'DHCPACK', color:'#2e7d32', cls:'ack',
+    dir:'←', isBcast:false,
+    title:'Step 4 — Acknowledge (DHCPACK)',
+    desc:'The server sends DHCPACK confirming the assignment. The client is now fully configured with its IP address, network settings, and lease period.'
+  }
+];
+
+let cvs, ctx2d;
+let W = 0, H = 0;
+const PKT_W = 120, PKT_H = 30;
+let CLIENT_X, SERVER_X, BUS_Y, DEV_TOP;
+
+let simStep = 0;       // 0 = idle, 1-4 = step just completed
+let busy = false;
+let autoTimer = null;
+
+function setupCanvas() {
+  cvs = document.getElementById('doraCanvas');
+  if (!cvs) return;
+  ctx2d = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const dispW = Math.min(cvs.parentElement.clientWidth - 32, 900);
+  const dispH = 270;
+  cvs.style.width  = dispW + 'px';
+  cvs.style.height = dispH + 'px';
+  cvs.width  = dispW * dpr;
+  cvs.height = dispH * dpr;
+  ctx2d.scale(dpr, dpr);
+  W = dispW; H = dispH;
+  CLIENT_X = Math.round(W * 0.11);
+  SERVER_X = Math.round(W * 0.89);
+  BUS_Y    = Math.round(H * 0.62);
+  DEV_TOP  = Math.round(H * 0.12);
+  PKT_W_scaled = Math.min(PKT_W, (SERVER_X - CLIENT_X) * 0.28);
+  draw(simStep, null);
+}
+
+// Helper: rounded rect polyfill
+function rRect(x, y, w, h, r) {
+  ctx2d.beginPath();
+  ctx2d.moveTo(x + r, y);
+  ctx2d.lineTo(x + w - r, y);
+  ctx2d.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx2d.lineTo(x + w, y + h - r);
+  ctx2d.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx2d.lineTo(x + r, y + h);
+  ctx2d.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx2d.lineTo(x, y + r);
+  ctx2d.quadraticCurveTo(x, y, x + r, y);
+  ctx2d.closePath();
+}
+
+function draw(step, pkt) {
+  if (!ctx2d) return;
+  const c = ctx2d;
+  c.clearRect(0, 0, W, H);
+
+  // Background
+  c.fillStyle = '#f8fbff';
+  c.fillRect(0, 0, W, H);
+
+  // ── Bus ──
+  c.strokeStyle = '#546e7a';
+  c.lineWidth = 5;
+  c.beginPath();
+  c.moveTo(CLIENT_X, BUS_Y);
+  c.lineTo(SERVER_X, BUS_Y);
+  c.stroke();
+
+  c.fillStyle = '#78909c';
+  c.font = '11px Segoe UI';
+  c.textAlign = 'center';
+  c.fillText('Network (Bus)', W / 2, BUS_Y + 20);
+
+  // ── Extra devices on bus ──
+  const extras = [Math.round(W*0.35), Math.round(W*0.52), Math.round(W*0.67)];
+  extras.forEach(ex => {
+    c.strokeStyle = '#b0bec5';
+    c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(ex, BUS_Y); c.lineTo(ex, BUS_Y - 28); c.stroke();
+    drawSmallDevice(ex, BUS_Y - 28 - 20);
+  });
+
+  // ── Stubs for client and server ──
+  c.strokeStyle = '#546e7a';
+  c.lineWidth = 2.5;
+  c.beginPath(); c.moveTo(CLIENT_X, BUS_Y); c.lineTo(CLIENT_X, DEV_TOP + 58); c.stroke();
+  c.beginPath(); c.moveTo(SERVER_X, BUS_Y); c.lineTo(SERVER_X, DEV_TOP + 70); c.stroke();
+
+  // ── Client ──
+  const configured = step >= 4;
+  drawClient(CLIENT_X, DEV_TOP, configured);
+
+  // ── Server ──
+  drawServerBox(SERVER_X, DEV_TOP);
+
+  // ── Packet ──
+  if (pkt !== null) {
+    const s = DORA_STEPS[step - 1];
+    drawPacket(pkt.x, BUS_Y - PKT_H - 6, s.color, s.label, s.isBcast);
+  }
+
+  // ── Completed message markers ──
+  if (step >= 1 && pkt === null) drawDoneMarker(step);
+}
+
+function drawSmallDevice(cx, cy) {
+  const c = ctx2d;
+  const w = 22, h = 16;
+  c.fillStyle = '#eceff1';
+  c.strokeStyle = '#90a4ae';
+  c.lineWidth = 1;
+  rRect(cx - w/2, cy, w, h, 2);
+  c.fill(); c.stroke();
+  c.fillStyle = '#b0bec5';
+  c.font = '7px Segoe UI';
+  c.textAlign = 'center';
+  c.fillText('device', cx, cy + h + 9);
+}
+
+function drawClient(cx, cy, configured) {
+  const c = ctx2d;
+  const w = 56, h = 38;
+  const bg = configured ? '#c8e6c9' : '#bbdefb';
+  const bd = configured ? '#2e7d32' : '#1565c0';
+
+  // Laptop screen
+  c.fillStyle = bg;
+  c.strokeStyle = bd;
+  c.lineWidth = 2;
+  rRect(cx - w/2, cy, w, h, 4);
+  c.fill(); c.stroke();
+
+  // Screen glow
+  c.fillStyle = bd + '25';
+  c.fillRect(cx - w/2 + 5, cy + 5, w - 10, h - 12);
+
+  // Keyboard base
+  c.fillStyle = bg;
+  c.strokeStyle = bd;
+  rRect(cx - w/2 - 5, cy + h, w + 10, 7, 2);
+  c.fill(); c.stroke();
+
+  c.font = 'bold 10px Segoe UI';
+  c.fillStyle = bd;
+  c.textAlign = 'center';
+  c.fillText(configured ? 'Client' : 'New Device', cx, cy + h + 20);
+  if (configured) {
+    c.font = '9px Segoe UI';
+    c.fillStyle = '#2e7d32';
+    c.fillText('✓ Configured', cx, cy + h + 32);
+  } else {
+    c.font = '9px Segoe UI';
+    c.fillStyle = '#888';
+    c.fillText('(no IP yet)', cx, cy + h + 32);
+  }
+}
+
+function drawServerBox(cx, cy) {
+  const c = ctx2d;
+  const w = 50, h = 62;
+  c.fillStyle = '#fce4ec';
+  c.strokeStyle = '#880e4f';
+  c.lineWidth = 2;
+  rRect(cx - w/2, cy, w, h, 4);
+  c.fill(); c.stroke();
+
+  // Drive bays
+  for (let i = 0; i < 3; i++) {
+    c.fillStyle = '#880e4f22';
+    c.fillRect(cx - w/2 + 5, cy + 7 + i*16, w - 10, 10);
+    c.strokeStyle = '#880e4f66';
+    c.lineWidth = 0.5;
+    c.strokeRect(cx - w/2 + 5, cy + 7 + i*16, w - 10, 10);
+    // LED
+    c.fillStyle = i === 0 ? '#4caf50' : '#ffb300';
+    c.beginPath();
+    c.arc(cx + w/2 - 9, cy + 12 + i*16, 3, 0, Math.PI*2);
+    c.fill();
+  }
+
+  c.font = 'bold 10px Segoe UI';
+  c.fillStyle = '#880e4f';
+  c.textAlign = 'center';
+  c.fillText('DHCP Server', cx, cy + h + 16);
+}
+
+function drawPacket(x, y, color, label, isBcast) {
+  const c = ctx2d;
+  const w = PKT_W, h = PKT_H;
+  c.save();
+
+  if (isBcast) {
+    c.setLineDash([5, 3]);
+    // Subtle broadcast glow
+    c.shadowColor = color;
+    c.shadowBlur = 14;
+  } else {
+    c.shadowColor = color + '66';
+    c.shadowBlur = 8;
+  }
+
+  c.fillStyle = color + 'ee';
+  c.strokeStyle = color;
+  c.lineWidth = 2;
+  rRect(x, y, w, h, 5);
+  c.fill();
+  c.setLineDash([]);
+  c.stroke();
+  c.shadowBlur = 0;
+
+  c.font = 'bold 10px "Segoe UI",monospace';
+  c.fillStyle = '#fff';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(label, x + w/2, y + h/2 - (isBcast ? 4 : 0));
+
+  if (isBcast) {
+    c.font = '8px Segoe UI';
+    c.fillStyle = 'rgba(255,255,255,0.8)';
+    c.fillText('(broadcast)', x + w/2, y + h/2 + 7);
+  }
+  c.textBaseline = 'alphabetic';
+  c.restore();
+}
+
+function drawDoneMarker(step) {
+  // Small tick marks beside completed steps
+}
+
+// ── Animation ──
+const ANIM_MS = 2400;
+
+function startAnim(stepNum, onDone) {
+  const s = DORA_STEPS[stepNum - 1];
+  let startX, endX;
+  const margin = 30;
+
+  if (s.dir === '→') {
+    startX = CLIENT_X + 32;
+    endX   = SERVER_X - PKT_W - 32;
+  } else {
+    startX = SERVER_X - PKT_W - 32;
+    endX   = CLIENT_X + 32;
+  }
+
+  let t0 = null;
+  function frame(ts) {
+    if (!t0) t0 = ts;
+    const p = Math.min((ts - t0) / ANIM_MS, 1);
+    // ease in-out cubic
+    const e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p+2,3)/2;
+    const x = startX + (endX - startX) * e;
+    draw(stepNum, { x });
+    if (p < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      onDone();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function nextStep() {
+  if (busy || simStep >= 4) return;
+  busy = true;
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnAuto').disabled = true;
+
+  const next = simStep + 1;
+  // Activate step indicator
+  const dsEl = document.getElementById('ds' + (next-1));
+  if (dsEl) { dsEl.classList.remove('done'); dsEl.classList.add('active'); }
+
+  // Sending info
+  const s = DORA_STEPS[next - 1];
+  setStepInfo(s.cls, s.title + ' <span style="opacity:0.6;font-size:0.8em;">(sending…)</span>', s.desc);
+
+  startAnim(next, () => {
+    simStep = next;
+    busy = false;
+
+    // Mark as done
+    if (dsEl) { dsEl.classList.remove('active'); dsEl.classList.add('done'); }
+
+    draw(simStep, null);
+    setStepInfo(s.cls, '✓ ' + s.title, s.desc);
+    document.getElementById('stepCounter').textContent = 'Step ' + simStep + ' / 4';
+
+    if (simStep < 4) {
+      document.getElementById('btnNext').disabled = false;
+      document.getElementById('btnAuto').disabled = false;
+    } else {
+      // Complete
+      setStepInfo('ack',
+        '✓ DHCP Complete — Device is now configured.',
+        'The client has its IP address, subnet mask, default gateway, DNS server address and lease period. It can now communicate on the network.');
+    }
+  });
+}
+
+function autoPlay() {
+  if (busy || simStep >= 4) return;
+  const go = () => {
+    if (simStep < 4 && !busy) {
+      nextStep();
+      autoTimer = setTimeout(go, ANIM_MS + 1200);
+    }
+  };
+  go();
+}
+
+function resetSim() {
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  busy = false;
+  simStep = 0;
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('ds' + i);
+    if (el) el.classList.remove('active','done');
+  }
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnAuto').disabled = false;
+  document.getElementById('stepCounter').textContent = 'Step 0 / 4';
+  setStepInfo('',
+    'Ready to Start',
+    'A new device has connected to the network. It has no IP address yet. Click <strong>Next Step</strong> to begin the DHCP negotiation.');
+  draw(0, null);
+}
+
+function setStepInfo(cls, title, desc) {
+  const el = document.getElementById('stepInfo');
+  el.className = 'step-info' + (cls ? ' ' + cls : '');
+  el.innerHTML = '<h3>' + title + '</h3><p>' + desc + '</p>';
+}
+
+// ── Initialise ──
+window.addEventListener('load', () => { showTab(0); });
+window.addEventListener('resize', () => {
+  if (document.getElementById('panel1').classList.contains('active')) setupCanvas();
+});
+</script>
+
+</body>
+</html>
