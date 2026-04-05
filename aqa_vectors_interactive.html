@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AQA A Level CS Vectors Interactive</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --panel: #ffffff;
+      --ink: #1b2230;
+      --muted: #59657a;
+      --accent: #1565c0;
+      --accent-2: #0d47a1;
+      --ok: #2e7d32;
+      --err: #c62828;
+      --line: #d8e0ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+    header {
+      background: var(--accent);
+      color: #fff;
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+    header h1 { margin: 0 0 0.2rem; font-size: 1.4rem; }
+    header p { margin: 0; opacity: 0.95; font-size: 0.92rem; }
+    .home-link { color: #dbe9ff; text-decoration: none; font-size: 0.85rem; display: inline-block; margin-top: 0.4rem; }
+
+    main { max-width: 980px; margin: 1.25rem auto 2rem; padding: 0 1rem; }
+    .card {
+      background: var(--panel);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; }
+    .stats { font-size: 0.9rem; color: var(--muted); display: flex; gap: 1rem; }
+    .stats strong { color: var(--ink); }
+
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 0.55rem 0.95rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-2); }
+    .btn-ghost { background: #eaf2ff; color: var(--accent-2); }
+
+    .question-type { color: var(--accent); font-weight: 700; margin-bottom: 0.55rem; }
+    .question-text {
+      background: #eef4ff;
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      padding: 0.75rem;
+      line-height: 1.5;
+      margin-bottom: 0.8rem;
+    }
+    .mono { font-family: Consolas, "Courier New", monospace; }
+
+    .input { width: min(100%, 560px); border: 2px solid #9bb8e3; border-radius: 8px; padding: 0.6rem 0.7rem; font-size: 1rem; }
+    .input:focus { outline: none; border-color: var(--accent); }
+
+    .feedback {
+      display: none;
+      margin-top: 0.8rem;
+      border-radius: 8px;
+      padding: 0.7rem;
+      line-height: 1.45;
+    }
+    .feedback.ok { display: block; background: #edf8ef; border: 1px solid #b9debd; color: var(--ok); }
+    .feedback.err { display: block; background: #ffefef; border: 1px solid #f3b7b7; color: var(--err); }
+
+    .solution {
+      display: none;
+      margin-top: 0.8rem;
+      background: #fafcff;
+      border: 1px solid #ccd8eb;
+      border-radius: 8px;
+      padding: 0.75rem;
+      line-height: 1.45;
+    }
+    .solution.on { display: block; }
+
+    .canvas-wrap { display: none; margin-top: 0.55rem; }
+    canvas { border: 1px solid var(--line); border-radius: 8px; background: #fff; max-width: 100%; }
+    .hint { font-size: 0.84rem; color: var(--muted); margin-top: 0.35rem; }
+
+    .calc {
+      margin-top: 0.8rem;
+      border-top: 1px solid var(--line);
+      padding-top: 0.8rem;
+      display: none;
+    }
+    .calc h3 { margin: 0 0 0.4rem; color: var(--accent); font-size: 0.95rem; }
+    .calc-output { font-size: 0.9rem; color: var(--muted); margin-top: 0.45rem; min-height: 1.2rem; }
+
+    @media (max-width: 600px) {
+      .row { align-items: stretch; }
+      .btn { width: 100%; }
+      .stats { width: 100%; justify-content: space-between; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>AQA A Level CS Vectors Interactive</h1>
+  <p>Random questions across representations, operations, convex combinations and dot product angles.</p>
+  <a class="home-link" href="index.html">&#8592; Back to Learning Demos</a>
+</header>
+
+<main>
+  <section class="card">
+    <div class="row" style="justify-content: space-between;">
+      <div class="stats">
+        <span>Attempted: <strong id="attempted">0</strong></span>
+        <span>Correct: <strong id="correct">0</strong></span>
+      </div>
+      <button class="btn btn-primary" id="newBtn">New Random Question</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="question-type" id="qType">Question type</div>
+    <div class="question-text" id="qText">Press <strong>New Random Question</strong> to begin.</div>
+
+    <div id="givenBlock" class="mono" style="margin-bottom:0.75rem;"></div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="vectorCanvas" width="420" height="420" aria-label="Vector grid"></canvas>
+      <div class="hint" id="canvasHint"></div>
+    </div>
+
+    <label for="answerInput" class="hint">Answer format: <span id="formatHint" class="mono">[2.0, 3.0]</span></label>
+    <input id="answerInput" class="input mono" type="text" placeholder="Type your answer here" />
+
+    <div class="calc" id="calcBox">
+      <h3>Quick scientific calculator (single-line expression)</h3>
+      <div class="row">
+        <input id="calcInput" class="input mono" type="text" placeholder="e.g. acos(7/sqrt(74))*180/pi" />
+        <button class="btn btn-ghost" id="calcEvalBtn">Evaluate</button>
+      </div>
+      <div class="calc-output" id="calcOut"></div>
+      <div class="hint mono">Allowed: + - * / ^ ( ) and functions sin cos tan asin acos atan sqrt abs log ln, plus pi and e.</div>
+    </div>
+
+    <div class="row" style="margin-top:0.8rem;">
+      <button class="btn btn-primary" id="checkBtn">Check Answer</button>
+      <button class="btn btn-ghost" id="showBtn">Show Solution</button>
+    </div>
+
+    <div class="feedback" id="feedback"></div>
+    <div class="solution" id="solution"></div>
+  </section>
+</main>
+
+<script>
+'use strict';
+
+const state = {
+  attempted: 0,
+  correct: 0,
+  question: null,
+  drag: { active: false, x: 0, y: 0 }
+};
+
+const els = {
+  attempted: document.getElementById('attempted'),
+  correct: document.getElementById('correct'),
+  qType: document.getElementById('qType'),
+  qText: document.getElementById('qText'),
+  givenBlock: document.getElementById('givenBlock'),
+  canvasWrap: document.getElementById('canvasWrap'),
+  canvas: document.getElementById('vectorCanvas'),
+  canvasHint: document.getElementById('canvasHint'),
+  formatHint: document.getElementById('formatHint'),
+  answerInput: document.getElementById('answerInput'),
+  feedback: document.getElementById('feedback'),
+  solution: document.getElementById('solution'),
+  calcBox: document.getElementById('calcBox'),
+  calcInput: document.getElementById('calcInput'),
+  calcOut: document.getElementById('calcOut')
+};
+
+const ctx = els.canvas.getContext('2d');
+const GRID_MIN = -8;
+const GRID_MAX = 8;
+
+function randint(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function pick(arr) { return arr[randint(0, arr.length - 1)]; }
+function fmt(n) { return Number(n).toFixed(1); }
+function fmtVec(v) { return `[${v.map(fmt).join(', ')}]`; }
+function clone(v) { return v.slice(); }
+
+function randVector2(nonZero = false) {
+  let v;
+  do {
+    v = [randint(-6, 6), randint(-6, 6)];
+  } while ((v[0] === 0 && v[1] === 0 && nonZero) || (!nonZero && false));
+  return v.map(x => Number(x));
+}
+
+function dot(a, b) { return a[0] * b[0] + a[1] * b[1]; }
+function mag(a) { return Math.sqrt(dot(a, a)); }
+function add(a, b) { return [a[0] + b[0], a[1] + b[1]]; }
+function scale(k, v) { return [k * v[0], k * v[1]]; }
+
+function toDictString(v) {
+  return `{0:${fmt(v[0])}, 1:${fmt(v[1])}}`;
+}
+function toFuncString(v) {
+  return `f : {0,1} → ℝ, 0 ↦ ${fmt(v[0])}, 1 ↦ ${fmt(v[1])}`;
+}
+
+function parseVectorInput(raw) {
+  if (!raw) return null;
+  const nums = raw.match(/-?\d+(?:\.\d+)?/g);
+  if (!nums || nums.length < 2) return null;
+  return [Number(nums[0]), Number(nums[1])];
+}
+
+function closeEnoughVec(a, b, eps = 0.05) {
+  return Math.abs(a[0] - b[0]) <= eps && Math.abs(a[1] - b[1]) <= eps;
+}
+
+function resetFeedback() {
+  els.feedback.className = 'feedback';
+  els.feedback.textContent = '';
+  els.solution.className = 'solution';
+  els.solution.innerHTML = '';
+}
+
+function updateScore() {
+  els.attempted.textContent = String(state.attempted);
+  els.correct.textContent = String(state.correct);
+}
+
+function drawGrid(vector = null, draggable = false) {
+  const w = els.canvas.width;
+  const h = els.canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const pad = 24;
+  const span = GRID_MAX - GRID_MIN;
+  const step = (w - pad * 2) / span;
+
+  function toPx(x, y) {
+    return {
+      px: pad + (x - GRID_MIN) * step,
+      py: h - pad - (y - GRID_MIN) * step
+    };
+  }
+
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  for (let i = GRID_MIN; i <= GRID_MAX; i++) {
+    const p1 = toPx(i, GRID_MIN);
+    const p2 = toPx(i, GRID_MAX);
+    ctx.beginPath(); ctx.moveTo(p1.px, p1.py); ctx.lineTo(p2.px, p2.py); ctx.stroke();
+
+    const p3 = toPx(GRID_MIN, i);
+    const p4 = toPx(GRID_MAX, i);
+    ctx.beginPath(); ctx.moveTo(p3.px, p3.py); ctx.lineTo(p4.px, p4.py); ctx.stroke();
+  }
+
+  const xAxisA = toPx(GRID_MIN, 0), xAxisB = toPx(GRID_MAX, 0);
+  const yAxisA = toPx(0, GRID_MIN), yAxisB = toPx(0, GRID_MAX);
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(xAxisA.px, xAxisA.py); ctx.lineTo(xAxisB.px, xAxisB.py); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(yAxisA.px, yAxisA.py); ctx.lineTo(yAxisB.px, yAxisB.py); ctx.stroke();
+
+  if (!vector) return;
+  const start = toPx(0, 0);
+  const end = toPx(vector[0], vector[1]);
+
+  ctx.strokeStyle = '#1565c0';
+  ctx.fillStyle = '#1565c0';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(start.px, start.py);
+  ctx.lineTo(end.px, end.py);
+  ctx.stroke();
+
+  const ang = Math.atan2(end.py - start.py, end.px - start.px);
+  const size = 10;
+  ctx.beginPath();
+  ctx.moveTo(end.px, end.py);
+  ctx.lineTo(end.px - size * Math.cos(ang - Math.PI / 6), end.py - size * Math.sin(ang - Math.PI / 6));
+  ctx.lineTo(end.px - size * Math.cos(ang + Math.PI / 6), end.py - size * Math.sin(ang + Math.PI / 6));
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = draggable ? '#c62828' : '#0d47a1';
+  ctx.beginPath();
+  ctx.arc(end.px, end.py, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '13px Segoe UI';
+  ctx.fillText(`(${fmt(vector[0])}, ${fmt(vector[1])})`, end.px + 8, end.py - 8);
+}
+
+function canvasToVector(evt) {
+  const r = els.canvas.getBoundingClientRect();
+  const x = evt.clientX - r.left;
+  const y = evt.clientY - r.top;
+  const pad = 24;
+  const span = GRID_MAX - GRID_MIN;
+  const step = (els.canvas.width - pad * 2) / span;
+  const gx = GRID_MIN + (x - pad) / step;
+  const gy = GRID_MIN + (els.canvas.height - pad - y) / step;
+  return [Math.max(GRID_MIN, Math.min(GRID_MAX, Math.round(gx))), Math.max(GRID_MIN, Math.min(GRID_MAX, Math.round(gy)))];
+}
+
+function setRepresentationQuestion() {
+  const v = randVector2(true);
+  const from = pick(['list', 'dictionary', 'function', 'arrow']);
+  const to = pick(['list', 'dictionary', 'function', 'arrow'].filter(x => x !== from));
+
+  const q = { kind: 'representation', from, to, vector: clone(v) };
+
+  let given = '';
+  if (from === 'list') given = `Given list form: ${fmtVec(v)}`;
+  if (from === 'dictionary') given = `Given dictionary form: ${toDictString(v)}`;
+  if (from === 'function') given = `Given function form: ${toFuncString(v)}`;
+
+  els.canvasWrap.style.display = from === 'arrow' || to === 'arrow' ? 'block' : 'none';
+
+  if (from === 'arrow') {
+    drawGrid(v, false);
+    els.canvasHint.textContent = 'Given arrow (tail at origin). Convert it into the requested representation.';
+  } else if (to === 'arrow') {
+    state.drag.x = v[0];
+    state.drag.y = v[1];
+    drawGrid([state.drag.x, state.drag.y], true);
+    els.canvasHint.textContent = 'Drag the red endpoint to create the required arrow from the origin.';
+  }
+
+  if (to === 'arrow') {
+    els.answerInput.style.display = 'none';
+  } else {
+    els.answerInput.style.display = 'block';
+  }
+
+  els.qType.textContent = 'Type 1: Representation conversion';
+  els.qText.innerHTML = `Convert from <strong>${from}</strong> form to <strong>${to}</strong> form. All entries must be over the same field (use real-number style floats like 2.0).`;
+  els.givenBlock.textContent = given;
+  els.formatHint.textContent = to === 'list' ? '[x.x, y.y]' : to === 'dictionary' ? '{0:x.x, 1:y.y}' : to === 'function' ? '0->x.x, 1->y.y' : 'Use the draggable endpoint on grid';
+
+  q.answer = clone(v);
+  q.solution = `Equivalent forms for the vector are:<br><span class="mono">List: ${fmtVec(v)}</span><br><span class="mono">Dictionary: ${toDictString(v)}</span><br><span class="mono">Function: ${toFuncString(v)}</span><br>Arrow endpoint from origin: <span class="mono">(${fmt(v[0])}, ${fmt(v[1])})</span>.`;
+  return q;
+}
+
+function setOperationsQuestion() {
+  const a = randVector2(true), b = randVector2(true);
+  let k1 = randint(-3, 3), k2 = randint(-3, 3);
+  if (k1 === 0) k1 = 2;
+  if (k2 === 0) k2 = -1;
+
+  const result = add(scale(k1, a), scale(k2, b));
+  const expr = `${k1}a ${k2 >= 0 ? '+' : '-'} ${Math.abs(k2)}b`;
+
+  els.canvasWrap.style.display = 'none';
+  els.answerInput.style.display = 'block';
+  els.calcBox.style.display = 'none';
+  els.qType.textContent = 'Type 2: Vector addition & scalar multiplication';
+  els.qText.innerHTML = `Given vectors <span class="mono">a = ${fmtVec(a)}</span> and <span class="mono">b = ${fmtVec(b)}</span>, calculate <span class="mono">${expr}</span>.`;
+  els.givenBlock.textContent = 'Remember: scalar multiplication scales a vector; addition translates by component-wise sum.';
+  els.formatHint.textContent = '[x.x, y.y]';
+
+  return {
+    kind: 'operations',
+    answer: result,
+    solution: `Compute each part: <span class="mono">${k1}a = ${fmtVec(scale(k1, a))}</span>, <span class="mono">${k2}b = ${fmtVec(scale(k2, b))}</span>, then add to get <span class="mono">${fmtVec(result)}</span>.`
+  };
+}
+
+function setConvexQuestion() {
+  const mode = pick(['evaluate', 'ratio']);
+  els.canvasWrap.style.display = 'none';
+  els.answerInput.style.display = 'block';
+  els.calcBox.style.display = 'none';
+
+  if (mode === 'evaluate') {
+    const u = randVector2(true), v = randVector2(true);
+    const choices = [[0.2, 0.8], [0.25, 0.75], [0.4, 0.6], [0.5, 0.5], [0.7, 0.3]];
+    const [a, b] = pick(choices);
+    const ans = add(scale(a, u), scale(b, v));
+
+    els.qType.textContent = 'Type 3: Convex combination';
+    els.qText.innerHTML = `Evaluate the convex combination <span class="mono">αu + βv</span> for <span class="mono">u=${fmtVec(u)}</span>, <span class="mono">v=${fmtVec(v)}</span>, <span class="mono">α=${fmt(a)}</span>, <span class="mono">β=${fmt(b)}</span>.`;
+    els.givenBlock.textContent = 'Check α, β ≥ 0 and α + β = 1 for convex combinations.';
+    els.formatHint.textContent = '[x.x, y.y]';
+
+    return {
+      kind: 'convex_eval',
+      answer: ans,
+      solution: `Substitute values: <span class="mono">${fmt(a)}u + ${fmt(b)}v = ${fmtVec(scale(a, u))} + ${fmtVec(scale(b, v))} = ${fmtVec(ans)}</span>.`
+    };
+  }
+
+  const A = randVector2(true), B = randVector2(true);
+  const m = randint(1, 5), n = randint(1, 5);
+  const X = scale(1 / (m + n), add(scale(n, A), scale(m, B))); // AX:XB = m:n
+
+  els.qType.textContent = 'Type 3: Convex combination (ratio on line segment)';
+  els.qText.innerHTML = `Point <span class="mono">X</span> divides segment <span class="mono">AB</span> internally in ratio <span class="mono">AX:XB = ${m}:${n}</span>, where <span class="mono">A=${fmtVec(A)}</span> and <span class="mono">B=${fmtVec(B)}</span>. Find <span class="mono">X</span>.`;
+  els.givenBlock.textContent = 'Use weighted average with positive coefficients summing to 1.';
+  els.formatHint.textContent = '[x.x, y.y]';
+
+  return {
+    kind: 'convex_ratio',
+    answer: X,
+    solution: `For ratio <span class="mono">AX:XB = ${m}:${n}</span>, <span class="mono">X = ( ${n}A + ${m}B ) / (${m + n})</span> = <span class="mono">${fmtVec(X)}</span>.`
+  };
+}
+
+function setAngleQuestion() {
+  let u = randVector2(true), v = randVector2(true);
+  while (Math.abs(dot(u, v)) === mag(u) * mag(v)) v = randVector2(true);
+  const cosT = dot(u, v) / (mag(u) * mag(v));
+  const angle = Math.acos(Math.max(-1, Math.min(1, cosT))) * 180 / Math.PI;
+
+  els.canvasWrap.style.display = 'none';
+  els.answerInput.style.display = 'block';
+  els.calcBox.style.display = 'block';
+  els.qType.textContent = 'Type 4: Angle using dot product';
+  els.qText.innerHTML = `Find the angle θ between <span class="mono">u=${fmtVec(u)}</span> and <span class="mono">v=${fmtVec(v)}</span> using <span class="mono">u·v = |u||v|cosθ</span>. Give θ in degrees (to 1 d.p.).`;
+  els.givenBlock.textContent = 'You may use the calculator below for expressions such as acos(value)*180/pi.';
+  els.formatHint.textContent = 'angle in degrees (e.g. 53.1)';
+
+  return {
+    kind: 'angle',
+    answer: angle,
+    solution: `Dot product: <span class="mono">u·v = ${fmt(dot(u, v))}</span>. Magnitudes: <span class="mono">|u|=${fmt(mag(u))}</span>, <span class="mono">|v|=${fmt(mag(v))}</span>. So <span class="mono">θ = cos⁻¹((u·v)/(|u||v|)) = ${angle.toFixed(1)}°</span>.`
+  };
+}
+
+function newQuestion() {
+  resetFeedback();
+  els.answerInput.value = '';
+  els.calcInput.value = '';
+  els.calcOut.textContent = '';
+
+  const builder = pick([setRepresentationQuestion, setOperationsQuestion, setConvexQuestion, setAngleQuestion]);
+  state.question = builder();
+}
+
+function checkAnswer() {
+  if (!state.question) return;
+  state.attempted += 1;
+  let ok = false;
+
+  if (state.question.kind === 'representation' && state.question.to === 'arrow') {
+    ok = closeEnoughVec([state.drag.x, state.drag.y], state.question.answer, 0.01);
+  } else if (state.question.kind === 'angle') {
+    const val = Number(els.answerInput.value.trim());
+    ok = Number.isFinite(val) && Math.abs(val - state.question.answer) <= 0.2;
+  } else {
+    const parsed = parseVectorInput(els.answerInput.value);
+    ok = parsed && closeEnoughVec(parsed, state.question.answer);
+  }
+
+  if (ok) {
+    state.correct += 1;
+    els.feedback.className = 'feedback ok';
+    els.feedback.innerHTML = 'Correct ✔ Nice work.';
+  } else {
+    els.feedback.className = 'feedback err';
+    els.feedback.innerHTML = 'Not quite. Check signs, scaling factors, and format (floats).';
+  }
+  updateScore();
+}
+
+function showSolution() {
+  if (!state.question) return;
+  els.solution.className = 'solution on';
+  els.solution.innerHTML = state.question.solution;
+}
+
+function safeEval(expr) {
+  const cleaned = expr
+    .replace(/\^/g, '**')
+    .replace(/\bpi\b/gi, 'Math.PI')
+    .replace(/\be\b/g, 'Math.E')
+    .replace(/\bln\(/gi, 'Math.log(')
+    .replace(/\blog\(/gi, 'Math.log10(')
+    .replace(/\bsin\(/gi, 'Math.sin(')
+    .replace(/\bcos\(/gi, 'Math.cos(')
+    .replace(/\btan\(/gi, 'Math.tan(')
+    .replace(/\basin\(/gi, 'Math.asin(')
+    .replace(/\bacos\(/gi, 'Math.acos(')
+    .replace(/\batan\(/gi, 'Math.atan(')
+    .replace(/\bsqrt\(/gi, 'Math.sqrt(')
+    .replace(/\babs\(/gi, 'Math.abs(');
+
+  if (!/^[0-9+\-*/().,\sA-Za-z]*$/.test(cleaned)) throw new Error('Invalid characters.');
+  if (/(?:window|document|Function|=>|;|\[|\]|\{|\}|=)/.test(cleaned)) throw new Error('Unsafe expression.');
+
+  const result = Function(`"use strict"; return (${cleaned});`)();
+  if (!Number.isFinite(result)) throw new Error('Expression did not return a finite number.');
+  return result;
+}
+
+els.canvas.addEventListener('pointerdown', (e) => {
+  if (!state.question || !(state.question.kind === 'representation' && state.question.to === 'arrow')) return;
+  state.drag.active = true;
+  const [x, y] = canvasToVector(e);
+  state.drag.x = x; state.drag.y = y;
+  drawGrid([x, y], true);
+});
+els.canvas.addEventListener('pointermove', (e) => {
+  if (!state.drag.active) return;
+  const [x, y] = canvasToVector(e);
+  state.drag.x = x; state.drag.y = y;
+  drawGrid([x, y], true);
+});
+window.addEventListener('pointerup', () => { state.drag.active = false; });
+
+
+document.getElementById('newBtn').addEventListener('click', newQuestion);
+document.getElementById('checkBtn').addEventListener('click', checkAnswer);
+document.getElementById('showBtn').addEventListener('click', showSolution);
+document.getElementById('calcEvalBtn').addEventListener('click', () => {
+  const expr = els.calcInput.value.trim();
+  if (!expr) return;
+  try {
+    const v = safeEval(expr);
+    els.calcOut.textContent = `= ${v}`;
+  } catch (err) {
+    els.calcOut.textContent = `Error: ${err.message}`;
+  }
+});
+
+updateScore();
+</script>
+</body>
+</html>
