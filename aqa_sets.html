@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level Sets Interactive</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useCallback, useRef } = React;
+
+      // --- ICON COMPONENTS (Replacing lucide-react) ---
+      const Check = ({ size = 20, className = "" }) => (
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      );
+      const X = ({ size = 20, className = "" }) => (
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      );
+      const ChevronDown = ({ size = 20, className = "" }) => (
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      );
+      const Filter = ({ size = 20, className = "" }) => (
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+      );
+      const Lightbulb = ({ size = 20, className = "" }) => (
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"></path>
+          <path d="M9 18h6"></path>
+          <path d="M10 22h4"></path>
+        </svg>
+      );
+      const Play = ({ size = 20, className = "" }) => (
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+      );
+
+      // --- UTILITY FUNCTIONS ---
+      const randomInt = (min, max) =>
+        Math.floor(Math.random() * (max - min + 1)) + min;
+      const shuffle = (array) => [...array].sort(() => Math.random() - 0.5);
+      const randomChoice = (array) =>
+        array[Math.floor(Math.random() * array.length)];
+
+      // --- QUESTION GENERATORS ---
+      const generateOperations = () => {
+        const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        const shuffledPool = shuffle(pool);
+        const A = shuffledPool.slice(0, randomInt(3, 5)).sort((a, b) => a - b);
+        const B = shuffle(pool)
+          .slice(0, randomInt(3, 5))
+          .sort((a, b) => a - b);
+        const op = randomChoice(["union", "intersection", "difference"]);
+
+        if (op === "union") {
+          const ans = Array.from(new Set([...A, ...B])).sort((a, b) => a - b);
+          return {
+            text: `Given sets A = {${A.join(", ")}} and B = {${B.join(", ")}},\nWhat is A ∪ B ?`,
+            type: "set",
+            correctAnswer: ans.map(String),
+            explanation: `Union (∪) combines all distinct elements from both sets to form: {${ans.join(", ")}}.`,
+          };
+        } else if (op === "intersection") {
+          const ans = A.filter((x) => B.includes(x)).sort((a, b) => a - b);
+          return {
+            text: `Given sets A = {${A.join(", ")}} and B = {${B.join(", ")}},\nWhat is A ∩ B ?`,
+            type: "set",
+            correctAnswer: ans.map(String),
+            explanation: `Intersection (∩) finds elements that exist in BOTH set A and set B: {${ans.length ? ans.join(", ") : "∅"}}.`,
+          };
+        } else {
+          const ans = A.filter((x) => !B.includes(x)).sort((a, b) => a - b);
+          return {
+            text: `Given sets A = {${A.join(", ")}} and B = {${B.join(", ")}},\nWhat is A \\ B ? (also written A - B)`,
+            type: "set",
+            correctAnswer: ans.map(String),
+            explanation: `Set difference (A \\ B) consists of the elements in A that are NOT in B: {${ans.length ? ans.join(", ") : "∅"}}.`,
+          };
+        }
+      };
+
+      const generateComprehension = () => {
+        const r = Math.random();
+        if (r < 0.33) {
+          const limit = randomInt(3, 6);
+          // ℕ starts at 0 in Computer Science
+          const ans = Array.from({ length: limit }, (_, i) => i);
+          return {
+            text: `List the elements of the set:\nA = {x | x ∈ ℕ ∧ x < ${limit}}`,
+            type: "set",
+            correctAnswer: ans.map(String),
+            explanation: `The set comprehension specifies all natural numbers (ℕ) strictly less than ${limit}. In Computer Science, ℕ starts at 0, so the elements are {${ans.join(", ")}}.`,
+          };
+        } else if (r < 0.66) {
+          const n = randomInt(2, 5);
+          const zeros = "0".repeat(n);
+          const ones = "1".repeat(n);
+          return {
+            text: `Consider the compact representation of a set: {0ⁿ1ⁿ | n ≥ 1}.\nWhich string is produced when n = ${n}?`,
+            type: "string",
+            correctAnswer: zeros + ones,
+            explanation: `The notation 0ⁿ1ⁿ means exactly ${n} zeros followed by ${n} ones. The resulting string is ${zeros + ones}.`,
+          };
+        } else {
+          const base = Array.from(
+            new Set([randomInt(1, 3), randomInt(2, 4), randomInt(3, 5)]),
+          ).sort((a, b) => a - b);
+          const mult = randomInt(2, 4);
+          const ans = base.map((x) => x * mult).sort((a, b) => a - b);
+          return {
+            text: `Evaluate the following Python set comprehension:\n{${mult} * x for x in {${base.join(", ")}}}`,
+            type: "set",
+            correctAnswer: ans.map(String),
+            explanation: `Multiply each element in {${base.join(", ")}} by ${mult} to get {${ans.join(", ")}}. Sets are unordered collections of unique values.`,
+          };
+        }
+      };
+
+      const generateSubsets = () => {
+        const type = randomChoice([
+          "proper",
+          "subset",
+          "membership_in",
+          "membership_notin",
+        ]);
+
+        if (type === "proper") {
+          const isProper = Math.random() > 0.5;
+          const A = [1, 2];
+          const B = isProper ? [1, 2, 3] : [1, 2];
+          return {
+            text: `True or False: {${A.join(", ")}} ⊂ {${B.join(", ")}}`,
+            type: "mcq",
+            options: ["True", "False"],
+            correctAnswer: isProper ? "True" : "False",
+            explanation: `⊂ means "proper subset". A proper subset contains some but not all elements of the parent set (they cannot be equal). Since {${A.join(", ")}} is ${isProper ? "a proper subset of" : "equal to"} {${B.join(", ")}}, the statement is ${isProper ? "True" : "False"}.`,
+          };
+        } else if (type === "subset") {
+          const isSubset = Math.random() > 0.3;
+          const A = isSubset ? [1, 2] : [1, 4];
+          const B = [1, 2, 3];
+          return {
+            text: `True or False: {${A.join(", ")}} ⊆ {${B.join(", ")}}`,
+            type: "mcq",
+            options: ["True", "False"],
+            correctAnswer: isSubset ? "True" : "False",
+            explanation: `⊆ means "subset". It includes both proper subsets and equal sets. Since every element of {${A.join(", ")}} is ${isSubset ? "" : "NOT "}in {${B.join(", ")}}, the statement is ${isSubset ? "True" : "False"}.`,
+          };
+        } else {
+          const isIn = type === "membership_in";
+          const num = isIn ? randomChoice([2, 4]) : randomChoice([3, 5]);
+          const set = [2, 4, 6];
+          const trueStatement = isIn ? set.includes(num) : !set.includes(num);
+          const symbol = isIn ? "∈" : "∉";
+
+          return {
+            text: `True or False: ${num} ${symbol} {${set.join(", ")}}`,
+            type: "mcq",
+            options: ["True", "False"],
+            correctAnswer: trueStatement ? "True" : "False",
+            explanation: `The symbol ∈ means "is a member of", while ∉ means "is NOT a member of". The number ${num} is ${set.includes(num) ? "" : "not "}in the set {${set.join(", ")}}, making the statement ${trueStatement ? "True" : "False"}.`,
+          };
+        }
+      };
+
+      const generateCardinality = () => {
+        if (Math.random() > 0.5) {
+          const sizeA = randomInt(2, 5);
+          const sizeB = randomInt(2, 4);
+          return {
+            text: `If finite set A has cardinality ${sizeA} and finite set B has cardinality ${sizeB}, what is the cardinality of the Cartesian product A × B?`,
+            type: "number",
+            correctAnswer: sizeA * sizeB,
+            explanation: `The Cartesian product A × B is the set of all ordered pairs (a,b). The cardinality |A × B| is equal to |A| × |B|. Thus, ${sizeA} × ${sizeB} = ${sizeA * sizeB}.`,
+          };
+        } else {
+          const A = Array.from(
+            new Set(
+              Array.from({ length: randomInt(3, 6) }, () => randomInt(1, 10)),
+            ),
+          ).sort((a, b) => a - b);
+          return {
+            text: `What is the cardinality of the set A = {${A.join(", ")}}?`,
+            type: "number",
+            correctAnswer: A.length,
+            explanation: `The cardinality of a finite set is the number of distinct elements it contains. Counting the elements in {${A.join(", ")}} gives ${A.length}.`,
+          };
+        }
+      };
+
+      const generateTheory = () => {
+        const questions = [
+          {
+            text: "Which of the following describes the set of real numbers ℝ?",
+            type: "mcq",
+            options: [
+              "Finite",
+              "Countably infinite",
+              "Uncountably infinite",
+              "Empty",
+            ],
+            correctAnswer: "Uncountably infinite",
+            explanation:
+              "The set of real numbers ℝ cannot be mapped one-to-one with the natural numbers, making it uncountably infinite.",
+          },
+          {
+            text: "Which of the following describes the set of natural numbers ℕ?",
+            type: "mcq",
+            options: [
+              "Finite",
+              "Countably infinite",
+              "Uncountably infinite",
+              "Uncountable",
+            ],
+            correctAnswer: "Countably infinite",
+            explanation:
+              "A countably infinite set is one whose elements can be counted off by the natural numbers. ℕ is the basis for this definition!",
+          },
+          {
+            text: "What does the symbol ∅ represent?",
+            type: "mcq",
+            options: [
+              "The set of natural numbers",
+              "The empty set {}",
+              "An infinite set",
+              "The universal set",
+            ],
+            correctAnswer: "The empty set {}",
+            explanation:
+              "∅ is an alternative notation for {}, the set with no elements.",
+          },
+          {
+            text: "In Computer Science, what is the first element of the set of natural numbers ℕ?",
+            type: "number",
+            correctAnswer: 0,
+            explanation:
+              "In AQA Computer Science, the natural numbers ℕ start from 0: {0, 1, 2, 3, 4, ...}. (Note: In some mathematics contexts it starts at 1, but for A-Level CS it is 0).",
+          },
+        ];
+        return randomChoice(questions);
+      };
+
+      // --- TOPIC CONFIGURATION ---
+      const TOPICS = {
+        operations: {
+          name: "Basic Operations (∪, ∩, \\)",
+          generator: generateOperations,
+        },
+        subsets: {
+          name: "Subsets & Membership (⊆, ⊂, ∈)",
+          generator: generateSubsets,
+        },
+        comprehension: {
+          name: "Comprehension & Compact Form",
+          generator: generateComprehension,
+        },
+        cardinality: {
+          name: "Cardinality & Cartesian Product",
+          generator: generateCardinality,
+        },
+        theory: {
+          name: "Types of Sets (ℕ, ℝ, Countable)",
+          generator: generateTheory,
+        },
+      };
+
+      // --- MAIN APP COMPONENT ---
+      function App() {
+        // State
+        const [activeTopics, setActiveTopics] = useState(Object.keys(TOPICS));
+        const [showDropdown, setShowDropdown] = useState(false);
+        const [currentQuestion, setCurrentQuestion] = useState(null);
+        const [userAnswer, setUserAnswer] = useState("");
+        const [status, setStatus] = useState("idle"); // 'idle', 'correct', 'incorrect'
+        const [showSolution, setShowSolution] = useState(false);
+        const dropdownRef = useRef(null);
+
+        // Close dropdown on outside click
+        useEffect(() => {
+          const handleClickOutside = (event) => {
+            if (
+              dropdownRef.current &&
+              !dropdownRef.current.contains(event.target)
+            ) {
+              setShowDropdown(false);
+            }
+          };
+          document.addEventListener("mousedown", handleClickOutside);
+          return () =>
+            document.removeEventListener("mousedown", handleClickOutside);
+        }, []);
+
+        const generateNewQuestion = useCallback(() => {
+          if (activeTopics.length === 0) return;
+          const topicKey = randomChoice(activeTopics);
+          const newQ = TOPICS[topicKey].generator();
+
+          setCurrentQuestion({ ...newQ, topic: TOPICS[topicKey].name });
+          setUserAnswer("");
+          setStatus("idle");
+          setShowSolution(false);
+        }, [activeTopics]);
+
+        // Initial generation
+        useEffect(() => {
+          generateNewQuestion();
+        }, [generateNewQuestion]);
+
+        const toggleTopic = (topicKey) => {
+          setActiveTopics((prev) => {
+            if (prev.includes(topicKey) && prev.length > 1) {
+              return prev.filter((t) => t !== topicKey);
+            } else if (!prev.includes(topicKey)) {
+              return [...prev, topicKey];
+            }
+            return prev; // Prevent unchecking the last topic
+          });
+        };
+
+        const checkAnswer = () => {
+          if (!currentQuestion || !userAnswer) return;
+
+          let isCorrect = false;
+
+          if (currentQuestion.type === "mcq") {
+            isCorrect = userAnswer === currentQuestion.correctAnswer;
+          } else if (currentQuestion.type === "number") {
+            isCorrect =
+              parseInt(userAnswer, 10) === currentQuestion.correctAnswer;
+          } else if (currentQuestion.type === "string") {
+            isCorrect = userAnswer.trim() === currentQuestion.correctAnswer;
+          } else if (currentQuestion.type === "set") {
+            const cleaned = userAnswer.trim().toLowerCase();
+            const isEmptyIndicator = ["empty", "none", "{}", "∅"].includes(
+              cleaned,
+            );
+
+            if (isEmptyIndicator) {
+              isCorrect = currentQuestion.correctAnswer.length === 0;
+            } else {
+              const userArr = cleaned
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s !== "")
+                .sort();
+              const correctArr = [...currentQuestion.correctAnswer]
+                .map(String)
+                .sort();
+
+              if (userArr.length === correctArr.length) {
+                isCorrect = userArr.every((v, i) => v === correctArr[i]);
+              }
+            }
+          }
+
+          setStatus(isCorrect ? "correct" : "incorrect");
+          if (isCorrect) setShowSolution(true); // Auto-show explanation on correct
+        };
+
+        const renderInput = () => {
+          if (!currentQuestion) return null;
+
+          if (currentQuestion.type === "mcq") {
+            return (
+              <div className="space-y-3 mt-4">
+                {currentQuestion.options.map((opt, idx) => (
+                  <label
+                    key={idx}
+                    className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="radio"
+                      name="mcq-answer"
+                      value={opt}
+                      checked={userAnswer === opt}
+                      onChange={(e) => {
+                        setUserAnswer(e.target.value);
+                        setStatus("idle");
+                      }}
+                      className="w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                    />
+                    <span className="text-slate-700 font-medium">{opt}</span>
+                  </label>
+                ))}
+              </div>
+            );
+          }
+
+          let placeholder = "Type your answer...";
+          if (currentQuestion.type === "set")
+            placeholder = "E.g. 1, 2, 3 (or 'empty' for ∅)";
+          if (currentQuestion.type === "number") placeholder = "Enter a number";
+
+          return (
+            <input
+              type={currentQuestion.type === "number" ? "number" : "text"}
+              value={userAnswer}
+              onChange={(e) => {
+                setUserAnswer(e.target.value);
+                setStatus("idle");
+              }}
+              onKeyDown={(e) => e.key === "Enter" && checkAnswer()}
+              placeholder={placeholder}
+              className="mt-4 w-full p-4 text-lg border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow outline-none font-mono"
+            />
+          );
+        };
+
+        return (
+          <div className="min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
+            <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+              {/* HEADER */}
+              <div className="bg-indigo-600 text-white p-6 flex justify-between items-center relative">
+                <div>
+                  <h1 className="text-2xl font-bold">
+                    AQA A-Level Sets Practice
+                  </h1>
+                  <p className="text-indigo-200 text-sm mt-1">
+                    Interactive Topic Generation
+                  </p>
+                </div>
+
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setShowDropdown(!showDropdown)}
+                    className="flex items-center space-x-2 bg-indigo-500 hover:bg-indigo-400 transition-colors px-4 py-2 rounded-lg text-sm font-medium"
+                  >
+                    <Filter size={18} />
+                    <span>Topics</span>
+                    <ChevronDown size={16} />
+                  </button>
+
+                  {/* TOPIC DROPDOWN */}
+                  {showDropdown && (
+                    <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl z-20 border border-slate-100 overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 font-semibold text-slate-700">
+                        Select Topics
+                      </div>
+                      <div className="p-2">
+                        {Object.entries(TOPICS).map(([key, topic]) => (
+                          <label
+                            key={key}
+                            className="flex items-start space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={activeTopics.includes(key)}
+                              onChange={() => toggleTopic(key)}
+                              disabled={
+                                activeTopics.length === 1 &&
+                                activeTopics.includes(key)
+                              }
+                              className="mt-1 w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 disabled:opacity-50"
+                            />
+                            <span
+                              className={`text-sm ${activeTopics.includes(key) ? "text-slate-800" : "text-slate-500"}`}
+                            >
+                              {topic.name}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* MAIN CONTENT */}
+              <div className="p-8">
+                {currentQuestion ? (
+                  <div className="space-y-6">
+                    <div className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-full uppercase tracking-wide">
+                      {currentQuestion.topic}
+                    </div>
+
+                    <div className="text-xl font-medium leading-relaxed whitespace-pre-wrap font-serif text-slate-900 bg-slate-50 p-6 rounded-xl border border-slate-100">
+                      {currentQuestion.text}
+                    </div>
+
+                    <div>
+                      {currentQuestion.type === "set" && (
+                        <p className="text-sm text-slate-500 mb-2 italic">
+                          Enter elements separated by commas. If the set has no
+                          elements, type <strong>empty</strong> or{" "}
+                          <strong>∅</strong>.
+                        </p>
+                      )}
+                      {renderInput()}
+                    </div>
+
+                    {/* ACTION BUTTONS & FEEDBACK */}
+                    <div className="flex items-center space-x-4 pt-4 border-t border-slate-100">
+                      <button
+                        onClick={checkAnswer}
+                        disabled={!userAnswer || status === "correct"}
+                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                      >
+                        <Check size={20} />
+                        <span>Check Answer</span>
+                      </button>
+
+                      {status === "incorrect" && (
+                        <button
+                          onClick={() => setShowSolution(!showSolution)}
+                          className="text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-4 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                        >
+                          <Lightbulb size={20} />
+                          <span>
+                            {showSolution ? "Hide Solution" : "Show Solution"}
+                          </span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={generateNewQuestion}
+                        className="ml-auto text-indigo-600 hover:text-indigo-800 font-semibold px-4 py-3 flex items-center space-x-2"
+                      >
+                        <span>Next Question</span>
+                        <Play size={18} />
+                      </button>
+                    </div>
+
+                    {/* STATUS INDICATORS */}
+                    {status === "correct" && (
+                      <div className="mt-6 bg-green-50 text-green-800 p-4 rounded-xl flex items-start space-x-3 border border-green-200">
+                        <div className="bg-green-100 p-1 rounded-full">
+                          <Check size={20} className="text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold">Correct!</h3>
+                          <p className="text-sm mt-1">
+                            {currentQuestion.explanation}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {status === "incorrect" && (
+                      <div className="mt-6 bg-red-50 text-red-800 p-4 rounded-xl flex items-center space-x-3 border border-red-200">
+                        <div className="bg-red-100 p-1 rounded-full">
+                          <X size={20} className="text-red-600" />
+                        </div>
+                        <h3 className="font-bold">Incorrect, try again!</h3>
+                      </div>
+                    )}
+
+                    {/* SOLUTION BOX */}
+                    {showSolution && status !== "correct" && (
+                      <div className="mt-4 bg-yellow-50 p-5 rounded-xl border border-yellow-200 text-yellow-900">
+                        <h4 className="font-bold mb-2 flex items-center">
+                          <Lightbulb size={18} className="mr-2" /> Solution
+                        </h4>
+                        <p className="text-sm mb-3">
+                          The correct answer is:{" "}
+                          <strong className="font-mono text-base bg-yellow-100 px-2 py-1 rounded">
+                            {currentQuestion.type === "set"
+                              ? currentQuestion.correctAnswer.length > 0
+                                ? `{${currentQuestion.correctAnswer.join(", ")}}`
+                                : "∅"
+                              : currentQuestion.correctAnswer}
+                          </strong>
+                        </p>
+                        <p className="text-sm">{currentQuestion.explanation}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    Generating your first question...
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Render the app
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
