@@ -495,6 +495,60 @@ function genLargeIntRounded(mCount, eCount) {
   return null;
 }
 
+// Shared setup for error question generators: returns { target, stored, gap } or null.
+function errorSetup(mCount, eCount) {
+  const all = normVals(mCount, eCount).filter(e => e.val > 0);
+  if (all.length < 2) return null;
+  for (let tries = 0; tries < 80; tries++) {
+    const idx = rnd(0, all.length - 2);
+    const A = all[idx], B = all[idx + 1];
+    const gap = B.val - A.val;
+    if (gap < 1e-10) continue;
+    // Avoid ties (r ≠ 0.5) and keep target well within the interval
+    const r = Math.random() < 0.5 ? 0.13 + Math.random() * 0.24 : 0.62 + Math.random() * 0.24;
+    const rawTarget = A.val + gap * r;
+    const decPlaces = Math.max(2, Math.ceil(-Math.log10(gap)) + 2);
+    const tgtStr = rawTarget.toFixed(Math.min(decPlaces, 7));
+    const target = parseFloat(tgtStr);
+    if (val2fp(target, mCount, eCount)) continue; // skip if happens to be exact
+    const stored = r < 0.5 ? A : B;
+    return { target, tgtStr, stored, gap };
+  }
+  return null;
+}
+
+function genAbsError(mCount, eCount) {
+  const s = errorSetup(mCount, eCount);
+  if (!s) return null;
+  const { target, tgtStr, stored } = s;
+  const absErr = Math.abs(target - stored.val);
+  return {
+    type: 'absError', mCount, eCount,
+    trueValue: target, storedValue: stored.val,
+    dispM: stored.mBits, dispE: stored.eBits,
+    decAns: absErr,
+    qText: `The true value <strong>${tgtStr}</strong> cannot be stored exactly in this floating point system. It is rounded to the nearest representable value, shown below. Calculate the <strong>absolute error</strong>.`,
+    sol: solError(target, stored.val, stored.mBits, stored.eBits, mCount, eCount, absErr, null)
+  };
+}
+
+function genRelError(mCount, eCount) {
+  const s = errorSetup(mCount, eCount);
+  if (!s) return null;
+  const { target, tgtStr, stored } = s;
+  const absErr = Math.abs(target - stored.val);
+  const relErr = absErr / Math.abs(target);
+  return {
+    type: 'relError', mCount, eCount,
+    trueValue: target, storedValue: stored.val,
+    dispM: stored.mBits, dispE: stored.eBits,
+    decAns: relErr,
+    absErr,
+    qText: `The true value <strong>${tgtStr}</strong> cannot be stored exactly in this floating point system. It is rounded to the nearest representable value, shown below. Calculate the <strong>relative error</strong> as a decimal.`,
+    sol: solError(target, stored.val, stored.mBits, stored.eBits, mCount, eCount, absErr, relErr)
+  };
+}
+
 // ══════════════════════════════════════════════════════
 //  SOLUTION BUILDERS
 // ══════════════════════════════════════════════════════
@@ -692,6 +746,35 @@ function solLargeIntRounded(N, N_exact, mBits, eBits, mCount, eCount, E, k) {
   return s;
 }
 
+function solError(trueValue, storedValue, mBits, eBits, mCount, eCount, absErr, relErr) {
+  const exp = tc2int(eBits);
+  const mVal = mantVal(mBits);
+
+  let s = `<b>Step 1 — Decode the stored floating point value.</b><br>`;
+  s += `Exponent bits <code>${eBits.join('')}</code> = <strong>${exp}</strong><br>`;
+  const terms = mBits.slice(1).map((b, i) => b ? `2<sup>−${i+1}</sup>` : null).filter(Boolean);
+  if (mBits[0] === 0) {
+    s += `Mantissa: <code>${mBits[0]}.</code><code>${mBits.slice(1).join('')}</code> = 0 + ${terms.join(' + ') || '0'} = ${fmtNum(mVal)}<br>`;
+  } else {
+    s += `Mantissa: <code>${mBits[0]}.</code><code>${mBits.slice(1).join('')}</code> = −1 + ${terms.join(' + ') || '0'} = ${fmtNum(mVal)}<br>`;
+  }
+  s += `Stored value = ${fmtNum(mVal)} × 2<sup>${exp}</sup> = <strong>${fmtNum(storedValue)}</strong><br><br>`;
+
+  s += `<b>Step 2 — Calculate the absolute error.</b><br>`;
+  s += `Absolute error = |true value − stored value|<br>`;
+  s += `= |${fmtNum(trueValue)} − ${fmtNum(storedValue)}|<br>`;
+  s += `= <strong>${fmtNum(absErr)}</strong>`;
+
+  if (relErr !== null) {
+    s += `<br><br><b>Step 3 — Calculate the relative error.</b><br>`;
+    s += `Relative error = absolute error / |true value|<br>`;
+    s += `= ${fmtNum(absErr)} / ${fmtNum(Math.abs(trueValue))}<br>`;
+    s += `= <strong>${fmtNum(relErr)}</strong>`;
+  }
+
+  return s;
+}
+
 // ══════════════════════════════════════════════════════
 //  UI RENDERING
 // ══════════════════════════════════════════════════════
@@ -781,15 +864,17 @@ const TYPE_LABEL = {
   range: 'Range Calculation',
   closest: 'Closest Representation',
   largeIntExact: 'Large Integer → Floating Point',
-  largeIntRounded: 'Large Integer (Rounded) → Floating Point'
+  largeIntRounded: 'Large Integer (Rounded) → Floating Point',
+  absError: 'Absolute Error',
+  relError: 'Relative Error'
 };
 
 function newQuestion() {
   answered = false; wrongCount = 0;
   const { mCount, eCount, total } = bitCfg();
 
-  // Weighted type selection (0-4 = existing types, 5-6 = large integer types)
-  const weights = [0, 0, 1, 1, 2, 2, 3, 4, 5, 6];
+  // Weighted type selection (0–4 = core types ×2, 5–8 = extended types ×1 each)
+  const weights = [0, 0, 1, 1, 2, 2, 3, 4, 5, 6, 7, 8];
   let type = weights[rnd(0, weights.length - 1)];
   let q = null;
   for (let t = 0; t < 6 && !q; t++) {
@@ -801,6 +886,8 @@ function newQuestion() {
       else if (type === 4) q = genClosest(mCount, eCount);
       else if (type === 5) q = genLargeIntExact(mCount, eCount);
       else if (type === 6) q = genLargeIntRounded(mCount, eCount);
+      else if (type === 7) q = genAbsError(mCount, eCount);
+      else if (type === 8) q = genRelError(mCount, eCount);
     } catch(e) { console.error(e); }
     if (!q) type = rnd(0, 1);
   }
@@ -854,6 +941,17 @@ function renderQ(q) {
     show('txtAnsSec');
     document.getElementById('txtHint').textContent = q.hint + ' Enter as a decimal (e.g. 0.03125).';
 
+  } else if (q.type === 'absError' || q.type === 'relError') {
+    show('dispSec'); show('sep1');
+    document.getElementById('dispTitle').textContent = 'Stored floating point value:';
+    renderFPRows(document.getElementById('dispFP'), mCount, eCount, q.dispM, q.dispE, false);
+    show('ansSec');
+    document.getElementById('ansTitle').textContent = 'Your answer:';
+    show('txtAnsSec');
+    document.getElementById('txtHint').textContent = q.type === 'absError'
+      ? 'Absolute error = |true value − stored value|. Enter as a decimal.'
+      : 'Relative error = |true value − stored value| / |true value|. Enter as a decimal (give at least 3 significant figures).';
+
   } else {
     // decToFP, closest
     show('ansSec');
@@ -879,7 +977,7 @@ function handleSubmit() {
 
   let correct = false;
 
-  if (q.type === 'fpToDec' || q.type === 'range') {
+  if (q.type === 'fpToDec' || q.type === 'range' || q.type === 'absError' || q.type === 'relError') {
     const raw = document.getElementById('txtAns').value.trim();
     const sv = parseFloat(raw);
     if (isNaN(sv)) {
@@ -887,12 +985,17 @@ function handleSubmit() {
       fb.innerHTML = 'Please enter a valid number (e.g. 3.75).';
       return;
     }
-    const tol = Math.max(Math.abs(q.decAns) * 1e-6, 1e-9);
+    // Error questions allow ±0.1% tolerance; exact-answer questions use ±0.0001%
+    const tolFrac = (q.type === 'absError' || q.type === 'relError') ? 1e-3 : 1e-6;
+    const tol = Math.max(Math.abs(q.decAns) * tolFrac, 1e-12);
     correct = Math.abs(sv - q.decAns) <= tol;
     document.getElementById('txtAns').className = 'text-ans ' + (correct ? 'ok' : 'err');
     if (correct) {
       fb.className = 'fb ok';
-      fb.innerHTML = `&#10003; Correct! The answer is <strong>${fmtNum(q.decAns)}</strong>.`;
+      const shown = q.type === 'relError'
+        ? parseFloat(q.decAns.toPrecision(6)).toString()
+        : fmtNum(q.decAns);
+      fb.innerHTML = `&#10003; Correct! The answer is <strong>${shown}</strong>.`;
     } else {
       fb.className = 'fb err';
       fb.innerHTML = `&#10007; Not quite (you entered ${fmtNum(sv)}). Try again or view the solution.`;
