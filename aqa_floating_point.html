@@ -411,6 +411,90 @@ function genClosest(mCount, eCount) {
   return null;
 }
 
+function genLargeIntExact(mCount, eCount) {
+  // Generates a large integer (positive or negative) that fits exactly in the mantissa.
+  // Exact representation requires exponent E ≤ mCount-1 (all significant bits fit).
+  const eMax = (1 << (eCount - 1)) - 1;
+  const eHigh = Math.min(mCount - 1, eMax);
+  if (eHigh < 3) return null; // numbers too small to be instructive
+
+  const neg = rnd(0, 1) === 1;
+  const eLo = Math.max(3, eHigh - 2);
+
+  for (let tries = 0; tries < 40; tries++) {
+    const E = rnd(eLo, eHigh);
+    let N;
+    if (!neg) {
+      // Positive: [2^(E-1)+1, 2^E-1] avoids exact powers of 2 (which val2fp can't encode)
+      N = rnd((1 << (E - 1)) + 1, (1 << E) - 1);
+    } else {
+      // Negative: |N| ∈ (2^(E-1), 2^E) so M = N/2^E ∈ (-1, -0.5)
+      N = -rnd((1 << (E - 1)) + 1, (1 << E) - 1);
+    }
+    const fp = val2fp(N, mCount, eCount);
+    if (!fp) continue;
+    if (Math.abs(fp2dec(fp.mantissa, fp.exponent) - N) > 0.5) continue;
+    const exp = tc2int(fp.exponent);
+    return {
+      type: 'largeIntExact', mCount, eCount, value: N,
+      ansM: fp.mantissa, ansE: fp.exponent,
+      qText: `Convert the integer <strong>${N}</strong> into normalised floating point form using a <strong>${mCount}-bit two's complement mantissa</strong> and a <strong>${eCount}-bit two's complement exponent</strong>. This integer can be represented exactly. (Binary point after the first bit of the mantissa.)`,
+      sol: solLargeIntExact(N, fp.mantissa, fp.exponent, mCount, eCount, exp)
+    };
+  }
+  return null;
+}
+
+function genLargeIntRounded(mCount, eCount) {
+  // Generates a large integer that is in range but cannot be stored exactly —
+  // the mantissa lacks sufficient precision and the lower bits must be rounded.
+  const eMax = (1 << (eCount - 1)) - 1;
+  if (mCount - 1 >= eMax) return null; // no exponent large enough to force rounding
+
+  const neg = rnd(0, 1) === 1;
+
+  for (let tries = 0; tries < 40; tries++) {
+    // E > mCount-1 so k = E-(mCount-1) bits are lost
+    const E = rnd(mCount, eMax);
+    const k = E - (mCount - 1);
+    const halfPoint = 1 << (k - 1);
+
+    let N, N_exact;
+    if (!neg) {
+      const rawN = rnd((1 << (E - 1)) + 1, (1 << E) - 1);
+      const lowerBits = rawN & ((1 << k) - 1);
+      if (lowerBits === 0 || lowerBits === halfPoint) continue; // exact or tie
+      const N_down = rawN & ~((1 << k) - 1);
+      const N_up = N_down + (1 << k);
+      N = rawN;
+      N_exact = lowerBits > halfPoint ? N_up : N_down;
+    } else {
+      const absN = rnd((1 << (E - 1)) + 1, (1 << E) - 1);
+      const lowerBits = absN & ((1 << k) - 1);
+      if (lowerBits === 0 || lowerBits === halfPoint) continue;
+      const absN_down = absN & ~((1 << k) - 1); // closer to zero
+      const absN_up = absN_down + (1 << k);       // further from zero
+      N = -absN;
+      N_exact = -(lowerBits > halfPoint ? absN_up : absN_down);
+    }
+
+    const fp = val2fp(N_exact, mCount, eCount);
+    if (!fp) continue;
+    if (val2fp(N, mCount, eCount)) continue; // N must not be exactly representable
+
+    const exp = tc2int(fp.exponent);
+    return {
+      type: 'largeIntRounded', mCount, eCount,
+      value: N_exact,     // closest representable value (for feedback)
+      originalN: N,        // original integer (for solution text)
+      ansM: fp.mantissa, ansE: fp.exponent,
+      qText: `The integer <strong>${N}</strong> cannot be represented exactly in a floating point system with a <strong>${mCount}-bit two's complement mantissa</strong> and a <strong>${eCount}-bit two's complement exponent</strong> — the mantissa has insufficient precision. Give the bit pattern of the <strong>closest representable value</strong>. (Binary point after the first bit of the mantissa.)`,
+      sol: solLargeIntRounded(N, N_exact, fp.mantissa, fp.exponent, mCount, eCount, E, k)
+    };
+  }
+  return null;
+}
+
 // ══════════════════════════════════════════════════════
 //  SOLUTION BUILDERS
 // ══════════════════════════════════════════════════════
@@ -522,6 +606,92 @@ function solClosest(target, A, B, r, mCount, eCount) {
   return s;
 }
 
+function solLargeIntExact(N, mBits, eBits, mCount, eCount, exp) {
+  const neg = N < 0;
+  const absN = Math.abs(N);
+  const binStr = absN.toString(2); // exp-bit binary representation of |N|
+
+  let s = `<b>Step 1 — Convert the integer to binary.</b><br>`;
+  s += `|${N}| = ${absN} in binary = <code>${binStr}</code> (${exp} bits → exponent E = ${exp})<br><br>`;
+
+  if (!neg) {
+    s += `<b>Step 2 — Form normalised mantissa (positive).</b><br>`;
+    s += `Positive: sign bit = 0, binary point placed before the leading 1:<br>`;
+    const fracBits = binStr.padEnd(mCount - 1, '0');
+    s += `${N} = <code>0.${fracBits}</code> × 2<sup>${exp}</sup><br>`;
+    s += `Mantissa bits: <code>${mBits.join('')}</code><br><br>`;
+  } else {
+    s += `<b>Step 2 — Form normalised mantissa (negative, two's complement).</b><br>`;
+    s += `Negative: sign bit = 1.<br>`;
+    const Mplusone = (1 << exp) - absN; // = 2^E − |N|
+    const MplusOneStr = Mplusone.toString(2).padStart(exp, '0'); // exp-digit binary
+    const fracBitsStr = MplusOneStr.padEnd(mCount - 1, '0');
+    s += `M = ${N} / 2<sup>${exp}</sup> = ${(N / (1 << exp)).toPrecision(4)}<br>`;
+    s += `Two's complement: M + 1 = (2<sup>${exp}</sup> − ${absN}) / 2<sup>${exp}</sup> = ${Mplusone} / 2<sup>${exp}</sup><br>`;
+    s += `In binary: <code>0.${MplusOneStr}</code> → padded to ${mCount - 1} fractional bits: <code>${fracBitsStr}</code><br>`;
+    s += `Mantissa: sign 1, fractional <code>${fracBitsStr}</code> → <code>${mBits.join('')}</code><br><br>`;
+  }
+
+  s += `<b>Step 3 — Encode the exponent.</b><br>`;
+  s += `E = ${exp} → two's complement (${eCount} bits) = <code>${eBits.join('')}</code><br><br>`;
+  s += `<b>Answer:</b> Mantissa <code>${mBits.join('')}</code> &nbsp; Exponent <code>${eBits.join('')}</code>`;
+  return s;
+}
+
+function solLargeIntRounded(N, N_exact, mBits, eBits, mCount, eCount, E, k) {
+  const neg = N < 0;
+  const absN = Math.abs(N);
+  const exp = tc2int(eBits);
+  const binStr = absN.toString(2); // E-bit binary of |N|
+  const keptCount = mCount - 1;   // significant bits the mantissa can hold
+  const topBits = binStr.slice(0, keptCount);  // bits that fit
+  const lostBits = binStr.slice(keptCount);     // bits that are discarded (k bits)
+  const firstDiscardedBit = parseInt(lostBits[0], 2);
+
+  let s = `<b>Step 1 — Convert the integer to binary.</b><br>`;
+  s += `|${N}| = ${absN} in binary = <code>${binStr}</code> (${E} significant bits → exponent E = ${E})<br><br>`;
+
+  s += `<b>Step 2 — Identify the precision limit.</b><br>`;
+  s += `A ${mCount}-bit mantissa provides only ${keptCount} significant bits (1 sign + ${keptCount - 1} fractional).<br>`;
+  s += `Bits that fit: <code>${topBits}</code> &nbsp;&nbsp; Bits discarded: <code>${lostBits}</code> (${k} bit${k > 1 ? 's' : ''})<br><br>`;
+
+  const topVal = parseInt(topBits, 2);
+  const N_down_abs = topVal << k;
+  const N_up_abs = N_down_abs + (1 << k);
+
+  if (!neg) {
+    s += `<b>Step 3 — Round to nearest.</b><br>`;
+    s += `Truncated (round down): <code>${topBits + '0'.repeat(k)}</code> = <strong>${N_down_abs}</strong><br>`;
+    s += `Next representable (round up): <code>${N_up_abs.toString(2)}</code> = <strong>${N_up_abs}</strong><br>`;
+    s += `First discarded bit = <strong>${firstDiscardedBit}</strong> → `;
+    s += firstDiscardedBit >= 1
+      ? `≥ ½ of one unit → round up → closest value is <strong>${N_exact}</strong><br><br>`
+      : `< ½ of one unit → round down → closest value is <strong>${N_exact}</strong><br><br>`;
+    s += `<b>Step 4 — Convert ${N_exact} to floating point.</b><br>`;
+    const exactBin = N_exact.toString(2);
+    const fracBits = exactBin.padEnd(mCount - 1, '0');
+    s += `${N_exact} = <code>${exactBin}</code> → normalised: <code>0.${fracBits}</code> × 2<sup>${exp}</sup><br>`;
+  } else {
+    s += `<b>Step 3 — Round to nearest.</b><br>`;
+    s += `Truncated toward zero: −<code>${topBits + '0'.repeat(k)}</code> = <strong>${-N_down_abs}</strong><br>`;
+    s += `Next value (away from zero): −<code>${N_up_abs.toString(2)}</code> = <strong>${-N_up_abs}</strong><br>`;
+    s += `First discarded bit = <strong>${firstDiscardedBit}</strong> → `;
+    s += firstDiscardedBit >= 1
+      ? `≥ ½ of one unit → round away from zero → closest value is <strong>${N_exact}</strong><br><br>`
+      : `< ½ of one unit → round toward zero → closest value is <strong>${N_exact}</strong><br><br>`;
+    s += `<b>Step 4 — Convert ${N_exact} to floating point.</b><br>`;
+    const absExact = Math.abs(N_exact);
+    const Mplusone = (1 << exp) - absExact;
+    const MplusOneStr = Mplusone.toString(2).padStart(exp, '0');
+    const fracBitsStr = MplusOneStr.padEnd(mCount - 1, '0');
+    s += `M = ${N_exact} / 2<sup>${exp}</sup>, M + 1 = (2<sup>${exp}</sup> − ${absExact}) / 2<sup>${exp}</sup> = <code>0.${fracBitsStr}</code><br>`;
+  }
+
+  s += `Mantissa: <code>${mBits.join('')}</code> &nbsp; Exponent: <code>${eBits.join('')}</code><br><br>`;
+  s += `<b>Answer:</b> Mantissa <code>${mBits.join('')}</code> &nbsp; Exponent <code>${eBits.join('')}</code>`;
+  return s;
+}
+
 // ══════════════════════════════════════════════════════
 //  UI RENDERING
 // ══════════════════════════════════════════════════════
@@ -609,15 +779,17 @@ const TYPE_LABEL = {
   fpToDec: 'Floating Point → Decimal',
   normalise: 'Normalise',
   range: 'Range Calculation',
-  closest: 'Closest Representation'
+  closest: 'Closest Representation',
+  largeIntExact: 'Large Integer → Floating Point',
+  largeIntRounded: 'Large Integer (Rounded) → Floating Point'
 };
 
 function newQuestion() {
   answered = false; wrongCount = 0;
   const { mCount, eCount, total } = bitCfg();
 
-  // Weighted type selection
-  const weights = [0, 0, 0, 1, 1, 1, 2, 2, 3, 4];
+  // Weighted type selection (0-4 = existing types, 5-6 = large integer types)
+  const weights = [0, 0, 1, 1, 2, 2, 3, 4, 5, 6];
   let type = weights[rnd(0, weights.length - 1)];
   let q = null;
   for (let t = 0; t < 6 && !q; t++) {
@@ -627,6 +799,8 @@ function newQuestion() {
       else if (type === 2) q = genNormalise(mCount, eCount);
       else if (type === 3) q = genRange(mCount, eCount);
       else if (type === 4) q = genClosest(mCount, eCount);
+      else if (type === 5) q = genLargeIntExact(mCount, eCount);
+      else if (type === 6) q = genLargeIntRounded(mCount, eCount);
     } catch(e) { console.error(e); }
     if (!q) type = rnd(0, 1);
   }
@@ -741,7 +915,11 @@ function handleSubmit() {
     if (correct) {
       fb.className = 'fb ok';
       let msg = `&#10003; Correct! Mantissa <code>${q.ansM.join('')}</code> &nbsp; Exponent <code>${q.ansE.join('')}</code>`;
-      if (q.value !== undefined) msg += ` = ${fmtNum(q.value)}`;
+      if (q.type === 'largeIntRounded') {
+        msg += ` ≈ ${fmtNum(q.value)} (closest representable to ${q.originalN})`;
+      } else if (q.value !== undefined) {
+        msg += ` = ${fmtNum(q.value)}`;
+      }
       fb.innerHTML = msg;
     } else {
       fb.className = 'fb err';
@@ -769,7 +947,7 @@ function showSolution() {
   box.innerHTML = '<b>Solution:</b><br><br>' + CQ.sol;
 
   // If bit answer, fill in correct bits read-only style
-  if (['decToFP','normalise','closest'].includes(CQ.type)) {
+  if (['decToFP','normalise','closest','largeIntExact','largeIntRounded'].includes(CQ.type)) {
     const ansFP = document.getElementById('ansFP');
     [...ansFP.querySelectorAll('.bit-cell')].forEach(c => {
       const exp = c.dataset.row === 'm' ? CQ.ansM[+c.dataset.idx] : CQ.ansE[+c.dataset.idx];
