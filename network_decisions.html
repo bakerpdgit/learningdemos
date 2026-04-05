@@ -1,0 +1,1438 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: Network Decision Making</title>
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.development.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+    ></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f3f4f6;
+      }
+      .fade-in {
+        animation: fadeIn 0.5s ease-in;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .packet-move {
+        animation: slideRight 1s forwards;
+      }
+      @keyframes slideRight {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(100px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      // --- REUSABLE COMPONENTS ---
+
+      // SVG Icons
+      const Icons = {
+        Server: () => (
+          <svg
+            className="w-10 h-10 text-gray-700"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+            ></path>
+          </svg>
+        ),
+        Router: () => (
+          <svg
+            className="w-10 h-10 text-blue-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+            ></path>
+          </svg>
+        ),
+        Firewall: () => (
+          <svg
+            className="w-10 h-10 text-red-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+            ></path>
+          </svg>
+        ),
+        Globe: () => (
+          <svg
+            className="w-10 h-10 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+            ></path>
+          </svg>
+        ),
+        Packet: ({ color = "bg-blue-500", text = "Data" }) => (
+          <div
+            className={`flex items-center justify-center text-xs font-bold text-white ${color} p-1 rounded shadow-md border border-gray-800`}
+            style={{ minWidth: "50px" }}
+          >
+            {text}
+          </div>
+        ),
+        DetailedPacket: ({
+          color = "bg-blue-500",
+          src,
+          dest,
+          payload = "Payload",
+        }) => (
+          <div
+            className={`flex flex-col text-xs font-bold text-white shadow-md border border-gray-800 rounded overflow-hidden z-10 relative`}
+            style={{ minWidth: "130px" }}
+          >
+            <div
+              className={`${color} p-1 border-b border-white border-opacity-30 flex flex-col gap-1 text-left`}
+            >
+              <div>
+                <span className="opacity-75 font-normal ml-1">Src:</span> {src}
+              </div>
+              <div>
+                <span className="opacity-75 font-normal ml-1">Dst:</span> {dest}
+              </div>
+            </div>
+            <div className="bg-gray-200 text-gray-800 p-1 text-center font-semibold">
+              {payload}
+            </div>
+          </div>
+        ),
+      };
+
+      // Interactive Question Component
+      const QuestionBlock = ({
+        question,
+        type = "text",
+        options = [],
+        correctAnswer,
+        explanation,
+        onCorrect,
+        onCorrectStart,
+        stepKey,
+      }) => {
+        const [answer, setAnswer] = useState("");
+        const [status, setStatus] = useState("idle"); // idle, wrong, correct, revealed
+        const [isChecking, setIsChecking] = useState(false);
+        const [isFlashing, setIsFlashing] = useState(false);
+
+        // Reset when step changes
+        useEffect(() => {
+          setAnswer("");
+          setStatus("idle");
+          setIsChecking(false);
+          setIsFlashing(false);
+        }, [stepKey]);
+
+        const handleSubmit = async () => {
+          if (isChecking) return;
+          const cleanUserAnswer = answer.trim().toLowerCase();
+          const cleanCorrectAnswer = correctAnswer.trim().toLowerCase();
+
+          if (cleanUserAnswer === cleanCorrectAnswer) {
+            setIsChecking(true);
+            setStatus("correct");
+
+            if (onCorrectStart) {
+              await onCorrectStart();
+            }
+
+            setIsFlashing(true);
+            setTimeout(() => {
+              setIsFlashing(false);
+              setIsChecking(false);
+              onCorrect();
+            }, 250);
+          } else {
+            setStatus("wrong");
+          }
+        };
+
+        const handleRevealClick = () => {
+          setStatus("revealed");
+          setAnswer(correctAnswer);
+        };
+
+        const handleSolutionOk = () => {
+          setStatus("correct");
+          onCorrect(); // skip animation triggers if they had to view solution
+        };
+
+        return (
+          <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500 my-4 fade-in relative">
+            <p className="font-semibold text-gray-800 mb-3">{question}</p>
+
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+              {type === "text" && (
+                <input
+                  type="text"
+                  className="border rounded p-2 flex-grow focus:outline-blue-500 w-full sm:w-auto"
+                  placeholder="Type your answer here..."
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSubmit();
+                  }}
+                  disabled={
+                    status === "correct" || status === "revealed" || isChecking
+                  }
+                />
+              )}
+              {type === "select" && (
+                <select
+                  className="border rounded p-2 flex-grow focus:outline-blue-500 w-full sm:w-auto"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSubmit();
+                  }}
+                  disabled={
+                    status === "correct" || status === "revealed" || isChecking
+                  }
+                >
+                  <option value="">-- Select an option --</option>
+                  {options.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {(status !== "correct" || isFlashing || isChecking) &&
+                status !== "revealed" && (
+                  <button
+                    onClick={handleSubmit}
+                    className={
+                      isFlashing
+                        ? "bg-green-500 text-white font-bold py-2 px-4 rounded w-full sm:w-auto transition-colors duration-150"
+                        : "bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto transition-colors duration-150"
+                    }
+                    disabled={status === "correct" || isChecking}
+                  >
+                    {isFlashing ? "Correct!" : "Check Answer"}
+                  </button>
+                )}
+            </div>
+
+            {(status === "wrong" || status === "revealed") && (
+              <div className="mt-3 text-red-600 flex items-center justify-between bg-red-50 p-2 rounded">
+                <span>Incorrect. Review the table/diagram and try again.</span>
+                {status === "wrong" && (
+                  <button
+                    onClick={handleRevealClick}
+                    className="text-sm underline hover:text-red-800 font-semibold"
+                  >
+                    View Solution
+                  </button>
+                )}
+              </div>
+            )}
+
+            {status === "revealed" && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 fade-in text-gray-800">
+                  <h3 className="text-xl font-bold text-blue-800 mb-2">
+                    Solution Required
+                  </h3>
+                  <p className="mb-4 text-lg">
+                    <strong>Correct Answer:</strong> <br />
+                    <span className="font-mono bg-gray-100 border px-3 py-1 rounded inline-block mt-2 text-blue-700">
+                      {correctAnswer}
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-700 mb-6 border-t pt-4">
+                    {explanation}
+                  </p>
+                  <button
+                    onClick={handleSolutionOk}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-bold transition"
+                  >
+                    OK, Continue
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {status === "correct" && !isFlashing && !isChecking && (
+              <div className="mt-3 text-green-700 bg-green-50 p-3 rounded">
+                <span className="font-bold flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M5 13l4 4L19 7"
+                    ></path>
+                  </svg>
+                  Correct!
+                </span>
+                {explanation && (
+                  <p className="mt-1 text-sm text-gray-700">{explanation}</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- SPECIFIC SIMULATIONS ---
+
+      // 1. Firewall Simulation
+      const SimFirewall = () => {
+        const [step, setStep] = useState(0);
+        const [completedSteps, setCompletedSteps] = useState([]);
+
+        const nextStep = () => {
+          setCompletedSteps([...completedSteps, step]);
+          setStep(step + 1);
+        };
+
+        return (
+          <div className="fade-in">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+              Firewall Rules & Stateful Inspection
+            </h2>
+            <p className="mb-4 text-gray-600">
+              A firewall protects a network by analyzing incoming and outgoing
+              packets. AQA requires understanding of{" "}
+              <b>static packet filtering</b> (checking headers against rules)
+              and <b>stateful inspection</b> (remembering active connections).
+            </p>
+
+            <div className="flex justify-around items-center bg-gray-100 p-6 rounded-lg shadow-inner mb-6 min-h-[140px]">
+              <div className="text-center">
+                <Icons.Globe />
+                <p className="text-xs font-bold mt-1">Internet</p>
+              </div>
+              <div className="flex-grow flex justify-center">
+                {step === 0 && (
+                  <Icons.DetailedPacket
+                    color="bg-red-500"
+                    src="18.2.4.5:80"
+                    dest="192.168.1.100"
+                    payload="Data"
+                  />
+                )}
+                {step >= 1 && (
+                  <Icons.DetailedPacket
+                    color="bg-green-500"
+                    src="8.8.8.8:443"
+                    dest="192.168.1.100"
+                    payload="Data"
+                  />
+                )}
+              </div>
+              <div className="text-center">
+                <Icons.Firewall />
+                <p className="text-xs font-bold mt-1">Firewall</p>
+              </div>
+              <div className="flex-grow"></div>
+              <div className="text-center">
+                <Icons.Server />
+                <p className="text-xs font-bold mt-1">LAN</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <h3 className="font-bold bg-gray-200 p-2 rounded-t">
+                  Static Packet Filtering Rules
+                </h3>
+                <table className="w-full text-sm text-left border">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th>Rule</th>
+                      <th>Source IP</th>
+                      <th>Source Port</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className={step === 0 ? "bg-yellow-100" : ""}>
+                      <td>1</td>
+                      <td>18.2.4.5</td>
+                      <td>Any</td>
+                      <td className="text-red-600 font-bold">DROP</td>
+                    </tr>
+                    <tr>
+                      <td>2</td>
+                      <td>Any</td>
+                      <td>22</td>
+                      <td className="text-red-600 font-bold">DROP</td>
+                    </tr>
+                    <tr>
+                      <td>3</td>
+                      <td>Any</td>
+                      <td>Any</td>
+                      <td className="text-green-600 font-bold">ACCEPT</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h3 className="font-bold bg-gray-200 p-2 rounded-t">
+                  Stateful Inspection Table
+                </h3>
+                <table className="w-full text-sm text-left border">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th>Session ID</th>
+                      <th>External IP</th>
+                      <th>State</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>S-101</td>
+                      <td>203.0.113.1</td>
+                      <td>Established</td>
+                    </tr>
+                    <tr className={step >= 1 ? "bg-yellow-100" : ""}>
+                      <td>S-102</td>
+                      <td>8.8.8.8</td>
+                      <td>Established</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {step === 0 && (
+              <QuestionBlock
+                stepKey="fw0"
+                question="An incoming packet arrives from IP 18.2.4.5 on Port 80. Based on top-down processing of the Static Rules, what action will the firewall take?"
+                type="select"
+                options={["ACCEPT", "DROP"]}
+                correctAnswer="DROP"
+                explanation="Correct. Static packet filtering evaluates rules sequentially. Rule 1 matches the Source IP and drops the packet."
+                onCorrect={nextStep}
+              />
+            )}
+            {step === 1 && (
+              <QuestionBlock
+                stepKey="fw1"
+                question="A new packet arrives from 8.8.8.8. It does not match an explicit static ACCEPT rule for its specific port, but the firewall allows it through. By looking at the Stateful Inspection Table, what is the status of the connection with 8.8.8.8?"
+                type="select"
+                options={["Blocked", "Established", "Unknown"]}
+                correctAnswer="Established"
+                explanation="Correct! Stateful inspection (or dynamic packet filtering) remembers outbound requests. Since an internal device previously requested data from 8.8.8.8, the session is 'Established', allowing the return packet through without needing a specific open port rule."
+                onCorrect={nextStep}
+              />
+            )}
+            {step === 2 && (
+              <QuestionBlock
+                stepKey="fw2"
+                question="Since the session with 8.8.8.8 is 'Established', what final action will the firewall take on this returning packet?"
+                type="select"
+                options={["ACCEPT", "DROP"]}
+                correctAnswer="ACCEPT"
+                explanation="Correct. The firewall accepts the packet because it belongs to a recognized, actively tracked session, bypassing the default static DROP rule."
+                onCorrect={nextStep}
+              />
+            )}
+            {step === 3 && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <strong className="font-bold">Simulation Complete!</strong>
+                <span className="block sm:inline">
+                  {" "}
+                  You understand both static rules and state/context checking.
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 2. Router Simulation
+      const SimRouter = () => {
+        const [step, setStep] = useState(0);
+        const [packetStyle, setPacketStyle] = useState({
+          left: "25%",
+          top: "50%",
+          transform: "translate(-50%, -50%) scale(1)",
+          opacity: 1,
+        });
+        const [highlightedRow, setHighlightedRow] = useState(null);
+
+        // Animation trigger for Q0
+        const handleRouterQ0Correct = async () => {
+          setHighlightedRow(1); // highlight Eth3 row
+          // Move to router
+          setPacketStyle({
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%) scale(0.6)",
+            opacity: 1,
+            transition: "all 1s ease-in-out",
+          });
+          await new Promise((r) => setTimeout(r, 1000));
+          // Move to Eth3
+          setPacketStyle({
+            left: "90%",
+            top: "50%",
+            transform: "translate(-50%, -50%) scale(0.2)",
+            opacity: 0,
+            transition: "all 1s ease-in-out",
+          });
+          await new Promise((r) => setTimeout(r, 1000));
+        };
+
+        return (
+          <div className="fade-in">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+              Standard Router & Routing Tables
+            </h2>
+            <p className="mb-4 text-gray-600">
+              Routers operate at the Network Layer. They read the destination IP
+              address of a packet and consult their <b>Routing Table</b> to
+              decide the best outbound interface (Next Hop).
+            </p>
+
+            <div className="flex justify-center items-center bg-gray-100 p-6 rounded-lg shadow-inner mb-6 relative h-64 overflow-hidden">
+              <div className="absolute left-10 top-1/2 transform -translate-y-1/2 text-center">
+                <Icons.Server />
+                <p className="text-xs font-bold mt-1">Eth0 (LAN 1)</p>
+              </div>
+
+              <div className="absolute z-20" style={packetStyle}>
+                {step >= 0 && (
+                  <Icons.DetailedPacket
+                    color="bg-purple-600"
+                    src="192.168.1.15"
+                    dest="192.168.3.50"
+                    payload="Data"
+                  />
+                )}
+              </div>
+
+              <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+                <Icons.Router />
+                <p className="text-xs font-bold mt-1 text-center">Router</p>
+              </div>
+
+              <div className="absolute right-10 top-4 text-center">
+                <p className="text-xs font-bold mb-1">Eth1 (LAN 2)</p>
+                <Icons.Server />
+              </div>
+              <div className="absolute right-10 top-1/2 transform -translate-y-1/2 text-center">
+                <p className="text-xs font-bold mb-1">Eth3 (LAN 3)</p>
+                <Icons.Server />
+              </div>
+              <div className="absolute right-10 bottom-4 text-center">
+                <p className="text-xs font-bold mb-1">Eth2 (Internet)</p>
+                <Icons.Globe />
+              </div>
+            </div>
+
+            <h3 className="font-bold bg-gray-200 p-2 rounded-t mt-4">
+              Router 1 - Routing Table
+            </h3>
+            <table className="w-full text-sm text-left border mb-6">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th>Network Destination</th>
+                  <th>Subnet Mask</th>
+                  <th>Next Hop</th>
+                  <th>Interface</th>
+                  <th>Current Cost Metric</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>192.168.2.0</td>
+                  <td>255.255.255.0</td>
+                  <td>On-link</td>
+                  <td>Eth1</td>
+                  <td>10</td>
+                </tr>
+                <tr
+                  className={
+                    highlightedRow === 1
+                      ? "bg-yellow-200 transition-colors duration-500"
+                      : "transition-colors duration-500"
+                  }
+                >
+                  <td>192.168.3.0</td>
+                  <td>255.255.255.0</td>
+                  <td>On-link</td>
+                  <td>Eth3</td>
+                  <td>10</td>
+                </tr>
+                <tr>
+                  <td>10.0.0.0</td>
+                  <td>255.0.0.0</td>
+                  <td>10.0.0.1</td>
+                  <td>Eth2</td>
+                  <td>20</td>
+                </tr>
+                <tr>
+                  <td>0.0.0.0 (Default)</td>
+                  <td>0.0.0.0</td>
+                  <td>82.1.1.254</td>
+                  <td>Eth2</td>
+                  <td>50</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {step === 0 && (
+              <QuestionBlock
+                stepKey="rt0"
+                question="A packet arrives with Destination IP: 192.168.3.50 (Sender: 192.168.1.15). Look at the routing table. Which interface will the router forward this packet out of?"
+                type="select"
+                options={["Eth1", "Eth2", "Eth3"]}
+                correctAnswer="Eth3"
+                explanation="Correct. The Destination IP 192.168.3.50 falls within the 192.168.3.0 network. The table shows this is accessible via interface Eth3."
+                onCorrectStart={handleRouterQ0Correct}
+                onCorrect={() => setStep(1)}
+              />
+            )}
+            {step === 1 && (
+              <QuestionBlock
+                stepKey="rt1"
+                question="If multiple paths to a destination existed in the table, the router would choose the path with the lowest numerical value in which column?"
+                type="select"
+                options={[
+                  "Network Destination",
+                  "Subnet Mask",
+                  "Next Hop",
+                  "Interface",
+                  "Current Cost Metric",
+                ]}
+                correctAnswer="Current Cost Metric"
+                explanation="Correct! The metric (often based on hop count, bandwidth, or delay) determines the lowest 'cost' path."
+                onCorrect={() => setStep(2)}
+              />
+            )}
+            {step === 2 && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <strong className="font-bold">Simulation Complete!</strong>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 3. Gateway Simulation
+      const SimGateway = () => {
+        const [step, setStep] = useState(0);
+
+        return (
+          <div className="fade-in">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+              Gateway Protocol Conversion
+            </h2>
+            <p className="mb-4 text-gray-600">
+              AQA emphasizes that while routers connect similar networks, a{" "}
+              <b>Gateway</b> connects networks that use{" "}
+              <b>different protocols</b>. Because the ethernet header needs
+              stripping off, the whole packet needs to be rebuilt because of the
+              change of protocol.
+            </p>
+
+            <div className="flex justify-around items-center bg-gray-100 p-6 rounded-lg shadow-inner mb-6">
+              <div className="text-center w-1/3 border-r border-gray-300">
+                <p className="font-bold text-blue-800">Network A</p>
+                <p className="text-xs mb-2">Protocol: Ethernet / TCP/IP</p>
+                {step === 0 && (
+                  <div className="mx-auto w-16 h-8 bg-blue-500 text-white text-xs flex items-center justify-center rounded">
+                    Eth Hdr | Data
+                  </div>
+                )}
+              </div>
+              <div className="text-center w-1/3">
+                <div className="w-16 h-16 bg-purple-600 text-white font-bold rounded-full flex items-center justify-center mx-auto shadow-lg border-4 border-purple-300">
+                  GW
+                </div>
+                {step === 1 && (
+                  <div className="mt-2 text-xs font-bold text-purple-700 animate-pulse">
+                    Rebuilding...
+                  </div>
+                )}
+              </div>
+              <div className="text-center w-1/3 border-l border-gray-300">
+                <p className="font-bold text-green-800">Network B</p>
+                <p className="text-xs mb-2">Protocol: Frame Relay</p>
+                {step >= 2 && (
+                  <div className="mx-auto w-16 h-8 bg-green-500 text-white text-xs flex items-center justify-center rounded">
+                    FR Hdr | Data
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {step === 0 && (
+              <QuestionBlock
+                stepKey="gw0"
+                question="Fill in the blank: A gateway is required here instead of a standard router because Network A and Network B use different _________."
+                type="text"
+                correctAnswer="protocols"
+                explanation="Correct. Gateways act as translators between different network architectures and protocols."
+                onCorrect={() => setStep(1)}
+              />
+            )}
+            {step === 1 && (
+              <QuestionBlock
+                stepKey="gw1"
+                question="To translate the packet for Network B, the gateway must strip off the Ethernet _________ and rebuild the whole packet for Frame Relay."
+                type="text"
+                correctAnswer="header"
+                explanation="Correct! The payload (data) remains intact, but the old header is stripped off and the whole packet is rebuilt with a new protocol-specific header."
+                onCorrect={() => setStep(2)}
+              />
+            )}
+            {step === 2 && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <strong className="font-bold">Simulation Complete!</strong>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 4. Port Forwarding Simulation
+      const SimPortForwarding = () => {
+        const [step, setStep] = useState(0);
+        const [highlightedRow, setHighlightedRow] = useState(null);
+
+        const handleQ0Correct = async () => {
+          setHighlightedRow(1); // highlight FTP row
+          await new Promise((r) => setTimeout(r, 1000));
+        };
+
+        const handleQ1Correct = async () => {
+          setHighlightedRow(0); // highlight HTTP row
+          await new Promise((r) => setTimeout(r, 1000));
+        };
+
+        return (
+          <div className="fade-in">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+              Port Forwarding
+            </h2>
+            <p className="mb-4 text-gray-600">
+              When an external request hits a router on the edge of a LAN,{" "}
+              <b>Port Forwarding</b> tables are used to route the traffic to a
+              specific private LAN device based on the port number.
+            </p>
+
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="w-full md:w-1/2 bg-gray-100 p-4 rounded-lg shadow-inner flex flex-col justify-between">
+                <div className="flex justify-between items-center mb-8">
+                  <div className="text-center w-1/3">
+                    <Icons.Globe />
+                    <p className="text-xs mt-1">Internet Client</p>
+                  </div>
+                  <div className="w-1/3 flex justify-center">
+                    {step === 0 && (
+                      <div className="text-xs bg-red-100 border border-red-500 p-1 rounded text-center font-mono shadow-sm">
+                        Dest: 82.10.10.10
+                        <br />
+                        Port: 21
+                      </div>
+                    )}
+                    {step === 1 && (
+                      <div className="text-xs bg-red-100 border border-red-500 p-1 rounded text-center font-mono shadow-sm">
+                        Dest: 82.10.10.10
+                        <br />
+                        Port: 80
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center w-1/3">
+                    <Icons.Router />
+                    <p className="text-xs mt-1 font-bold">Router Edge</p>
+                    <p className="text-xs text-blue-600">Pub IP: 82.10.10.10</p>
+                  </div>
+                </div>
+                <div className="border-t-2 border-dashed border-gray-400 pt-4 flex justify-around">
+                  <div className="text-center">
+                    <Icons.Server />
+                    <p className="text-xs font-bold mt-1">Web Server</p>
+                    <p className="text-xs text-green-600">192.168.1.10</p>
+                    {step >= 2 && (
+                      <div className="mt-1 text-xs bg-green-100 border border-green-500 p-1 rounded font-mono">
+                        Port: 8080
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <Icons.Server />
+                    <p className="text-xs font-bold mt-1">FTP Server</p>
+                    <p className="text-xs text-green-600">192.168.1.20</p>
+                    {step >= 1 && (
+                      <div className="mt-1 text-xs bg-green-100 border border-green-500 p-1 rounded font-mono">
+                        Port: 21
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="w-full md:w-1/2">
+                <h3 className="font-bold bg-gray-200 p-2 rounded-t">
+                  Port Forwarding Table
+                </h3>
+                <table className="w-full text-sm text-left border">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th>Public Port</th>
+                      <th>Private IP</th>
+                      <th>Private Port</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      className={
+                        highlightedRow === 0
+                          ? "bg-yellow-200 transition-colors duration-300"
+                          : "transition-colors duration-300"
+                      }
+                    >
+                      <td>80 (HTTP)</td>
+                      <td>192.168.1.10</td>
+                      <td>8080</td>
+                    </tr>
+                    <tr
+                      className={
+                        highlightedRow === 1
+                          ? "bg-yellow-200 transition-colors duration-300"
+                          : "transition-colors duration-300"
+                      }
+                    >
+                      <td>21 (FTP)</td>
+                      <td>192.168.1.20</td>
+                      <td>21</td>
+                    </tr>
+                    <tr>
+                      <td>443 (HTTPS)</td>
+                      <td>192.168.1.10</td>
+                      <td>443</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {step === 0 && (
+              <QuestionBlock
+                stepKey="pf0"
+                question="An incoming internet packet arrives at the router's public IP (82.10.10.10) targeting Port 21 (FTP). Based on the table, to which internal Private IP address will the router forward this packet?"
+                type="text"
+                correctAnswer="192.168.1.20"
+                explanation="Correct. The router intercepts traffic on port 21 and translates the destination IP to the FTP server's private IP."
+                onCorrectStart={handleQ0Correct}
+                onCorrect={() => setStep(1)}
+              />
+            )}
+            {step === 1 && (
+              <QuestionBlock
+                stepKey="pf1"
+                question="Now a new request arrives targeting Port 80 (HTTP). The web server runs on a different internal port. Which Private IP and Private Port will this HTTP request be forwarded to? (Format: IP:Port)"
+                type="text"
+                correctAnswer="192.168.1.10:8080"
+                explanation="Correct! Port Forwarding can translate both the IP address and the Port number (e.g., from public port 80 to private port 8080)."
+                onCorrectStart={handleQ1Correct}
+                onCorrect={() => setStep(2)}
+              />
+            )}
+            {step === 2 && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <strong className="font-bold">Simulation Complete!</strong>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 5. NAT Simulation
+      const SimNAT = () => {
+        const [step, setStep] = useState(0);
+
+        return (
+          <div className="fade-in">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+              Network Address Translation (NAT)
+            </h2>
+            <p className="mb-4 text-gray-600">
+              NAT maps private non-routable IP addresses to a public routable
+              IP. When an outbound packet hits the NAT router, it changes the
+              source IP and port, and adds an entry to the NAT table to reverse
+              the process on the inbound reply.
+            </p>
+
+            <div className="flex flex-col mb-6">
+              <div className="bg-gray-100 p-4 rounded-lg shadow-inner flex justify-between items-center mb-4 min-h-[160px]">
+                <div className="text-center w-1/5">
+                  <Icons.Server />
+                  <p className="text-xs font-bold mt-1">LAN Client</p>
+                  <p className="text-xs text-green-600">192.168.1.50</p>
+                </div>
+                <div className="w-1/5 flex flex-col items-center relative">
+                  {step <= 1 && (
+                    <Icons.DetailedPacket
+                      color="bg-blue-600"
+                      src="192.168.1.50:4000"
+                      dest="8.8.8.8:80"
+                      payload="Data"
+                    />
+                  )}
+                  {step >= 4 && (
+                    <Icons.DetailedPacket
+                      color="bg-green-600"
+                      src="8.8.8.8:80"
+                      dest="192.168.1.50:4000"
+                      payload="Reply"
+                    />
+                  )}
+                </div>
+                <div className="text-center w-1/5 flex flex-col items-center">
+                  <Icons.Router />
+                  <p className="text-xs font-bold mt-1">NAT Router</p>
+                  <p className="text-xs text-blue-600">Pub: 82.1.1.1</p>
+                  <p className="text-xs text-green-700">Priv: 192.168.1.1</p>
+                  {step === 1 && (
+                    <p className="text-xs font-bold text-purple-600 animate-pulse mt-1 absolute bottom-0">
+                      NATing...
+                    </p>
+                  )}
+                </div>
+                <div className="w-1/5 flex flex-col items-center">
+                  {step === 2 && (
+                    <Icons.DetailedPacket
+                      color="bg-purple-600"
+                      src="82.1.1.1:5000"
+                      dest="8.8.8.8:80"
+                      payload="Data"
+                    />
+                  )}
+                  {step === 3 && (
+                    <Icons.DetailedPacket
+                      color="bg-red-600"
+                      src="8.8.8.8:80"
+                      dest="82.1.1.1:5000"
+                      payload="Reply"
+                    />
+                  )}
+                </div>
+                <div className="w-1/5 text-center flex flex-col items-center">
+                  <Icons.Globe />
+                  <p className="text-xs font-bold mt-1">Web Server</p>
+                  <p className="text-xs text-gray-600">8.8.8.8</p>
+                </div>
+              </div>
+
+              <div className="w-full">
+                <h3 className="font-bold bg-gray-200 p-2 rounded-t">
+                  NAT Translation Table
+                </h3>
+                <table className="w-full text-sm text-left border">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th>Public Port (Mapped)</th>
+                      <th>Private IP</th>
+                      <th>Private Port</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {step >= 2 ? (
+                      <tr
+                        className={
+                          step === 2 || step === 3 || step === 4
+                            ? "bg-yellow-100"
+                            : ""
+                        }
+                      >
+                        <td>5000</td>
+                        <td>192.168.1.50</td>
+                        <td>4000</td>
+                      </tr>
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="3"
+                          className="text-center text-gray-400 italic"
+                        >
+                          Table is currently empty
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {step === 0 && (
+              <QuestionBlock
+                stepKey="nat0"
+                question="An outbound packet leaves the LAN Client. Private IP addresses cannot be routed on the internet. What must the router change the packet's Source IP address to?"
+                type="select"
+                options={["8.8.8.8", "82.1.1.1", "192.168.1.1"]}
+                correctAnswer="82.1.1.1"
+                explanation="Correct. The router replaces the private LAN IP with its own Public routable IP address."
+                onCorrect={() => setStep(1)}
+              />
+            )}
+            {step === 1 && (
+              <QuestionBlock
+                stepKey="nat1"
+                question="The router also changes the source port (e.g., to 5000) and begins recording this in the NAT table. Look at the table format. What Private IP and Private Port must be added to map back to Public Port 5000? (Format: IP:Port)"
+                type="text"
+                correctAnswer="192.168.1.50:4000"
+                explanation="Correct! The router logs that Public Port 5000 maps back to the internal client 192.168.1.50 on port 4000."
+                onCorrect={() => setStep(2)}
+              />
+            )}
+            {step === 2 && (
+              <div className="mb-4 p-4 bg-gray-50 border rounded flex justify-between items-center">
+                <p>
+                  The packet has been forwarded to the web server. Ready to
+                  simulate the server's reply?
+                </p>
+                <button
+                  onClick={() => setStep(3)}
+                  className="bg-blue-500 text-white font-bold px-4 py-2 rounded shadow hover:bg-blue-600 transition"
+                >
+                  Simulate Reply
+                </button>
+              </div>
+            )}
+            {step === 3 && (
+              <QuestionBlock
+                stepKey="nat3"
+                question="The inbound reply hits the router on Public Port 5000. Reversing the process using the NAT table, what will the router change the Destination IP and Port to? (Format: IP:Port)"
+                type="text"
+                correctAnswer="192.168.1.50:4000"
+                explanation="Correct! By looking up port 5000 in the NAT table, the router knows to rewrite the destination headers to the private LAN IP 192.168.1.50 and port 4000."
+                onCorrect={() => setStep(4)}
+              />
+            )}
+            {step === 4 && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <strong className="font-bold">Simulation Complete!</strong>
+                <p className="text-sm mt-1">
+                  You successfully acted as the NAT router, rewriting headers
+                  for both outbound and inbound traffic.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 6. DNS Simulation
+      const SimDNS = () => {
+        const [step, setStep] = useState(0);
+
+        return (
+          <div className="fade-in">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+              DNS Resolution
+            </h2>
+            <p className="mb-4 text-gray-600">
+              The Domain Name System translates a human-readable FQDN (Fully
+              Qualified Domain Name) into an IP address. AQA requires knowing
+              the hierarchical steps of resolution.
+            </p>
+
+            <div className="bg-gray-100 p-4 rounded-lg shadow-inner mb-6 relative">
+              <div className="flex justify-between items-center relative z-10">
+                <div
+                  className={`text-center p-2 rounded ${step === 0 ? "bg-yellow-200 shadow-md border border-yellow-500" : ""}`}
+                >
+                  <Icons.Server />
+                  <p className="text-xs font-bold mt-1">
+                    1. Client / Local Cache
+                  </p>
+                </div>
+                <div
+                  className={`text-center p-2 rounded ${step === 1 ? "bg-yellow-200 shadow-md border border-yellow-500" : ""}`}
+                >
+                  <Icons.Server />
+                  <p className="text-xs font-bold mt-1">2. ISP Resolver</p>
+                </div>
+                <div
+                  className={`text-center p-2 rounded ${step === 2 ? "bg-yellow-200 shadow-md border border-yellow-500" : ""}`}
+                >
+                  <Icons.Server />
+                  <p className="text-xs font-bold mt-1">3. Root DNS</p>
+                </div>
+                <div
+                  className={`text-center p-2 rounded ${step === 3 ? "bg-yellow-200 shadow-md border border-yellow-500" : ""}`}
+                >
+                  <Icons.Server />
+                  <p className="text-xs font-bold mt-1">4. TLD DNS (.com)</p>
+                </div>
+                <div
+                  className={`text-center p-2 rounded ${step >= 4 ? "bg-yellow-200 shadow-md border border-yellow-500" : ""}`}
+                >
+                  <Icons.Server />
+                  <p className="text-xs font-bold mt-1">5. Authoritative DNS</p>
+                </div>
+              </div>
+
+              <div className="mt-6 bg-white p-3 border rounded border-blue-200 text-sm">
+                <strong>Current Action: </strong>
+                {step === 0 && "User types www.aqa.com. Checking local PC."}
+                {step === 1 && "Cache miss. PC asks the ISP Resolver."}
+                {step === 2 &&
+                  "Resolver asks Root. Root doesn't know the exact IP, but knows who handles '.com'."}
+                {step === 3 &&
+                  "Resolver asks TLD (.com). TLD doesn't know the IP, but knows who handles 'aqa.com'."}
+                {step >= 4 &&
+                  "Resolver asks Authoritative Server for the zone aqa.com."}
+              </div>
+
+              {step >= 4 && (
+                <div className="mt-4 p-4 bg-white border border-gray-300 rounded shadow-sm">
+                  <h4 className="font-bold mb-2 text-center text-blue-800">
+                    Authoritative Zone File: aqa.com
+                  </h4>
+                  <table className="w-full text-sm text-left border">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th>FQDN (Host)</th>
+                        <th>Record Type</th>
+                        <th>IP Address</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="hover:bg-gray-50">
+                        <td>www.aqa.com</td>
+                        <td>A</td>
+                        <td className="font-mono text-green-700">
+                          198.51.100.10
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-gray-50">
+                        <td>ftp.aqa.com</td>
+                        <td>A</td>
+                        <td className="font-mono text-green-700">
+                          198.51.100.20
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-gray-50">
+                        <td>mail.aqa.com</td>
+                        <td>A</td>
+                        <td className="font-mono text-green-700">
+                          198.51.100.30
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {step === 0 && (
+              <QuestionBlock
+                stepKey="dns0"
+                question="Before sending a query to the network, the PC first checks its local DNS cache and a specific local file. What is the name of this file?"
+                type="select"
+                options={[
+                  "index.html",
+                  "hosts file",
+                  "routing table",
+                  "config.sys",
+                ]}
+                correctAnswer="hosts file"
+                explanation="Correct. The local 'hosts' file and DNS cache are checked first to save time and network traffic."
+                onCorrect={() => setStep(1)}
+              />
+            )}
+            {step === 1 && (
+              <div className="mb-4 p-4 bg-gray-50 border rounded flex justify-between items-center">
+                <p>
+                  The local machine didn't have the IP. It forwards the request
+                  to the ISP's DNS Resolver.
+                </p>
+                <button
+                  onClick={() => setStep(2)}
+                  className="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600"
+                >
+                  Send to Root Server
+                </button>
+              </div>
+            )}
+            {step === 2 && (
+              <QuestionBlock
+                stepKey="dns2"
+                question="The Root Server receives the request for 'www.aqa.com'. Does the Root Server return the final IP address of the web server?"
+                type="select"
+                options={[
+                  "Yes",
+                  "No, it returns the IP of the TLD server",
+                  "No, it returns an error",
+                ]}
+                correctAnswer="No, it returns the IP of the TLD server"
+                explanation="Correct. Root servers direct queries to Top-Level Domain (TLD) servers (like .com or .uk) based on the end of the URL."
+                onCorrect={() => setStep(3)}
+              />
+            )}
+            {step === 3 && (
+              <QuestionBlock
+                stepKey="dns3"
+                question="The TLD server (.com) is queried. It responds with the IP address of the final server in the hierarchy that holds the actual domain record. What is this server called?"
+                type="select"
+                options={[
+                  "Authoritative Name Server",
+                  "Gateway Server",
+                  "Proxy Server",
+                ]}
+                correctAnswer="Authoritative Name Server"
+                explanation="Correct! The Authoritative Name Server is the definitive source that holds the actual IP mapping for 'aqa.com'."
+                onCorrect={() => setStep(4)}
+              />
+            )}
+            {step === 4 && (
+              <QuestionBlock
+                stepKey="dns4"
+                question="The Authoritative server has been reached. Look at the Zone File table provided. What exact IP address should be returned for the FQDN 'www.aqa.com'?"
+                type="text"
+                correctAnswer="198.51.100.10"
+                explanation="Correct! The A Record for 'www.aqa.com' directly maps to 198.51.100.10."
+                onCorrect={() => setStep(5)}
+              />
+            )}
+            {step === 5 && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <strong className="font-bold">Simulation Complete!</strong>
+                <p className="text-sm mt-1">
+                  The Authoritative server returns the IP 198.51.100.10 to the
+                  Resolver, which caches it and sends it back to the PC.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- MAIN APP COMPONENT ---
+
+      const App = () => {
+        const allTopics = [
+          { id: "firewall", title: "Firewall & Stateful Inspection" },
+          { id: "router", title: "Standard Router" },
+          { id: "gateway", title: "Gateway" },
+          { id: "nat", title: "Network Address Translation (NAT)" },
+          { id: "portForwarding", title: "Port Forwarding" },
+          { id: "dns", title: "DNS Resolution" },
+        ];
+
+        const [enabledTopics, setEnabledTopics] = useState(
+          allTopics.reduce((acc, topic) => ({ ...acc, [topic.id]: true }), {}),
+        );
+
+        const [dropdownOpen, setDropdownOpen] = useState(false);
+
+        const availableTopics = allTopics.filter((t) => enabledTopics[t.id]);
+        const [currentSimId, setCurrentSimId] = useState(allTopics[0].id);
+
+        // Ensure current sim is always valid if topics are unchecked
+        useEffect(() => {
+          if (availableTopics.length > 0 && !enabledTopics[currentSimId]) {
+            setCurrentSimId(availableTopics[0].id);
+          }
+        }, [enabledTopics]);
+
+        const handleToggleTopic = (id) => {
+          // Prevent unchecking the very last topic
+          if (availableTopics.length === 1 && enabledTopics[id]) return;
+          setEnabledTopics((prev) => ({ ...prev, [id]: !prev[id] }));
+        };
+
+        const renderSimulation = () => {
+          if (availableTopics.length === 0) return <p>No topics selected.</p>;
+          switch (currentSimId) {
+            case "firewall":
+              return <SimFirewall />;
+            case "router":
+              return <SimRouter />;
+            case "gateway":
+              return <SimGateway />;
+            case "nat":
+              return <SimNAT />;
+            case "portForwarding":
+              return <SimPortForwarding />;
+            case "dns":
+              return <SimDNS />;
+            default:
+              return <p>Select a simulation.</p>;
+          }
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
+            <div className="w-full max-w-5xl bg-white rounded-xl shadow-xl overflow-hidden">
+              {/* Header Area */}
+              <div className="bg-blue-900 text-white p-6 flex flex-col md:flex-row justify-between items-center relative">
+                <div>
+                  <h1 className="text-3xl font-extrabold tracking-tight">
+                    Network Decision Making
+                  </h1>
+                  <p className="text-blue-200 mt-1">
+                    AQA A-Level Computer Science Interactive
+                  </p>
+                </div>
+
+                <div className="mt-4 md:mt-0 flex gap-4 items-center">
+                  {/* Filter Checkboxes Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded text-sm font-semibold flex items-center gap-2"
+                    >
+                      Filter Topics
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 9l-7 7-7-7"
+                        ></path>
+                      </svg>
+                    </button>
+
+                    {dropdownOpen && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-50 p-2 border border-gray-200 text-left">
+                        <p className="text-xs text-gray-500 mb-2 border-b pb-1">
+                          Select Active Sub-topics:
+                        </p>
+                        {allTopics.map((topic) => (
+                          <label
+                            key={topic.id}
+                            className="flex items-center p-1 hover:bg-gray-100 rounded cursor-pointer text-sm text-gray-800"
+                          >
+                            <input
+                              type="checkbox"
+                              className="mr-2 rounded text-blue-600 focus:ring-blue-500"
+                              checked={enabledTopics[topic.id]}
+                              onChange={() => handleToggleTopic(topic.id)}
+                            />
+                            {topic.title}
+                          </label>
+                        ))}
+                        <button
+                          onClick={() => setDropdownOpen(false)}
+                          className="mt-2 w-full text-center text-xs text-blue-600 font-bold hover:underline"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Simulation Area */}
+              <div className="p-8">{renderSimulation()}</div>
+
+              {/* Footer navigation between available topics */}
+              <div className="bg-gray-100 p-4 border-t flex justify-between items-center">
+                <button
+                  onClick={() => {
+                    const idx = availableTopics.findIndex(
+                      (t) => t.id === currentSimId,
+                    );
+                    if (idx > 0) setCurrentSimId(availableTopics[idx - 1].id);
+                  }}
+                  disabled={
+                    availableTopics.findIndex((t) => t.id === currentSimId) ===
+                    0
+                  }
+                  className="px-4 py-2 bg-gray-300 text-gray-700 font-bold rounded disabled:opacity-50 hover:bg-gray-400 transition"
+                >
+                  &laquo; Previous Topic
+                </button>
+                <span className="text-sm text-gray-500 font-semibold hidden md:inline">
+                  {availableTopics.find((t) => t.id === currentSimId)?.title}
+                </span>
+                <button
+                  onClick={() => {
+                    const idx = availableTopics.findIndex(
+                      (t) => t.id === currentSimId,
+                    );
+                    if (idx < availableTopics.length - 1)
+                      setCurrentSimId(availableTopics[idx + 1].id);
+                  }}
+                  disabled={
+                    availableTopics.findIndex((t) => t.id === currentSimId) ===
+                    availableTopics.length - 1
+                  }
+                  className="px-4 py-2 bg-blue-600 text-white font-bold rounded disabled:opacity-50 hover:bg-blue-700 transition"
+                >
+                  Next Topic &raquo;
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
