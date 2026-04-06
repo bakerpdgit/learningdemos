@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Binary Search Trees Interactive</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: #f3f4f6;
+      }
+      .fade-in {
+        animation: fadeIn 0.3s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* SVG Tree Styling */
+      .node-circle {
+        fill: white;
+        stroke: #3b82f6;
+        stroke-width: 3px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .node-circle:hover {
+        fill: #eff6ff;
+        stroke: #2563eb;
+      }
+      .node-text {
+        font-weight: bold;
+        fill: #1e3a8a;
+        pointer-events: none;
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+      .edge-line {
+        stroke: #94a3b8;
+        stroke-width: 2px;
+        z-index: -1;
+      }
+      .node-highlight-correct {
+        fill: #dcfce7;
+        stroke: #16a34a;
+      }
+      .node-highlight-error {
+        fill: #fee2e2;
+        stroke: #dc2626;
+      }
+      .node-highlight-selected {
+        fill: #fef08a;
+        stroke: #ca8a04;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef, useCallback } = React;
+
+      // --- UTILS & DATA GENERATORS ---
+      const generateRandomArray = (size, min = 10, max = 99) => {
+        const arr = [];
+        while (arr.length < size) {
+          const num = Math.floor(Math.random() * (max - min + 1)) + min;
+          if (!arr.includes(num)) arr.push(num);
+        }
+        return arr;
+      };
+
+      const buildBST = (values) => {
+        if (values.length === 0) return null;
+        const nodes = [];
+        const root = { value: values[0], left: null, right: null, id: 0 };
+        nodes.push(root);
+
+        for (let i = 1; i < values.length; i++) {
+          const val = values[i];
+          const newNode = { value: val, left: null, right: null, id: i };
+          nodes.push(newNode);
+
+          let curr = root;
+          while (true) {
+            if (val < curr.value) {
+              if (!curr.left) {
+                curr.left = newNode;
+                break;
+              }
+              curr = curr.left;
+            } else {
+              if (!curr.right) {
+                curr.right = newNode;
+                break;
+              }
+              curr = curr.right;
+            }
+          }
+        }
+        return { root, nodes };
+      };
+
+      const calculateTreeLayout = (root) => {
+        if (!root) return { nodes: [], edges: [], width: 0, height: 0 };
+        let rank = 0;
+        const xSpacing = 60;
+        const ySpacing = 70;
+        const nodesData = [];
+        const edgesData = [];
+        let maxDepth = 0;
+
+        // In-order traversal assigns x-coordinates based on value rank (perfect for BSTs)
+        const traverse = (node, depth) => {
+          if (!node) return;
+          traverse(node.left, depth + 1);
+          node.x = (rank + 1) * xSpacing;
+          node.y = (depth + 1) * ySpacing;
+          if (depth > maxDepth) maxDepth = depth;
+          nodesData.push(node);
+          rank++;
+          traverse(node.right, depth + 1);
+        };
+        traverse(root, 0);
+
+        const buildEdges = (node) => {
+          if (!node) return;
+          if (node.left) {
+            edgesData.push({ from: node, to: node.left, type: "left" });
+            buildEdges(node.left);
+          }
+          if (node.right) {
+            edgesData.push({ from: node, to: node.right, type: "right" });
+            buildEdges(node.right);
+          }
+        };
+        buildEdges(root);
+
+        return {
+          nodes: nodesData,
+          edges: edgesData,
+          width: (rank + 1) * xSpacing + xSpacing,
+          height: (maxDepth + 2) * ySpacing,
+        };
+      };
+
+      // --- ICONS ---
+      const ChevronDown = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      );
+      const Check = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#16a34a"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      );
+      const XCircle = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#dc2626"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>
+      );
+
+      // --- COMPONENTS ---
+
+      // 1. Topic A: Building a BST
+      const BuildBSTInteractive = ({ onComplete, onNext }) => {
+        const [sequence, setSequence] = useState([]);
+        const [tree, setTree] = useState(null);
+        const [currentIndex, setCurrentIndex] = useState(1);
+        const [selectedNode, setSelectedNode] = useState(null);
+        const [feedback, setFeedback] = useState("");
+        const [isCompleted, setIsCompleted] = useState(false);
+
+        useEffect(() => {
+          initGame();
+        }, []);
+
+        const initGame = () => {
+          const seq = generateRandomArray(6);
+          setSequence(seq);
+          setTree({ value: seq[0], left: null, right: null, id: 0 });
+          setCurrentIndex(1);
+          setSelectedNode(null);
+          setFeedback("");
+          setIsCompleted(false);
+        };
+
+        const targetValue = sequence[currentIndex];
+
+        const handleNodeClick = (node) => {
+          if (isCompleted) return;
+          setSelectedNode(node);
+          setFeedback("");
+        };
+
+        const handleAddChild = (direction) => {
+          if (!selectedNode) return;
+
+          // Determine if this is the CORRECT place to add the node according to standard BST insertion
+          let curr = tree;
+          let correctParent = null;
+          let correctDirection = null;
+
+          while (curr !== null) {
+            correctParent = curr;
+            if (targetValue < curr.value) {
+              correctDirection = "left";
+              curr = curr.left;
+            } else {
+              correctDirection = "right";
+              curr = curr.right;
+            }
+          }
+
+          if (
+            selectedNode.id === correctParent.id &&
+            direction === correctDirection
+          ) {
+            // Correct! Update tree
+            const newNode = {
+              value: targetValue,
+              left: null,
+              right: null,
+              id: currentIndex,
+            };
+
+            // Deep copy tree and update
+            const updateTree = (n) => {
+              if (!n) return null;
+              let copy = { ...n };
+              if (n.id === selectedNode.id) {
+                if (direction === "left") copy.left = newNode;
+                else copy.right = newNode;
+              } else {
+                copy.left = updateTree(n.left);
+                copy.right = updateTree(n.right);
+              }
+              return copy;
+            };
+
+            setTree(updateTree(tree));
+            setSelectedNode(null);
+            setFeedback("Correct! " + targetValue + " added.");
+
+            if (currentIndex + 1 >= sequence.length) {
+              setIsCompleted(true);
+              setFeedback(
+                "Congratulations! You have successfully built the Binary Search Tree.",
+              );
+              onComplete();
+            } else {
+              setCurrentIndex(currentIndex + 1);
+            }
+          } else {
+            // Incorrect
+            if (selectedNode.id !== correctParent.id) {
+              setFeedback(
+                `Incorrect parent. Remember to start at the root and go left if smaller, right if larger until you find an empty spot.`,
+              );
+            } else {
+              setFeedback(
+                `Incorrect direction. Is ${targetValue} ${direction === "left" ? "smaller" : "larger"} than ${selectedNode.value}?`,
+              );
+            }
+          }
+        };
+
+        const layout = calculateTreeLayout(tree);
+
+        return (
+          <div className="space-y-4 fade-in">
+            <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+              <p className="font-medium text-blue-900">
+                Task: Build the Binary Search Tree
+              </p>
+              <p className="text-sm text-blue-800 mt-1">
+                Given the sequence:
+                <span className="font-mono bg-white px-2 py-1 mx-2 rounded border">
+                  {sequence.join(", ")}
+                </span>
+              </p>
+              {!isCompleted && (
+                <p className="text-sm font-bold text-blue-900 mt-2">
+                  Next value to insert:{" "}
+                  <span className="text-xl bg-blue-200 px-2 py-1 rounded">
+                    {targetValue}
+                  </span>
+                </p>
+              )}
+              <p className="text-sm text-gray-600 mt-1 italic">
+                Interaction: Click the node in the tree where the new value
+                should be attached, then choose Left or Right.
+              </p>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 bg-white p-4 border rounded-md shadow-inner overflow-auto min-h-[300px] flex justify-center relative">
+                {layout.nodes.length > 0 && (
+                  <svg
+                    width={Math.max(400, layout.width)}
+                    height={Math.max(300, layout.height)}
+                  >
+                    {/* Edges */}
+                    {layout.edges.map((edge, i) => (
+                      <line
+                        key={i}
+                        x1={edge.from.x}
+                        y1={edge.from.y}
+                        x2={edge.to.x}
+                        y2={edge.to.y}
+                        className="edge-line"
+                      />
+                    ))}
+                    {/* Nodes */}
+                    {layout.nodes.map((node) => (
+                      <g
+                        key={node.id}
+                        transform={`translate(${node.x},${node.y})`}
+                        onClick={() => handleNodeClick(node)}
+                      >
+                        <circle
+                          r="20"
+                          className={`node-circle ${selectedNode?.id === node.id ? "node-highlight-selected" : ""}`}
+                        />
+                        <text className="node-text">{node.value}</text>
+                      </g>
+                    ))}
+                  </svg>
+                )}
+
+                {/* Context Menu for Selected Node */}
+                {selectedNode && !isCompleted && (
+                  <div
+                    className="absolute bg-white border shadow-lg rounded-md p-2 flex flex-col gap-2 z-10"
+                    style={{
+                      left: `${Math.min(selectedNode.x + 30, layout.width - 100)}px`,
+                      top: `${Math.max(10, selectedNode.y - 10)}px`,
+                    }}
+                  >
+                    <p className="text-xs font-bold text-center border-b pb-1">
+                      Attach to {selectedNode.value}
+                    </p>
+                    <button
+                      disabled={selectedNode.left !== null}
+                      onClick={() => handleAddChild("left")}
+                      className="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                    >
+                      Add Left Child
+                    </button>
+                    <button
+                      disabled={selectedNode.right !== null}
+                      onClick={() => handleAddChild("right")}
+                      className="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                    >
+                      Add Right Child
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {feedback && (
+              <div
+                className={`p-3 rounded-md border ${feedback.includes("Correct") || feedback.includes("Congratulations") ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}
+              >
+                {feedback}
+              </div>
+            )}
+
+            {isCompleted ? (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={onNext}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded shadow-lg transition transform hover:scale-105"
+                >
+                  Next Question
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={initGame}
+                className="mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-800 font-medium"
+              >
+                Restart Current Question
+              </button>
+            )}
+          </div>
+        );
+      };
+
+      // 2. Topic B: Searching a BST
+      const SearchBSTInteractive = ({ onComplete, onNext }) => {
+        const [treeData, setTreeData] = useState(null);
+        const [target, setTarget] = useState(null);
+        const [userSequence, setUserSequence] = useState([]);
+        const [status, setStatus] = useState("idle"); // idle, checking, correct, incorrect, solution
+        const [correctSequence, setCorrectSequence] = useState([]);
+
+        useEffect(() => {
+          initGame();
+        }, []);
+
+        const initGame = () => {
+          const values = generateRandomArray(8);
+          const { root } = buildBST(values);
+          setTreeData(root);
+
+          // Pick a target (70% chance it's in the tree, 30% chance it's random not in tree)
+          let tgt;
+          if (Math.random() > 0.3) {
+            tgt = values[Math.floor(Math.random() * values.length)];
+          } else {
+            tgt = Math.floor(Math.random() * 90) + 10;
+            while (values.includes(tgt))
+              tgt = Math.floor(Math.random() * 90) + 10;
+          }
+          setTarget(tgt);
+          setUserSequence([]);
+          setStatus("idle");
+
+          // Calculate correct sequence
+          let curr = root;
+          let seq = [];
+          while (curr !== null) {
+            seq.push(curr.id);
+            if (curr.value === tgt) break;
+            if (tgt < curr.value) curr = curr.left;
+            else curr = curr.right;
+          }
+          setCorrectSequence(seq);
+        };
+
+        const handleNodeClick = (node) => {
+          if (status === "correct" || status === "solution") return;
+
+          if (userSequence.includes(node.id)) {
+            // Allow unclicking the last node
+            if (userSequence[userSequence.length - 1] === node.id) {
+              setUserSequence(userSequence.slice(0, -1));
+              setStatus("idle");
+            }
+            return;
+          }
+          setUserSequence([...userSequence, node.id]);
+          setStatus("idle");
+        };
+
+        const checkAnswer = () => {
+          if (userSequence.length === 0) return;
+          let isCorrect = true;
+          if (userSequence.length !== correctSequence.length) isCorrect = false;
+          else {
+            for (let i = 0; i < correctSequence.length; i++) {
+              if (userSequence[i] !== correctSequence[i]) isCorrect = false;
+            }
+          }
+
+          if (isCorrect) {
+            setStatus("correct");
+            onComplete();
+          } else {
+            setStatus("incorrect");
+          }
+        };
+
+        const layout = calculateTreeLayout(treeData);
+
+        return (
+          <div className="space-y-4 fade-in">
+            <div className="bg-purple-50 p-4 rounded-md border border-purple-200">
+              <p className="font-medium text-purple-900">
+                Task: Search the Binary Search Tree
+              </p>
+              <p className="text-sm text-purple-800 mt-1">
+                Click the nodes in the exact order they would be compared when
+                searching for the value:
+                <span className="font-bold text-lg bg-white px-2 py-1 mx-2 rounded border">
+                  {target}
+                </span>
+              </p>
+              <p className="text-sm text-gray-600 mt-1 italic">
+                (Click a selected node again to undo your last selection).
+              </p>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 bg-white p-4 border rounded-md shadow-inner overflow-auto min-h-[300px] flex justify-center">
+                {layout.nodes.length > 0 && (
+                  <svg
+                    width={Math.max(400, layout.width)}
+                    height={Math.max(300, layout.height)}
+                  >
+                    {layout.edges.map((edge, i) => (
+                      <line
+                        key={i}
+                        x1={edge.from.x}
+                        y1={edge.from.y}
+                        x2={edge.to.x}
+                        y2={edge.to.y}
+                        className="edge-line"
+                      />
+                    ))}
+                    {layout.nodes.map((node) => {
+                      const indexInSeq = userSequence.indexOf(node.id);
+                      const isSelected = indexInSeq !== -1;
+                      const isCorrectSeqNode =
+                        status === "solution" &&
+                        correctSequence.includes(node.id);
+
+                      let circleClass = "node-circle";
+                      if (status === "solution") {
+                        circleClass = isCorrectSeqNode
+                          ? "node-highlight-correct"
+                          : "opacity-30 node-circle";
+                      } else if (isSelected) {
+                        circleClass = "node-highlight-selected";
+                      }
+
+                      return (
+                        <g
+                          key={node.id}
+                          transform={`translate(${node.x},${node.y})`}
+                          onClick={() => handleNodeClick(node)}
+                        >
+                          <circle r="20" className={circleClass} />
+                          <text className="node-text">{node.value}</text>
+                          {isSelected && status !== "solution" && (
+                            <text
+                              x="25"
+                              y="-15"
+                              className="text-xs font-bold fill-purple-700 pointer-events-none"
+                            >
+                              {indexInSeq + 1}
+                            </text>
+                          )}
+                          {status === "solution" && isCorrectSeqNode && (
+                            <text
+                              x="25"
+                              y="-15"
+                              className="text-xs font-bold fill-green-700 pointer-events-none"
+                            >
+                              {correctSequence.indexOf(node.id) + 1}
+                            </text>
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
+                )}
+              </div>
+
+              {/* Comparisons Panel */}
+              <div className="w-full md:w-64 bg-white border rounded-md p-4 shadow-sm flex flex-col">
+                <h3 className="font-bold text-purple-900 border-b pb-2 mb-2 text-sm">
+                  Comparisons
+                </h3>
+                <ul className="text-sm space-y-2 overflow-auto flex-1 max-h-[300px]">
+                  {userSequence.length === 0 && (
+                    <li className="text-gray-400 italic">
+                      No nodes clicked yet.
+                    </li>
+                  )}
+                  {userSequence.map((id, index) => {
+                    const node = layout.nodes.find((n) => n.id === id);
+                    return (
+                      <li
+                        key={index}
+                        className="text-purple-800 bg-purple-50 px-2 py-1.5 rounded border border-purple-100 shadow-sm"
+                      >
+                        <span className="font-bold">{target}</span> is compared
+                        with <span className="font-bold">{node?.value}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+
+            {status !== "correct" && (
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={checkAnswer}
+                  disabled={userSequence.length === 0 || status === "solution"}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium disabled:opacity-50"
+                >
+                  Check Answer
+                </button>
+                <button
+                  onClick={initGame}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-800 font-medium"
+                >
+                  Restart Current Question
+                </button>
+              </div>
+            )}
+
+            {status === "incorrect" && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded flex justify-between items-center">
+                <span>
+                  Incorrect sequence. Remember to compare with the root first,
+                  then decide whether to go left or right.
+                </span>
+                <button
+                  onClick={() => setStatus("solution")}
+                  className="text-sm underline font-bold text-red-900"
+                >
+                  Show Solution
+                </button>
+              </div>
+            )}
+
+            {status === "correct" && (
+              <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded font-bold flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Check /> Correct! You traced the search path accurately.
+                </div>
+                <button
+                  onClick={onNext}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded shadow transition transform hover:scale-105"
+                >
+                  Next Question
+                </button>
+              </div>
+            )}
+
+            {status === "solution" && (
+              <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded">
+                <p className="font-bold">Solution Path:</p>
+                <p>
+                  The sequence of values checked is:{" "}
+                  {correctSequence
+                    .map((id) => layout.nodes.find((n) => n.id === id)?.value)
+                    .join(" → ")}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 3. Topic C: 2D Array View
+      const ArrayViewInteractive = ({ onComplete, onNext }) => {
+        const [treeData, setTreeData] = useState(null);
+        const [nodesArray, setNodesArray] = useState([]);
+        const [userInputs, setUserInputs] = useState({});
+        const [status, setStatus] = useState("idle");
+        const [layout, setLayout] = useState({
+          nodes: [],
+          edges: [],
+          width: 0,
+          height: 0,
+        });
+
+        useEffect(() => {
+          initGame();
+        }, []);
+
+        const initGame = () => {
+          const values = generateRandomArray(6);
+          const { root } = buildBST(values);
+          setTreeData(root);
+          setLayout(calculateTreeLayout(root));
+
+          // Use Level-Order (Breadth-First) traversal for a sensible array layout
+          // This ensures root is 0, left is 1, right is 2, etc.
+          const levelOrderNodes = [];
+          const queue = [root];
+          while (queue.length > 0) {
+            const node = queue.shift();
+            levelOrderNodes.push(node);
+            if (node.left) queue.push(node.left);
+            if (node.right) queue.push(node.right);
+          }
+
+          setNodesArray(levelOrderNodes);
+
+          const initialInputs = {};
+          levelOrderNodes.forEach((_, i) => {
+            initialInputs[i] = { left: "", right: "" };
+          });
+          setUserInputs(initialInputs);
+          setStatus("idle");
+        };
+
+        const handleInputChange = (index, field, value) => {
+          setUserInputs((prev) => ({
+            ...prev,
+            [index]: { ...prev[index], [field]: value },
+          }));
+          setStatus("idle");
+        };
+
+        const checkAnswer = () => {
+          let allCorrect = true;
+
+          nodesArray.forEach((node, i) => {
+            const expectedLeft = node.left
+              ? nodesArray.findIndex((n) => n.id === node.left.id)
+              : -1;
+            const expectedRight = node.right
+              ? nodesArray.findIndex((n) => n.id === node.right.id)
+              : -1;
+
+            const userLeft = userInputs[i].left.trim();
+            const userRight = userInputs[i].right.trim();
+
+            if (
+              userLeft !== expectedLeft.toString() &&
+              !(
+                expectedLeft === -1 &&
+                (userLeft.toLowerCase() === "null" || userLeft === "")
+              )
+            ) {
+              allCorrect = false;
+            }
+            if (
+              userRight !== expectedRight.toString() &&
+              !(
+                expectedRight === -1 &&
+                (userRight.toLowerCase() === "null" || userRight === "")
+              )
+            ) {
+              allCorrect = false;
+            }
+          });
+
+          if (allCorrect) {
+            setStatus("correct");
+            onComplete();
+          } else {
+            setStatus("incorrect");
+          }
+        };
+
+        const showSolution = () => {
+          const solution = {};
+          nodesArray.forEach((node, i) => {
+            const leftIdx = node.left
+              ? nodesArray.findIndex((n) => n.id === node.left.id)
+              : -1;
+            const rightIdx = node.right
+              ? nodesArray.findIndex((n) => n.id === node.right.id)
+              : -1;
+            solution[i] = {
+              left: leftIdx.toString(),
+              right: rightIdx.toString(),
+            };
+          });
+          setUserInputs(solution);
+          setStatus("solution");
+        };
+
+        return (
+          <div className="space-y-4 fade-in">
+            <div className="bg-amber-50 p-4 rounded-md border border-amber-200">
+              <p className="font-medium text-amber-900">
+                Task: Convert BST to 2D Array
+              </p>
+              <p className="text-sm text-amber-800 mt-1">
+                Fill in the Left Pointer and Right Pointer columns for the table
+                representing the given BST. Use{" "}
+                <span className="font-mono bg-white px-1 border">-1</span> for
+                null/empty pointers.
+              </p>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* Tree View */}
+              <div className="flex-1 bg-white p-2 border rounded-md shadow-inner flex justify-center items-center overflow-auto">
+                {layout.nodes.length > 0 && (
+                  <svg
+                    width={Math.max(300, layout.width)}
+                    height={Math.max(250, layout.height)}
+                  >
+                    {layout.edges.map((edge, i) => (
+                      <line
+                        key={i}
+                        x1={edge.from.x}
+                        y1={edge.from.y}
+                        x2={edge.to.x}
+                        y2={edge.to.y}
+                        className="edge-line"
+                      />
+                    ))}
+                    {layout.nodes.map((node) => (
+                      <g
+                        key={node.id}
+                        transform={`translate(${node.x},${node.y})`}
+                      >
+                        <circle r="18" className="node-circle" />
+                        <text className="node-text text-sm">{node.value}</text>
+                      </g>
+                    ))}
+                  </svg>
+                )}
+              </div>
+
+              {/* Array View */}
+              <div className="flex-1 bg-white border rounded-md shadow-sm overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-100 text-gray-700 border-b">
+                    <tr>
+                      <th className="p-2 border-r w-16 text-center">Index</th>
+                      <th className="p-2 border-r text-center">Data</th>
+                      <th className="p-2 border-r text-center">Left Ptr</th>
+                      <th className="p-2 text-center">Right Ptr</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nodesArray.map((node, index) => (
+                      <tr key={index} className="border-b hover:bg-gray-50">
+                        <td className="p-2 border-r text-center font-mono text-gray-500">
+                          {index}
+                        </td>
+                        <td className="p-2 border-r text-center font-bold">
+                          {node.value}
+                        </td>
+                        <td className="p-2 border-r">
+                          <input
+                            type="text"
+                            className={`w-full p-1 border rounded text-center focus:outline-none focus:ring-2 focus:ring-amber-400 ${status === "solution" ? "bg-green-50 border-green-300" : ""}`}
+                            value={userInputs[index]?.left || ""}
+                            onChange={(e) =>
+                              handleInputChange(index, "left", e.target.value)
+                            }
+                            disabled={
+                              status === "correct" || status === "solution"
+                            }
+                            placeholder="-1"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            className={`w-full p-1 border rounded text-center focus:outline-none focus:ring-2 focus:ring-amber-400 ${status === "solution" ? "bg-green-50 border-green-300" : ""}`}
+                            value={userInputs[index]?.right || ""}
+                            onChange={(e) =>
+                              handleInputChange(index, "right", e.target.value)
+                            }
+                            disabled={
+                              status === "correct" || status === "solution"
+                            }
+                            placeholder="-1"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {status !== "correct" && (
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={checkAnswer}
+                  disabled={status === "solution"}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium disabled:opacity-50"
+                >
+                  Check Table
+                </button>
+                <button
+                  onClick={initGame}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-800 font-medium"
+                >
+                  Restart Current Question
+                </button>
+              </div>
+            )}
+
+            {status === "incorrect" && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded flex justify-between items-center">
+                <span>
+                  Some pointers are incorrect. Check the connections in the
+                  graph. Remember the pointers refer to the 'Index' column.
+                </span>
+                <button
+                  onClick={showSolution}
+                  className="text-sm underline font-bold text-red-900"
+                >
+                  Show Solution
+                </button>
+              </div>
+            )}
+
+            {status === "correct" && (
+              <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded font-bold flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Check /> Perfect! You correctly mapped the graphical tree to
+                  its 2D array representation.
+                </div>
+                <button
+                  onClick={onNext}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded shadow transition transform hover:scale-105"
+                >
+                  Next Question
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 4. Topic D: Definitions
+      const DefinitionsInteractive = ({ onComplete, onNext }) => {
+        const definitionsData = [
+          {
+            id: "tree",
+            parts: [
+              { type: "text", text: "A Tree is a " },
+              {
+                type: "blank",
+                id: "b1",
+                options: ["connected", "disconnected", "hierarchical"],
+                correct: "connected",
+              },
+              { type: "text", text: " " },
+              {
+                type: "blank",
+                id: "b2",
+                options: ["directed", "undirected", "weighted"],
+                correct: "undirected",
+              },
+              { type: "text", text: " graph with no " },
+              {
+                type: "blank",
+                id: "b3",
+                options: ["edges", "vertices", "cycles"],
+                correct: "cycles",
+              },
+              { type: "text", text: "." },
+            ],
+          },
+          {
+            id: "binary",
+            parts: [
+              { type: "text", text: "A Binary Tree is a " },
+              {
+                type: "blank",
+                id: "b4a",
+                options: ["tree", "graph", "data structure"],
+                correct: "tree",
+              },
+              { type: "text", text: " in which there is a nominated " },
+              {
+                type: "blank",
+                id: "b4b",
+                options: ["root", "parent", "leaf"],
+                correct: "root",
+              },
+              { type: "text", text: " node and in which each node has " },
+              {
+                type: "blank",
+                id: "b4",
+                options: ["exactly two", "at most two", "at least two"],
+                correct: "at most two",
+              },
+              { type: "text", text: " " },
+              {
+                type: "blank",
+                id: "b5",
+                options: ["parents", "children", "edges"],
+                correct: "children",
+              },
+              { type: "text", text: "." },
+            ],
+          },
+          {
+            id: "bst",
+            parts: [
+              { type: "text", text: "A Binary Search Tree is a " },
+              {
+                type: "blank",
+                id: "b6a",
+                options: ["tree", "graph", "binary tree", "rooted tree"],
+                correct: "binary tree",
+              },
+              { type: "text", text: " in which the value of each node is " },
+              {
+                type: "blank",
+                id: "b6",
+                options: ["greater than", "less than", "equal to"],
+                correct: "greater than",
+              },
+              { type: "text", text: " all values in its left subtree and " },
+              {
+                type: "blank",
+                id: "b7",
+                options: ["greater than", "less than", "equal to"],
+                correct: "less than",
+              },
+              { type: "text", text: " all values in its right subtree." },
+            ],
+          },
+        ];
+
+        const [answers, setAnswers] = useState({});
+        const [status, setStatus] = useState("idle");
+
+        const handleSelect = (id, val) => {
+          setAnswers((prev) => ({ ...prev, [id]: val }));
+          setStatus("idle");
+        };
+
+        const checkAnswer = () => {
+          let allCorrect = true;
+          definitionsData.forEach((def) => {
+            def.parts.forEach((p) => {
+              if (p.type === "blank" && answers[p.id] !== p.correct) {
+                allCorrect = false;
+              }
+            });
+          });
+
+          if (allCorrect) {
+            setStatus("correct");
+            onComplete();
+          } else {
+            setStatus("incorrect");
+          }
+        };
+
+        const showSolution = () => {
+          const solution = {};
+          definitionsData.forEach((def) => {
+            def.parts.forEach((p) => {
+              if (p.type === "blank") solution[p.id] = p.correct;
+            });
+          });
+          setAnswers(solution);
+          setStatus("solution");
+        };
+
+        const reset = () => {
+          setAnswers({});
+          setStatus("idle");
+        };
+
+        const renderSelect = (blankConfig) => (
+          <select
+            key={blankConfig.id}
+            value={answers[blankConfig.id] || ""}
+            onChange={(e) => handleSelect(blankConfig.id, e.target.value)}
+            disabled={status === "correct" || status === "solution"}
+            className={`mx-1 p-1 border rounded bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 inline-block my-1
+                        ${status === "solution" || status === "correct" ? "border-green-400 font-medium text-green-700" : "border-gray-300"}`}
+          >
+            <option value="" disabled>
+              ---
+            </option>
+            {blankConfig.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        );
+
+        // Calculate total blanks for disabling check button
+        const totalBlanks = definitionsData.reduce(
+          (acc, def) =>
+            acc + def.parts.filter((p) => p.type === "blank").length,
+          0,
+        );
+
+        return (
+          <div className="space-y-4 fade-in">
+            <div className="bg-teal-50 p-4 rounded-md border border-teal-200">
+              <p className="font-medium text-teal-900">
+                Task: Complete the Definitions
+              </p>
+              <p className="text-sm text-teal-800 mt-1">
+                Select the correct terms to complete the formal AQA definitions.
+              </p>
+            </div>
+
+            <div className="space-y-6 bg-white p-6 border rounded-md shadow-sm">
+              {definitionsData.map((def, i) => (
+                <div key={i} className="text-lg text-gray-800 leading-relaxed">
+                  {def.parts.map((p, idx) =>
+                    p.type === "text" ? (
+                      <span key={idx}>{p.text}</span>
+                    ) : (
+                      renderSelect(p)
+                    ),
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {status !== "correct" && (
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={checkAnswer}
+                  disabled={
+                    Object.keys(answers).length < totalBlanks ||
+                    status === "solution"
+                  }
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded font-medium disabled:opacity-50"
+                >
+                  Check Definitions
+                </button>
+                <button
+                  onClick={reset}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-800 font-medium"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
+
+            {status === "incorrect" && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded flex justify-between items-center">
+                <span>
+                  Some definitions are incorrect. Review the characteristics of
+                  graphs and trees.
+                </span>
+                <button
+                  onClick={showSolution}
+                  className="text-sm underline font-bold text-red-900"
+                >
+                  Show Solution
+                </button>
+              </div>
+            )}
+
+            {status === "correct" && (
+              <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded font-bold flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Check /> Excellent! All definitions are precisely correct.
+                </div>
+                <button
+                  onClick={onNext}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded shadow transition transform hover:scale-105"
+                >
+                  Next Question
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- MAIN APP COMPONENT ---
+      const App = () => {
+        const topics = [
+          { id: "A", name: "Building a BST", color: "blue" },
+          { id: "B", name: "Searching a BST", color: "purple" },
+          { id: "C", name: "2D Array View", color: "amber" },
+          { id: "D", name: "Definitions", color: "teal" },
+        ];
+
+        const [selectedTopics, setSelectedTopics] = useState(
+          topics.map((t) => t.id),
+        );
+        const [currentTopic, setCurrentTopic] = useState("A");
+        const [filterOpen, setFilterOpen] = useState(false);
+        const [score, setScore] = useState(0);
+        const [questionKey, setQuestionKey] = useState(0);
+
+        // Generate a random question from selected topics
+        const generateQuestion = useCallback(() => {
+          if (selectedTopics.length === 0) return;
+          const randomIndex = Math.floor(Math.random() * selectedTopics.length);
+          setCurrentTopic(selectedTopics[randomIndex]);
+          setQuestionKey((prevKey) => prevKey + 1);
+        }, [selectedTopics]);
+
+        useEffect(() => {
+          if (
+            !selectedTopics.includes(currentTopic) &&
+            selectedTopics.length > 0
+          ) {
+            generateQuestion();
+          }
+        }, [selectedTopics, currentTopic, generateQuestion]);
+
+        const handleTopicToggle = (id) => {
+          setSelectedTopics((prev) => {
+            if (prev.includes(id)) {
+              if (prev.length === 1) return prev; // Keep at least one selected
+              return prev.filter((t) => t !== id);
+            } else {
+              return [...prev, id];
+            }
+          });
+        };
+
+        const handleSuccess = () => {
+          setScore((s) => s + 1);
+        };
+
+        const activeTopicObj =
+          topics.find((t) => t.id === currentTopic) || topics[0];
+
+        return (
+          <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+            <div className="max-w-5xl mx-auto">
+              {/* Header */}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    Binary Search Trees
+                  </h1>
+                  <p className="text-gray-600">
+                    AQA A Level Computer Science Interactive Practice
+                  </p>
+                </div>
+
+                {/* Controls Right */}
+                <div className="flex items-center gap-4 w-full md:w-auto relative">
+                  <div className="bg-white px-4 py-2 rounded-lg shadow-sm border font-bold text-gray-700">
+                    Score: <span className="text-green-600">{score}</span>
+                  </div>
+
+                  {/* Dropdown */}
+                  <div className="relative z-50">
+                    <button
+                      onClick={() => setFilterOpen(!filterOpen)}
+                      className="bg-white px-4 py-2 rounded-lg shadow-sm border text-gray-700 flex items-center gap-2 hover:bg-gray-50"
+                    >
+                      Filter Topics <ChevronDown />
+                    </button>
+
+                    {filterOpen && (
+                      <div className="absolute right-0 mt-2 w-64 bg-white border rounded-lg shadow-xl overflow-hidden p-2">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2">
+                          Sub-topics
+                        </p>
+                        {topics.map((topic) => (
+                          <label
+                            key={topic.id}
+                            className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedTopics.includes(topic.id)}
+                              onChange={() => handleTopicToggle(topic.id)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">
+                              {topic.name}
+                            </span>
+                          </label>
+                        ))}
+                        <button
+                          onClick={() => {
+                            setFilterOpen(false);
+                            generateQuestion();
+                          }}
+                          className="w-full mt-2 bg-blue-600 text-white text-sm py-2 rounded hover:bg-blue-700 transition"
+                        >
+                          Apply & Next Question
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Content Area */}
+              <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+                {/* Question Header */}
+                <div
+                  className={`px-6 py-4 border-b bg-${activeTopicObj.color}-600 text-white flex justify-between items-center`}
+                >
+                  <h2 className="text-xl font-bold">
+                    Topic {activeTopicObj.id}: {activeTopicObj.name}
+                  </h2>
+                </div>
+
+                {/* Interactive Region */}
+                <div className="p-6 min-h-[400px]">
+                  {currentTopic === "A" && (
+                    <BuildBSTInteractive
+                      key={`A-${questionKey}`}
+                      onComplete={handleSuccess}
+                      onNext={generateQuestion}
+                    />
+                  )}
+                  {currentTopic === "B" && (
+                    <SearchBSTInteractive
+                      key={`B-${questionKey}`}
+                      onComplete={handleSuccess}
+                      onNext={generateQuestion}
+                    />
+                  )}
+                  {currentTopic === "C" && (
+                    <ArrayViewInteractive
+                      key={`C-${questionKey}`}
+                      onComplete={handleSuccess}
+                      onNext={generateQuestion}
+                    />
+                  )}
+                  {currentTopic === "D" && (
+                    <DefinitionsInteractive
+                      key={`D-${questionKey}`}
+                      onComplete={handleSuccess}
+                      onNext={generateQuestion}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={generateQuestion}
+                  className="bg-gray-800 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-gray-900 transition-transform hover:scale-105 active:scale-95"
+                >
+                  Generate Random Question
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>

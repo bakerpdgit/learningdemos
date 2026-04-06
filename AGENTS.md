@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI agents when working with code in this repository.
 
 ## What this repo is
 
@@ -19,7 +19,7 @@ Open any `.html` file directly in a browser, or use VS Code's Live Server extens
 
 ## Architecture
 
-- **No build tooling.** Every page is a single `.html` file. Styles and scripts are inlined; no external local files are referenced between pages.
+- **No build tooling.** Every page is a single `.html` file. Styles and scripts are inlined; no external local files are referenced between pages. Pages which use REACT must do so within a script of type "text/babel" and the required js libraries so that they can run as standalone HTML pages without build required.
 - **External CDNs only.** Some demos use CDN-hosted libraries:
   - Tailwind CSS (`cdn.tailwindcss.com`) — used in some quiz pages
   - KaTeX (`cdn.jsdelivr.net/npm/katex`) — used for maths rendering
