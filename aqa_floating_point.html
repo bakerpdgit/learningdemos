@@ -93,6 +93,67 @@
     .score-item { font-size: 0.88rem; color: var(--muted); }
     .score-item strong { color: #1a1a2e; font-size: 1rem; }
 
+    /* ── Calculator ── */
+    .calc-card {
+      background: #1f2937;
+      color: #e2e8f0;
+    }
+    .calc-title {
+      color: #34d399;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    .calc-help {
+      color: #94a3b8;
+      font-size: 0.8rem;
+      margin-bottom: 0.7rem;
+    }
+    .calc-help code {
+      background: #0f172a;
+      border-radius: 4px;
+      padding: 0.1rem 0.3rem;
+      color: #d1fae5;
+      font-family: Consolas, monospace;
+    }
+    .calc-input {
+      width: 100%;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 0.55rem 0.65rem;
+      font-family: Consolas, monospace;
+      margin-bottom: 0.6rem;
+    }
+    .calc-input:focus {
+      outline: none;
+      border-color: #34d399;
+      box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
+    }
+    .calc-row { display: flex; gap: 0.5rem; }
+    .calc-btn {
+      flex: 1;
+      border: none;
+      border-radius: 8px;
+      background: #059669;
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0.5rem 0.65rem;
+    }
+    .calc-btn:hover { filter: brightness(1.08); }
+    .calc-out {
+      min-width: 140px;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #6ee7b7;
+      font-family: Consolas, monospace;
+      text-align: right;
+      padding: 0.5rem 0.65rem;
+    }
+
     @media (max-width: 520px) {
       .bit-cell { width: 34px; height: 38px; font-size: 1rem; }
       .row-label { min-width: 80px; font-size: 0.72rem; }
@@ -160,6 +221,16 @@
 
     <div class="fb" id="fb"></div>
     <div class="sol" id="solBox"></div>
+  </div>
+
+  <div class="card calc-card">
+    <div class="calc-title">Scientific Calculator</div>
+    <p class="calc-help">Try <code>acos(0.5) * 180 / PI</code> or <code>2^5 + sqrt(49)</code>.</p>
+    <input type="text" id="calcExpr" class="calc-input" placeholder="Enter expression..." />
+    <div class="calc-row">
+      <button class="calc-btn" id="calcBtn">=</button>
+      <div class="calc-out" id="calcOut">0.0</div>
+    </div>
   </div>
 </main>
 
@@ -1066,6 +1137,38 @@ function showSolution() {
 
 function arrEq(a, b) { return a.length === b.length && a.every((v, i) => v === b[i]); }
 
+function calcEval() {
+  const exprInput = document.getElementById('calcExpr');
+  const out = document.getElementById('calcOut');
+  const raw = exprInput.value.trim();
+  if (!raw) {
+    out.textContent = '0.0';
+    return;
+  }
+  try {
+    const replacements = {
+      asin: 'Math.asin',
+      acos: 'Math.acos',
+      atan: 'Math.atan',
+      sin: 'Math.sin',
+      cos: 'Math.cos',
+      tan: 'Math.tan',
+      sqrt: 'Math.sqrt',
+      pow: 'Math.pow',
+      abs: 'Math.abs',
+      pi: 'Math.PI',
+    };
+    let parsed = raw
+      .replace(/\^/g, '**')
+      .toLowerCase()
+      .replace(/\b([a-z]+)\b/g, m => replacements[m] || m);
+    const value = Function(`"use strict"; return (${parsed});`)();
+    out.textContent = Number.isFinite(value) ? Number(value.toFixed(6)).toString() : 'Error';
+  } catch (_) {
+    out.textContent = 'Invalid Expr';
+  }
+}
+
 // ══════════════════════════════════════════════════════
 //  KEYBOARD SHORTCUT: Enter = submit, N = new
 // ══════════════════════════════════════════════════════
@@ -1073,6 +1176,15 @@ document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   if (e.key === 'Enter') handleSubmit();
   else if (e.key === 'n' || e.key === 'N') newQuestion();
+});
+
+document.getElementById('calcBtn').addEventListener('click', calcEval);
+document.getElementById('calcExpr').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.stopPropagation();
+    calcEval();
+  }
 });
 
 // ── Start ──
