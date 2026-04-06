@@ -754,7 +754,8 @@
           b = broadcastInt(base, p);
         const low = intToIp(n + 1),
           high = intToIp(b - 1);
-        if (Math.random() < 0.5) {
+        const mode = pick(["lowest", "highest", "hostId"]);
+        if (mode === "lowest") {
           return {
             topic: 11,
             type: "ip",
@@ -763,12 +764,25 @@
             explain: `Lowest host is network + 1.`,
           };
         }
+        if (mode === "highest") {
+          return {
+            topic: 11,
+            type: "ip",
+            prompt: `Given network ID ${intToIp(n)}/${p}, state the highest assignable host address.`,
+            answer: high,
+            explain: `Highest host is broadcast - 1.`,
+          };
+        }
+        const hostIp = intToIp(rand(n + 1, b - 1));
+        const hostId = intToIp(
+          ipToInt(hostIp) & (~((0xffffffff << (32 - p)) >>> 0) >>> 0),
+        );
         return {
           topic: 11,
           type: "ip",
-          prompt: `Given network ID ${intToIp(n)}/${p}, state the highest assignable host address.`,
-          answer: high,
-          explain: `Highest host is broadcast - 1.`,
+          prompt: `Given IP address ${hostIp}/${p}, state the host ID (host portion) after masking off the network bits.`,
+          answer: hostId,
+          explain: `Host ID = IP AND host mask. For /${p}, host mask is ${intToIp((2 ** (32 - p) - 1) >>> 0)}, so host ID is ${hostId}.`,
         };
       }
 
