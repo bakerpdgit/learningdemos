@@ -1,0 +1,1952 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: Hardware Operations</title>
+
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f8fafc;
+      }
+
+      /* Smooth SVG Animations */
+      .fade-in {
+        animation: fadeIn 0.8s ease-in-out forwards;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .draw-line {
+        stroke-dasharray: 1000;
+        stroke-dashoffset: 1000;
+        animation: drawLine 1s ease-out forwards;
+      }
+      @keyframes drawLine {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      .spin-slow {
+        animation: spin 4s linear infinite;
+      }
+      @keyframes spin {
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* RFID Animations */
+      @keyframes waveRight {
+        0% {
+          transform: translateX(0) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(200px) scale(1.5);
+          opacity: 0;
+        }
+      }
+      .wave-right {
+        animation: waveRight 2s infinite linear;
+      }
+
+      @keyframes waveLeft {
+        0% {
+          transform: translateX(0) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(-200px) scale(1.5);
+          opacity: 0;
+        }
+      }
+      .wave-left {
+        animation: waveLeft 2s infinite linear;
+      }
+
+      @keyframes pulseGlow {
+        0% {
+          opacity: 0.2;
+          transform: scale(0.9);
+        }
+        50% {
+          opacity: 0.8;
+          transform: scale(1.2);
+        }
+        100% {
+          opacity: 0.2;
+          transform: scale(0.9);
+        }
+      }
+      .pulse-glow {
+        animation: pulseGlow 1.5s infinite ease-in-out;
+      }
+
+      /* Camera Animations */
+      @keyframes slideDown {
+        from {
+          transform: translateY(-120px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      .slide-down {
+        animation: slideDown 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+
+      /* Laser Printer Toner Animation */
+      @keyframes pourToner {
+        0% {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        100% {
+          transform: translateY(35px);
+          opacity: 0;
+        }
+      }
+      .toner-pour {
+        animation: pourToner 0.6s linear infinite;
+      }
+
+      @keyframes slideRight {
+        from {
+          transform: translateX(-50px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      .slide-right {
+        animation: slideRight 0.8s ease-out forwards;
+      }
+
+      .highlight-glow {
+        filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
+      }
+
+      /* Custom scrollbar for dropdown */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* Radio Button Custom Styling */
+      .mcq-option input:checked + div {
+        background-color: #eff6ff;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- DATA DEFINITIONS (MCQ FORMAT) ---
+
+      const TOPICS = [
+        { id: "barcode", name: "Barcode Reader" },
+        { id: "camera", name: "Digital Camera" },
+        { id: "rfid", name: "RFID" },
+        { id: "laser", name: "Laser Printer" },
+        { id: "comparison", name: "Comparisons" },
+      ];
+
+      const SIMULATIONS = {
+        barcode: {
+          title: "Barcode Reader Operation",
+          stages: [
+            {
+              desc: "A laser or LED light source is directed at the printed barcode.",
+              question:
+                "What light sources are typically used to illuminate the barcode?",
+              options: [
+                "Laser or LED",
+                "Infrared or Ultraviolet",
+                "Halogen or Fluorescent",
+                "Microwave or Radio waves",
+              ],
+              answer: "Laser or LED",
+            },
+            {
+              desc: "Light is reflected back; white bands reflect more light, while black bands absorb light and reflect less.",
+              question:
+                "Which part of the barcode reflects the most light back to the scanner?",
+              options: [
+                "The black bands",
+                "The white bands",
+                "The human-readable numbers",
+                "The red laser itself",
+              ],
+              answer: "The white bands",
+            },
+            {
+              desc: "A light sensor (photodiode or CCD) measures the intensity of the reflected light and converts it into an electrical current.",
+              question:
+                "What specific hardware component measures the intensity of the reflected light?",
+              options: [
+                "Analogue-to-Digital Converter",
+                "Microprocessor",
+                "Light sensor (Photodiode/CCD)",
+                "Laser diode",
+              ],
+              answer: "Light sensor (Photodiode/CCD)",
+            },
+            {
+              desc: "An Analogue-to-Digital Converter (ADC) translates the continuous electrical signal into discrete binary data.",
+              question:
+                "If the sensor receives high light intensity (from a white band), what binary value does the ADC convert this to?",
+              options: ["0", "1", "2", "A variable decimal value"],
+              answer: "1",
+            },
+          ],
+        },
+        camera: {
+          title: "Digital Camera Operation",
+          stages: [
+            {
+              desc: "Light enters through the lens and is focused onto a 2D sensor grid.",
+              question:
+                "What technologies are typically used for the microscopic sensor cells in the 2D grid?",
+              options: [
+                "OLED or LCD",
+                "CCD or CMOS",
+                "HDD or SSD",
+                "ROM or RAM",
+              ],
+              answer: "CCD or CMOS",
+            },
+            {
+              desc: "Each microscopic sensor cell represents a single pixel and measures light intensity. A Bayer filter is applied to separate RGB light.",
+              question: "What is the purpose of the Bayer filter?",
+              options: [
+                "To focus the image sharply",
+                "To compress the image file size",
+                "To separate red, green, and blue light",
+                "To block ultraviolet interference",
+              ],
+              answer: "To separate red, green, and blue light",
+            },
+            {
+              desc: "Each sensor produces an analogue electrical voltage/current directly proportional to the light intensity.",
+              question:
+                "What does the magnitude of the analogue electrical voltage represent?",
+              options: [
+                "The focal length",
+                "The light intensity/brightness",
+                "The shutter speed",
+                "The number of megapixels",
+              ],
+              answer: "The light intensity/brightness",
+            },
+            {
+              desc: "An ADC converts this analogue voltage into digital binary data. High intensity is 1, low is 0.",
+              question:
+                "How are the final digital pixel values recorded and stored in memory?",
+              options: [
+                "Sequentially as a bitmap",
+                "As vector graphics equations",
+                "As analogue sound waves",
+                "As a single continuous text string",
+              ],
+              answer: "Sequentially as a bitmap",
+            },
+          ],
+        },
+        rfid: {
+          title: "RFID System Operation",
+          stages: [
+            {
+              desc: "The RFID reader continuously transmits a radio frequency signal.",
+              question:
+                "What is continuously transmitted by the RFID reader to detect tags?",
+              options: [
+                "Visible red laser light",
+                "A radio frequency signal / radio waves",
+                "Ultrasonic sound waves",
+                "Static electricity",
+              ],
+              answer: "A radio frequency signal / radio waves",
+            },
+            {
+              desc: "When in range, the reader's radio waves induce an electrical current in a passive RFID tag's antenna, energising it.",
+              question:
+                "How does a passive RFID tag get the power it needs to operate?",
+              options: [
+                "From a small internal lithium battery",
+                "From solar panels on the tag",
+                "The reader's radio waves induce a current in the tag's antenna",
+                "Through physical contact with the reader's metal pins",
+              ],
+              answer:
+                "The reader's radio waves induce a current in the tag's antenna",
+            },
+            {
+              desc: "The activated tag transmits its stored digital data back to the reader via radio waves.",
+              question:
+                "What two physical components make up a basic passive RFID tag?",
+              options: [
+                "A battery and an LED",
+                "A magnetic stripe and a microchip",
+                "An antenna and an integrated circuit chip",
+                "A light sensor and a speaker",
+              ],
+              answer: "An antenna and an integrated circuit chip",
+            },
+            {
+              desc: "The RFID reader receives the radio wave and converts the signal back into binary data.",
+              question:
+                "What form of data does the reader convert the received signal into for the computer to process?",
+              options: [
+                "Analogue voltages",
+                "Binary data",
+                "Human-readable text",
+                "Hexadecimal pixels",
+              ],
+              answer: "Binary data",
+            },
+          ],
+        },
+        laser: {
+          title: "Laser Printer Operation",
+          stages: [
+            {
+              desc: "The printer's processor creates a 2D digital bitmap in memory. A uniform negative electrostatic charge is applied to the photosensitive print drum.",
+              question:
+                "What type of charge is initially applied to the entire photosensitive print drum?",
+              options: [
+                "A uniform negative electrostatic charge",
+                "A uniform positive magnetic charge",
+                "A neutral grounding charge",
+                "An alternating positive and negative charge",
+              ],
+              answer: "A uniform negative electrostatic charge",
+            },
+            {
+              desc: "A moving mirror directs a laser beam across the rotating drum. The laser neutralises the negative charge wherever it strikes.",
+              question:
+                "What effect does the laser beam have when it strikes the charged drum?",
+              options: [
+                "It adds more negative charge to the area",
+                "It physically melts the drum coating",
+                "It neutralises (discharges) the negative charge in that area",
+                "It applies toner directly to the drum",
+              ],
+              answer:
+                "It neutralises (discharges) the negative charge in that area",
+            },
+            {
+              desc: "Negatively charged toner powder is attracted to and sticks only to the neutralised areas of the drum. It is then transferred to paper.",
+              question:
+                "Why does the toner powder only stick to the areas struck by the laser?",
+              options: [
+                "Toner is positively charged and attracted to the whole drum",
+                "Toner is wet ink and sticks like glue",
+                "Toner is negatively charged, so it is repelled by the negative drum but attracted to neutralised areas",
+                "The laser makes the drum magnetic and toner contains iron",
+              ],
+              answer:
+                "Toner is negatively charged, so it is repelled by the negative drum but attracted to neutralised areas",
+            },
+            {
+              desc: "The paper is given a strong positive charge as it passes under the drum. The negatively charged toner is attracted off the drum and onto the paper.",
+              question:
+                "Why does the negatively charged toner transfer from the drum onto the paper?",
+              options: [
+                "The paper is given a strong positive charge",
+                "The paper is coated with adhesive",
+                "Gravity pulls the toner down",
+                "The drum becomes positively charged",
+              ],
+              answer: "The paper is given a strong positive charge",
+            },
+            {
+              desc: "A fuser unit applies extreme heat and pressure to permanently bond the toner to the paper.",
+              question:
+                "What two physical forces does the fuser unit apply to bond the toner to the paper?",
+              options: [
+                "Cold air and a vacuum",
+                "Heat and pressure",
+                "Static electricity and friction",
+                "Light and magnetism",
+              ],
+              answer: "Heat and pressure",
+            },
+          ],
+        },
+      };
+
+      const COMPARISONS = [
+        {
+          scenario:
+            "A major supermarket chain needs to track inventory of 50,000 low-value cans of baked beans. They are deciding between using Barcodes or RFID tags on each can.",
+          question:
+            "Which of the following is the most significant advantage of using Barcode Readers over RFID for this specific scenario?",
+          options: [
+            "Barcodes can be read from much further away.",
+            "Barcodes are exceptionally cheap to print, maintaining profit margins on low-value items.",
+            "Barcodes do not require a direct line-of-sight to be scanned.",
+            "Barcodes can scan an entire pallet of beans simultaneously.",
+          ],
+          answer:
+            "Barcodes are exceptionally cheap to print, maintaining profit margins on low-value items.",
+        },
+        {
+          scenario:
+            "A logistics company is processing pallets wrapped tightly in opaque black plastic wrap. Each pallet contains hundreds of items.",
+          question:
+            "Why is an RFID system significantly superior to a Barcode system in this scenario?",
+          options: [
+            "RFID requires no line-of-sight and can read multiple tags simultaneously through the opaque plastic.",
+            "RFID tags are much cheaper to produce and attach to hundreds of items.",
+            "RFID systems are completely immune to electromagnetic interference in warehouses.",
+            "RFID tags include a human-readable fallback code if the scanner breaks.",
+          ],
+          answer:
+            "RFID requires no line-of-sight and can read multiple tags simultaneously through the opaque plastic.",
+        },
+        {
+          scenario:
+            "Organisers of a city marathon need to track thousands of runners crossing the finish line simultaneously without requiring them to stop.",
+          question:
+            "Why would a Barcode system be entirely unsuitable for this scenario compared to RFID?",
+          options: [
+            "Barcodes produce too much electronic waste.",
+            "Barcodes require a direct line of sight and often require the subject to stop and align closely with the scanner.",
+            "RFID systems are cheaper to implement for one-off sporting events.",
+            "Barcode scanners cannot be used outdoors due to sunlight.",
+          ],
+          answer:
+            "Barcodes require a direct line of sight and often require the subject to stop and align closely with the scanner.",
+        },
+        {
+          scenario:
+            "A secure facility uses automated number plate recognition (Digital Cameras) to grant vehicle access, rather than giving employees RFID swipe cards.",
+          question:
+            "What is the primary physical security advantage of using the Digital Camera system over physical RFID cards here?",
+          options: [
+            "Cameras are immune to weather conditions.",
+            "Number plates are cheaper to produce than RFID cards.",
+            "It eliminates the risk of physical access tags being lost, stolen, or shared by employees.",
+            "Cameras use less electricity than RFID readers.",
+          ],
+          answer:
+            "It eliminates the risk of physical access tags being lost, stolen, or shared by employees.",
+        },
+      ];
+
+      // --- HELPER COMPONENTS ---
+
+      const CheckboxList = ({ topics, selectedTopics, onChange }) => {
+        const [isOpen, setIsOpen] = useState(false);
+
+        const handleToggle = (id) => {
+          if (selectedTopics.includes(id)) {
+            if (selectedTopics.length > 1) {
+              onChange(selectedTopics.filter((t) => t !== id));
+            }
+          } else {
+            onChange([...selectedTopics, id]);
+          }
+        };
+
+        return (
+          <div className="relative">
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="bg-white border border-gray-300 px-4 py-2 rounded-lg shadow-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              Topics Selected: {selectedTopics.length}
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M19 9l-7 7-7-7"
+                ></path>
+              </svg>
+            </button>
+
+            {isOpen && (
+              <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-50 p-3">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  Select Sub-topics
+                </h3>
+                {topics.map((topic) => (
+                  <label
+                    key={topic.id}
+                    className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      checked={selectedTopics.includes(topic.id)}
+                      onChange={() => handleToggle(topic.id)}
+                    />
+                    <span className="ml-3 text-sm text-gray-700">
+                      {topic.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- SIMULATION VISUAL COMPONENTS ---
+
+      // 1. Barcode SVG Restructured
+      const BarcodeVis = ({ stage }) => {
+        return (
+          <svg
+            viewBox="0 0 600 350"
+            className="w-full h-full bg-white rounded-lg"
+          >
+            {/* Background Desk/Environment */}
+            <rect x="0" y="250" width="600" height="100" fill="#f1f5f9" />
+            <line
+              x1="0"
+              y1="250"
+              x2="600"
+              y2="250"
+              stroke="#cbd5e1"
+              strokeWidth="2"
+            />
+
+            {/* The Product with Barcode */}
+            <g transform="translate(400, 100)">
+              <path
+                d="M 0 50 L 20 0 L 100 0 L 100 150 L 0 150 Z"
+                fill="#e2e8f0"
+                stroke="#94a3b8"
+                strokeWidth="2"
+              />
+              <rect
+                x="10"
+                y="40"
+                width="80"
+                height="90"
+                fill="white"
+                stroke="#cbd5e1"
+              />
+              {/* Barcode Lines */}
+              <g transform="translate(15, 50)">
+                <rect x="0" y="0" width="6" height="60" fill="black" />
+                <rect x="10" y="0" width="3" height="60" fill="black" />
+                <rect x="18" y="0" width="8" height="60" fill="black" />
+                <rect x="30" y="0" width="12" height="60" fill="black" />
+                <rect x="45" y="0" width="4" height="60" fill="black" />
+                <rect x="55" y="0" width="10" height="60" fill="black" />
+              </g>
+            </g>
+
+            {/* Laser Emitting (Stage >= 0, visible >= 1) */}
+            {stage >= 0 && (
+              <path
+                d="M 170 140 L 410 140"
+                stroke="#ef4444"
+                strokeWidth="4"
+                className={stage >= 0 ? "draw-line" : ""}
+                style={{
+                  opacity: stage >= 0 ? 1 : 0,
+                  filter: "drop-shadow(0 0 4px #ef4444)",
+                }}
+              />
+            )}
+
+            {/* Reflection (Stage >= 1) */}
+            {stage >= 1 && (
+              <g>
+                <path
+                  d="M 410 140 L 170 160"
+                  stroke="#fcd34d"
+                  strokeWidth="2"
+                  strokeDasharray="6,4"
+                  className="draw-line"
+                />
+                <path
+                  d="M 430 140 L 170 170"
+                  stroke="#fcd34d"
+                  strokeWidth="3"
+                  strokeDasharray="6,4"
+                  className="draw-line"
+                />
+              </g>
+            )}
+
+            {/* Scanner Internal Hardware View */}
+            <g transform="translate(20, 50)">
+              {/* Casing */}
+              <path
+                d="M 0 0 L 150 0 L 150 200 L 0 200 Z"
+                fill="#334155"
+                rx="10"
+              />
+              <rect x="150" y="60" width="10" height="120" fill="#94a3b8" />{" "}
+              {/* Window */}
+              <text
+                x="75"
+                y="30"
+                textAnchor="middle"
+                fill="#94a3b8"
+                fontSize="14"
+                fontWeight="bold"
+              >
+                Scanner Internals
+              </text>
+              {/* Laser/LED Source */}
+              <rect
+                x="20"
+                y="70"
+                width="40"
+                height="30"
+                fill="#1e293b"
+                rx="4"
+              />
+              <circle
+                cx="60"
+                cy="85"
+                r="8"
+                fill={stage >= 0 ? "#ef4444" : "#475569"}
+                className={stage === 0 ? "highlight-glow" : ""}
+              />
+              <text
+                x="40"
+                y="115"
+                textAnchor="middle"
+                fill="white"
+                fontSize="10"
+              >
+                Laser/LED
+              </text>
+              {/* Mirror/Lens */}
+              <polygon points="100,70 110,85 100,100" fill="#cbd5e1" />
+              {/* Sensor (Stage >= 2 highlights) */}
+              <rect
+                x="60"
+                y="130"
+                width="50"
+                height="25"
+                fill="#475569"
+                rx="3"
+                stroke={stage === 2 ? "#fcd34d" : "none"}
+                strokeWidth="2"
+              />
+              {stage >= 1 && (
+                <circle
+                  cx="110"
+                  cy="142"
+                  r="6"
+                  fill="#fcd34d"
+                  className="fade-in"
+                />
+              )}
+              <text
+                x="85"
+                y="146"
+                textAnchor="middle"
+                fill="white"
+                fontSize="10"
+                fontWeight="bold"
+              >
+                CCD Sensor
+              </text>
+              <text
+                x="85"
+                y="168"
+                textAnchor="middle"
+                fill="#94a3b8"
+                fontSize="9"
+              >
+                Analogue Signal
+              </text>
+              {/* Wire from Sensor to ADC */}
+              {stage >= 2 && (
+                <path
+                  d="M 60 142 L 30 142 L 30 170"
+                  stroke="#eab308"
+                  strokeWidth="2"
+                  fill="none"
+                  className="draw-line"
+                />
+              )}
+              {/* ADC Chip (Stage >= 3 highlights) */}
+              <rect
+                x="15"
+                y="170"
+                width="40"
+                height="20"
+                fill="#10b981"
+                rx="2"
+                className={
+                  stage === 3
+                    ? "highlight-glow fade-in"
+                    : stage < 2
+                      ? "opacity-50"
+                      : ""
+                }
+              />
+              <text
+                x="35"
+                y="183"
+                textAnchor="middle"
+                fill="white"
+                fontSize="10"
+                fontWeight="bold"
+              >
+                ADC
+              </text>
+            </g>
+
+            {/* Binary Output Pipeline */}
+            {stage >= 3 && (
+              <g transform="translate(20, 280)" className="fade-in">
+                <rect
+                  x="0"
+                  y="0"
+                  width="150"
+                  height="40"
+                  fill="#0f172a"
+                  rx="5"
+                />
+                <text
+                  x="75"
+                  y="18"
+                  textAnchor="middle"
+                  fill="#64748b"
+                  fontSize="10"
+                >
+                  Digital Output
+                </text>
+                <text
+                  x="75"
+                  y="32"
+                  textAnchor="middle"
+                  fill="#22c55e"
+                  fontSize="14"
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                >
+                  1 0 1 1 0 0 1
+                </text>
+                <path
+                  d="M 75 250 L 75 280"
+                  stroke="#10b981"
+                  strokeWidth="3"
+                  strokeDasharray="4,4"
+                  className="draw-line"
+                />
+              </g>
+            )}
+          </svg>
+        );
+      };
+
+      // 2. Camera SVG Reimagined (Animated Grid, Filters, and ADC mapping)
+      const CameraVis = ({ stage }) => {
+        return (
+          <svg
+            viewBox="0 0 600 350"
+            className="w-full h-full bg-white rounded-lg"
+          >
+            {/* 1. Lens and Incoming Light */}
+            <path
+              d="M 50 100 Q 80 175 50 250 Q 20 175 50 100"
+              fill="#bae6fd"
+              stroke="#38bdf8"
+              strokeWidth="4"
+              className={stage === 0 ? "highlight-glow" : ""}
+            />
+            <text
+              x="45"
+              y="275"
+              textAnchor="middle"
+              fill="#64748b"
+              fontSize="12"
+              fontWeight="bold"
+            >
+              Lens
+            </text>
+
+            {/* Light Rays hitting grid */}
+            {stage >= 0 && (
+              <g
+                className="draw-line"
+                stroke="#fcd34d"
+                strokeWidth="3"
+                fill="none"
+              >
+                <line x1="70" y1="130" x2="165" y2="130" />
+                <line x1="75" y1="175" x2="165" y2="175" />
+                <line x1="70" y1="220" x2="165" y2="220" />
+              </g>
+            )}
+
+            {/* 2. Sensor Grid Area */}
+            <g transform="translate(170, 95)">
+              <rect
+                x="-10"
+                y="-10"
+                width="140"
+                height="140"
+                fill="#334155"
+                rx="6"
+              />
+              <text
+                x="60"
+                y="-20"
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="14"
+                fontWeight="bold"
+              >
+                2D Sensor Grid
+              </text>
+
+              {/* The Sensor Cells (4x4 Grid) */}
+              {[0, 1, 2, 3].map((r) =>
+                [0, 1, 2, 3].map((c) => {
+                  const isBayer = stage >= 1;
+                  const isRed = r % 2 === 0 && c % 2 === 0;
+                  const isBlue = r % 2 === 1 && c % 2 === 1;
+                  const color = isRed
+                    ? "#ef4444"
+                    : isBlue
+                      ? "#3b82f6"
+                      : "#22c55e";
+                  return (
+                    <rect
+                      key={`${r}-${c}`}
+                      x={c * 30}
+                      y={r * 30}
+                      width="30"
+                      height="30"
+                      fill={isBayer ? color : "#cbd5e1"}
+                      stroke="#1e293b"
+                      strokeWidth="2"
+                      style={{ transition: "fill 0.8s ease-in-out" }}
+                    />
+                  );
+                }),
+              )}
+            </g>
+
+            {/* Animated Bayer Filter dropping in */}
+            {stage >= 1 && (
+              <g transform="translate(170, 95)" className="slide-down">
+                {/* Draw a grid of white borders to represent the filter sliding in and seating itself */}
+                <rect
+                  x="0"
+                  y="0"
+                  width="120"
+                  height="120"
+                  fill="none"
+                  stroke="#f8fafc"
+                  strokeWidth="4"
+                  className="highlight-glow"
+                />
+                <line
+                  x1="60"
+                  y1="0"
+                  x2="60"
+                  y2="120"
+                  stroke="#f8fafc"
+                  strokeWidth="2"
+                  opacity="0.6"
+                />
+                <line
+                  x1="0"
+                  y1="60"
+                  x2="120"
+                  y2="60"
+                  stroke="#f8fafc"
+                  strokeWidth="2"
+                  opacity="0.6"
+                />
+                <text
+                  x="60"
+                  y="145"
+                  textAnchor="middle"
+                  fill="#0f172a"
+                  fontSize="12"
+                  fontWeight="bold"
+                >
+                  Bayer RGB Filter applied
+                </text>
+              </g>
+            )}
+
+            {/* 3. Analogue Voltages Generating */}
+            {stage >= 2 && (
+              <g transform="translate(320, 120)" className="fade-in">
+                <line
+                  x1="0"
+                  y1="35"
+                  x2="40"
+                  y2="35"
+                  stroke="#94a3b8"
+                  strokeWidth="2"
+                  strokeDasharray="4"
+                />
+                <line
+                  x1="0"
+                  y1="55"
+                  x2="40"
+                  y2="55"
+                  stroke="#94a3b8"
+                  strokeWidth="2"
+                  strokeDasharray="4"
+                />
+                {/* Sine wave representations */}
+                <path
+                  d="M 40 35 Q 50 10 60 35 T 80 35 T 100 35"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="3"
+                  className="draw-line"
+                />
+                <path
+                  d="M 40 55 Q 50 80 60 55 T 80 55 T 100 55"
+                  fill="none"
+                  stroke="#22c55e"
+                  strokeWidth="3"
+                  className="draw-line"
+                  style={{ animationDelay: "0.2s" }}
+                />
+
+                <text
+                  x="70"
+                  y="90"
+                  textAnchor="middle"
+                  fill="#eab308"
+                  fontSize="12"
+                  fontWeight="bold"
+                >
+                  Analogue Voltages
+                </text>
+              </g>
+            )}
+
+            {/* 4. ADC & Digital Data Storage */}
+            <g
+              transform="translate(430, 95)"
+              className={stage >= 3 ? "highlight-glow fade-in" : "opacity-30"}
+            >
+              <rect x="0" y="0" width="40" height="120" fill="#10b981" rx="4" />
+              <text
+                x="20"
+                y="65"
+                textAnchor="middle"
+                fill="white"
+                fontSize="16"
+                fontWeight="bold"
+                transform="rotate(-90 20 65)"
+              >
+                ADC
+              </text>
+            </g>
+
+            {stage >= 3 && (
+              <g transform="translate(485, 105)" className="fade-in">
+                <path d="M -15 50 L 0 50" stroke="#10b981" strokeWidth="3" />
+                <polygon points="0,45 8,50 0,55" fill="#10b981" />
+
+                <rect
+                  x="10"
+                  y="0"
+                  width="70"
+                  height="100"
+                  fill="#0f172a"
+                  rx="6"
+                />
+                <text
+                  x="45"
+                  y="25"
+                  textAnchor="middle"
+                  fill="#22c55e"
+                  fontSize="14"
+                  fontFamily="monospace"
+                >
+                  1011
+                </text>
+                <text
+                  x="45"
+                  y="45"
+                  textAnchor="middle"
+                  fill="#22c55e"
+                  fontSize="14"
+                  fontFamily="monospace"
+                >
+                  0100
+                </text>
+                <text
+                  x="45"
+                  y="65"
+                  textAnchor="middle"
+                  fill="#22c55e"
+                  fontSize="14"
+                  fontFamily="monospace"
+                >
+                  1110
+                </text>
+                <text
+                  x="45"
+                  y="85"
+                  textAnchor="middle"
+                  fill="#22c55e"
+                  fontSize="14"
+                  fontFamily="monospace"
+                >
+                  0011
+                </text>
+                <text
+                  x="45"
+                  y="120"
+                  textAnchor="middle"
+                  fill="#64748b"
+                  fontSize="12"
+                  fontWeight="bold"
+                >
+                  Bitmap Memory
+                </text>
+              </g>
+            )}
+          </svg>
+        );
+      };
+
+      // 3. RFID SVG Restructured (Fixed wave directions and IC chip wording)
+      const RFIDVis = ({ stage }) => {
+        return (
+          <svg
+            viewBox="0 0 600 350"
+            className="w-full h-full bg-white rounded-lg"
+          >
+            {/* Background Grid */}
+            <pattern
+              id="grid"
+              width="40"
+              height="40"
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d="M 40 0 L 0 0 0 40"
+                fill="none"
+                stroke="#f1f5f9"
+                strokeWidth="1"
+              />
+            </pattern>
+            <rect width="600" height="350" fill="url(#grid)" />
+
+            {/* RFID Reader (Left Side) */}
+            <g transform="translate(50, 80)">
+              <rect x="0" y="0" width="80" height="140" fill="#334155" rx="8" />
+              <rect
+                x="10"
+                y="20"
+                width="60"
+                height="100"
+                fill="#1e293b"
+                rx="4"
+              />
+              <circle cx="40" cy="70" r="20" fill="#475569" />
+              <circle
+                cx="40"
+                cy="70"
+                r="10"
+                fill="#cbd5e1"
+                className={stage === 0 ? "highlight-glow" : ""}
+              />
+              <text
+                x="40"
+                y="160"
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="14"
+                fontWeight="bold"
+              >
+                RFID Reader
+              </text>
+            </g>
+
+            {/* Outbound RF Waves (Left to Right: Reader -> Tag) */}
+            {stage >= 0 && (
+              <g
+                transform="translate(130, 150)"
+                stroke="#3b82f6"
+                strokeWidth="4"
+                fill="none"
+              >
+                <path d="M 0 -30 Q 30 0 0 30" className="wave-right" />
+                <path
+                  d="M 0 -50 Q 50 0 0 50"
+                  className="wave-right"
+                  style={{ animationDelay: "0.6s" }}
+                />
+                <path
+                  d="M 0 -70 Q 70 0 0 70"
+                  className="wave-right"
+                  style={{ animationDelay: "1.2s" }}
+                />
+              </g>
+            )}
+
+            {/* Passive Tag (Right Side) */}
+            <g transform="translate(380, 110)">
+              <rect
+                x="0"
+                y="0"
+                width="150"
+                height="80"
+                fill="white"
+                stroke="#94a3b8"
+                strokeWidth="2"
+                rx="4"
+              />
+
+              {/* Antenna Loop */}
+              <path
+                d="M 10 10 L 140 10 L 140 70 L 10 70 L 10 20 L 130 20 L 130 60 L 20 60 L 20 30 L 120 30 L 120 50 L 30 50 L 30 40 L 70 40"
+                fill="none"
+                stroke={stage >= 1 ? "#d97706" : "#cbd5e1"}
+                strokeWidth="2"
+                className={stage === 1 ? "highlight-glow" : ""}
+                style={{ transition: "stroke 0.5s" }}
+              />
+
+              {/* Integrated Circuit (IC) Chip */}
+              <rect
+                x="75"
+                y="35"
+                width="20"
+                height="20"
+                fill={stage >= 2 ? "#10b981" : "#475569"}
+                rx="2"
+                className={stage === 2 ? "highlight-glow" : ""}
+                style={{ transition: "fill 0.5s" }}
+              />
+
+              {/* Energised Pulse (Radiating from the chip center) */}
+              {stage >= 1 && (
+                <circle
+                  cx="85"
+                  cy="45"
+                  r="30"
+                  fill="#fef08a"
+                  style={{ transformOrigin: "85px 45px" }}
+                  className="pulse-glow"
+                />
+              )}
+
+              <text
+                x="85"
+                y="100"
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="14"
+                fontWeight="bold"
+              >
+                Passive Tag
+              </text>
+              <text
+                x="85"
+                y="115"
+                textAnchor="middle"
+                fill="#94a3b8"
+                fontSize="10"
+              >
+                (Antenna & IC Chip)
+              </text>
+            </g>
+
+            {/* Return Data Waves (Right to Left: Tag -> Reader) */}
+            {stage >= 2 && (
+              <g
+                transform="translate(380, 150)"
+                stroke="#10b981"
+                strokeWidth="4"
+                strokeDasharray="8,4"
+                fill="none"
+              >
+                <path d="M 0 -30 Q -30 0 0 30" className="wave-left" />
+                <path
+                  d="M 0 -50 Q -50 0 0 50"
+                  className="wave-left"
+                  style={{ animationDelay: "0.6s" }}
+                />
+                <path
+                  d="M 0 -70 Q -70 0 0 70"
+                  className="wave-left"
+                  style={{ animationDelay: "1.2s" }}
+                />
+              </g>
+            )}
+
+            {/* Computer Output (Stage >= 3) */}
+            {stage >= 3 && (
+              <g
+                transform="translate(50, 260)"
+                className="fade-in highlight-glow"
+              >
+                <rect
+                  x="0"
+                  y="0"
+                  width="80"
+                  height="40"
+                  fill="#0f172a"
+                  rx="4"
+                />
+                <text
+                  x="40"
+                  y="18"
+                  textAnchor="middle"
+                  fill="#64748b"
+                  fontSize="10"
+                >
+                  Decoded
+                </text>
+                <text
+                  x="40"
+                  y="32"
+                  textAnchor="middle"
+                  fill="#22c55e"
+                  fontSize="12"
+                  fontFamily="monospace"
+                >
+                  011010
+                </text>
+                <path d="M 40 -10 L 40 0" stroke="#94a3b8" strokeWidth="2" />
+              </g>
+            )}
+          </svg>
+        );
+      };
+
+      // 4. Laser Printer SVG Restructured (Added rotating hopper and toner pouring animation)
+      const LaserVis = ({ stage }) => {
+        return (
+          <svg
+            viewBox="0 0 600 350"
+            className="w-full h-full bg-white rounded-lg"
+          >
+            {/* Printer Cross-section casing */}
+            <path
+              d="M 40 40 L 560 40 L 560 300 L 40 300 Z"
+              fill="#f8fafc"
+              stroke="#e2e8f0"
+              strokeWidth="4"
+              rx="10"
+            />
+
+            {/* Photosensitive Drum (Center) */}
+            <g transform="translate(300, 180)">
+              <circle
+                cx="0"
+                cy="0"
+                r="60"
+                fill="#cbd5e1"
+                stroke="#64748b"
+                strokeWidth="3"
+                className="spin-slow"
+                style={{ transformOrigin: "0px 0px" }}
+              />
+              <text
+                x="0"
+                y="5"
+                textAnchor="middle"
+                fill="#475569"
+                fontSize="14"
+                fontWeight="bold"
+              >
+                Drum
+              </text>
+
+              {/* Negative Charge Halo (Stage >= 0) */}
+              {stage >= 0 && (
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="68"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="4"
+                  strokeDasharray="10, 10"
+                  className={
+                    stage === 0 ? "highlight-glow spin-slow" : "spin-slow"
+                  }
+                  opacity="0.7"
+                  style={{ transformOrigin: "0px 0px" }}
+                />
+              )}
+
+              {/* Discharged gap where laser hits (Stage >= 1) */}
+              {stage >= 1 && (
+                <path
+                  d="M -68 0 A 68 68 0 0 1 0 -68"
+                  fill="none"
+                  stroke="#f8fafc"
+                  strokeWidth="8"
+                  className="fade-in spin-slow"
+                  style={{ transformOrigin: "0px 0px" }}
+                />
+              )}
+            </g>
+
+            {/* Charging Corona Wire (Top Left) */}
+            <g transform="translate(180, 100)">
+              <rect
+                x="0"
+                y="0"
+                width="50"
+                height="10"
+                fill="#f59e0b"
+                rx="2"
+                className={stage === 0 ? "highlight-glow" : ""}
+              />
+              <text
+                x="25"
+                y="-10"
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="12"
+                fontWeight="bold"
+              >
+                Charge Wire
+              </text>
+              {/* Corona discharge to drum */}
+              {stage >= 0 && (
+                <path
+                  d="M 40 10 L 70 40"
+                  stroke="#f59e0b"
+                  strokeWidth="2"
+                  strokeDasharray="2,2"
+                />
+              )}
+            </g>
+
+            {/* Laser and Mirror Assembly (Bottom Left) */}
+            <g transform="translate(80, 200)">
+              <rect x="0" y="0" width="60" height="25" fill="#334155" />
+              <text
+                x="30"
+                y="16"
+                textAnchor="middle"
+                fill="white"
+                fontSize="12"
+              >
+                Laser
+              </text>
+              <polygon points="120,-40 130,-20 110,-20" fill="#94a3b8" />
+            </g>
+
+            {/* Laser Beam (Stage >= 1) */}
+            {stage >= 1 && (
+              <g
+                stroke="#ef4444"
+                strokeWidth="3"
+                className="draw-line"
+                style={{ filter: "drop-shadow(0 0 4px #ef4444)" }}
+              >
+                <line x1="140" y1="212" x2="200" y2="170" />
+                <line x1="200" y1="170" x2="250" y2="150" />
+              </g>
+            )}
+
+            {/* Toner Hopper (Top Right) */}
+            <g transform="translate(400, 80)">
+              <path d="M 0 0 L 80 0 L 60 70 L 20 70 Z" fill="#1e293b" />
+              <text
+                x="40"
+                y="30"
+                textAnchor="middle"
+                fill="white"
+                fontSize="12"
+              >
+                Toner (-)
+              </text>
+
+              {/* Rotating Roller */}
+              <circle
+                cx="40"
+                cy="70"
+                r="15"
+                fill="#475569"
+                className={stage >= 2 ? "spin-slow highlight-glow" : ""}
+                style={{ transformOrigin: "40px 70px" }}
+              />
+
+              {/* Inner visual agitator crosshair for rotation visibility */}
+              {stage >= 2 && (
+                <line
+                  x1="25"
+                  y1="70"
+                  x2="55"
+                  y2="70"
+                  stroke="#cbd5e1"
+                  strokeWidth="3"
+                  className="spin-slow"
+                  style={{ transformOrigin: "40px 70px" }}
+                />
+              )}
+
+              {/* Falling Toner Particle Animation (Stage 2) */}
+              {stage >= 2 && (
+                <g className="toner-pour">
+                  <circle cx="30" cy="85" r="3" fill="black" />
+                  <circle cx="40" cy="88" r="2" fill="black" />
+                  <circle cx="50" cy="85" r="3" fill="black" />
+                  <circle cx="35" cy="95" r="2" fill="black" />
+                </g>
+              )}
+            </g>
+
+            {/* Toner sticking to drum (Stage 2 only - before it goes to paper) */}
+            {stage === 2 && (
+              <g transform="translate(350, 140)" className="fade-in">
+                <circle cx="0" cy="0" r="4" fill="black" />
+                <circle cx="-10" cy="15" r="4" fill="black" />
+                <circle cx="-25" cy="25" r="4" fill="black" />
+              </g>
+            )}
+
+            {/* Paper Path & Fuser (Bottom) */}
+            <g transform="translate(40, 260)">
+              <line
+                x1="0"
+                y1="0"
+                x2="520"
+                y2="0"
+                stroke="#cbd5e1"
+                strokeWidth="8"
+              />
+              <text x="50" y="-10" fill="#64748b" fontSize="12">
+                Paper Path ➔
+              </text>
+
+              {/* Fuser Rollers (Moved slightly right) */}
+              <g
+                transform="translate(460, -20)"
+                className={stage >= 4 ? "highlight-glow" : ""}
+              >
+                <circle cx="0" cy="0" r="18" fill="#ef4444" opacity="0.9" />
+                <circle cx="0" cy="40" r="18" fill="#334155" />
+                <text
+                  x="0"
+                  y="-25"
+                  textAnchor="middle"
+                  fill="#ef4444"
+                  fontSize="12"
+                  fontWeight="bold"
+                >
+                  Heat Fuser
+                </text>
+              </g>
+
+              {/* Paper moving under drum to collect toner (Stage 3) */}
+              {stage === 3 && (
+                <g transform="translate(250, -5)" className="slide-right">
+                  <rect
+                    x="0"
+                    y="0"
+                    width="100"
+                    height="10"
+                    fill="white"
+                    stroke="#94a3b8"
+                  />
+                  {/* Positive charges on paper */}
+                  <text
+                    x="20"
+                    y="8"
+                    fill="#ef4444"
+                    fontSize="12"
+                    fontWeight="bold"
+                  >
+                    +
+                  </text>
+                  <text
+                    x="50"
+                    y="8"
+                    fill="#ef4444"
+                    fontSize="12"
+                    fontWeight="bold"
+                  >
+                    +
+                  </text>
+                  <text
+                    x="80"
+                    y="8"
+                    fill="#ef4444"
+                    fontSize="12"
+                    fontWeight="bold"
+                  >
+                    +
+                  </text>
+                  {/* Toner resting on paper */}
+                  <circle cx="40" cy="0" r="3" fill="black" />
+                  <circle cx="50" cy="-2" r="3" fill="black" />
+                  <circle cx="65" cy="0" r="3" fill="black" />
+                </g>
+              )}
+
+              {/* Paper moving through fuser (Stage 4) */}
+              {stage >= 4 && (
+                <g transform="translate(410, -5)" className="slide-right">
+                  <rect
+                    x="0"
+                    y="0"
+                    width="100"
+                    height="10"
+                    fill="white"
+                    stroke="#94a3b8"
+                  />
+                  <line
+                    x1="10"
+                    y1="5"
+                    x2="80"
+                    y2="5"
+                    stroke="black"
+                    strokeWidth="2"
+                    strokeDasharray="10,4"
+                  />
+                </g>
+              )}
+            </g>
+          </svg>
+        );
+      };
+
+      // --- MAIN APP COMPONENT ---
+
+      const App = () => {
+        const [selectedTopics, setSelectedTopics] = useState(
+          TOPICS.map((t) => t.id),
+        );
+        const [currentTask, setCurrentTask] = useState(null);
+        const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
+        const [shuffledOptions, setShuffledOptions] = useState([]);
+
+        const [selectedOption, setSelectedOption] = useState("");
+        const [feedback, setFeedback] = useState(null);
+
+        // Helper to randomly shuffle options
+        const shuffleArray = (array) => {
+          const newArray = [...array];
+          for (let i = newArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+          }
+          return newArray;
+        };
+
+        // Load a specific topic index sequentially
+        const loadTopic = (topicIndex) => {
+          if (selectedTopics.length === 0) return;
+
+          // Wrap around to the start if we reach the end of selected topics
+          const safeIndex =
+            topicIndex >= selectedTopics.length ? 0 : topicIndex;
+          setCurrentTopicIndex(safeIndex);
+
+          const topicId = selectedTopics[safeIndex];
+
+          resetState();
+
+          if (topicId === "comparison") {
+            const shuffledComps = shuffleArray([...COMPARISONS]);
+            setCurrentTask({
+              type: "comp",
+              id: "comparison",
+              stage: 0,
+              data: { title: "Hardware Comparisons", stages: shuffledComps },
+            });
+            setShuffledOptions(shuffleArray(shuffledComps[0].options));
+          } else {
+            setCurrentTask({
+              type: "sim",
+              id: topicId,
+              stage: 0,
+              data: SIMULATIONS[topicId],
+            });
+            setShuffledOptions(
+              shuffleArray(SIMULATIONS[topicId].stages[0].options),
+            );
+          }
+        };
+
+        const resetState = () => {
+          setSelectedOption("");
+          setFeedback(null);
+        };
+
+        // Restart sequentially from the beginning whenever selected topics change (also fires on first load)
+        useEffect(() => {
+          loadTopic(0);
+        }, [selectedTopics]);
+
+        const handleOptionClick = (option) => {
+          if (feedback?.type === "correct") return; // Prevent changing after correct answer
+          setSelectedOption(option);
+        };
+
+        const checkAnswer = () => {
+          if (!selectedOption) {
+            setFeedback({
+              text: "Please select an option.",
+              type: "incorrect",
+            });
+            return;
+          }
+
+          const currentQuestionData =
+            currentTask.data.stages[currentTask.stage];
+
+          const isCorrect = selectedOption === currentQuestionData.answer;
+
+          if (isCorrect) {
+            setFeedback({ text: "Correct!", type: "correct" });
+          } else {
+            setFeedback({
+              text: "Incorrect. Try another option.",
+              type: "incorrect",
+            });
+          }
+        };
+
+        const advanceStage = () => {
+          if (currentTask.stage < currentTask.data.stages.length - 1) {
+            const nextStage = currentTask.stage + 1;
+            setCurrentTask({
+              ...currentTask,
+              stage: nextStage,
+            });
+            setShuffledOptions(
+              shuffleArray(currentTask.data.stages[nextStage].options),
+            );
+            resetState();
+          } else {
+            // Move sequentially to the next selected sub-topic
+            loadTopic(currentTopicIndex + 1);
+          }
+        };
+
+        // Render logic
+        if (!currentTask)
+          return (
+            <div className="min-h-screen flex items-center justify-center font-bold text-xl text-blue-600">
+              Loading Specification Data...
+            </div>
+          );
+
+        const isSim = currentTask.type === "sim";
+        const currentStageData = currentTask.data.stages[currentTask.stage];
+        const isCorrect = feedback?.type === "correct";
+
+        return (
+          <div className="min-h-screen flex flex-col font-sans">
+            {/* Header */}
+            <header className="bg-slate-900 text-white p-4 shadow-lg flex justify-between items-center z-10 relative">
+              <div>
+                <h1 className="text-2xl font-extrabold tracking-tight">
+                  AQA A-Level CS
+                </h1>
+                <p className="text-sm text-slate-300 font-medium">
+                  Hardware: Principles of Operation
+                </p>
+              </div>
+              <CheckboxList
+                topics={TOPICS}
+                selectedTopics={selectedTopics}
+                onChange={setSelectedTopics}
+              />
+            </header>
+
+            {/* Main Content Area */}
+            <main className="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* LEFT: VISUAL SIMULATION OR SCENARIO */}
+              <div className="flex flex-col space-y-4">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col">
+                  <h2 className="text-2xl font-bold text-slate-800 mb-4 border-b border-slate-100 pb-3">
+                    {isSim
+                      ? currentTask.data.title
+                      : "Hardware Comparison Scenario"}
+                  </h2>
+
+                  {isSim ? (
+                    <>
+                      {/* Status / Stage Tracker */}
+                      <div className="flex gap-2 mb-6">
+                        {currentTask.data.stages.map((_, idx) => (
+                          <div
+                            key={idx}
+                            className={`h-2.5 flex-grow rounded-full transition-colors duration-300 ${idx <= currentTask.stage ? "bg-blue-600" : "bg-slate-100"}`}
+                          ></div>
+                        ))}
+                      </div>
+
+                      {/* Dynamic SVG Visualisation */}
+                      <div className="w-full aspect-video bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 relative mb-6 shadow-inner">
+                        {currentTask.id === "barcode" && (
+                          <BarcodeVis stage={currentTask.stage} />
+                        )}
+                        {currentTask.id === "camera" && (
+                          <CameraVis stage={currentTask.stage} />
+                        )}
+                        {currentTask.id === "rfid" && (
+                          <RFIDVis stage={currentTask.stage} />
+                        )}
+                        {currentTask.id === "laser" && (
+                          <LaserVis stage={currentTask.stage} />
+                        )}
+                      </div>
+
+                      <div className="bg-blue-50/50 border border-blue-100 p-5 rounded-xl text-base text-slate-800 mb-2 flex-grow">
+                        <p className="font-bold text-blue-800 mb-2 uppercase tracking-wide text-sm">
+                          Principle of Operation:
+                        </p>
+                        <p className="leading-relaxed">
+                          {currentStageData.desc}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-grow flex flex-col justify-center">
+                      <div className="bg-purple-50 border border-purple-100 p-8 rounded-2xl text-slate-800 shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                          <svg
+                            className="w-10 h-10 text-purple-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                            ></path>
+                          </svg>
+                          <span className="bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
+                            Scenario {currentTask.stage + 1} of{" "}
+                            {currentTask.data.stages.length}
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-purple-900 text-lg mb-3">
+                          Context:
+                        </h3>
+                        <p className="text-xl leading-relaxed">
+                          {currentStageData.scenario}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* RIGHT: QUESTION & INTERACTION */}
+              <div className="flex flex-col space-y-4">
+                <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col">
+                  <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+                    <span className="bg-blue-100 text-blue-600 p-2 rounded-lg">
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        ></path>
+                      </svg>
+                    </span>
+                    Knowledge Check
+                  </h3>
+
+                  <p className="text-slate-800 font-semibold mb-6 text-lg leading-relaxed">
+                    {currentStageData.question}
+                  </p>
+
+                  {/* Multiple Choice Options */}
+                  <div className="space-y-3 mb-8 flex-grow">
+                    {shuffledOptions.map((option, idx) => (
+                      <label
+                        key={idx}
+                        className={`mcq-option block cursor-pointer relative ${isCorrect ? "pointer-events-none" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="answer"
+                          value={option}
+                          checked={selectedOption === option}
+                          onChange={() => handleOptionClick(option)}
+                          className="absolute opacity-0 w-0 h-0"
+                        />
+                        <div
+                          className={`p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-4
+                                                ${selectedOption === option ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50"}
+                                                ${isCorrect && option === currentStageData.answer ? "border-green-500 bg-green-50 ring-2 ring-green-200" : ""}
+                                                ${isCorrect && selectedOption === option && option !== currentStageData.answer ? "border-red-500 bg-red-50" : ""}
+                                            `}
+                        >
+                          <div
+                            className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center
+                                                    ${selectedOption === option ? "border-blue-500" : "border-slate-300"}
+                                                    ${isCorrect && option === currentStageData.answer ? "border-green-500 bg-green-500" : ""}
+                                                `}
+                          >
+                            {isCorrect &&
+                              option === currentStageData.answer && (
+                                <svg
+                                  className="w-3 h-3 text-white"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="3"
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                              )}
+                          </div>
+                          <span className="text-slate-700 font-medium">
+                            {option}
+                          </span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Controls & Feedback */}
+                  <div className="space-y-4 pt-4 border-t border-slate-100 mt-auto">
+                    {!isCorrect ? (
+                      <div className="flex flex-col gap-3">
+                        <button
+                          onClick={checkAnswer}
+                          disabled={!selectedOption}
+                          className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-sm
+                                                    ${selectedOption ? "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md active:transform active:scale-[0.98]" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                        >
+                          Check Answer
+                        </button>
+
+                        {feedback?.type === "incorrect" && (
+                          <div className="p-3 rounded-lg bg-red-50 text-red-700 text-center font-medium animate-pulse border border-red-100">
+                            {feedback.text}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-4 fade-in">
+                        <div className="p-4 rounded-xl bg-green-50 border border-green-200 text-green-800 flex items-center gap-3">
+                          <div className="bg-green-100 p-2 rounded-full text-green-600">
+                            <svg
+                              className="w-6 h-6"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              ></path>
+                            </svg>
+                          </div>
+                          <p className="font-bold text-lg">Correct!</p>
+                        </div>
+
+                        <button
+                          onClick={advanceStage}
+                          className="w-full bg-slate-800 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-900 transition-all shadow-md flex items-center justify-center gap-2 hover:gap-3"
+                        >
+                          {currentTask.stage <
+                          currentTask.data.stages.length - 1
+                            ? isSim
+                              ? "Next Step"
+                              : "Next Scenario"
+                            : "Next Topic"}
+                          <svg
+                            className="w-5 h-5 transition-transform"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M14 5l7 7m0 0l-7 7m7-7H3"
+                            ></path>
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </main>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
