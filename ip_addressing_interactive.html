@@ -234,6 +234,68 @@
         font-size: 0.9rem;
         padding-left: 1.15rem;
       }
+      .calc-panel {
+        margin-top: 0.9rem;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 0.75rem;
+      }
+      .calc-panel h3 {
+        margin: 0 0 0.35rem;
+        font-size: 0.95rem;
+        color: #34d399;
+      }
+      .calc-note {
+        margin: 0 0 0.55rem;
+        color: #94a3b8;
+        font-size: 0.78rem;
+        line-height: 1.4;
+      }
+      .calc-note code {
+        background: #020617;
+        border-radius: 4px;
+        padding: 0.08rem 0.28rem;
+        color: #bbf7d0;
+      }
+      .calc-input {
+        width: 100%;
+        border: 1px solid #475569;
+        border-radius: 8px;
+        background: #020617;
+        color: #f8fafc;
+        padding: 0.45rem 0.55rem;
+        font-family: Consolas, "Courier New", monospace;
+        margin-bottom: 0.45rem;
+      }
+      .calc-input:focus {
+        outline: none;
+        border-color: #34d399;
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.22);
+      }
+      .calc-row {
+        display: flex;
+        gap: 0.45rem;
+      }
+      .calc-go {
+        border: none;
+        border-radius: 8px;
+        background: #059669;
+        color: #fff;
+        font-weight: 700;
+        min-width: 44px;
+      }
+      .calc-out {
+        flex: 1;
+        border: 1px solid #475569;
+        border-radius: 8px;
+        background: #020617;
+        color: #6ee7b7;
+        font-family: Consolas, "Courier New", monospace;
+        text-align: right;
+        padding: 0.45rem 0.55rem;
+      }
       @media (max-width: 980px) {
         .page {
           grid-template-columns: 1fr;
@@ -290,6 +352,22 @@
           <button class="secondary" id="allOffBtn">Clear all</button>
         </div>
         <div class="topics" id="topicList"></div>
+        <div class="calc-panel">
+          <h3>Scientific Calculator</h3>
+          <p class="calc-note">
+            Use expressions like <code>2^10</code> or <code>log2(256)</code>.
+          </p>
+          <input
+            id="calcExpr"
+            class="calc-input"
+            type="text"
+            placeholder="Enter expression..."
+          />
+          <div class="calc-row">
+            <button id="calcBtn" class="calc-go">=</button>
+            <div id="calcOut" class="calc-out">0.0</div>
+          </div>
+        </div>
       </aside>
     </div>
 
@@ -405,6 +483,43 @@
         const parts = ip.split(".");
         const inputs = [...document.querySelectorAll(`#${groupId} input`)];
         inputs.forEach((input, idx) => (input.value = parts[idx] ?? ""));
+      }
+
+      function calcEval() {
+        const input = document.getElementById("calcExpr");
+        const out = document.getElementById("calcOut");
+        const raw = input.value.trim();
+        if (!raw) {
+          out.textContent = "0.0";
+          return;
+        }
+        try {
+          const replacements = {
+            asin: "Math.asin",
+            acos: "Math.acos",
+            atan: "Math.atan",
+            sin: "Math.sin",
+            cos: "Math.cos",
+            tan: "Math.tan",
+            sqrt: "Math.sqrt",
+            pow: "Math.pow",
+            abs: "Math.abs",
+            ln: "Math.log",
+            log10: "Math.log10",
+            log2: "Math.log2",
+            pi: "Math.PI",
+          };
+          let parsed = raw
+            .replace(/\^/g, "**")
+            .toLowerCase()
+            .replace(/\b([a-z0-9]+)\b/g, (m) => replacements[m] || m);
+          const result = Function(`"use strict"; return (${parsed});`)();
+          out.textContent = Number.isFinite(result)
+            ? Number(result.toFixed(6)).toString()
+            : "Error";
+        } catch (_) {
+          out.textContent = "Invalid Expr";
+        }
       }
 
       function createIpGroup(id, label, initial = "") {
@@ -964,9 +1079,19 @@
       document.addEventListener("keydown", (e) => {
         if (
           e.key === "Enter" &&
+          !e.target.closest(".calc-panel") &&
           !["BUTTON"].includes(document.activeElement.tagName)
         ) {
           submitAnswer();
+        }
+      });
+
+      document.getElementById("calcBtn").addEventListener("click", calcEval);
+      document.getElementById("calcExpr").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.stopPropagation();
+          calcEval();
         }
       });
 
