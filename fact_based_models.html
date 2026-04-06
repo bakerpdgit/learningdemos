@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graph Schema Editor — AQA Computer Science</title>
+<style>
+:root {
+  --bg:#1b1e2e; --panel:#242840; --surface:#2c3255; --border:#3a4068;
+  --accent:#7c6ff7; --accent2:#a78bfa; --success:#22c55e; --danger:#ef4444;
+  --warn:#f59e0b; --text:#e2e4f0; --dim:#8590b8;
+  --canvas-bg:#f7f8fe; --dot:#cdd0e3;
+  --oval-bg:#fff; --oval-bd:#374151; --oval-new-bg:#f0fdf4; --oval-new-bd:#16a34a;
+  --rect-bg:#fefce8; --rect-bd:#78716c; --rect-new-bg:#f0fdf4; --rect-new-bd:#16a34a;
+  --edge:#1e293b; --edge-new:#16a34a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  background:var(--bg);font-family:'Segoe UI',system-ui,sans-serif;
+  color:var(--text);font-size:14px}
+
+/* HEADER */
+.hdr{background:var(--panel);border-bottom:1px solid var(--border);
+  padding:0 1rem;height:48px;display:flex;align-items:center;gap:.75rem;
+  flex-shrink:0;z-index:100}
+.hdr-back{color:var(--dim);text-decoration:none;font-size:.78rem;
+  padding:3px 9px;border:1px solid var(--border);border-radius:5px;transition:.15s}
+.hdr-back:hover{color:var(--text);border-color:var(--accent)}
+.hdr h1{flex:1;font-size:1rem;font-weight:600;
+  background:linear-gradient(120deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.q-wrap{display:flex;align-items:center;gap:.45rem}
+.q-wrap label{font-size:.75rem;color:var(--dim)}
+.q-wrap select{background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;
+  padding:4px 22px 4px 8px;font-size:.8rem;cursor:pointer;
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238590b8'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 7px center}
+.q-wrap select:focus{outline:none;border-color:var(--accent)}
+
+/* TOOLBAR */
+.tb{background:var(--panel);border-bottom:1px solid var(--border);
+  padding:.3rem .9rem;display:flex;align-items:center;gap:.35rem;
+  flex-shrink:0;flex-wrap:wrap}
+.tb-sep{width:1px;height:20px;background:var(--border);margin:0 .1rem}
+.btn{display:inline-flex;align-items:center;gap:.25rem;
+  padding:4px 10px;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);
+  font-size:.78rem;font-weight:500;cursor:pointer;white-space:nowrap;transition:.13s}
+.btn:hover{border-color:var(--accent2);background:#323868}
+.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.prim{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.prim:hover{background:var(--accent2)}
+.btn.warn-btn{background:#78350f;border-color:var(--warn);color:#fde68a}
+.btn.warn-btn:hover{background:#92400e}
+.btn:disabled{opacity:.35;pointer-events:none}
+
+/* LAYOUT */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* PALETTE */
+.pal{width:185px;flex-shrink:0;background:var(--panel);
+  border-right:1px solid var(--border);overflow-y:auto;padding:.6rem}
+.pal-sec{margin-bottom:.8rem}
+.pal-sec h4{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--dim);margin-bottom:.4rem;padding-bottom:.25rem;
+  border-bottom:1px solid var(--border)}
+.pal-item{cursor:grab;margin-bottom:.35rem;transition:opacity .2s,transform .1s}
+.pal-item:active{cursor:grabbing;transform:scale(.96)}
+.pal-item.used{opacity:.28;pointer-events:none}
+.pn{padding:5px 9px;font-size:.74rem;font-weight:500;text-align:center;
+  border:2px solid;background:white;color:#111827;user-select:none;
+  line-height:1.3;word-break:break-word;transition:box-shadow .13s}
+.pn:hover{box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.pn.oval{border-radius:50px;border-color:#374151}
+.pn.rect{border-radius:3px;border-color:#78716c;background:#fefce8}
+.lbl-chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:.2rem}
+.lchip{padding:2px 7px;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;font-size:.69rem;color:var(--dim);font-style:italic}
+.pal-hint{font-size:.68rem;color:var(--dim);line-height:1.5;margin-top:.4rem}
+
+/* CANVAS AREA */
+.cw{flex:1;overflow:auto;background:#d8dced;
+  display:flex;align-items:flex-start;justify-content:center;padding:10px}
+#gc{position:relative;width:920px;height:570px;flex-shrink:0;
+  background-color:var(--canvas-bg);
+  background-image:radial-gradient(circle,var(--dot) 1.5px,transparent 1.5px);
+  background-size:28px 28px;background-position:14px 14px;
+  border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.22)}
+#gc.mode-move{cursor:default}
+#gc.mode-connect-solid,#gc.mode-connect-dotted{cursor:crosshair}
+#gc.mode-delete{cursor:cell}
+.mode-pill{position:absolute;top:8px;right:10px;z-index:50;
+  font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  padding:2px 9px;border-radius:10px;pointer-events:none}
+.mp-move{background:#e0e7ff;color:#3730a3}
+.mp-solid{background:#fef3c7;color:#92400e}
+.mp-dotted{background:#ede9fe;color:#5b21b6}
+.mp-delete{background:#fee2e2;color:#991b1b}
+#esvg{position:absolute;top:0;left:0;width:100%;height:100%;
+  overflow:visible;pointer-events:none;z-index:5}
+#esvg.pon{pointer-events:all}
+
+/* NODES */
+.gn{position:absolute;transform:translate(-50%,-50%);
+  user-select:none;text-align:center;font-size:12px;font-weight:500;
+  line-height:1.3;padding:6px 14px;z-index:10;white-space:nowrap;
+  transition:box-shadow .12s}
+.gn.oval{border-radius:50px;border:2.5px solid var(--oval-bd);
+  background:var(--oval-bg);color:#111827;min-width:80px}
+.gn.rect{border-radius:3px;border:2px solid var(--rect-bd);
+  background:var(--rect-bg);color:#111827;min-width:90px}
+.gn.isnew.oval{border-color:var(--oval-new-bd);background:var(--oval-new-bg)}
+.gn.isnew.rect{border-color:var(--rect-new-bd);background:var(--rect-new-bg)}
+.gn.src{box-shadow:0 0 0 3px var(--warn),0 0 14px rgba(245,158,11,.4)}
+.gn.tgt{box-shadow:0 0 0 3px var(--success),0 0 10px rgba(34,197,94,.35)}
+
+/* RIGHT PANEL */
+.rp{width:265px;flex-shrink:0;background:var(--panel);
+  border-left:1px solid var(--border);padding:.85rem;
+  overflow-y:auto;display:flex;flex-direction:column;gap:.65rem}
+.rp-title{font-size:.88rem;font-weight:600;color:var(--accent2);line-height:1.3}
+.rp-marks{display:inline-block;padding:2px 8px;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;font-size:.7rem;color:var(--dim)}
+.rp-text{font-size:.78rem;line-height:1.68;color:var(--text);white-space:pre-wrap}
+.how-to{background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:.6rem;font-size:.7rem;color:var(--dim);line-height:1.55}
+.how-to b{color:var(--text)}
+.how-to .ht-head{display:block;color:var(--text);font-weight:600;margin-bottom:.3rem}
+
+/* STATUS */
+.sb{background:var(--panel);border-top:1px solid var(--border);
+  padding:.3rem 1rem;min-height:30px;display:flex;align-items:center;
+  flex-shrink:0;font-size:.78rem}
+.sm{flex:1}.sm.info{color:var(--dim)}.sm.ok{color:var(--success);font-weight:600}
+.sm.err{color:#f87171}.sm.hint{color:var(--warn)}
+
+/* PICKER */
+.picker{position:fixed;display:none;background:var(--panel);
+  border:1.5px solid var(--accent);border-radius:10px;padding:.55rem;
+  z-index:600;box-shadow:0 10px 36px rgba(0,0,0,.55);min-width:145px}
+.picker h5{font-size:.68rem;color:var(--dim);text-align:center;
+  margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.05em}
+.pb{display:block;width:100%;padding:5px 9px;margin-bottom:3px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:5px;color:var(--text);font-size:.8rem;
+  font-style:italic;cursor:pointer;text-align:center;transition:.12s}
+.pb:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.pc{display:block;width:100%;padding:3px;margin-top:3px;
+  background:transparent;border:none;color:var(--dim);
+  font-size:.7rem;cursor:pointer;text-align:center}
+.pc:hover{color:#f87171}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <a href="index.html" class="hdr-back">← Home</a>
+  <h1>Graph Schema Editor</h1>
+  <div class="q-wrap">
+    <label for="qsel">Question:</label>
+    <select id="qsel" onchange="loadQ(+this.value)"></select>
+  </div>
+</header>
+
+<div class="tb">
+  <button class="btn on" id="btn-move" onclick="setMode('move')" title="Drag nodes to reposition">✥ Move</button>
+  <button class="btn" id="btn-csolid" onclick="setMode('connect-solid')" title="Draw a solid labelled edge between two ovals">— Solid Edge</button>
+  <button class="btn" id="btn-cdot" onclick="setMode('connect-dotted')" title="Draw a dotted edge from an oval to a rectangle">⋯ Dotted Edge</button>
+  <button class="btn" id="btn-del" onclick="setMode('delete')" title="Click a node or edge to delete it">✕ Delete</button>
+  <div class="tb-sep"></div>
+  <button class="btn prim" onclick="submitAnswer()">✓ Submit</button>
+  <button class="btn warn-btn" id="btn-sol" style="display:none" onclick="showSol()">👁 View Solution</button>
+  <button class="btn" onclick="resetQ()" title="Reset to initial state">↺ Reset</button>
+  <div class="tb-sep"></div>
+  <button class="btn" onclick="prevQ()">‹ Prev</button>
+  <button class="btn" onclick="nextQ()">Next ›</button>
+</div>
+
+<div class="main">
+  <aside class="pal" id="pal">
+    <div class="pal-sec">
+      <h4>Nodes to Add</h4>
+      <div id="pal-nodes"></div>
+    </div>
+    <div class="pal-sec">
+      <h4>Edge Labels</h4>
+      <div class="lbl-chips" id="pal-labels"></div>
+      <p class="pal-hint">Available when drawing solid edges.</p>
+    </div>
+  </aside>
+
+  <div class="cw">
+    <div id="gc" class="mode-move"
+         ondragover="event.preventDefault()"
+         ondrop="onDrop(event)">
+      <svg id="esvg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="mode-pill mp-move" id="mpill">Move</div>
+    </div>
+  </div>
+
+  <aside class="rp">
+    <div>
+      <div class="rp-title" id="rp-title">—</div>
+      <div style="margin-top:.3rem"><span class="rp-marks" id="rp-marks">—</span></div>
+    </div>
+    <div class="rp-text" id="rp-text"></div>
+    <div class="how-to">
+      <span class="ht-head">How to use:</span>
+      Drag nodes from the palette onto the canvas.<br><br>
+      <b>Solid Edge:</b> click source oval → click target oval → pick a label from the popup.<br><br>
+      <b>Dotted Edge:</b> click an oval → click a rectangle (no label needed).<br><br>
+      <b>Delete:</b> click any node or edge to remove it (original items are protected).
+    </div>
+  </aside>
+</div>
+
+<div class="sb">
+  <span class="sm info" id="smsg">Select a question and drag nodes from the palette to begin.</span>
+</div>
+
+<div class="picker" id="picker"></div>
+
+<script>
+'use strict';
+
+// ── QUESTION DATA ──────────────────────────────────────────────────────────────
+
+const QS=[
+{
+  title:'Q1: Supermarket Products',marks:7,
+  text:`The graph schema below shows part of a fact-based model of a supermarket's dataset.\n\nModify the graph schema to represent the following additional facts:\n\n• The Bath store sells chocolate biscuits.\n• There are 20 individual biscuits in a packet of iced biscuits and each packet costs £1.50.\n• Both chocolate biscuits and iced biscuits are made by the company Delicious Snacks. The company has 75 employees and also makes cake bars.`,
+  iN:[
+    {id:'n1',t:'oval',l:'Bath',x:160,y:148},
+    {id:'n2',t:'oval',l:'iced biscuits',x:440,y:148},
+    {id:'n3',t:'rect',l:'cost: £1.20',x:440,y:275},
+  ],
+  iE:[
+    {id:'e1',f:'n1',t:'n2',tp:'solid',lb:'sells'},
+    {id:'e2',f:'n2',t:'n3',tp:'dotted',lb:''},
+  ],
+  pal:{
+    nodes:[
+      {id:'p1',t:'oval',l:'chocolate biscuits'},
+      {id:'p2',t:'oval',l:'Delicious Snacks'},
+      {id:'p3',t:'oval',l:'cake bars'},
+      {id:'p4',t:'rect',l:'quantity: 20'},
+      {id:'p5',t:'rect',l:'cost: £1.50'},
+      {id:'p6',t:'rect',l:'employees: 75'},
+    ],
+    labels:['sells','made_by','makes'],
+  },
+  sN:[
+    {id:'s1',t:'oval',l:'chocolate biscuits',x:160,y:380},
+    {id:'s2',t:'oval',l:'Delicious Snacks',x:650,y:148},
+    {id:'s3',t:'oval',l:'cake bars',x:840,y:148},
+    {id:'s4',t:'rect',l:'quantity: 20',x:340,y:380},
+    {id:'s5',t:'rect',l:'cost: £1.50',x:520,y:380},
+    {id:'s6',t:'rect',l:'employees: 75',x:650,y:275},
+  ],
+  sE:[
+    {f:'n1',t:'s1',tp:'solid',lb:'sells'},
+    {f:'n2',t:'s4',tp:'dotted',lb:''},
+    {f:'n2',t:'s5',tp:'dotted',lb:''},
+    {f:'s1',t:'s2',tp:'solid',lb:'made_by'},
+    {f:'n2',t:'s2',tp:'solid',lb:'made_by'},
+    {f:'s2',t:'s6',tp:'dotted',lb:''},
+    {f:'s2',t:'s3',tp:'solid',lb:'makes'},
+  ],
+  req:[
+    {f:'Bath',t:'chocolate biscuits',tp:'solid',lb:'sells'},
+    {f:'iced biscuits',t:'quantity: 20',tp:'dotted',lb:''},
+    {f:'iced biscuits',t:'cost: £1.50',tp:'dotted',lb:''},
+    {f:'chocolate biscuits',t:'Delicious Snacks',tp:'solid',lb:'made_by'},
+    {f:'iced biscuits',t:'Delicious Snacks',tp:'solid',lb:'made_by'},
+    {f:'Delicious Snacks',t:'employees: 75',tp:'dotted',lb:''},
+    {f:'Delicious Snacks',t:'cake bars',tp:'solid',lb:'makes'},
+  ],
+},
+{
+  title:'Q2: School Library',marks:4,
+  text:`The graph schema below shows part of a fact-based model of a school library.\n\nModify the graph schema to represent the following additional facts:\n\n• The library stocks the book "1984".\n• "1984" was written by George Orwell.\n• George Orwell was born in 1903.\n• "1984" has 328 pages.`,
+  iN:[
+    {id:'n1',t:'oval',l:'The Library',x:155,y:172},
+    {id:'n2',t:'oval',l:'The Hobbit',x:420,y:172},
+    {id:'n3',t:'oval',l:'Tolkien',x:690,y:172},
+    {id:'n4',t:'rect',l:'born: 1892',x:690,y:300},
+  ],
+  iE:[
+    {id:'e1',f:'n1',t:'n2',tp:'solid',lb:'stocks'},
+    {id:'e2',f:'n2',t:'n3',tp:'solid',lb:'written_by'},
+    {id:'e3',f:'n3',t:'n4',tp:'dotted',lb:''},
+  ],
+  pal:{
+    nodes:[
+      {id:'p1',t:'oval',l:'1984'},
+      {id:'p2',t:'oval',l:'George Orwell'},
+      {id:'p3',t:'rect',l:'born: 1903'},
+      {id:'p4',t:'rect',l:'pages: 328'},
+    ],
+    labels:['stocks','written_by'],
+  },
+  sN:[
+    {id:'s1',t:'oval',l:'1984',x:420,y:390},
+    {id:'s2',t:'oval',l:'George Orwell',x:690,y:390},
+    {id:'s3',t:'rect',l:'born: 1903',x:690,y:490},
+    {id:'s4',t:'rect',l:'pages: 328',x:420,y:490},
+  ],
+  sE:[
+    {f:'n1',t:'s1',tp:'solid',lb:'stocks'},
+    {f:'s1',t:'s2',tp:'solid',lb:'written_by'},
+    {f:'s2',t:'s3',tp:'dotted',lb:''},
+    {f:'s1',t:'s4',tp:'dotted',lb:''},
+  ],
+  req:[
+    {f:'The Library',t:'1984',tp:'solid',lb:'stocks'},
+    {f:'1984',t:'George Orwell',tp:'solid',lb:'written_by'},
+    {f:'George Orwell',t:'born: 1903',tp:'dotted',lb:''},
+    {f:'1984',t:'pages: 328',tp:'dotted',lb:''},
+  ],
+},
+{
+  title:'Q3: Music Festival',marks:4,
+  text:`The graph schema below shows part of a fact-based model of a music festival.\n\nModify the graph schema to represent the following additional facts:\n\n• Glastonbury has a stage called Jazz Stage.\n• Jazz Stage is headlined by Miles Davis Quartet.\n• Jazz Stage has a capacity of 8000.\n• Miles Davis Quartet was formed in 1955.`,
+  iN:[
+    {id:'n1',t:'oval',l:'Glastonbury',x:150,y:190},
+    {id:'n2',t:'oval',l:'Main Stage',x:395,y:190},
+    {id:'n3',t:'oval',l:'The Stones',x:650,y:190},
+    {id:'n4',t:'rect',l:'capacity: 100000',x:395,y:320},
+  ],
+  iE:[
+    {id:'e1',f:'n1',t:'n2',tp:'solid',lb:'has_stage'},
+    {id:'e2',f:'n2',t:'n3',tp:'solid',lb:'headlined_by'},
+    {id:'e3',f:'n2',t:'n4',tp:'dotted',lb:''},
+  ],
+  pal:{
+    nodes:[
+      {id:'p1',t:'oval',l:'Jazz Stage'},
+      {id:'p2',t:'oval',l:'Miles Davis Quartet'},
+      {id:'p3',t:'rect',l:'capacity: 8000'},
+      {id:'p4',t:'rect',l:'formed: 1955'},
+    ],
+    labels:['has_stage','headlined_by'],
+  },
+  sN:[
+    {id:'s1',t:'oval',l:'Jazz Stage',x:395,y:415},
+    {id:'s2',t:'oval',l:'Miles Davis Quartet',x:650,y:415},
+    {id:'s3',t:'rect',l:'capacity: 8000',x:395,y:510},
+    {id:'s4',t:'rect',l:'formed: 1955',x:650,y:510},
+  ],
+  sE:[
+    {f:'n1',t:'s1',tp:'solid',lb:'has_stage'},
+    {f:'s1',t:'s2',tp:'solid',lb:'headlined_by'},
+    {f:'s1',t:'s3',tp:'dotted',lb:''},
+    {f:'s2',t:'s4',tp:'dotted',lb:''},
+  ],
+  req:[
+    {f:'Glastonbury',t:'Jazz Stage',tp:'solid',lb:'has_stage'},
+    {f:'Jazz Stage',t:'Miles Davis Quartet',tp:'solid',lb:'headlined_by'},
+    {f:'Jazz Stage',t:'capacity: 8000',tp:'dotted',lb:''},
+    {f:'Miles Davis Quartet',t:'formed: 1955',tp:'dotted',lb:''},
+  ],
+},
+{
+  title:'Q4: City Hospital',marks:4,
+  text:`The graph schema below shows part of a fact-based model of a hospital.\n\nModify the graph schema to represent the following additional facts:\n\n• City Hospital employs Nurse Chen.\n• Nurse Chen works in Ward 3.\n• Ward 3 has 24 beds.\n• Nurse Chen has 5 years of experience.`,
+  iN:[
+    {id:'n1',t:'oval',l:'City Hospital',x:158,y:172},
+    {id:'n2',t:'oval',l:'Dr. Ahmed',x:420,y:172},
+    {id:'n3',t:'oval',l:'Cardiology',x:685,y:172},
+    {id:'n4',t:'rect',l:'years_exp: 12',x:420,y:300},
+  ],
+  iE:[
+    {id:'e1',f:'n1',t:'n2',tp:'solid',lb:'employs'},
+    {id:'e2',f:'n2',t:'n3',tp:'solid',lb:'specialises_in'},
+    {id:'e3',f:'n2',t:'n4',tp:'dotted',lb:''},
+  ],
+  pal:{
+    nodes:[
+      {id:'p1',t:'oval',l:'Nurse Chen'},
+      {id:'p2',t:'oval',l:'Ward 3'},
+      {id:'p3',t:'rect',l:'beds: 24'},
+      {id:'p4',t:'rect',l:'years_exp: 5'},
+    ],
+    labels:['employs','works_in'],
+  },
+  sN:[
+    {id:'s1',t:'oval',l:'Nurse Chen',x:158,y:390},
+    {id:'s2',t:'oval',l:'Ward 3',x:420,y:390},
+    {id:'s3',t:'rect',l:'beds: 24',x:420,y:490},
+    {id:'s4',t:'rect',l:'years_exp: 5',x:158,y:490},
+  ],
+  sE:[
+    {f:'n1',t:'s1',tp:'solid',lb:'employs'},
+    {f:'s1',t:'s2',tp:'solid',lb:'works_in'},
+    {f:'s2',t:'s3',tp:'dotted',lb:''},
+    {f:'s1',t:'s4',tp:'dotted',lb:''},
+  ],
+  req:[
+    {f:'City Hospital',t:'Nurse Chen',tp:'solid',lb:'employs'},
+    {f:'Nurse Chen',t:'Ward 3',tp:'solid',lb:'works_in'},
+    {f:'Ward 3',t:'beds: 24',tp:'dotted',lb:''},
+    {f:'Nurse Chen',t:'years_exp: 5',tp:'dotted',lb:''},
+  ],
+},
+{
+  title:'Q5: Football League',marks:4,
+  text:`The graph schema below shows part of a fact-based model of a football league.\n\nModify the graph schema to represent the following additional facts:\n\n• City FC plays in the Premier League.\n• City FC is managed by Pep.\n• Pep has the nationality Spanish.\n• City FC was founded in 1880.`,
+  iN:[
+    {id:'n1',t:'oval',l:'United FC',x:158,y:172},
+    {id:'n2',t:'oval',l:'Premier League',x:430,y:172},
+    {id:'n3',t:'oval',l:'Ole Gunnar',x:158,y:318},
+    {id:'n4',t:'rect',l:'nationality: Norwegian',x:158,y:430},
+  ],
+  iE:[
+    {id:'e1',f:'n1',t:'n2',tp:'solid',lb:'plays_in'},
+    {id:'e2',f:'n1',t:'n3',tp:'solid',lb:'managed_by'},
+    {id:'e3',f:'n3',t:'n4',tp:'dotted',lb:''},
+  ],
+  pal:{
+    nodes:[
+      {id:'p1',t:'oval',l:'City FC'},
+      {id:'p2',t:'oval',l:'Pep'},
+      {id:'p3',t:'rect',l:'nationality: Spanish'},
+      {id:'p4',t:'rect',l:'founded: 1880'},
+    ],
+    labels:['plays_in','managed_by'],
+  },
+  sN:[
+    {id:'s1',t:'oval',l:'City FC',x:660,y:172},
+    {id:'s2',t:'oval',l:'Pep',x:660,y:318},
+    {id:'s3',t:'rect',l:'nationality: Spanish',x:660,y:430},
+    {id:'s4',t:'rect',l:'founded: 1880',x:840,y:172},
+  ],
+  sE:[
+    {f:'s1',t:'n2',tp:'solid',lb:'plays_in'},
+    {f:'s1',t:'s2',tp:'solid',lb:'managed_by'},
+    {f:'s2',t:'s3',tp:'dotted',lb:''},
+    {f:'s1',t:'s4',tp:'dotted',lb:''},
+  ],
+  req:[
+    {f:'City FC',t:'Premier League',tp:'solid',lb:'plays_in'},
+    {f:'City FC',t:'Pep',tp:'solid',lb:'managed_by'},
+    {f:'Pep',t:'nationality: Spanish',tp:'dotted',lb:''},
+    {f:'City FC',t:'founded: 1880',tp:'dotted',lb:''},
+  ],
+},
+{
+  title:'Q6: Online Shop',marks:4,
+  text:`The graph schema below shows part of a fact-based model of an online shop.\n\nModify the graph schema to represent the following additional facts:\n\n• Amazon UK sells Wireless Headphones.\n• Wireless Headphones are made by SoundCo.\n• SoundCo is based in Japan.\n• Wireless Headphones cost £149.`,
+  iN:[
+    {id:'n1',t:'oval',l:'Amazon UK',x:158,y:172},
+    {id:'n2',t:'oval',l:'Laptop Pro X',x:425,y:172},
+    {id:'n3',t:'oval',l:'TechBrand',x:685,y:172},
+    {id:'n4',t:'rect',l:'price: £899',x:425,y:300},
+  ],
+  iE:[
+    {id:'e1',f:'n1',t:'n2',tp:'solid',lb:'sells'},
+    {id:'e2',f:'n2',t:'n3',tp:'solid',lb:'made_by'},
+    {id:'e3',f:'n2',t:'n4',tp:'dotted',lb:''},
+  ],
+  pal:{
+    nodes:[
+      {id:'p1',t:'oval',l:'Wireless Headphones'},
+      {id:'p2',t:'oval',l:'SoundCo'},
+      {id:'p3',t:'rect',l:'price: £149'},
+      {id:'p4',t:'rect',l:'country: Japan'},
+    ],
+    labels:['sells','made_by'],
+  },
+  sN:[
+    {id:'s1',t:'oval',l:'Wireless Headphones',x:425,y:400},
+    {id:'s2',t:'oval',l:'SoundCo',x:685,y:400},
+    {id:'s3',t:'rect',l:'price: £149',x:425,y:495},
+    {id:'s4',t:'rect',l:'country: Japan',x:685,y:495},
+  ],
+  sE:[
+    {f:'n1',t:'s1',tp:'solid',lb:'sells'},
+    {f:'s1',t:'s2',tp:'solid',lb:'made_by'},
+    {f:'s1',t:'s3',tp:'dotted',lb:''},
+    {f:'s2',t:'s4',tp:'dotted',lb:''},
+  ],
+  req:[
+    {f:'Amazon UK',t:'Wireless Headphones',tp:'solid',lb:'sells'},
+    {f:'Wireless Headphones',t:'SoundCo',tp:'solid',lb:'made_by'},
+    {f:'Wireless Headphones',t:'price: £149',tp:'dotted',lb:''},
+    {f:'SoundCo',t:'country: Japan',tp:'dotted',lb:''},
+  ],
+},
+];
+
+// ── STATE ──────────────────────────────────────────────────────────────────────
+
+let qi=0, nodes=[], edges=[], mode='move';
+let srcId=null, dragId=null, dragOx=0, dragOy=0, uid=1000;
+
+// ── INIT ───────────────────────────────────────────────────────────────────────
+
+const qsel=document.getElementById('qsel');
+QS.forEach((q,i)=>{
+  const o=document.createElement('option');
+  o.value=i; o.textContent=q.title; qsel.appendChild(o);
+});
+loadQ(0);
+
+// ── LOAD ───────────────────────────────────────────────────────────────────────
+
+function loadQ(i){
+  qi=i; qsel.value=i; srcId=null;
+  hidePicker(); setMode('move');
+  document.getElementById('btn-sol').style.display='none';
+  const q=QS[i];
+  document.getElementById('rp-title').textContent=q.title;
+  document.getElementById('rp-marks').textContent=q.req.length+' additions required';
+  document.getElementById('rp-text').textContent=q.text;
+  nodes=q.iN.map(n=>({...n,orig:true,isnew:false,w:100,h:40}));
+  edges=q.iE.map(e=>({...e,orig:true,isnew:false}));
+  uid=1000;
+  buildPal(q); render();
+  setSt('Drag nodes from the palette onto the canvas to begin.','info');
+}
+function resetQ(){loadQ(qi)}
+function prevQ(){if(qi>0)loadQ(qi-1)}
+function nextQ(){if(qi<QS.length-1)loadQ(qi+1)}
+
+// ── PALETTE ────────────────────────────────────────────────────────────────────
+
+function buildPal(q){
+  const pn=document.getElementById('pal-nodes');
+  const pl=document.getElementById('pal-labels');
+  pn.innerHTML=''; pl.innerHTML='';
+  q.pal.nodes.forEach(item=>{
+    const wrap=document.createElement('div');
+    wrap.className='pal-item'; wrap.id='pi-'+item.id;
+    wrap.draggable=true; wrap.dataset.type=item.t; wrap.dataset.label=item.l;
+    wrap.addEventListener('dragstart',e=>{
+      e.dataTransfer.setData('type',item.t);
+      e.dataTransfer.setData('label',item.l);
+    });
+    const p=document.createElement('div');
+    p.className='pn '+item.t; p.textContent=item.l;
+    wrap.appendChild(p); pn.appendChild(wrap);
+  });
+  q.pal.labels.forEach(lb=>{
+    const c=document.createElement('span');
+    c.className='lchip'; c.textContent=lb; pl.appendChild(c);
+  });
+}
+
+function syncPal(){
+  const q=QS[qi];
+  const used=new Set(nodes.map(n=>n.l));
+  q.pal.nodes.forEach(item=>{
+    const el=document.getElementById('pi-'+item.id);
+    if(el) el.classList.toggle('used',used.has(item.l));
+  });
+}
+
+function onDrop(ev){
+  ev.preventDefault();
+  const type=ev.dataTransfer.getData('type');
+  const label=ev.dataTransfer.getData('label');
+  if(!label||nodes.some(n=>n.l===label)) return;
+  const cr=document.getElementById('gc').getBoundingClientRect();
+  nodes.push({id:'u'+(uid++),t:type,l:label,
+    x:ev.clientX-cr.left, y:ev.clientY-cr.top,
+    orig:false,isnew:false,w:100,h:40});
+  render(); syncPal();
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────────────
+
+function render(){
+  renderNodes();
+  requestAnimationFrame(()=>{ measure(); renderEdges(); });
+}
+
+function renderNodes(){
+  const gc=document.getElementById('gc');
+  gc.querySelectorAll('.gn').forEach(el=>el.remove());
+  nodes.forEach(n=>{
+    const d=document.createElement('div');
+    d.className='gn '+n.t+(n.isnew?' isnew':'')+(n.id===srcId?' src':'');
+    d.id='gn-'+n.id; d.style.left=n.x+'px'; d.style.top=n.y+'px';
+    d.textContent=n.l;
+    d.addEventListener('mousedown',e=>nodeDown(e,n.id));
+    d.addEventListener('mouseenter',()=>{
+      if((mode==='connect-solid'||mode==='connect-dotted')&&srcId&&srcId!==n.id)
+        d.classList.add('tgt');
+    });
+    d.addEventListener('mouseleave',()=>d.classList.remove('tgt'));
+    d.addEventListener('click',e=>{e.stopPropagation();nodeClick(n.id);});
+    gc.appendChild(d);
+  });
+}
+
+function measure(){
+  nodes.forEach(n=>{
+    const el=document.getElementById('gn-'+n.id);
+    if(el){n.w=el.offsetWidth; n.h=el.offsetHeight;}
+  });
+}
+
+function renderEdges(){
+  const svg=document.getElementById('esvg');
+  svg.innerHTML='';
+  const defs=ns('defs');
+  ['orig','new'].forEach(v=>{
+    const m=ns('marker');
+    m.setAttribute('id','arr-'+v);
+    m.setAttribute('markerWidth','10'); m.setAttribute('markerHeight','7');
+    m.setAttribute('refX','9'); m.setAttribute('refY','3.5');
+    m.setAttribute('orient','auto');
+    const p=ns('polygon'); p.setAttribute('points','0 0,10 3.5,0 7');
+    p.setAttribute('fill',v==='new'?'#16a34a':'#1e293b');
+    m.appendChild(p); defs.appendChild(m);
+  });
+  svg.appendChild(defs);
+  edges.forEach(e=>drawEdge(svg,e));
+}
+
+function drawEdge(svg,e){
+  const fn=nodes.find(n=>n.id===e.f);
+  const tn=nodes.find(n=>n.id===e.t);
+  if(!fn||!tn) return;
+  const fp=bpt(fn,tn.x,tn.y);
+  const tp=bpt(tn,fn.x,fn.y);
+  const col=e.isnew?'#16a34a':'#1e293b';
+  const g=ns('g'); g.dataset.eid=e.id;
+
+  // Hit area
+  const hit=ns('line');
+  hit.setAttribute('x1',fp.x); hit.setAttribute('y1',fp.y);
+  hit.setAttribute('x2',tp.x); hit.setAttribute('y2',tp.y);
+  hit.style.stroke='transparent'; hit.style.strokeWidth='20';
+  hit.style.fill='none';
+  hit.style.pointerEvents=mode==='delete'?'stroke':'none';
+  hit.style.cursor=mode==='delete'?'pointer':'default';
+  hit.addEventListener('click',ev=>{ev.stopPropagation();edgeClick(e.id);});
+  g.appendChild(hit);
+
+  // Visible line
+  const ln=ns('line');
+  ln.setAttribute('x1',fp.x); ln.setAttribute('y1',fp.y);
+  ln.setAttribute('x2',tp.x); ln.setAttribute('y2',tp.y);
+  ln.style.stroke=col; ln.style.strokeWidth='2'; ln.style.fill='none';
+  ln.style.pointerEvents='none';
+  if(e.tp==='dotted') ln.style.strokeDasharray='7 4';
+  if(e.tp==='solid') ln.setAttribute('marker-end','url(#arr-'+(e.isnew?'new':'orig')+')');
+  g.appendChild(ln);
+
+  // Label on solid edges
+  if(e.tp==='solid'&&e.lb){
+    const mx=(fp.x+tp.x)/2, my=(fp.y+tp.y)/2;
+    const tx=ns('text');
+    tx.setAttribute('x',mx); tx.setAttribute('y',my-6);
+    tx.setAttribute('text-anchor','middle');
+    tx.setAttribute('font-size','11');
+    tx.setAttribute('font-family',"'Segoe UI',sans-serif");
+    tx.setAttribute('font-weight','600');
+    tx.setAttribute('fill',e.isnew?'#15803d':'#1e293b');
+    tx.setAttribute('stroke','rgba(247,248,254,0.92)');
+    tx.setAttribute('stroke-width','3.5');
+    tx.setAttribute('paint-order','stroke fill');
+    tx.style.pointerEvents='none';
+    tx.textContent=e.lb;
+    g.appendChild(tx);
+  }
+  svg.appendChild(g);
+}
+
+function ns(tag){return document.createElementNS('http://www.w3.org/2000/svg',tag);}
+
+function bpt(node,tx,ty){
+  const cx=node.x,cy=node.y,w=node.w||100,h=node.h||40;
+  const dx=tx-cx, dy=ty-cy;
+  if(Math.abs(dx)<.01&&Math.abs(dy)<.01) return{x:cx,y:cy};
+  if(node.t==='oval'){
+    const rx=w/2+3,ry=h/2+3,a=Math.atan2(dy,dx);
+    return{x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a)};
+  }
+  const hw=w/2+2,hh=h/2+2;
+  const tv=(Math.abs(dx)*hh>Math.abs(dy)*hw)?hw/Math.abs(dx):hh/Math.abs(dy);
+  return{x:cx+dx*tv,y:cy+dy*tv};
+}
+
+// ── MODE ───────────────────────────────────────────────────────────────────────
+
+function setMode(m){
+  mode=m; srcId=null; hidePicker();
+  const map={move:'btn-move','connect-solid':'btn-csolid','connect-dotted':'btn-cdot',delete:'btn-del'};
+  Object.values(map).forEach(id=>document.getElementById(id)?.classList.remove('on'));
+  if(map[m]) document.getElementById(map[m]).classList.add('on');
+  const gc=document.getElementById('gc'); gc.className='mode-'+m;
+  const pill=document.getElementById('mpill');
+  const pillCls={move:'mp-move','connect-solid':'mp-solid','connect-dotted':'mp-dotted',delete:'mp-delete'};
+  const pillTxt={move:'Move','connect-solid':'Draw Solid Edge','connect-dotted':'Draw Dotted Edge',delete:'Delete'};
+  pill.className='mode-pill '+(pillCls[m]||'mp-move');
+  pill.textContent=pillTxt[m]||m;
+  const svg=document.getElementById('esvg');
+  svg.classList.toggle('pon',m==='delete');
+  nodes.forEach(n=>{const el=document.getElementById('gn-'+n.id);if(el)el.classList.remove('src','tgt');});
+  renderEdges();
+}
+
+// ── NODE/EDGE INTERACTION ──────────────────────────────────────────────────────
+
+document.getElementById('gc').addEventListener('click',e=>{
+  if(e.target===document.getElementById('gc')||e.target===document.getElementById('esvg')){
+    srcId=null; hidePicker();
+    nodes.forEach(n=>{const el=document.getElementById('gn-'+n.id);if(el)el.classList.remove('src');});
+  }
+});
+
+function nodeDown(e,id){
+  if(mode!=='move') return;
+  e.preventDefault(); e.stopPropagation();
+  const n=nodes.find(x=>x.id===id); if(!n) return;
+  dragId=id;
+  const cr=document.getElementById('gc').getBoundingClientRect();
+  dragOx=e.clientX-cr.left-n.x; dragOy=e.clientY-cr.top-n.y;
+  document.addEventListener('mousemove',onDrag);
+  document.addEventListener('mouseup',endDrag);
+}
+
+function onDrag(e){
+  if(!dragId) return;
+  const n=nodes.find(x=>x.id===dragId);
+  const cr=document.getElementById('gc').getBoundingClientRect();
+  n.x=Math.max(40,Math.min(880,e.clientX-cr.left-dragOx));
+  n.y=Math.max(20,Math.min(550,e.clientY-cr.top-dragOy));
+  const el=document.getElementById('gn-'+n.id);
+  if(el){el.style.left=n.x+'px';el.style.top=n.y+'px';}
+  measure(); renderEdges();
+}
+
+function endDrag(){
+  dragId=null;
+  document.removeEventListener('mousemove',onDrag);
+  document.removeEventListener('mouseup',endDrag);
+}
+
+function nodeClick(id){
+  if(mode==='delete'){delNode(id);return;}
+  if(mode!=='connect-solid'&&mode!=='connect-dotted') return;
+  if(!srcId){
+    srcId=id;
+    const el=document.getElementById('gn-'+id);
+    if(el) el.classList.add('src');
+    setSt('Source node selected — now click the target node.','hint');
+    return;
+  }
+  if(srcId===id){
+    srcId=null;
+    const el=document.getElementById('gn-'+id);
+    if(el) el.classList.remove('src');
+    setSt('Selection cleared.','info'); return;
+  }
+  const sn=nodes.find(n=>n.id===srcId);
+  const tn=nodes.find(n=>n.id===id);
+  const clearSrc=()=>{
+    srcId=null;
+    nodes.forEach(n=>{const el=document.getElementById('gn-'+n.id);if(el)el.classList.remove('src','tgt');});
+  };
+  if(mode==='connect-dotted'){
+    if((sn.t==='oval'&&tn.t==='rect')||(sn.t==='rect'&&tn.t==='oval')){
+      if(!edgeEx(srcId,id)){
+        edges.push({id:'ue'+(uid++),f:srcId,t:id,tp:'dotted',lb:'',orig:false,isnew:false});
+        render();
+      } else setSt('An edge already exists between these nodes.','info');
+    } else setSt('Dotted edges connect an entity oval to a property rectangle.','info');
+    clearSrc();
+  } else {
+    if(sn.t==='oval'&&tn.t==='oval'){
+      if(!edgeEx(srcId,id)) showPicker(srcId,id,clearSrc);
+      else{setSt('An edge already exists between these nodes.','info');clearSrc();}
+    } else{setSt('Solid edges connect two entity ovals. Use Dotted Edge for oval→rectangle.','info');clearSrc();}
+  }
+}
+
+function edgeClick(id){
+  if(mode!=='delete') return;
+  delEdge(id);
+}
+
+function delNode(id){
+  const n=nodes.find(x=>x.id===id); if(!n) return;
+  if(n.orig){setSt('Original nodes cannot be deleted.','info');return;}
+  nodes=nodes.filter(x=>x.id!==id);
+  edges=edges.filter(e=>e.f!==id&&e.t!==id);
+  render(); syncPal();
+}
+
+function delEdge(id){
+  const e=edges.find(x=>x.id===id); if(!e) return;
+  if(e.orig){setSt('Original edges cannot be deleted.','info');return;}
+  edges=edges.filter(x=>x.id!==id); renderEdges();
+}
+
+function edgeEx(a,b){
+  return edges.some(e=>(e.f===a&&e.t===b)||(e.f===b&&e.t===a));
+}
+
+// ── LABEL PICKER ───────────────────────────────────────────────────────────────
+
+function showPicker(fromId,toId,done){
+  const q=QS[qi];
+  const fn=nodes.find(n=>n.id===fromId);
+  const tn=nodes.find(n=>n.id===toId);
+  const cr=document.getElementById('gc').getBoundingClientRect();
+  const px=cr.left+(fn.x+tn.x)/2;
+  const py=cr.top+(fn.y+tn.y)/2-75;
+  const pk=document.getElementById('picker');
+  pk.innerHTML='<h5>Choose relationship label</h5>';
+  q.pal.labels.forEach(lb=>{
+    const b=document.createElement('button');
+    b.className='pb'; b.textContent=lb;
+    b.onclick=()=>{
+      hidePicker();
+      if(!edgeEx(fromId,toId))
+        edges.push({id:'ue'+(uid++),f:fromId,t:toId,tp:'solid',lb,orig:false,isnew:false});
+      done(); render();
+    };
+    pk.appendChild(b);
+  });
+  const cc=document.createElement('button');
+  cc.className='pc'; cc.textContent='Cancel';
+  cc.onclick=()=>{hidePicker();done();};
+  pk.appendChild(cc);
+  pk.style.left=Math.min(Math.max(px,155),window.innerWidth-165)+'px';
+  pk.style.top=Math.min(Math.max(py,55),window.innerHeight-200)+'px';
+  pk.style.display='block';
+  setTimeout(()=>document.addEventListener('click',pickerOut,{once:true,capture:true}),80);
+}
+
+function pickerOut(e){
+  if(!document.getElementById('picker').contains(e.target)){hidePicker();}
+}
+
+function hidePicker(){
+  document.getElementById('picker').style.display='none';
+}
+
+// ── SUBMIT ─────────────────────────────────────────────────────────────────────
+
+function submitAnswer(){
+  const q=QS[qi];
+  const lm={};
+  nodes.forEach(n=>{
+    const k=n.l.trim().toLowerCase();
+    if(!lm[k]) lm[k]=[];
+    lm[k].push(n.id);
+  });
+  let missing=0;
+  for(const r of q.req){
+    const froms=lm[r.f.trim().toLowerCase()]||[];
+    const tos=lm[r.t.trim().toLowerCase()]||[];
+    let found=false;
+    outer:for(const fi of froms)
+      for(const ti of tos)
+        if(edges.some(e=>
+          ((e.f===fi&&e.t===ti)||(e.f===ti&&e.t===fi))&&
+          e.tp===r.tp&&
+          (r.tp==='dotted'||e.lb.trim().toLowerCase()===r.lb.trim().toLowerCase())
+        )){found=true;break outer;}
+    if(!found) missing++;
+  }
+  if(missing===0){
+    setSt('✓ Correct! Well done — all required additions are present.','ok');
+    document.getElementById('btn-sol').style.display='none';
+  } else {
+    setSt(`✗ Not quite — ${missing} required addition${missing!==1?'s are':' is'} missing or incorrect. Click "View Solution" to see the answer.`,'err');
+    document.getElementById('btn-sol').style.display='';
+  }
+}
+
+// ── SOLUTION ───────────────────────────────────────────────────────────────────
+
+function showSol(){
+  const q=QS[qi];
+  nodes=q.iN.map(n=>({...n,orig:true,isnew:false,w:100,h:40}));
+  edges=q.iE.map(e=>({...e,orig:true,isnew:false}));
+  q.sN.forEach(sn=>nodes.push({...sn,orig:false,isnew:true,w:100,h:40}));
+  q.sE.forEach(se=>edges.push({
+    id:'se'+(uid++),f:se.f,t:se.t,tp:se.tp,lb:se.lb||'',orig:false,isnew:true
+  }));
+  render(); syncPal();
+  setSt('Solution shown — additions are highlighted in green.','info');
+  document.getElementById('btn-sol').style.display='none';
+  setMode('move');
+}
+
+// ── STATUS ─────────────────────────────────────────────────────────────────────
+
+function setSt(msg,type){
+  const el=document.getElementById('smsg');
+  el.textContent=msg; el.className='sm '+(type||'info');
+}
+</script>
+</body>
+</html>
