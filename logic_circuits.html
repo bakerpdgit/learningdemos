@@ -524,12 +524,11 @@
         const A = { id: "INPUT_A", port: "out" },
           B = { id: "INPUT_B", port: "out" },
           C = { id: "INPUT_C", port: "out" };
-        const g1a = addG(pick(), 185, 88, A, B);
-        const g1b = addG(pick(), 185, 188, B, C);
-        const g1c = addG(pick(), 185, 278, A, C);
-        const g2a = addG(pick(), 355, 130, g1a, g1b);
-        const g2b = addG(pick(), 355, 245, g1b, g1c);
-        const gO = addG(pick(), 510, 188, g2a, g2b);
+        const g1a = addG(pick(), 185, 110, A, B);
+        const g1b = addG(pick(), 185, 245, B, C);
+        const g2a = addG(pick(), 355, 110, g1a, C);
+        const g2b = addG(pick(), 355, 245, A, g1b);
+        const gO = addG(pick(), 510, 178, g2a, g2b);
         connections.push({
           id: `c${connections.length}`,
           fromId: gO.id,
@@ -1912,8 +1911,18 @@
         const [fb, setFb] = useState(null);
 
         const newQ = () => {
-          const c = genTTCircuit();
-          const d = buildTTData(c.gates, c.connections);
+          let c = null,
+            d = null,
+            tries = 0;
+          do {
+            c = genTTCircuit();
+            d = buildTTData(c.gates, c.connections);
+            tries++;
+          } while (
+            tries < 200 &&
+            d.rows.length &&
+            d.rows.every((row) => row.Q === d.rows[0].Q)
+          );
           setCirc(c);
           setTT(d);
           setCells({});
