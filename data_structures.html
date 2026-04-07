@@ -1,0 +1,1407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA Data Structures Interactive</title>
+
+    <script
+      src="https://unpkg.com/react@18/umd/react.development.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+      crossorigin
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+      }
+      .node-connector {
+        flex-grow: 1;
+        height: 2px;
+        background-color: #94a3b8;
+        position: relative;
+        min-width: 30px;
+      }
+      .node-connector::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        top: -4px;
+        width: 0;
+        height: 0;
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+        border-left: 8px solid #94a3b8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo } = React;
+
+      // --- ICONS ---
+      const Plus = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M5 12h14M12 5v14" />
+        </svg>
+      );
+      const CheckCircle = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#16a34a"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+      );
+      const XCircle = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#dc2626"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="15" y1="9" x2="9" y2="15" />
+          <line x1="9" y1="9" x2="15" y2="15" />
+        </svg>
+      );
+
+      // --- UTILS & QUESTION GENERATOR ---
+      const getHash = (str) => {
+        if (!str || str.length !== 2) return 0;
+        return (str.charCodeAt(0) + str.charCodeAt(1)) % 20;
+      };
+
+      const randomChar = () =>
+        String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      const randomKey = () => randomChar() + randomChar();
+
+      const getCollisionKey = (existingHash) => {
+        let k = randomKey();
+        while (getHash(k) !== existingHash) k = randomKey();
+        return k;
+      };
+
+      const pickWeightedOp = (opsWeights) => {
+        const total = Object.values(opsWeights).reduce((a, b) => a + b, 0);
+        let r = Math.random() * total;
+        for (let op in opsWeights) {
+          if (r < opsWeights[op]) return op;
+          r -= opsWeights[op];
+        }
+      };
+
+      const QuestionEngine = {
+        generate: (topic, mode) => {
+          const q = {
+            opStr: "",
+            initialData: { array: [], nodes: [], pointers: {} },
+            expectedData: { array: [], nodes: [], pointers: {} },
+            expectedOutput: { type: "Null", value: "" }, // Null, Value, True, False, Error
+            expectedErrorType: "", // Overflow, Underflow
+          };
+
+          const isDynamic = mode === "Dynamic";
+
+          if (topic === "Stack") {
+            const size = 6;
+            const curLen = Math.floor(Math.random() * 7); // 0 to 6 elements (allows empty and full)
+            const opWeights = {
+              push: 2,
+              pop: 2,
+              peek: 1,
+              isEmpty: 1,
+              isFull: 1,
+            };
+            if (isDynamic) delete opWeights.isFull;
+            const op = pickWeightedOp(opWeights);
+            const val = randomChar();
+
+            q.opStr = op === "push" ? `push('${val}')` : `${op}()`;
+
+            let elements = Array(curLen)
+              .fill("")
+              .map(() => randomChar());
+
+            if (!isDynamic) {
+              q.initialData.array = Array(size).fill("");
+              for (let i = 0; i < curLen; i++)
+                q.initialData.array[i] = elements[i];
+              q.initialData.pointers = { top: curLen - 1 };
+
+              q.expectedData.array = [...q.initialData.array];
+              q.expectedData.pointers = { ...q.initialData.pointers };
+
+              if (op === "push") {
+                if (curLen === size) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Overflow";
+                } else {
+                  q.expectedData.pointers.top++;
+                  q.expectedData.array[q.expectedData.pointers.top] = val;
+                }
+              } else if (op === "pop") {
+                if (curLen === 0) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Underflow";
+                } else {
+                  q.expectedOutput = {
+                    type: "Value",
+                    value: q.initialData.array[curLen - 1],
+                  };
+                  q.expectedData.array[q.expectedData.pointers.top] = "";
+                  q.expectedData.pointers.top--;
+                }
+              } else if (op === "peek") {
+                if (curLen === 0) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Underflow";
+                } else {
+                  q.expectedOutput = {
+                    type: "Value",
+                    value: q.initialData.array[curLen - 1],
+                  };
+                }
+              } else if (op === "isEmpty") {
+                q.expectedOutput = {
+                  type: curLen === 0 ? "True" : "False",
+                  value: "",
+                };
+              } else if (op === "isFull") {
+                q.expectedOutput = {
+                  type: curLen === size ? "True" : "False",
+                  value: "",
+                };
+              }
+            } else {
+              // Dynamic Stack
+              let top = "null";
+              let nodes = [];
+              let idBase = 100;
+              for (let i = 0; i < curLen; i++) {
+                const newId = (idBase++).toString();
+                nodes.push({ id: newId, data: elements[i], next: top });
+                top = newId;
+              }
+              q.initialData.nodes = JSON.parse(JSON.stringify(nodes));
+              q.initialData.pointers = { top };
+
+              q.expectedData.nodes = JSON.parse(JSON.stringify(nodes));
+              q.expectedData.pointers = { top };
+
+              if (op === "push") {
+                const newId = "999"; // Distinct ID for expected
+                q.expectedData.nodes.push({ id: newId, data: val, next: top });
+                q.expectedData.pointers.top = newId;
+              } else if (op === "pop") {
+                if (curLen === 0) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Underflow";
+                } else {
+                  const topNode = q.expectedData.nodes.find(
+                    (n) => n.id === top,
+                  );
+                  q.expectedOutput = { type: "Value", value: topNode.data };
+                  q.expectedData.pointers.top = topNode.next;
+                  q.expectedData.nodes = q.expectedData.nodes.filter(
+                    (n) => n.id !== top,
+                  );
+                }
+              } else if (op === "peek") {
+                if (curLen === 0) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Underflow";
+                } else {
+                  q.expectedOutput = {
+                    type: "Value",
+                    value: q.expectedData.nodes.find((n) => n.id === top).data,
+                  };
+                }
+              } else if (op === "isEmpty") {
+                q.expectedOutput = {
+                  type: curLen === 0 ? "True" : "False",
+                  value: "",
+                };
+              } else if (op === "isFull") {
+                q.expectedOutput = { type: "False", value: "" }; // Dynamic never strictly full in theory
+              }
+            }
+          } else if (topic === "Queue" || topic === "Priority Queue") {
+            const size = 6;
+            let curLen = Math.floor(Math.random() * 7); // 0 to 6 items
+            let front = -1;
+            let rear = -1;
+
+            if (curLen > 0) {
+              front = Math.floor(Math.random() * (size - curLen + 1));
+              rear = (front + curLen - 1) % size;
+
+              if (mode === "Static Circular" && Math.random() > 0.3) {
+                // Force wrapping
+                front = size - Math.floor(Math.random() * 2) - 1;
+                rear = (front + curLen - 1) % size;
+              } else if (mode === "Static Linear") {
+                // Ensure no wrapping in static linear
+                front = Math.floor(Math.random() * (size - curLen + 1));
+                rear = front + curLen - 1;
+              }
+            }
+
+            const opWeights = { enqueue: 2, dequeue: 2, isEmpty: 1, isFull: 1 };
+            if (isDynamic) delete opWeights.isFull;
+            const op = pickWeightedOp(opWeights);
+            const val = randomChar();
+
+            q.opStr = op === "enqueue" ? `enqueue('${val}')` : `${op}()`;
+            if (topic === "Priority Queue" && op === "enqueue") {
+              q.opStr += ` - Alphabetical Priority (A is highest)`;
+            }
+
+            let elements = Array(curLen)
+              .fill("")
+              .map(() => randomChar());
+            if (topic === "Priority Queue") elements.sort();
+
+            if (!isDynamic) {
+              q.initialData.array = Array(size).fill("");
+              if (curLen > 0) {
+                for (let i = 0; i < curLen; i++)
+                  q.initialData.array[(front + i) % size] = elements[i];
+              }
+              q.initialData.pointers = { front, rear };
+
+              q.expectedData.array = [...q.initialData.array];
+              q.expectedData.pointers = { ...q.initialData.pointers };
+
+              if (op === "enqueue") {
+                if (
+                  curLen === size ||
+                  (mode === "Static Linear" && rear === size - 1)
+                ) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Overflow";
+                } else {
+                  if (topic === "Priority Queue") {
+                    elements.push(val);
+                    elements.sort();
+                    q.expectedData.array = Array(size).fill("");
+                    if (front === -1) {
+                      q.expectedData.pointers.front = 0;
+                      q.expectedData.pointers.rear = 0;
+                      q.expectedData.array[0] = elements[0];
+                    } else {
+                      q.expectedData.pointers.rear = (rear + 1) % size;
+                      for (let i = 0; i <= curLen; i++)
+                        q.expectedData.array[(front + i) % size] = elements[i];
+                    }
+                  } else {
+                    if (front === -1) {
+                      q.expectedData.pointers.front = 0;
+                      q.expectedData.pointers.rear = 0;
+                      q.expectedData.array[0] = val;
+                    } else {
+                      q.expectedData.pointers.rear = (rear + 1) % size;
+                      q.expectedData.array[q.expectedData.pointers.rear] = val;
+                    }
+                  }
+                }
+              } else if (op === "dequeue") {
+                if (curLen === 0) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Underflow";
+                } else {
+                  q.expectedOutput = {
+                    type: "Value",
+                    value: q.initialData.array[front],
+                  };
+                  q.expectedData.array[front] = "";
+                  if (curLen === 1) {
+                    // Emptying queue
+                    q.expectedData.pointers.front = -1;
+                    q.expectedData.pointers.rear = -1;
+                  } else {
+                    q.expectedData.pointers.front = (front + 1) % size;
+                  }
+                }
+              } else if (op === "isEmpty") {
+                q.expectedOutput = {
+                  type: curLen === 0 ? "True" : "False",
+                  value: "",
+                };
+              } else if (op === "isFull") {
+                let isF =
+                  curLen === size ||
+                  (mode === "Static Linear" && rear === size - 1);
+                q.expectedOutput = { type: isF ? "True" : "False", value: "" };
+              }
+            } else {
+              // Dynamic Queue
+              let nodes = [];
+              let idBase = 100;
+              let ids = [];
+              for (let i = 0; i < curLen; i++) {
+                ids.push((idBase++).toString());
+              }
+              for (let i = 0; i < curLen; i++) {
+                nodes.push({
+                  id: ids[i],
+                  data: elements[i],
+                  next: i < curLen - 1 ? ids[i + 1] : "null",
+                });
+              }
+
+              let dFront = curLen > 0 ? ids[0] : "null";
+              let dRear = curLen > 0 ? ids[curLen - 1] : "null";
+
+              q.initialData.nodes = JSON.parse(JSON.stringify(nodes));
+              q.initialData.pointers = { front: dFront, rear: dRear };
+              q.expectedData.nodes = JSON.parse(JSON.stringify(nodes));
+              q.expectedData.pointers = { front: dFront, rear: dRear };
+
+              if (op === "enqueue") {
+                const newId = "999";
+                if (topic === "Priority Queue") {
+                  elements.push(val);
+                  elements.sort();
+                  // Rebuild entire linked list structurally for expected
+                  let eNodes = [];
+                  let eFront = "null",
+                    eRear = "null";
+                  for (let i = 0; i <= curLen; i++) {
+                    const nid = `e${i}`;
+                    eNodes.push({
+                      id: nid,
+                      data: elements[i],
+                      next: i < curLen ? `e${i + 1}` : "null",
+                    });
+                    if (i === 0) eFront = nid;
+                    if (i === curLen) eRear = nid;
+                  }
+                  q.expectedData.nodes = eNodes;
+                  q.expectedData.pointers = { front: eFront, rear: eRear };
+                } else {
+                  q.expectedData.nodes.push({
+                    id: newId,
+                    data: val,
+                    next: "null",
+                  });
+                  if (dRear !== "null") {
+                    q.expectedData.nodes.find((n) => n.id === dRear).next =
+                      newId;
+                  } else {
+                    q.expectedData.pointers.front = newId;
+                  }
+                  q.expectedData.pointers.rear = newId;
+                }
+              } else if (op === "dequeue") {
+                if (curLen === 0) {
+                  q.expectedOutput = { type: "Error", value: "" };
+                  q.expectedErrorType = "Underflow";
+                } else {
+                  const fNode = q.expectedData.nodes.find(
+                    (n) => n.id === dFront,
+                  );
+                  q.expectedOutput = { type: "Value", value: fNode.data };
+                  q.expectedData.pointers.front = fNode.next;
+                  if (fNode.next === "null")
+                    q.expectedData.pointers.rear = "null";
+                  q.expectedData.nodes = q.expectedData.nodes.filter(
+                    (n) => n.id !== dFront,
+                  );
+                }
+              } else if (op === "isEmpty") {
+                q.expectedOutput = {
+                  type: curLen === 0 ? "True" : "False",
+                  value: "",
+                };
+              } else if (op === "isFull") {
+                q.expectedOutput = { type: "False", value: "" };
+              }
+            }
+          } else if (topic === "Hash Table") {
+            const opWeights = { add: 2, remove: 2, contains: 1 };
+            const op = pickWeightedOp(opWeights);
+            q.initialData.array = Array(20).fill("");
+
+            const keys = [
+              randomKey(),
+              randomKey(),
+              randomKey(),
+              randomKey(),
+              randomKey(),
+              randomKey(),
+            ];
+            keys.push(getCollisionKey(getHash(keys[0])));
+            keys.push(getCollisionKey(getHash(keys[2])));
+            keys.push(getCollisionKey(getHash(keys[4]))); // Force more collisions to populate the array nicely
+
+            keys.forEach((k) => {
+              let idx = getHash(k);
+              while (q.initialData.array[idx] !== "") idx = (idx + 1) % 20;
+              q.initialData.array[idx] = k;
+            });
+
+            let targetKey =
+              op === "add" ? getCollisionKey(getHash(keys[1])) : keys[0];
+            q.opStr = `${op}('${targetKey}')`;
+
+            q.expectedData.array = [...q.initialData.array];
+
+            if (op === "add") {
+              let idx = getHash(targetKey);
+              while (q.expectedData.array[idx] !== "") idx = (idx + 1) % 20;
+              q.expectedData.array[idx] = targetKey;
+            } else if (op === "remove") {
+              let idx = getHash(targetKey);
+              while (
+                q.expectedData.array[idx] !== targetKey &&
+                q.expectedData.array[idx] !== ""
+              )
+                idx = (idx + 1) % 20;
+              if (q.expectedData.array[idx] === targetKey)
+                q.expectedData.array[idx] = "";
+            } else if (op === "contains") {
+              q.expectedOutput = { type: "True", value: "" };
+            }
+          } else if (topic === "Dictionary") {
+            const opWeights = { add: 2, remove: 2, containsKey: 1 };
+            const op = pickWeightedOp(opWeights);
+            q.initialData.array = Array.from({ length: 20 }, () => ({
+              key: "",
+              val: "",
+            }));
+
+            const keys = [
+              randomKey(),
+              randomKey(),
+              randomKey(),
+              randomKey(),
+              randomKey(),
+              randomKey(),
+            ];
+            keys.push(getCollisionKey(getHash(keys[0])));
+            keys.push(getCollisionKey(getHash(keys[2])));
+            keys.push(getCollisionKey(getHash(keys[4])));
+
+            keys.forEach((k) => {
+              let idx = getHash(k);
+              while (q.initialData.array[idx].key !== "") idx = (idx + 1) % 20;
+              q.initialData.array[idx] = {
+                key: k,
+                val: Math.floor(Math.random() * 100).toString(),
+              };
+            });
+
+            let targetKey =
+              op === "add" ? getCollisionKey(getHash(keys[1])) : keys[0];
+            let targetVal = Math.floor(Math.random() * 100).toString();
+            q.opStr =
+              op === "add"
+                ? `${op}('${targetKey}', ${targetVal})`
+                : `${op}('${targetKey}')`;
+
+            q.expectedData.array = q.initialData.array.map((obj) => ({
+              ...obj,
+            }));
+
+            if (op === "add") {
+              let idx = getHash(targetKey);
+              while (q.expectedData.array[idx].key !== "") idx = (idx + 1) % 20;
+              q.expectedData.array[idx] = { key: targetKey, val: targetVal };
+            } else if (op === "remove") {
+              let idx = getHash(targetKey);
+              while (
+                q.expectedData.array[idx].key !== targetKey &&
+                q.expectedData.array[idx].key !== ""
+              )
+                idx = (idx + 1) % 20;
+              if (q.expectedData.array[idx].key === targetKey)
+                q.expectedData.array[idx] = { key: "", val: "" };
+            } else if (op === "containsKey") {
+              q.expectedOutput = { type: "True", value: "" };
+            }
+          }
+          return q;
+        },
+      };
+
+      // --- COMPONENTS ---
+
+      const OutputPanel = ({ userOutput, setUserOutput }) => {
+        return (
+          <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 mt-6 shadow-inner">
+            <h4 className="text-sm font-semibold text-slate-700 mb-3">
+              Operation Return / Error Output
+            </h4>
+            <div className="flex flex-wrap items-center gap-4">
+              <select
+                value={userOutput.type}
+                onChange={(e) =>
+                  setUserOutput({ type: e.target.value, value: "" })
+                }
+                className="p-2 border border-slate-300 rounded-md font-medium text-slate-700 focus:ring-blue-500 outline-none"
+              >
+                <option value="Null">Null / No Return</option>
+                <option value="Value">Returns Data Value</option>
+                <option value="True">Returns True</option>
+                <option value="False">Returns False</option>
+                <option value="Error">Raises Error</option>
+              </select>
+
+              {userOutput.type === "Value" && (
+                <input
+                  type="text"
+                  value={userOutput.value}
+                  onChange={(e) =>
+                    setUserOutput({ ...userOutput, value: e.target.value })
+                  }
+                  placeholder="Enter value..."
+                  className="p-2 border border-slate-300 rounded-md outline-none focus:border-blue-500 w-32"
+                />
+              )}
+
+              {userOutput.type === "Error" && (
+                <select
+                  value={userOutput.value}
+                  onChange={(e) =>
+                    setUserOutput({ ...userOutput, value: e.target.value })
+                  }
+                  className="p-2 border border-red-300 bg-red-50 text-red-700 rounded-md outline-none w-32 font-medium"
+                >
+                  <option value="">Select Error...</option>
+                  <option value="Overflow">Overflow</option>
+                  <option value="Underflow">Underflow</option>
+                </select>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const HashCalculator = () => {
+        const [keyInput, setKeyInput] = useState("");
+        const renderCalculation = () => {
+          if (keyInput.length !== 2)
+            return (
+              <span className="text-slate-400 italic text-sm">
+                Enter 2 uppercase letters
+              </span>
+            );
+          const sum = keyInput.charCodeAt(0) + keyInput.charCodeAt(1);
+          return (
+            <div className="flex items-center space-x-2 text-sm font-mono text-slate-700">
+              <span className="bg-white px-2 py-1 rounded border border-slate-200">
+                {keyInput[0]} ({keyInput.charCodeAt(0)})
+              </span>
+              <span>+</span>
+              <span className="bg-white px-2 py-1 rounded border border-slate-200">
+                {keyInput[1]} ({keyInput.charCodeAt(1)})
+              </span>
+              <span>= {sum}</span>
+              <span className="mx-2 font-bold text-slate-400">→</span>
+              <span>{sum} % 20 =</span>
+              <span className="bg-blue-100 text-blue-800 font-bold px-2 py-1 rounded border border-blue-200 ml-1">
+                {sum % 20}
+              </span>
+            </div>
+          );
+        };
+
+        return (
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm w-fit flex items-center space-x-6 mb-8">
+            <div>
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Hash Calculator
+              </h4>
+              <input
+                type="text"
+                value={keyInput}
+                onChange={(e) =>
+                  setKeyInput(
+                    e.target.value
+                      .toUpperCase()
+                      .replace(/[^A-Z]/g, "")
+                      .slice(0, 2),
+                  )
+                }
+                placeholder="AR"
+                className="w-16 text-center text-lg font-bold py-1 border-2 border-slate-300 rounded-md focus:border-blue-500 outline-none uppercase"
+              />
+            </div>
+            <div className="w-px h-10 bg-slate-300"></div>
+            <div className="min-w-[280px]">{renderCalculation()}</div>
+          </div>
+        );
+      };
+
+      const DictionaryArrayEditor = ({ state, setState, isHash }) => {
+        const handleVal = (idx, field, val) => {
+          const arr = [...state.array];
+          if (isHash) {
+            arr[idx] = val
+              .toUpperCase()
+              .replace(/[^A-Z]/g, "")
+              .slice(0, 2);
+          } else {
+            if (field === "key")
+              arr[idx].key = val
+                .toUpperCase()
+                .replace(/[^A-Z]/g, "")
+                .slice(0, 2);
+            else arr[idx].val = val.replace(/[^0-9-]/g, "").slice(0, 4);
+          }
+          setState({ ...state, array: arr });
+        };
+
+        return (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <HashCalculator />
+            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner overflow-x-auto">
+              <div
+                className={`grid gap-4 ${isHash ? "grid-cols-5 md:grid-cols-10" : "grid-cols-3 md:grid-cols-5 min-w-[600px]"}`}
+              >
+                {state.array.map((item, idx) => (
+                  <div key={idx} className="flex flex-col items-center">
+                    <span className="text-xs font-mono font-bold text-slate-400 mb-1.5">
+                      {idx}
+                    </span>
+                    {isHash ? (
+                      <input
+                        type="text"
+                        value={item || ""}
+                        onChange={(e) => handleVal(idx, null, e.target.value)}
+                        className={`w-14 h-14 text-center text-xl font-bold border-2 rounded-md focus:outline-none focus:border-blue-400 shadow-sm ${item ? "bg-blue-50 border-blue-300 text-blue-900" : "border-slate-300 bg-white"}`}
+                      />
+                    ) : (
+                      <div
+                        className={`flex items-center text-slate-800 font-bold bg-white border-2 rounded-md overflow-hidden shadow-sm transition-all focus-within:ring-2 ${item?.key || item?.val ? "border-purple-400 focus-within:ring-purple-200" : "border-slate-300 focus-within:ring-slate-200"}`}
+                      >
+                        <span className="pl-2 pr-1 text-slate-400 font-mono select-none">
+                          (
+                        </span>
+                        <input
+                          type="text"
+                          value={item?.key || ""}
+                          onChange={(e) =>
+                            handleVal(idx, "key", e.target.value)
+                          }
+                          placeholder="K"
+                          className={`w-8 h-10 text-center font-bold outline-none transition-colors ${item?.key ? "bg-purple-50 text-purple-900" : ""}`}
+                        />
+                        <span className="text-slate-400 font-mono select-none">
+                          ,
+                        </span>
+                        <input
+                          type="text"
+                          value={item?.val || ""}
+                          onChange={(e) =>
+                            handleVal(idx, "val", e.target.value)
+                          }
+                          placeholder="V"
+                          className={`w-10 h-10 text-center outline-none font-mono text-sm transition-colors ${item?.val ? "bg-slate-50" : ""}`}
+                        />
+                        <span className="pr-2 pl-1 text-slate-400 font-mono select-none">
+                          )
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const StaticArrayEditor = ({ state, setState, ptrNames }) => {
+        const setPtr = (name, idx) =>
+          setState({ ...state, pointers: { ...state.pointers, [name]: idx } });
+        const setVal = (idx, val) => {
+          const arr = [...state.array];
+          arr[idx] = val.toUpperCase().slice(0, 2);
+          setState({ ...state, array: arr });
+        };
+
+        return (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="mb-10 flex items-center gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100 shadow-sm w-fit">
+              {ptrNames.map((name, i) => (
+                <React.Fragment key={name}>
+                  {i > 0 && <div className="w-px h-6 bg-slate-300"></div>}
+                  <div className="flex items-center space-x-3">
+                    <span
+                      className={`text-sm font-semibold capitalize ${i === 0 ? "text-blue-700" : "text-emerald-700"}`}
+                    >
+                      {name}: {state.pointers[name]}
+                    </span>
+                    <button
+                      onClick={() => setPtr(name, -1)}
+                      className="px-2 py-1 text-xs bg-white border border-slate-300 rounded hover:bg-slate-100"
+                    >
+                      Set to -1
+                    </button>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+
+            <div className="overflow-x-auto pb-8 pt-12">
+              <div className="flex items-end min-w-max space-x-2">
+                {state.array.map((val, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-col items-center w-20 relative group mt-2"
+                  >
+                    <div className="absolute -top-10 flex flex-col items-center space-y-1 h-10 justify-end pb-1 w-full pointer-events-none">
+                      {ptrNames.map(
+                        (name, i) =>
+                          state.pointers[name] === idx && (
+                            <div
+                              key={name}
+                              className={`text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm ${i === 0 ? "bg-blue-600" : "bg-emerald-600"}`}
+                            >
+                              {name.toUpperCase()}
+                            </div>
+                          ),
+                      )}
+                    </div>
+                    <span className="text-xs font-mono text-slate-400 mb-1">
+                      {idx}
+                    </span>
+                    <input
+                      type="text"
+                      value={val || ""}
+                      onChange={(e) => setVal(idx, e.target.value)}
+                      maxLength="2"
+                      className="w-16 h-16 text-center text-xl font-semibold border-2 border-slate-300 rounded-md focus:outline-none focus:border-slate-500 shadow-inner"
+                    />
+                    <div className="flex space-x-1 mt-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                      {ptrNames.map((name, i) => (
+                        <button
+                          key={name}
+                          onClick={() => setPtr(name, idx)}
+                          className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded ${state.pointers[name] === idx ? (i === 0 ? "bg-blue-600 text-white" : "bg-emerald-600 text-white") : "bg-slate-100 text-slate-500"}`}
+                        >
+                          {name.charAt(0).toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const NodeView = ({
+        node,
+        nodes,
+        pointers,
+        removeNode,
+        updateNodeData,
+        updateNodeNext,
+      }) => (
+        <div className="relative flex flex-col items-center mt-6 group">
+          <div className="absolute -top-7 flex flex-col items-center space-y-0.5 w-full pointer-events-none z-10">
+            {pointers.map(
+              (p, i) =>
+                p.val === node.id && (
+                  <div
+                    key={p.name}
+                    className={`text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm ${i === 0 ? "bg-blue-600" : "bg-emerald-600"}`}
+                  >
+                    {p.name.charAt(0).toUpperCase() + p.name.slice(1)}
+                  </div>
+                ),
+            )}
+          </div>
+          <div className="flex border-2 border-slate-700 rounded-md bg-white shadow-sm hover:shadow-md transition-shadow relative">
+            <button
+              onClick={() => removeNode(node.id)}
+              className="absolute -top-2.5 -right-2.5 bg-red-100 hover:bg-red-500 text-red-600 hover:text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-xs shadow border border-red-200 z-20"
+            >
+              ✕
+            </button>
+            <input
+              type="text"
+              className="w-16 h-10 text-center outline-none font-semibold text-slate-800 rounded-l-md focus:bg-blue-50 transition-colors"
+              value={node.data || ""}
+              onChange={(e) => updateNodeData(node.id, e.target.value)}
+              placeholder="..."
+            />
+            <div className="border-l-2 border-slate-700 bg-slate-50 flex items-center rounded-r-md overflow-hidden relative">
+              <select
+                value={node.next}
+                onChange={(e) => updateNodeNext(node.id, e.target.value)}
+                className="h-full bg-transparent outline-none text-xs font-mono font-medium text-slate-600 cursor-pointer pl-2 pr-6 appearance-none hover:bg-slate-200 focus:bg-blue-100 transition-colors"
+              >
+                <option value="null">Null</option>
+                {nodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    → {n.id}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-400 mt-1.5 font-mono font-medium bg-slate-100 px-1.5 py-0.5 rounded">
+            ID: {node.id}
+          </div>
+        </div>
+      );
+
+      const DynamicEditor = ({ state, setState, ptrNames }) => {
+        const setPtr = (name, val) =>
+          setState({ ...state, pointers: { ...state.pointers, [name]: val } });
+
+        const addNode = () => {
+          const maxId = Math.max(
+            99,
+            ...state.nodes.map((n) => parseInt(n.id) || 0),
+          );
+          setState({
+            ...state,
+            nodes: [
+              ...state.nodes,
+              { id: (maxId + 1).toString(), data: "", next: "null" },
+            ],
+          });
+        };
+
+        const removeNode = (id) => {
+          const newPtrs = { ...state.pointers };
+          for (let p in newPtrs) if (newPtrs[p] === id) newPtrs[p] = "null";
+          setState({
+            ...state,
+            pointers: newPtrs,
+            nodes: state.nodes
+              .filter((n) => n.id !== id)
+              .map((n) => (n.next === id ? { ...n, next: "null" } : n)),
+          });
+        };
+
+        const updateNodeData = (id, data) =>
+          setState({
+            ...state,
+            nodes: state.nodes.map((n) => (n.id === id ? { ...n, data } : n)),
+          });
+        const updateNodeNext = (id, next) =>
+          setState({
+            ...state,
+            nodes: state.nodes.map((n) => (n.id === id ? { ...n, next } : n)),
+          });
+
+        const startPtr = state.pointers.top || state.pointers.front || "null";
+        let currentId = startPtr;
+        const visited = new Set();
+        const chain = [];
+        let hasCycle = false;
+
+        while (currentId !== "null" && currentId) {
+          if (visited.has(currentId)) {
+            hasCycle = true;
+            chain.push({ type: "cycle", to: currentId });
+            break;
+          }
+          visited.add(currentId);
+          const node = state.nodes.find((n) => n.id === currentId);
+          if (!node) {
+            chain.push({ type: "error", to: currentId });
+            break;
+          }
+          chain.push({ type: "node", node });
+          currentId = node.next;
+        }
+
+        const unlinkedNodes = state.nodes.filter((n) => !visited.has(n.id));
+        const activePtrsList = ptrNames.map((name) => ({
+          name,
+          val: state.pointers[name],
+        }));
+
+        return (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <div className="flex flex-wrap items-center gap-6 bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-sm mb-6">
+                {ptrNames.map((name, i) => (
+                  <div key={name} className="flex items-center space-x-2">
+                    <span
+                      className={`text-sm font-bold capitalize ${i === 0 ? "text-blue-700" : "text-emerald-700"}`}
+                    >
+                      {name} Pointer:
+                    </span>
+                    <select
+                      value={state.pointers[name]}
+                      onChange={(e) => setPtr(name, e.target.value)}
+                      className={`appearance-none bg-white border text-sm rounded-md py-1.5 pl-3 pr-8 focus:outline-none focus:ring-2 font-mono cursor-pointer shadow-sm ${i === 0 ? "border-blue-200 text-blue-800 focus:ring-blue-500" : "border-emerald-200 text-emerald-800 focus:ring-emerald-500"}`}
+                    >
+                      <option value="null">Null</option>
+                      {state.nodes.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          Addr {n.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                <button
+                  onClick={addNode}
+                  className="ml-auto flex items-center space-x-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-sm font-medium transition-colors border border-indigo-200 shadow-sm"
+                >
+                  <Plus /> <span>New Node</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 min-h-[180px] flex flex-col justify-center overflow-x-auto shadow-inner">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  Main Chain
+                </h4>
+                <div className="flex items-center min-w-max space-x-2 mt-4">
+                  {startPtr === "null" && (
+                    <div className="text-slate-400 font-mono font-medium px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg bg-white">
+                      Empty
+                    </div>
+                  )}
+                  {chain.map((item, idx) => (
+                    <React.Fragment key={idx}>
+                      {item.type === "node" && (
+                        <div className="flex items-center">
+                          <NodeView
+                            node={item.node}
+                            nodes={state.nodes}
+                            pointers={activePtrsList}
+                            removeNode={removeNode}
+                            updateNodeData={updateNodeData}
+                            updateNodeNext={updateNodeNext}
+                          />
+                          {item.node.next !== "null" && (
+                            <div className="node-connector w-10 mx-2"></div>
+                          )}
+                        </div>
+                      )}
+                      {item.type === "cycle" && (
+                        <div className="px-3 py-2 bg-red-100 text-red-600 font-medium rounded-md border border-red-200 shadow-sm ml-2">
+                          ↻ Cycle
+                        </div>
+                      )}
+                      {item.type === "error" && (
+                        <div className="px-3 py-2 bg-red-100 text-red-600 font-medium rounded-md border border-red-200 shadow-sm ml-2">
+                          Missing Node
+                        </div>
+                      )}
+                    </React.Fragment>
+                  ))}
+                  {!hasCycle &&
+                    startPtr !== "null" &&
+                    (chain.length === 0 ||
+                      chain[chain.length - 1].type === "node") &&
+                    (chain.length === 0 ||
+                      chain[chain.length - 1].node.next === "null") && (
+                      <div className="text-slate-400 font-mono font-medium ml-2 px-3 py-1.5 border border-dashed border-slate-300 rounded bg-slate-50">
+                        Null
+                      </div>
+                    )}
+                </div>
+              </div>
+
+              {unlinkedNodes.length > 0 && (
+                <div className="mt-6 p-4 border border-dashed border-amber-200 bg-amber-50/50 rounded-xl">
+                  <h4 className="text-sm font-semibold text-amber-700 mb-4 flex items-center">
+                    Disconnected Nodes (Heap)
+                  </h4>
+                  <div className="flex flex-wrap gap-x-8 gap-y-6 items-start">
+                    {unlinkedNodes.map((node) => (
+                      <NodeView
+                        key={node.id}
+                        node={node}
+                        nodes={state.nodes}
+                        pointers={activePtrsList}
+                        removeNode={removeNode}
+                        updateNodeData={updateNodeData}
+                        updateNodeNext={updateNodeNext}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const App = () => {
+        const topics = [
+          "Stack",
+          "Queue",
+          "Priority Queue",
+          "Hash Table",
+          "Dictionary",
+        ];
+        const modesMap = {
+          Stack: ["Static", "Dynamic"],
+          Queue: ["Static Linear", "Static Circular", "Dynamic"],
+          "Priority Queue": ["Static Linear", "Static Circular", "Dynamic"],
+          "Hash Table": ["Static Array"],
+          Dictionary: ["Static Array"],
+        };
+
+        const [topic, setTopic] = useState("Stack");
+        const [mode, setMode] = useState("Static");
+
+        const [question, setQuestion] = useState(null);
+        const [userState, setUserState] = useState({
+          array: [],
+          nodes: [],
+          pointers: {},
+        });
+        const [userOutput, setUserOutput] = useState({
+          type: "Null",
+          value: "",
+        });
+        const [feedback, setFeedback] = useState(null);
+
+        const loadNewQuestion = () => {
+          const q = QuestionEngine.generate(topic, mode);
+          setQuestion(q);
+          const arrClone = q.initialData.array
+            ? q.initialData.array.map((item) =>
+                typeof item === "object" ? { ...item } : item,
+              )
+            : [];
+          const nodesClone = q.initialData.nodes
+            ? q.initialData.nodes.map((n) => ({ ...n }))
+            : [];
+          setUserState({
+            array: arrClone,
+            nodes: nodesClone,
+            pointers: { ...q.initialData.pointers },
+          });
+          setUserOutput({ type: "Null", value: "" });
+          setFeedback(null);
+        };
+
+        useEffect(() => {
+          loadNewQuestion();
+        }, [topic, mode]);
+        useEffect(() => {
+          if (!modesMap[topic].includes(mode)) setMode(modesMap[topic][0]);
+        }, [topic]);
+
+        const getLogicalSequence = (nodes, ptr) => {
+          const seq = [];
+          let curr = ptr;
+          let safety = 0;
+          while (curr !== "null" && curr && safety < 50) {
+            const n = nodes.find((x) => x.id === curr);
+            if (!n) break;
+            seq.push(n.data);
+            curr = n.next;
+            safety++;
+          }
+          return seq;
+        };
+
+        const checkAnswer = () => {
+          let isDataCorrect = false;
+          let isOutputCorrect = false;
+
+          if (userOutput.type === "Error") {
+            isOutputCorrect =
+              question.expectedOutput.type === "Error" &&
+              userOutput.value === question.expectedErrorType;
+          } else {
+            isOutputCorrect =
+              userOutput.type === question.expectedOutput.type &&
+              userOutput.value.toString() ===
+                question.expectedOutput.value.toString();
+          }
+
+          if (mode === "Dynamic") {
+            const mainPtrName = topic === "Stack" ? "top" : "front";
+            const uSeq = getLogicalSequence(
+              userState.nodes,
+              userState.pointers[mainPtrName],
+            );
+            const eSeq = getLogicalSequence(
+              question.expectedData.nodes,
+              question.expectedData.pointers[mainPtrName],
+            );
+
+            isDataCorrect = JSON.stringify(uSeq) === JSON.stringify(eSeq);
+
+            // Check for memory leaks
+            if (
+              isDataCorrect &&
+              userState.nodes.length !== question.expectedData.nodes.length
+            ) {
+              isDataCorrect = false;
+            }
+
+            // Specific check for rear pointer in dynamic queue
+            if (isDataCorrect && topic.includes("Queue")) {
+              const eRearData = eSeq.length > 0 ? eSeq[eSeq.length - 1] : null;
+              const uRearNode = userState.nodes.find(
+                (n) => n.id === userState.pointers.rear,
+              );
+              if (eRearData) {
+                if (!uRearNode || uRearNode.data !== eRearData)
+                  isDataCorrect = false;
+              } else {
+                if (userState.pointers.rear !== "null") isDataCorrect = false;
+              }
+            }
+          } else if (topic === "Dictionary") {
+            isDataCorrect =
+              JSON.stringify(userState.array) ===
+              JSON.stringify(question.expectedData.array);
+          } else {
+            isDataCorrect =
+              JSON.stringify(userState.array) ===
+                JSON.stringify(question.expectedData.array) &&
+              JSON.stringify(userState.pointers) ===
+                JSON.stringify(question.expectedData.pointers);
+          }
+
+          // If error was expected, punish changing data (usually means they didn't abort operation)
+          if (
+            question.expectedOutput.type === "Error" &&
+            (JSON.stringify(userState.array) !==
+              JSON.stringify(question.initialData.array) ||
+              JSON.stringify(userState.pointers) !==
+                JSON.stringify(question.initialData.pointers))
+          ) {
+            isDataCorrect = false;
+          }
+
+          if (isDataCorrect && isOutputCorrect)
+            setFeedback({
+              success: true,
+              msg: "Correct! Data structure and returned output are perfectly accurate.",
+            });
+          else if (!isDataCorrect && isOutputCorrect)
+            setFeedback({
+              success: false,
+              msg: "Incorrect Data Structure. Your returned value/error was right, but the pointers/nodes updates are wrong.",
+            });
+          else if (isDataCorrect && !isOutputCorrect)
+            setFeedback({
+              success: false,
+              msg: "Incorrect Output. You updated the structure correctly, but failed to return the correct value or error.",
+            });
+          else
+            setFeedback({
+              success: false,
+              msg: "Incorrect. Both the data structure updates and the return output are wrong.",
+            });
+        };
+
+        const showSolution = () => {
+          const arrClone = question.expectedData.array
+            ? question.expectedData.array.map((item) =>
+                typeof item === "object" ? { ...item } : item,
+              )
+            : [];
+          const nodesClone = question.expectedData.nodes
+            ? question.expectedData.nodes.map((n) => ({ ...n }))
+            : [];
+          setUserState({
+            array: arrClone,
+            nodes: nodesClone,
+            pointers: { ...question.expectedData.pointers },
+          });
+
+          setUserOutput({
+            type:
+              question.expectedOutput.type === "Error"
+                ? "Error"
+                : question.expectedOutput.type,
+            value:
+              question.expectedOutput.type === "Error"
+                ? question.expectedErrorType
+                : question.expectedOutput.value,
+          });
+          setFeedback({ success: true, msg: "Solution applied." });
+        };
+
+        return (
+          <div className="min-h-screen bg-slate-50 py-10 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-6xl mx-auto space-y-6">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h1 className="text-2xl font-bold text-slate-900 mb-4">
+                  AQA CS: Data Structures Interactive
+                </h1>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {topics.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTopic(t)}
+                      className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${topic === t ? "bg-slate-800 text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                  <span className="text-sm font-medium text-slate-400 py-1.5 mr-2">
+                    Implementation:
+                  </span>
+                  {modesMap[topic].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMode(m)}
+                      className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all ${mode === m ? "bg-blue-100 text-blue-700 border border-blue-300" : "bg-transparent text-slate-500 border border-slate-200 hover:bg-slate-50"}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {question && (
+                <div className="bg-indigo-600 p-6 rounded-2xl shadow-md text-white flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div>
+                    <h2 className="text-indigo-200 text-sm font-bold uppercase tracking-widest mb-1">
+                      Current Task
+                    </h2>
+                    <p className="text-xl font-medium">
+                      Perform the operation:{" "}
+                      <code className="bg-indigo-800 px-3 py-1 rounded-lg text-yellow-300 shadow-inner text-2xl ml-2">
+                        {question.opStr}
+                      </code>
+                    </p>
+                    <p className="text-indigo-200 text-sm mt-2">
+                      Update the structure below and select the correct output.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {topic === "Dictionary" && (
+                <DictionaryArrayEditor
+                  state={userState}
+                  setState={setUserState}
+                  isHash={false}
+                />
+              )}
+              {topic === "Hash Table" && (
+                <DictionaryArrayEditor
+                  state={userState}
+                  setState={setUserState}
+                  isHash={true}
+                />
+              )}
+              {topic === "Stack" && mode === "Static" && (
+                <StaticArrayEditor
+                  state={userState}
+                  setState={setUserState}
+                  ptrNames={["top"]}
+                />
+              )}
+              {(topic === "Queue" || topic === "Priority Queue") &&
+                mode.includes("Static") && (
+                  <StaticArrayEditor
+                    state={userState}
+                    setState={setUserState}
+                    ptrNames={["front", "rear"]}
+                  />
+                )}
+              {mode === "Dynamic" && (
+                <DynamicEditor
+                  state={userState}
+                  setState={setUserState}
+                  ptrNames={topic === "Stack" ? ["top"] : ["front", "rear"]}
+                />
+              )}
+
+              <OutputPanel
+                userOutput={userOutput}
+                setUserOutput={setUserOutput}
+              />
+
+              <div className="flex flex-wrap items-center gap-6 mt-6 pt-4 border-t border-slate-200">
+                <button
+                  onClick={checkAnswer}
+                  className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-md transition-all"
+                >
+                  Check Answer
+                </button>
+
+                <button
+                  onClick={loadNewQuestion}
+                  className="bg-white border-2 border-indigo-600 text-indigo-700 hover:bg-indigo-50 px-6 py-3 rounded-xl font-bold text-lg shadow-sm transition-all"
+                >
+                  New Question
+                </button>
+
+                {feedback && (
+                  <div
+                    className={`flex items-center space-x-3 px-6 py-3 rounded-xl font-medium ${feedback.success ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200"}`}
+                  >
+                    {feedback.success ? <CheckCircle /> : <XCircle />}
+                    <span>{feedback.msg}</span>
+
+                    {!feedback.success && (
+                      <button
+                        onClick={showSolution}
+                        className="ml-4 px-3 py-1 bg-red-200 hover:bg-red-300 text-red-900 rounded-md text-sm font-bold transition-colors"
+                      >
+                        See Solution
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
