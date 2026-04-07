@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Von Neumann Processor Simulator</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        background-color: #0f172a;
+        color: #f8fafc;
+        font-family: "Inter", sans-serif;
+        overflow: hidden;
+      }
+
+      /* Layout components */
+      .cpu-box {
+        border: 2px solid #334155;
+        border-radius: 0.5rem;
+        background: #1e293b;
+        position: relative;
+      }
+      .component {
+        border: 2px solid #475569;
+        border-radius: 0.25rem;
+        background: #0f172a;
+        padding: 0.5rem;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+      .component:hover {
+        border-color: #38bdf8;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+      }
+      .component.active-glow {
+        border-color: #22c55e;
+        box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
+        background-color: #14532d;
+      }
+
+      .bus {
+        border: 2px solid #475569;
+        background-color: transparent;
+        transition: all 0.3s;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        color: #cbd5e1;
+        font-weight: bold;
+        letter-spacing: 1px;
+        cursor: pointer;
+      }
+      .bus:hover {
+        border-color: #38bdf8;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+      }
+      .bus.active-bus {
+        background-color: #3b82f6;
+        border-color: #60a5fa;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+        color: white;
+      }
+
+      /* Grid */
+      .ram-grid {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 2px;
+      }
+      .ram-cell {
+        background: #1e293b;
+        border: 1px solid #334155;
+        text-align: center;
+        padding: 2px;
+        font-size: 0.65rem;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        height: 35px;
+        transition: all 0.2s;
+      }
+      .ram-cell:hover {
+        background: #334155;
+      }
+      .ram-cell.ram-active {
+        background: #166534;
+        border-color: #4ade80;
+        color: #fff;
+        box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+        z-index: 10;
+      }
+      .ram-cell.ram-pc {
+        border-color: #38bdf8;
+        background: rgba(56, 189, 248, 0.2);
+      }
+
+      .scrollable-panel {
+        overflow-y: auto;
+        max-height: calc(100vh - 4rem);
+      }
+      .lcd-text {
+        font-family: "Courier New", Courier, monospace;
+        color: #4ade80;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- INSTRUCTION SET CONSTANTS & HELPERS ---
+      const OPCODES = {
+        LDR: "00000",
+        STR: "00001",
+        ADD: "00010",
+        SUB: "00011",
+        MOV: "00100",
+        CMP: "00101",
+        B: "00110",
+        BEQ: "00111",
+        BNE: "01000",
+        AND: "01001",
+        ORR: "01010",
+        EOR: "01011",
+        MVN: "01100",
+        LSL: "01101",
+        LSR: "01110",
+        HALT: "11111",
+      };
+
+      // Helper to fake binary representation
+      function toBinStr(num, bits) {
+        if (num < 0) num = (1 << bits) + num;
+        return num.toString(2).padStart(bits, "0");
+      }
+
+      function asmToBinary(asm) {
+        if (!asm || asm === "0") return "0000000000000000";
+        const parts = asm.replace(/,/g, "").split(" ");
+        const op = parts[0];
+        const opcodeBin = OPCODES[op] || "00000";
+
+        if (op === "HALT") return "1111100000000000";
+
+        let mode = "0"; // 0 = Direct/Register, 1 = Immediate
+        let reg1Bin = "0000";
+        let operandBin = "000000";
+
+        if (op === "B" || op === "BEQ" || op === "BNE") {
+          operandBin = toBinStr(parseInt(parts[1]), 10);
+          return `${opcodeBin}0${operandBin.padStart(10, "0")}`;
+        }
+
+        if (parts.length > 1) {
+          reg1Bin = toBinStr(parseInt(parts[1].replace("R", "")), 4);
+        }
+
+        let lastPart = parts[parts.length - 1];
+        if (lastPart.startsWith("#")) {
+          mode = "1";
+          operandBin = toBinStr(parseInt(lastPart.replace("#", "")), 6);
+        } else if (lastPart.startsWith("R") && parts.length === 3) {
+          // Register operand (simplification for visualization)
+          operandBin = toBinStr(parseInt(lastPart.replace("R", "")), 6);
+        } else if (!isNaN(parseInt(lastPart))) {
+          // Direct Memory
+          operandBin = toBinStr(parseInt(lastPart), 6);
+        }
+
+        return `${opcodeBin}${mode}${reg1Bin}${operandBin}`;
+      }
+
+      // --- INITIAL STATE SETUP ---
+      const INITIAL_PROGRAM = {
+        100: "LDR R0, 198", // Load 5 into R0
+        101: "MOV R1, #3", // Counter = 3
+        102: "MOV R2, #0", // Accumulator = 0
+        103: "CMP R1, #0", // Compare counter with 0
+        104: "BEQ 109", // If counter == 0, branch to store
+        105: "ADD R2, R2, R0", // Accumulate: R2 = R2 + 5
+        106: "SUB R1, R1, #1", // Decrement counter
+        107: "B 103", // Loop back
+        108: "HALT",
+        109: "STR R2, 199", // Store result (15) in 199
+        110: "HALT",
+        190: "0", // Stack for PC
+        191: "0", // Stack for SR
+        192: "0", // Stack for R0
+        193: "0", // Stack for R1
+        194: "0", // Stack for R2
+        195: "0", // Stack for R3
+        198: "5", // Data
+        199: "0", // Data Result
+      };
+
+      const generateInitialMemory = () => {
+        const mem = {};
+        for (let i = 100; i < 200; i++) {
+          mem[i] = INITIAL_PROGRAM[i] || "0";
+        }
+        return mem;
+      };
+
+      const MICRO_STATES = {
+        F1_PC_TO_MAR: "F1_PC_TO_MAR",
+        F2_RAM_TO_MBR: "F2_RAM_TO_MBR",
+        F3_MBR_TO_CIR: "F3_MBR_TO_CIR",
+        DECODE: "DECODE",
+        E1_ROUTING: "E1_ROUTING",
+        E2_MEMORY: "E2_MEMORY",
+        E3_WRITEBACK: "E3_WRITEBACK",
+        INT_1_CHECK: "INT_1_CHECK",
+        INT_2_SAVE: "INT_2_SAVE",
+        INT_3_JUMP: "INT_3_JUMP",
+        INT_RESTORE: "INT_RESTORE",
+        HALTED: "HALTED",
+      };
+
+      const TOPICS = [
+        "FDE Cycle",
+        "Registers",
+        "Buses",
+        "ALU & Math",
+        "Interrupts",
+      ];
+
+      const INITIAL_STATE = {
+        registers: {
+          PC: 100,
+          CIR: "0",
+          MAR: 0,
+          MBR: "0",
+          SR: { Z: 0, N: 0, C: 0, V: 0 },
+          R0: 0,
+          R1: 0,
+          R2: 0,
+          R3: 0,
+          R4: 0,
+          R5: 0,
+          R6: 0,
+          R7: 0,
+          R8: 0,
+          R9: 0,
+          R10: 0,
+          R11: 0,
+          R12: 0,
+        },
+        memory: generateInitialMemory(),
+        microState: MICRO_STATES.F1_PC_TO_MAR,
+        clock: 0,
+        activeComponents: [],
+        activeBuses: [],
+        interruptPending: false,
+        interruptMode: false,
+      };
+
+      // --- MAIN COMPONENT ---
+      const App = () => {
+        const [sysState, setSysState] = useState(INITIAL_STATE);
+        const [selectedTopics, setSelectedTopics] = useState(
+          TOPICS.reduce((acc, t) => ({ ...acc, [t]: true }), {}),
+        );
+
+        const [question, setQuestion] = useState(null);
+        const [feedback, setFeedback] = useState(null);
+
+        // --- QUESTION GENERATOR ---
+        // Examines next state and active topics to see if we should pause for a question.
+        const generateQuestion = (nextMicroState, currRegs, currMem) => {
+          const possibleQuestions = [];
+
+          if (
+            nextMicroState === MICRO_STATES.F1_PC_TO_MAR &&
+            selectedTopics["FDE Cycle"]
+          ) {
+            possibleQuestions.push({
+              text: "The Fetch cycle begins. Which register's address must be sent to the Address Bus to find the next instruction?",
+              type: "click",
+              target: "PC",
+              topic: "FDE Cycle",
+            });
+          }
+
+          if (
+            nextMicroState === MICRO_STATES.F2_RAM_TO_MBR &&
+            selectedTopics["Buses"]
+          ) {
+            possibleQuestions.push({
+              text: "The address is in the MAR. Which bus will carry the data/instruction FROM Memory back to the CPU?",
+              type: "click",
+              target: "DataBus",
+              topic: "Buses",
+            });
+          }
+
+          if (
+            nextMicroState === MICRO_STATES.DECODE &&
+            selectedTopics["FDE Cycle"]
+          ) {
+            possibleQuestions.push({
+              text: "The instruction is in the CPU. Which component decodes the instruction in the CIR?",
+              type: "click",
+              target: "CU",
+              topic: "FDE Cycle",
+            });
+          }
+
+          if (nextMicroState === MICRO_STATES.E1_ROUTING) {
+            const inst = currRegs.CIR.split(" ")[0];
+            if (
+              (inst === "ADD" || inst === "SUB" || inst === "CMP") &&
+              selectedTopics["ALU & Math"]
+            ) {
+              possibleQuestions.push({
+                text: `The decoded instruction is ${inst}. Which processor component will execute this mathematical/logical operation?`,
+                type: "click",
+                target: "ALU",
+                topic: "ALU & Math",
+              });
+            }
+            if (inst === "STR" && selectedTopics["Registers"]) {
+              possibleQuestions.push({
+                text: "We are executing STR (Store). The target address goes to the MAR. Where must the DATA go before traveling on the Data Bus?",
+                type: "click",
+                target: "MBR",
+                topic: "Registers",
+              });
+            }
+            if (
+              (inst === "B" || inst === "BEQ") &&
+              selectedTopics["Registers"]
+            ) {
+              possibleQuestions.push({
+                text: "A branch instruction alters the normal flow. Which register will be overwritten with the branch address?",
+                type: "click",
+                target: "PC",
+                topic: "Registers",
+              });
+            }
+          }
+
+          if (
+            nextMicroState === MICRO_STATES.INT_1_CHECK &&
+            selectedTopics["Interrupts"]
+          ) {
+            possibleQuestions.push({
+              text: "An interrupt has triggered! To save the volatile environment before jumping to the ISR, click the Status Register. (R0-R3 will also be saved).",
+              type: "click",
+              target: "SR",
+              topic: "Interrupts",
+            });
+          }
+
+          if (
+            nextMicroState === MICRO_STATES.INT_RESTORE &&
+            selectedTopics["Interrupts"]
+          ) {
+            possibleQuestions.push({
+              text: "The ISR has finished (HALT). The OS must now restore the saved volatile environment (PC, SR, R0-R3). Where was this state saved?",
+              type: "click",
+              target: "RAM",
+              topic: "Interrupts",
+            });
+          }
+
+          return possibleQuestions.length > 0
+            ? possibleQuestions[
+                Math.floor(Math.random() * possibleQuestions.length)
+              ]
+            : null;
+        };
+
+        // --- CORE SIMULATION ENGINE ---
+        const handleStep = () => {
+          if (question) return; // Locked while waiting for answer
+
+          let nextState = { ...sysState };
+          let nextMicro = sysState.microState;
+          let pendingQ = null;
+
+          // Execute current micro-step logic
+          switch (sysState.microState) {
+            case MICRO_STATES.F1_PC_TO_MAR:
+              nextState.registers.MAR = nextState.registers.PC;
+              nextState.activeComponents = ["PC", "MAR"];
+              nextState.activeBuses = ["AddressBus"];
+              nextMicro = MICRO_STATES.F2_RAM_TO_MBR;
+              break;
+
+            case MICRO_STATES.F2_RAM_TO_MBR:
+              nextState.registers.MBR =
+                nextState.memory[nextState.registers.MAR];
+              if (!sysState.interruptMode) nextState.registers.PC++; // Don't increment PC if we are branching in ISR setup
+              nextState.activeComponents = ["MAR", "RAM", "MBR", "PC"];
+              nextState.activeBuses = ["DataBus", "ControlBus"];
+              nextMicro = MICRO_STATES.F3_MBR_TO_CIR;
+              break;
+
+            case MICRO_STATES.F3_MBR_TO_CIR:
+              nextState.registers.CIR = nextState.registers.MBR;
+              nextState.activeComponents = ["MBR", "CIR"];
+              nextState.activeBuses = [];
+              nextMicro = MICRO_STATES.DECODE;
+              break;
+
+            case MICRO_STATES.DECODE:
+              nextState.activeComponents = ["CIR", "CU"];
+              nextState.activeBuses = [];
+              if (nextState.registers.CIR === "HALT") {
+                if (sysState.interruptMode) {
+                  nextMicro = MICRO_STATES.INT_RESTORE;
+                } else {
+                  nextMicro = MICRO_STATES.HALTED;
+                }
+              } else {
+                nextMicro = MICRO_STATES.E1_ROUTING;
+              }
+              break;
+
+            case MICRO_STATES.E1_ROUTING:
+              const parts = nextState.registers.CIR.replace(/,/g, "").split(
+                " ",
+              );
+              const op = parts[0];
+              nextState.activeComponents = ["CU"];
+              nextState.activeBuses = [];
+
+              if (op === "LDR") {
+                nextState.registers.MAR = parseInt(parts[2]);
+                nextState.activeComponents.push("MAR");
+                nextState.activeBuses = ["AddressBus"];
+                nextMicro = MICRO_STATES.E2_MEMORY;
+              } else if (op === "STR") {
+                nextState.registers.MAR = parseInt(parts[2]);
+                nextState.registers.MBR = nextState.registers[parts[1]];
+                nextState.activeComponents.push("MAR", "MBR", parts[1]);
+                nextState.activeBuses = ["AddressBus"];
+                nextMicro = MICRO_STATES.E2_MEMORY;
+              } else if (op === "ADD") {
+                const val1 = nextState.registers[parts[2]];
+                const val2Str = parts[3];
+                const val2 = val2Str.startsWith("#")
+                  ? parseInt(val2Str.replace("#", ""))
+                  : nextState.registers[val2Str];
+                nextState.registers[parts[1]] = val1 + val2;
+                nextState.activeComponents.push("ALU", parts[1], parts[2]);
+                nextMicro = checkInterrupt();
+              } else if (op === "SUB") {
+                const val1 = nextState.registers[parts[2]];
+                const val2Str = parts[3];
+                const val2 = val2Str.startsWith("#")
+                  ? parseInt(val2Str.replace("#", ""))
+                  : nextState.registers[val2Str];
+                nextState.registers[parts[1]] = val1 - val2;
+                nextState.activeComponents.push("ALU", parts[1], parts[2]);
+                nextMicro = checkInterrupt();
+              } else if (op === "MOV") {
+                const valStr = parts[2];
+                nextState.registers[parts[1]] = valStr.startsWith("#")
+                  ? parseInt(valStr.replace("#", ""))
+                  : nextState.registers[valStr];
+                nextState.activeComponents.push(parts[1]);
+                nextMicro = checkInterrupt();
+              } else if (op === "CMP") {
+                const val1 = nextState.registers[parts[1]];
+                const val2Str = parts[2];
+                const val2 = val2Str.startsWith("#")
+                  ? parseInt(val2Str.replace("#", ""))
+                  : nextState.registers[val2Str];
+                const res = val1 - val2;
+                nextState.registers.SR.Z = res === 0 ? 1 : 0;
+                nextState.registers.SR.N = res < 0 ? 1 : 0;
+                nextState.activeComponents.push("ALU", "SR", parts[1]);
+                nextMicro = checkInterrupt();
+              } else if (op === "B") {
+                nextState.registers.PC = parseInt(parts[1]);
+                nextState.activeComponents.push("PC");
+                nextMicro = checkInterrupt();
+              } else if (op === "BEQ") {
+                if (nextState.registers.SR.Z === 1) {
+                  nextState.registers.PC = parseInt(parts[1]);
+                }
+                nextState.activeComponents.push("PC", "SR");
+                nextMicro = checkInterrupt();
+              }
+              break;
+
+            case MICRO_STATES.E2_MEMORY:
+              const e2Parts = nextState.registers.CIR.replace(/,/g, "").split(
+                " ",
+              );
+              const e2Op = e2Parts[0];
+              if (e2Op === "LDR") {
+                nextState.registers.MBR =
+                  nextState.memory[nextState.registers.MAR];
+                nextState.activeComponents = [
+                  "RAM",
+                  "MBR",
+                  "DataBus",
+                  "ControlBus",
+                ];
+                nextState.activeBuses = ["DataBus", "ControlBus"];
+                nextMicro = MICRO_STATES.E3_WRITEBACK;
+              } else if (e2Op === "STR") {
+                nextState.memory[nextState.registers.MAR] =
+                  nextState.registers.MBR.toString();
+                nextState.activeComponents = [
+                  "RAM",
+                  "MBR",
+                  "DataBus",
+                  "ControlBus",
+                ];
+                nextState.activeBuses = ["DataBus", "ControlBus"];
+                nextMicro = checkInterrupt();
+              }
+              break;
+
+            case MICRO_STATES.E3_WRITEBACK:
+              const e3Parts = nextState.registers.CIR.replace(/,/g, "").split(
+                " ",
+              );
+              if (e3Parts[0] === "LDR") {
+                nextState.registers[e3Parts[1]] = parseInt(
+                  nextState.registers.MBR,
+                );
+                nextState.activeComponents = ["MBR", e3Parts[1]];
+              }
+              nextMicro = checkInterrupt();
+              break;
+
+            // Interrupt Handling Micro-steps
+            case MICRO_STATES.INT_1_CHECK:
+              nextState.activeComponents = ["PC", "SR"];
+              nextMicro = MICRO_STATES.INT_2_SAVE;
+              break;
+            case MICRO_STATES.INT_2_SAVE:
+              nextState.memory[190] = nextState.registers.PC.toString();
+              nextState.memory[191] = JSON.stringify(nextState.registers.SR);
+              nextState.memory[192] = nextState.registers.R0.toString();
+              nextState.memory[193] = nextState.registers.R1.toString();
+              nextState.memory[194] = nextState.registers.R2.toString();
+              nextState.memory[195] = nextState.registers.R3.toString();
+              nextState.activeComponents = ["RAM", "DataBus"];
+              nextState.activeBuses = ["DataBus"];
+              nextMicro = MICRO_STATES.INT_3_JUMP;
+              break;
+            case MICRO_STATES.INT_3_JUMP:
+              nextState.registers.PC = 180; // ISR Addr (we'll just halt there for demo)
+              nextState.memory[180] = "HALT";
+
+              // Scramble registers to show ISR execution altering volatile environment
+              nextState.registers.R0 = Math.floor(Math.random() * 100);
+              nextState.registers.R1 = Math.floor(Math.random() * 100);
+              nextState.registers.R2 = Math.floor(Math.random() * 100);
+              nextState.registers.R3 = Math.floor(Math.random() * 100);
+              nextState.registers.SR = {
+                Z: Math.random() > 0.5 ? 1 : 0,
+                N: Math.random() > 0.5 ? 1 : 0,
+                C: Math.random() > 0.5 ? 1 : 0,
+                V: Math.random() > 0.5 ? 1 : 0,
+              };
+
+              nextState.interruptPending = false;
+              nextState.interruptMode = true;
+              nextState.activeComponents = ["PC", "R0", "R1", "R2", "R3", "SR"];
+              nextMicro = MICRO_STATES.F1_PC_TO_MAR;
+              break;
+
+            case MICRO_STATES.INT_RESTORE:
+              nextState.registers.PC = parseInt(nextState.memory[190]);
+              nextState.registers.SR = JSON.parse(nextState.memory[191]);
+              nextState.registers.R0 = parseInt(nextState.memory[192]);
+              nextState.registers.R1 = parseInt(nextState.memory[193]);
+              nextState.registers.R2 = parseInt(nextState.memory[194]);
+              nextState.registers.R3 = parseInt(nextState.memory[195]);
+              nextState.interruptMode = false;
+              nextState.activeComponents = [
+                "RAM",
+                "PC",
+                "SR",
+                "R0",
+                "R1",
+                "R2",
+                "R3",
+                "DataBus",
+              ];
+              nextState.activeBuses = ["DataBus"];
+              nextMicro = MICRO_STATES.F1_PC_TO_MAR;
+              setFeedback({
+                type: "success",
+                text: "OS restored PC, SR, and R0-R3 from Stack. Normal execution resumes.",
+              });
+              break;
+
+            case MICRO_STATES.HALTED:
+              // Normal halt logic applies here
+              break;
+          }
+
+          // Check if we need to pause for a question on the NEXT state
+          pendingQ = generateQuestion(
+            nextMicro,
+            nextState.registers,
+            nextState.memory,
+          );
+
+          nextState.clock++;
+          nextState.microState = nextMicro;
+
+          setSysState(nextState);
+
+          if (pendingQ) {
+            setQuestion(pendingQ);
+            setFeedback(null);
+          } else {
+            setFeedback(null);
+          }
+        };
+
+        const checkInterrupt = () => {
+          if (sysState.interruptPending) return MICRO_STATES.INT_1_CHECK;
+          return MICRO_STATES.F1_PC_TO_MAR;
+        };
+
+        // --- INTERACTION HANDLER ---
+        const handleComponentClick = (targetId) => {
+          if (!question || question.type !== "click") return;
+
+          if (targetId === question.target) {
+            setFeedback({ type: "success", text: "Correct! Advancing..." });
+            setQuestion(null);
+            setTimeout(() => handleStep(), 800); // Auto-advance after success
+          } else {
+            setFeedback({
+              type: "error",
+              text: `Incorrect. You clicked ${targetId}. Try again, or click 'View Solution'.`,
+            });
+          }
+        };
+
+        const toggleTopic = (topic) => {
+          setSelectedTopics((prev) => ({ ...prev, [topic]: !prev[topic] }));
+        };
+
+        const toggleAllTopics = () => {
+          const allSelected = TOPICS.every((t) => selectedTopics[t]);
+          const nextState = {};
+          TOPICS.forEach((t) => (nextState[t] = !allSelected));
+          setSelectedTopics(nextState);
+        };
+
+        const handleInterruptTrigger = () => {
+          setSysState((prev) => ({ ...prev, interruptPending: true }));
+          setFeedback({
+            type: "warning",
+            text: "Hardware Interrupt triggered! The processor will service it at the end of the current FDE cycle.",
+          });
+        };
+
+        // --- RENDER HELPERS ---
+        const isTarget = (id) => question && question.target === id;
+        const getCompClass = (id) =>
+          `component text-center shadow-lg relative ${sysState.activeComponents.includes(id) ? "active-glow" : ""}`;
+        const getBusClass = (id) =>
+          `bus h-4 flex-1 mx-2 rounded ${sysState.activeBuses.includes(id) ? "active-bus" : ""}`;
+
+        const renderDecoder = () => {
+          const idleStates = [
+            MICRO_STATES.F1_PC_TO_MAR,
+            MICRO_STATES.F2_RAM_TO_MBR,
+            MICRO_STATES.F3_MBR_TO_CIR,
+            MICRO_STATES.HALTED,
+            MICRO_STATES.INT_1_CHECK,
+            MICRO_STATES.INT_2_SAVE,
+            MICRO_STATES.INT_3_JUMP,
+            MICRO_STATES.INT_RESTORE,
+          ];
+          if (idleStates.includes(sysState.microState)) {
+            return (
+              <div className="text-[10px] text-slate-500 mt-2 text-center border border-slate-700/50 p-1 rounded bg-slate-900/50">
+                Decoder Idle
+              </div>
+            );
+          }
+
+          const asm = sysState.registers.CIR;
+          if (!asm || asm === "0") return null;
+          const parts = asm.split(" ");
+          const op = parts[0];
+          const fullBin = asmToBinary(asm);
+          const opBin = fullBin.substring(0, 5);
+          const modeBin = fullBin.substring(5, 6);
+          const operandBin = fullBin.substring(6);
+          const args = parts.slice(1).join(" ");
+
+          return (
+            <div className="text-[10px] text-sky-200 mt-2 p-1 border border-sky-500/50 bg-sky-900/50 rounded flex flex-col gap-1">
+              <div className="text-center font-bold text-sky-400 text-[9px] border-b border-sky-500/30 pb-1 mb-1 tracking-wider">
+                DECODER ACTIVE
+              </div>
+              <div className="flex justify-between">
+                <span>OPCODE:</span>{" "}
+                <span className="font-mono text-emerald-300">{opBin}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>ADDR MODE:</span>{" "}
+                <span className="font-mono text-purple-300">{modeBin}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>OPERAND:</span>{" "}
+                <span className="font-mono text-amber-300 truncate ml-1">
+                  {operandBin}
+                </span>
+              </div>
+              <div className="text-center text-slate-400 mt-1 border-t border-slate-700 pt-1">
+                {op} {args}
+              </div>
+            </div>
+          );
+        };
+
+        const renderGrid = () => {
+          let cells = [];
+          for (let i = 100; i < 200; i++) {
+            const val = sysState.memory[i];
+            const isPC = sysState.registers.PC === i;
+            const isMAR =
+              sysState.registers.MAR === i &&
+              sysState.activeComponents.includes("RAM");
+
+            let displayVal = val;
+            let tooltip = `Address: ${i}\nValue: ${val}\nBinary: ${asmToBinary(val)}`;
+
+            cells.push(
+              <div
+                key={i}
+                className={`ram-cell ${isMAR ? "ram-active" : ""} ${isPC ? "ram-pc" : ""}`}
+                title={tooltip}
+                onClick={() => handleComponentClick("RAM")}
+              >
+                <div className="text-[10px] text-slate-400">{i}</div>
+                <div className="font-mono truncate w-full px-1">
+                  {displayVal === "0" ? "-" : displayVal.substring(0, 6)}
+                </div>
+              </div>,
+            );
+          }
+          return (
+            <div className="ram-grid mt-2 bg-slate-800 p-2 rounded-lg border border-slate-700">
+              {cells}
+            </div>
+          );
+        };
+
+        const formatMicroState = (ms) => {
+          const map = {
+            F1_PC_TO_MAR: "FETCH: PC → MAR",
+            F2_RAM_TO_MBR: "FETCH: Mem → MBR, PC++",
+            F3_MBR_TO_CIR: "FETCH: MBR → CIR",
+            DECODE: "DECODE CIR",
+            E1_ROUTING: "EXECUTE: Process",
+            E2_MEMORY: "EXECUTE: Mem Access",
+            E3_WRITEBACK: "EXECUTE: Writeback",
+            INT_1_CHECK: "INTERRUPT: Raised",
+            INT_2_SAVE: "INTERRUPT: Push to Stack",
+            INT_3_JUMP: "INTERRUPT: PC → ISR",
+            INT_RESTORE: "INTERRUPT: Restore Stack",
+            HALTED: "PROGRAM HALTED",
+          };
+          return map[ms] || ms;
+        };
+
+        return (
+          <div className="flex w-full h-screen p-4 gap-4 box-border">
+            {/* LEFT PANEL: PROCESSOR (70%) */}
+            <div className="w-[70%] cpu-box flex flex-col p-6 shadow-2xl overflow-hidden">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-100 tracking-wider">
+                    AQA VON NEUMANN PROCESSOR
+                  </h1>
+                  <div className="text-emerald-400 font-mono mt-1 text-lg">
+                    STATE: {formatMicroState(sysState.microState)}
+                  </div>
+                  <div className="text-slate-400 text-sm">
+                    Clock Pulses: {sysState.clock}
+                  </div>
+                </div>
+                <button
+                  onClick={handleInterruptTrigger}
+                  disabled={
+                    sysState.interruptPending ||
+                    sysState.interruptMode ||
+                    sysState.microState === MICRO_STATES.HALTED
+                  }
+                  className="bg-red-900/50 hover:bg-red-600 text-red-200 border border-red-500 px-4 py-2 rounded shadow transition-all disabled:opacity-50 text-sm font-bold"
+                >
+                  {sysState.interruptPending
+                    ? "Interrupt Pending..."
+                    : "Trigger HW Interrupt"}
+                </button>
+              </div>
+
+              {/* CPU Core Area */}
+              <div className="flex-1 border-2 border-dashed border-slate-600 rounded-xl p-4 flex flex-col justify-between relative bg-slate-900/50">
+                <div className="absolute top-[-14px] left-4 bg-slate-800 px-2 text-slate-400 font-bold text-sm">
+                  CPU
+                </div>
+
+                {/* Top row: CU and ALU */}
+                <div className="flex justify-between h-40 gap-6">
+                  {/* Control Unit */}
+                  <div
+                    className={`flex-1 border-2 border-slate-600 rounded p-3 flex flex-col justify-center relative cursor-pointer hover:border-sky-400 hover:shadow-[0_0_10px_rgba(56,189,248,0.3)] transition-all ${sysState.activeComponents.includes("CU") ? "border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.3)]" : ""}`}
+                    onClick={() => handleComponentClick("CU")}
+                  >
+                    <div className="absolute top-[-10px] left-2 bg-slate-900 px-1 text-xs text-slate-400">
+                      Control Unit (CU)
+                    </div>
+                    <div className="flex gap-2">
+                      <div
+                        className={getCompClass("PC")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleComponentClick("PC");
+                        }}
+                      >
+                        <div className="text-xs text-sky-300">PC</div>
+                        <div className="lcd-text text-xl">
+                          {sysState.registers.PC}
+                        </div>
+                      </div>
+                      <div
+                        className={getCompClass("CIR")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleComponentClick("CIR");
+                        }}
+                      >
+                        <div className="text-xs text-sky-300">CIR</div>
+                        <div
+                          className="lcd-text text-sm truncate w-24"
+                          title={sysState.registers.CIR}
+                        >
+                          {sysState.registers.CIR}
+                        </div>
+                      </div>
+                    </div>
+                    {renderDecoder()}
+                  </div>
+
+                  {/* ALU */}
+                  <div
+                    className={`w-1/3 border-2 border-slate-600 rounded p-3 flex flex-col justify-center items-center relative clip-alu cursor-pointer hover:border-sky-400 hover:shadow-[0_0_10px_rgba(56,189,248,0.3)] transition-all ${sysState.activeComponents.includes("ALU") ? "bg-indigo-900 border-indigo-400 shadow-[0_0_15px_rgba(129,140,248,0.5)]" : ""}`}
+                    style={{
+                      clipPath:
+                        "polygon(0 0, 100% 20%, 100% 80%, 0 100%, 0 60%, 20% 50%, 0 40%)",
+                    }}
+                    onClick={() => handleComponentClick("ALU")}
+                  >
+                    <div className="font-bold text-indigo-300 text-lg">ALU</div>
+                  </div>
+                </div>
+
+                {/* Middle row: General Registers & Status */}
+                <div className="flex my-6 gap-4">
+                  <div className="flex-1 grid grid-cols-4 gap-2">
+                    {[0, 1, 2, 3].map((i) => {
+                      const reg = `R${i}`;
+                      return (
+                        <div
+                          key={reg}
+                          className={getCompClass(reg)}
+                          onClick={() => handleComponentClick(reg)}
+                        >
+                          <div className="text-xs text-slate-400">{reg}</div>
+                          <div className="lcd-text text-lg">
+                            {sysState.registers[reg]}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="col-span-4 text-center text-xs text-slate-500 pt-1">
+                      R4-R12 omitted for space
+                    </div>
+                  </div>
+                  <div
+                    className={`${getCompClass("SR")} w-40`}
+                    onClick={() => handleComponentClick("SR")}
+                  >
+                    <div className="text-xs text-pink-300 mb-1">
+                      Status Register (SR)
+                    </div>
+                    <div className="flex justify-around text-sm font-mono text-pink-100 bg-slate-800 rounded p-1">
+                      <span
+                        className={
+                          sysState.registers.SR.Z
+                            ? "text-green-400 font-bold"
+                            : ""
+                        }
+                      >
+                        Z:{sysState.registers.SR.Z}
+                      </span>
+                      <span
+                        className={
+                          sysState.registers.SR.N
+                            ? "text-red-400 font-bold"
+                            : ""
+                        }
+                      >
+                        N:{sysState.registers.SR.N}
+                      </span>
+                      <span>C:{sysState.registers.SR.C}</span>
+                      <span>V:{sysState.registers.SR.V}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom row: MAR and MBR */}
+                <div className="flex gap-8 justify-center h-20">
+                  <div
+                    className={`${getCompClass("MAR")} w-40 flex flex-col justify-center`}
+                    onClick={() => handleComponentClick("MAR")}
+                  >
+                    <div className="text-xs text-amber-300">MAR</div>
+                    <div className="lcd-text text-xl">
+                      {sysState.registers.MAR}
+                    </div>
+                  </div>
+                  <div
+                    className={`${getCompClass("MBR")} w-48 flex flex-col justify-center`}
+                    onClick={() => handleComponentClick("MBR")}
+                  >
+                    <div className="text-xs text-amber-300">MBR</div>
+                    <div
+                      className="lcd-text text-sm truncate w-full"
+                      title={sysState.registers.MBR}
+                    >
+                      {sysState.registers.MBR}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Buses Area (connecting CPU to bottom edge) */}
+              <div className="h-16 flex justify-between items-center px-12 py-2">
+                <div className="flex flex-col items-center w-40">
+                  <div
+                    className={getBusClass("AddressBus")}
+                    onClick={() => handleComponentClick("AddressBus")}
+                  >
+                    ADDRESS BUS
+                  </div>
+                  <div className="text-slate-500 text-[10px]">
+                    ▼ (Unidirectional)
+                  </div>
+                </div>
+                <div className="flex flex-col items-center w-32">
+                  <div
+                    className={getBusClass("ControlBus")}
+                    onClick={() => handleComponentClick("ControlBus")}
+                  >
+                    CONTROL BUS
+                  </div>
+                  <div className="text-slate-500 text-[10px]">▲▼</div>
+                </div>
+                <div className="flex flex-col items-center w-48">
+                  <div
+                    className={getBusClass("DataBus")}
+                    onClick={() => handleComponentClick("DataBus")}
+                  >
+                    DATA BUS
+                  </div>
+                  <div className="text-slate-500 text-[10px]">
+                    ▲▼ (Bidirectional)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT PANEL: MEMORY & CONTROL (30%) */}
+            <div className="w-[30%] flex flex-col gap-4">
+              {/* Control & Topics */}
+              <div className="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                <div className="flex justify-between items-center mb-2">
+                  <h2 className="font-bold text-sky-400">Controls</h2>
+                  <button
+                    onClick={handleStep}
+                    disabled={
+                      question !== null ||
+                      sysState.microState === MICRO_STATES.HALTED
+                    }
+                    className={`px-6 py-2 rounded font-bold shadow-lg transition-all ${question !== null ? "bg-slate-600 text-slate-400" : "bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-400"}`}
+                  >
+                    {sysState.microState === MICRO_STATES.HALTED
+                      ? "HALTED"
+                      : "STEP ⏵"}
+                  </button>
+                </div>
+
+                {/* Filter Topics */}
+                <div className="mt-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <div className="text-xs text-slate-400 uppercase tracking-wider">
+                      Active Question Topics:
+                    </div>
+                    <button
+                      onClick={toggleAllTopics}
+                      className="text-[10px] text-sky-400 hover:text-sky-300 underline"
+                    >
+                      Select/Deselect All
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {TOPICS.map((topic) => (
+                      <label
+                        key={topic}
+                        className="flex items-center space-x-1 text-xs bg-slate-900 px-2 py-1 rounded cursor-pointer hover:bg-slate-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTopics[topic]}
+                          onChange={() => toggleTopic(topic)}
+                          className="accent-sky-500"
+                        />
+                        <span>{topic}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Interactive Question Panel */}
+              <div
+                className={`p-4 rounded-xl border-2 transition-all ${question ? "bg-slate-800 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]" : "bg-slate-800/50 border-slate-700"}`}
+              >
+                <h2 className="font-bold flex items-center gap-2 mb-2">
+                  {question ? (
+                    <span className="text-amber-400">
+                      ❓ Question ({question.topic})
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">Interaction</span>
+                  )}
+                </h2>
+                <div className="text-sm text-slate-300 min-h-[60px]">
+                  {question
+                    ? question.text
+                    : sysState.interruptMode &&
+                        sysState.microState === MICRO_STATES.F1_PC_TO_MAR &&
+                        sysState.registers.PC === 180
+                      ? "We jumped to the ISR. Notice how R0-R3 and SR were scrambled by the simulated ISR's execution! Click STEP to fetch its HALT."
+                      : sysState.microState === MICRO_STATES.INT_RESTORE
+                        ? "The ISR has halted. The OS must now restore the prior state from the stack to continue execution. Click STEP."
+                        : "Click 'STEP' to advance the clock. Active topics will generate questions."}
+                </div>
+
+                {feedback && (
+                  <div
+                    className={`mt-2 p-2 rounded text-sm font-bold ${feedback.type === "error" ? "bg-red-900/50 text-red-300 border border-red-800" : feedback.type === "warning" ? "bg-amber-900/50 text-amber-300" : "bg-emerald-900/50 text-emerald-300 border border-emerald-800"}`}
+                  >
+                    {feedback.text}
+                  </div>
+                )}
+
+                {question && (
+                  <button
+                    onClick={() => {
+                      setFeedback({
+                        type: "warning",
+                        text: `Solution: You needed to interact with the ${question.target}.`,
+                      });
+                      setQuestion(null);
+                    }}
+                    className="mt-3 text-xs text-slate-400 underline hover:text-white"
+                  >
+                    I'm stuck, show solution & skip
+                  </button>
+                )}
+              </div>
+
+              {/* Main Memory (RAM) View */}
+              <div className="flex-1 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 flex flex-col min-h-0">
+                <div className="flex justify-between items-center mb-1">
+                  <h2 className="font-bold text-sky-400">Main Memory (RAM)</h2>
+                  <span className="text-xs text-slate-500">Cells 100-199</span>
+                </div>
+                <div className="text-[10px] text-slate-400 mb-2">
+                  Hover for binary/details. Loop program loaded.
+                </div>
+
+                <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                  {renderGrid()}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+    <style>
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #1e293b;
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+    </style>
+  </body>
+</html>
