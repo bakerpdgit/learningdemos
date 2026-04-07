@@ -1,0 +1,2334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA Logic Circuits &amp; Truth Tables</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <style>
+      .global-home-link {
+        display: inline-block;
+        margin: 0.75rem 0 0 0.75rem;
+        font-size: 0.85rem;
+        color: inherit;
+        opacity: 0.8;
+        text-decoration: none;
+      }
+      .global-home-link:hover {
+        opacity: 1;
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50">
+    <a class="global-home-link" href="index.html"
+      >&larr; Back to Learning Demos</a
+    >
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useState, useEffect, useRef, useCallback } = React;
+
+      // ── Boolean expression engine ──────────────────────────────────────
+
+      function tokenize(s) {
+        const out = [];
+        let i = 0;
+        while (i < s.length) {
+          const c = s[i];
+          if (/\s/.test(c)) {
+            i++;
+            continue;
+          }
+          if (c === "(") {
+            out.push({ t: "LP" });
+            i++;
+            continue;
+          }
+          if (c === ")") {
+            out.push({ t: "RP" });
+            i++;
+            continue;
+          }
+          if (c === "+" || c === "∨") {
+            out.push({ t: "OR" });
+            i++;
+            continue;
+          }
+          if (c === "^" || c === "⊕") {
+            out.push({ t: "XOR" });
+            i++;
+            continue;
+          }
+          if (c === "." || c === "·" || c === "∧") {
+            out.push({ t: "AND" });
+            i++;
+            continue;
+          }
+          if (c === "¬" || c === "!") {
+            out.push({ t: "NOT" });
+            i++;
+            continue;
+          }
+          const m = s.slice(i).match(/^(NOT|AND|OR|[A-Z]|[01])/i);
+          if (!m) throw new Error("Bad token near: " + s.slice(i, i + 6));
+          const raw = m[1].toUpperCase();
+          i += m[1].length;
+          if (raw === "NOT" || raw === "AND" || raw === "OR")
+            out.push({ t: raw });
+          else if (raw === "0" || raw === "1") out.push({ t: "CONST", v: raw });
+          else out.push({ t: "VAR", v: raw });
+        }
+        return out;
+      }
+
+      function parseExpr(src) {
+        const tk = tokenize(src);
+        let i = 0;
+        const peek = () => tk[i];
+        const eat = (t) => {
+          if (!peek() || peek().t !== t) throw new Error("Expected " + t);
+          return tk[i++];
+        };
+        function pOr() {
+          let l = pXor();
+          while (peek()?.t === "OR") {
+            eat("OR");
+            l = { k: "or", l, r: pXor() };
+          }
+          return l;
+        }
+        function pXor() {
+          let l = pAnd();
+          while (peek()?.t === "XOR") {
+            eat("XOR");
+            l = { k: "xor", l, r: pAnd() };
+          }
+          return l;
+        }
+        function pAnd() {
+          let l = pNot();
+          while (peek()?.t === "AND") {
+            eat("AND");
+            l = { k: "and", l, r: pNot() };
+          }
+          return l;
+        }
+        function pNot() {
+          if (peek()?.t === "NOT") {
+            eat("NOT");
+            if (peek()?.t === "LP") {
+              eat("LP");
+              const e = pOr();
+              eat("RP");
+              return { k: "not", v: e };
+            }
+            return { k: "not", v: pNot() };
+          }
+          return pAtom();
+        }
+        function pAtom() {
+          const t = peek();
+          if (!t) throw new Error("Unexpected end");
+          if (t.t === "VAR") {
+            eat("VAR");
+            return { k: "var", n: t.v };
+          }
+          if (t.t === "CONST") {
+            eat("CONST");
+            return { k: "const", v: Number(t.v) };
+          }
+          if (t.t === "LP") {
+            eat("LP");
+            const e = pOr();
+            eat("RP");
+            return e;
+          }
+          throw new Error("Unexpected " + t.t);
+        }
+        const e = pOr();
+        if (i !== tk.length) throw new Error("Trailing input");
+        return e;
+      }
+
+      function evalE(e, env) {
+        if (e.k === "var") return !!env[e.n];
+        if (e.k === "const") return !!e.v;
+        if (e.k === "not") return !evalE(e.v, env);
+        if (e.k === "and") return evalE(e.l, env) && evalE(e.r, env);
+        if (e.k === "or") return evalE(e.l, env) || evalE(e.r, env);
+        if (e.k === "xor") return evalE(e.l, env) !== evalE(e.r, env);
+      }
+
+      function eVars(e, s = new Set()) {
+        if (e.k === "var") s.add(e.n);
+        else if (e.k === "not") eVars(e.v, s);
+        else if (e.l) {
+          eVars(e.l, s);
+          eVars(e.r, s);
+        }
+        return s;
+      }
+
+      function eqExprs(a, b) {
+        const vars = [...new Set([...eVars(a), ...eVars(b)])].sort();
+        for (let m = 0; m < 1 << vars.length; m++) {
+          const env = {};
+          vars.forEach((v, i) => (env[v] = !!((m >> i) & 1)));
+          if (evalE(a, env) !== evalE(b, env)) return false;
+        }
+        return true;
+      }
+
+      function toLaTeX(e, pp = 0) {
+        const pr = (x) =>
+          x.k === "or" ? 1 : x.k === "xor" ? 2 : x.k === "and" ? 3 : 4;
+        if (e.k === "var") return e.n;
+        if (e.k === "const") return e.v ? "1" : "0";
+        if (e.k === "not") return `\\overline{${toLaTeX(e.v, 4)}}`;
+        const p = pr(e),
+          sym =
+            e.k === "and" ? " \\cdot " : e.k === "xor" ? " \\oplus " : " + ";
+        const t = toLaTeX(e.l, p) + sym + toLaTeX(e.r, p);
+        return p < pp ? `(${t})` : t;
+      }
+
+      function rk(latex) {
+        try {
+          return katex.renderToString(latex, { throwOnError: false });
+        } catch {
+          return latex;
+        }
+      }
+
+      // ── Expression generation ─────────────────────────────────────────
+
+      function randE(vars, md = 3, d = 0) {
+        if (d >= md || (d >= 1 && Math.random() < 0.4)) {
+          const v = vars[Math.floor(Math.random() * vars.length)];
+          return Math.random() < 0.3
+            ? { k: "not", v: { k: "var", n: v } }
+            : { k: "var", n: v };
+        }
+        const ops = ["and", "or", "xor"];
+        const op = ops[Math.floor(Math.random() * ops.length)];
+        return { k: op, l: randE(vars, md, d + 1), r: randE(vars, md, d + 1) };
+      }
+
+      function countG(e) {
+        if (e.k === "var" || e.k === "const") return 0;
+        if (e.k === "not") return 1 + countG(e.v);
+        return 1 + countG(e.l) + countG(e.r);
+      }
+
+      function genExpr(vars = ["A", "B", "C"], minG = 2, maxG = 5) {
+        let e,
+          g,
+          v,
+          t = 0;
+        do {
+          e = randE(vars);
+          g = countG(e);
+          v = eVars(e);
+          t++;
+        } while ((g < minG || g > maxG || v.size < 2) && t < 300);
+        return e;
+      }
+
+      // ── Gate definitions ──────────────────────────────────────────────
+
+      const GD = {
+        AND: {
+          lbl: "AND",
+          n: 2,
+          col: "#2563eb",
+          path: "M -26 -20 L 4 -20 A 20 20 0 0 1 4 20 L -26 20 Z",
+          ins: [
+            { dx: -26, dy: -10 },
+            { dx: -26, dy: 10 },
+          ],
+          ox: 24,
+          oy: 0,
+          bub: false,
+        },
+        OR: {
+          lbl: "OR",
+          n: 2,
+          col: "#7c3aed",
+          path: "M -26 -20 Q 4 -20 30 0 Q 4 20 -26 20 Q -6 0 -26 -20 Z",
+          ins: [
+            { dx: -22, dy: -10 },
+            { dx: -22, dy: 10 },
+          ],
+          ox: 30,
+          oy: 0,
+          bub: false,
+        },
+        NOT: {
+          lbl: "NOT",
+          n: 1,
+          col: "#db2777",
+          path: "M -16 -13 L 16 0 L -16 13 Z",
+          ins: [{ dx: -16, dy: 0 }],
+          ox: 23,
+          oy: 0,
+          bub: true,
+          bx: 19,
+          by: 0,
+          br: 4,
+        },
+        NAND: {
+          lbl: "NAND",
+          n: 2,
+          col: "#b45309",
+          path: "M -26 -20 L 4 -20 A 20 20 0 0 1 4 20 L -26 20 Z",
+          ins: [
+            { dx: -26, dy: -10 },
+            { dx: -26, dy: 10 },
+          ],
+          ox: 31,
+          oy: 0,
+          bub: true,
+          bx: 27,
+          by: 0,
+          br: 4,
+        },
+        NOR: {
+          lbl: "NOR",
+          n: 2,
+          col: "#047857",
+          path: "M -26 -20 Q 4 -20 30 0 Q 4 20 -26 20 Q -6 0 -26 -20 Z",
+          ins: [
+            { dx: -22, dy: -10 },
+            { dx: -22, dy: 10 },
+          ],
+          ox: 37,
+          oy: 0,
+          bub: true,
+          bx: 33,
+          by: 0,
+          br: 4,
+        },
+        XOR: {
+          lbl: "XOR",
+          n: 2,
+          col: "#dc2626",
+          path: "M -26 -20 Q 4 -20 30 0 Q 4 20 -26 20 Q -6 0 -26 -20 Z",
+          arc: "M -33 -20 Q -13 0 -33 20",
+          ins: [
+            { dx: -22, dy: -10 },
+            { dx: -22, dy: 10 },
+          ],
+          ox: 30,
+          oy: 0,
+          bub: false,
+        },
+        XNOR: {
+          lbl: "XNOR",
+          n: 2,
+          col: "#6d28d9",
+          path: "M -26 -20 Q 4 -20 30 0 Q 4 20 -26 20 Q -6 0 -26 -20 Z",
+          arc: "M -33 -20 Q -13 0 -33 20",
+          ins: [
+            { dx: -22, dy: -10 },
+            { dx: -22, dy: 10 },
+          ],
+          ox: 37,
+          oy: 0,
+          bub: true,
+          bx: 33,
+          by: 0,
+          br: 4,
+        },
+      };
+
+      const GFNS = {
+        AND: (i) => i[0] && i[1],
+        OR: (i) => i[0] || i[1],
+        NOT: (i) => !i[0],
+        NAND: (i) => !(i[0] && i[1]),
+        NOR: (i) => !(i[0] || i[1]),
+        XOR: (i) => i[0] !== i[1],
+        XNOR: (i) => i[0] === i[1],
+      };
+
+      // ── Circuit evaluation ────────────────────────────────────────────
+
+      function evalCircuit(gates, conns, env) {
+        // env keys: 'INPUT_A', 'INPUT_B', 'INPUT_C' → bool
+        const res = { ...env };
+        for (let iter = 0; iter < gates.length + 3; iter++) {
+          let ch = false;
+          for (const g of gates) {
+            if (res[g.id] !== undefined) continue;
+            const d = GD[g.type];
+            if (!d) continue;
+            const ic = conns
+              .filter((c) => c.toId === g.id)
+              .sort((a, b) => a.toPort.localeCompare(b.toPort));
+            if (ic.length < d.n) continue;
+            const iv = ic.map((c) => res[c.fromId]);
+            if (iv.some((v) => v === undefined)) continue;
+            res[g.id] = GFNS[g.type](iv.map(Boolean));
+            ch = true;
+          }
+          if (!ch) break;
+        }
+        conns
+          .filter((c) => c.toId.startsWith("OUTPUT_"))
+          .forEach((c) => {
+            if (res[c.fromId] !== undefined) res[c.toId] = res[c.fromId];
+          });
+        return res;
+      }
+
+      function pPos(gate, pk) {
+        const d = GD[gate.type];
+        if (!d) return { x: gate.x, y: gate.y };
+        if (pk === "out") return { x: gate.x + d.ox, y: gate.y + d.oy };
+        const idx = parseInt(pk.replace("in", ""));
+        return { x: gate.x + d.ins[idx].dx, y: gate.y + d.ins[idx].dy };
+      }
+
+      // ── Layout expression tree → positioned gates ─────────────────────
+
+      function layoutExpr(expr, sw = 700, sh = 340) {
+        const RL = 90,
+          RR = sw - 50,
+          RT = 28,
+          RB = sh - 28;
+        const gates = [],
+          connections = [];
+        let gi = 0;
+        function depth(e) {
+          if (e.k === "var" || e.k === "const") return 0;
+          if (e.k === "not") return 1 + depth(e.v);
+          return 1 + Math.max(depth(e.l), depth(e.r));
+        }
+        const D = depth(expr);
+        const lw = Math.max((RR - RL - 80) / Math.max(D, 1), 80);
+        function place(e, layer, y0, y1) {
+          const x = RR - 50 - layer * lw,
+            y = (y0 + y1) / 2;
+          if (e.k === "var") return { id: `INPUT_${e.n}`, port: "out" };
+          const id = `g${gi++}`;
+          const typeMap = {
+            and: "AND",
+            or: "OR",
+            not: "NOT",
+            xor: "XOR",
+            nand: "NAND",
+            nor: "NOR",
+          };
+          gates.push({
+            id,
+            type: typeMap[e.k] || "AND",
+            x: Math.round(x),
+            y: Math.round(y),
+          });
+          if (e.k === "not") {
+            const c = place(e.v, layer + 1, y0, y1);
+            if (c)
+              connections.push({
+                id: `lc${connections.length}`,
+                fromId: c.id,
+                fromPort: c.port,
+                toId: id,
+                toPort: "in0",
+              });
+          } else {
+            const mid = (y0 + y1) / 2;
+            const cl = place(e.l, layer + 1, y0, mid);
+            const cr = place(e.r, layer + 1, mid, y1);
+            if (cl)
+              connections.push({
+                id: `lc${connections.length}`,
+                fromId: cl.id,
+                fromPort: cl.port,
+                toId: id,
+                toPort: "in0",
+              });
+            if (cr)
+              connections.push({
+                id: `lc${connections.length}`,
+                fromId: cr.id,
+                fromPort: cr.port,
+                toId: id,
+                toPort: "in1",
+              });
+          }
+          return { id, port: "out" };
+        }
+        const root = place(expr, 0, RT + 20, RB - 20);
+        if (root)
+          connections.push({
+            id: "lc_out",
+            fromId: root.id,
+            fromPort: root.port,
+            toId: "OUTPUT_Q",
+            toPort: "in0",
+          });
+        return { gates, connections };
+      }
+
+      // ── Generate truth-table circuit ──────────────────────────────────
+
+      function genTTCircuit() {
+        const types2 = ["AND", "OR", "XOR", "NAND", "NOR"];
+        const counts = {};
+        const gates = [],
+          connections = [];
+        let gi = 0;
+        const pick = () => {
+          const av = types2.filter((t) => (counts[t] || 0) < 2);
+          const t = av.length
+            ? av[Math.floor(Math.random() * av.length)]
+            : types2[0];
+          counts[t] = (counts[t] || 0) + 1;
+          return t;
+        };
+        const addG = (type, x, y, f1, f2) => {
+          const id = `g${gi++}`;
+          gates.push({ id, type, x, y });
+          if (f1)
+            connections.push({
+              id: `c${connections.length}`,
+              fromId: f1.id,
+              fromPort: f1.port,
+              toId: id,
+              toPort: "in0",
+            });
+          if (f2)
+            connections.push({
+              id: `c${connections.length}`,
+              fromId: f2.id,
+              fromPort: f2.port,
+              toId: id,
+              toPort: "in1",
+            });
+          return { id, port: "out" };
+        };
+        const A = { id: "INPUT_A", port: "out" },
+          B = { id: "INPUT_B", port: "out" },
+          C = { id: "INPUT_C", port: "out" };
+        const g1a = addG(pick(), 185, 88, A, B);
+        const g1b = addG(pick(), 185, 188, B, C);
+        const g1c = addG(pick(), 185, 278, A, C);
+        const g2a = addG(pick(), 355, 130, g1a, g1b);
+        const g2b = addG(pick(), 355, 245, g1b, g1c);
+        const gO = addG(pick(), 510, 188, g2a, g2b);
+        connections.push({
+          id: `c${connections.length}`,
+          fromId: gO.id,
+          fromPort: "out",
+          toId: "OUTPUT_Q",
+          toPort: "in0",
+        });
+        return { gates, connections };
+      }
+
+      function buildTTData(gates, connections) {
+        const outC = connections.find((c) => c.toId === "OUTPUT_Q");
+        const outId = outC?.fromId;
+        const vis = new Set(),
+          order = [];
+        function dfs(id) {
+          if (vis.has(id) || id.startsWith("INPUT_")) return;
+          vis.add(id);
+          connections
+            .filter((c) => c.toId === id)
+            .forEach((c) => dfs(c.fromId));
+          if (!id.startsWith("OUTPUT_")) order.push(id);
+        }
+        if (outId) dfs(outId);
+        const inters = order.filter((id) => id !== outId);
+        const wLabels = ["D", "E", "F", "G"].slice(
+          0,
+          Math.min(inters.length, 4),
+        );
+        const wGates = inters.slice(0, wLabels.length);
+        const rows = [];
+        for (let mask = 0; mask < 8; mask++) {
+          const A = (mask >> 0) & 1,
+            B = (mask >> 1) & 1,
+            C = (mask >> 2) & 1;
+          const env = { INPUT_A: !!A, INPUT_B: !!B, INPUT_C: !!C };
+          const res = evalCircuit(gates, connections, env);
+          const row = { A, B, C, w: {}, Q: res[outId] ? 1 : 0 };
+          wGates.forEach((id, i) => {
+            row.w[wLabels[i]] = res[id] ? 1 : 0;
+          });
+          rows.push(row);
+        }
+        return { rows, wLabels, wGates, outId };
+      }
+
+      // ── SVG path helper ───────────────────────────────────────────────
+
+      function wire(f, t) {
+        const dx = t.x - f.x,
+          cp = Math.max(Math.abs(dx) * 0.5, 35);
+        return `M ${f.x} ${f.y} C ${f.x + cp} ${f.y} ${t.x - cp} ${t.y} ${t.x} ${t.y}`;
+      }
+
+      // ── Circuit Designer ──────────────────────────────────────────────
+
+      function CircuitDesigner({
+        gates = [],
+        connections = [],
+        inputLabels = [],
+        outputLabels = [],
+        readOnly = false,
+        onChange,
+        sw = 700,
+        sh = 340,
+        missingHint = null,
+      }) {
+        const RL = 90,
+          RR = sw - 50,
+          RT = 22,
+          RB = sh - 22;
+        const [sel, setSel] = useState(null);
+        const [drag, setDrag] = useState(null);
+        const [pFrom, setPFrom] = useState(null);
+        const [mPos, setMPos] = useState(null);
+        const svgRef = useRef(null);
+
+        const termP = (tid) => {
+          for (let i = 0; i < inputLabels.length; i++)
+            if (tid === `INPUT_${inputLabels[i]}`)
+              return {
+                x: RL,
+                y: RT + ((RB - RT) * (i + 1)) / (inputLabels.length + 1),
+              };
+          for (let i = 0; i < outputLabels.length; i++)
+            if (tid === `OUTPUT_${outputLabels[i]}`)
+              return {
+                x: RR,
+                y: RT + ((RB - RT) * (i + 1)) / (outputLabels.length + 1),
+              };
+          return null;
+        };
+
+        const absP = (id, pk) => {
+          const tp = termP(id);
+          if (tp) return tp;
+          const g = gates.find((g) => g.id === id);
+          if (!g) return null;
+          return pPos(g, pk);
+        };
+
+        const svgXY = (e) => {
+          const svg = svgRef.current,
+            r = svg.getBoundingClientRect();
+          return {
+            x: (e.clientX - r.left) * (sw / r.width),
+            y: (e.clientY - r.top) * (sh / r.height),
+          };
+        };
+
+        // Global drag
+        useEffect(() => {
+          if (!drag) return;
+          const mv = (e) => {
+            const svg = svgRef.current;
+            if (!svg) return;
+            const r = svg.getBoundingClientRect();
+            const x = (e.clientX - r.left) * (sw / r.width),
+              y = (e.clientY - r.top) * (sh / r.height);
+            const nx = Math.max(
+              RL + 36,
+              Math.min(RR - 36, drag.ox + (x - drag.sx)),
+            );
+            const ny = Math.max(
+              RT + 22,
+              Math.min(RB - 22, drag.oy + (y - drag.sy)),
+            );
+            onChange({
+              gates: gates.map((g) =>
+                g.id === drag.gid
+                  ? { ...g, x: Math.round(nx), y: Math.round(ny) }
+                  : g,
+              ),
+              connections,
+            });
+          };
+          const up = () => setDrag(null);
+          window.addEventListener("mousemove", mv);
+          window.addEventListener("mouseup", up);
+          return () => {
+            window.removeEventListener("mousemove", mv);
+            window.removeEventListener("mouseup", up);
+          };
+        }, [drag, gates, connections, onChange]);
+
+        // Keyboard
+        useEffect(() => {
+          const h = (e) => {
+            if (
+              (e.key === "Delete" || e.key === "Backspace") &&
+              sel &&
+              !readOnly
+            ) {
+              onChange({
+                gates: gates.filter((g) => g.id !== sel),
+                connections: connections.filter(
+                  (c) => c.fromId !== sel && c.toId !== sel,
+                ),
+              });
+              setSel(null);
+            }
+            if (e.key === "Escape") {
+              setPFrom(null);
+              setMPos(null);
+            }
+          };
+          window.addEventListener("keydown", h);
+          return () => window.removeEventListener("keydown", h);
+        }, [sel, gates, connections, readOnly]);
+
+        const portClick = (gid, pk) => {
+          if (readOnly) return;
+          if (!pFrom) {
+            if (pk === "out") {
+              setPFrom({ id: gid, port: "out" });
+              setMPos(null);
+            }
+          } else {
+            if (pFrom.id === gid) {
+              setPFrom(null);
+              setMPos(null);
+              return;
+            }
+            if (pk.startsWith("in") || gid.startsWith("OUTPUT_")) {
+              const toPort = pk.startsWith("in") ? pk : "in0";
+              const toId = gid;
+              if (
+                !connections.find((c) => c.toId === toId && c.toPort === toPort)
+              ) {
+                onChange({
+                  gates,
+                  connections: [
+                    ...connections,
+                    {
+                      id: "w" + Date.now(),
+                      fromId: pFrom.id,
+                      fromPort: pFrom.port,
+                      toId,
+                      toPort,
+                    },
+                  ],
+                });
+              }
+              setPFrom(null);
+              setMPos(null);
+            } else if (pk === "out") {
+              setPFrom({ id: gid, port: "out" });
+              setMPos(null);
+            }
+          }
+        };
+
+        const termClick = (tid) => {
+          if (readOnly) return;
+          if (!pFrom) {
+            if (tid.startsWith("INPUT_")) {
+              setPFrom({ id: tid, port: "out" });
+              setMPos(null);
+            }
+          } else {
+            if (tid.startsWith("OUTPUT_")) {
+              if (!connections.find((c) => c.toId === tid)) {
+                onChange({
+                  gates,
+                  connections: [
+                    ...connections,
+                    {
+                      id: "w" + Date.now(),
+                      fromId: pFrom.id,
+                      fromPort: pFrom.port,
+                      toId: tid,
+                      toPort: "in0",
+                    },
+                  ],
+                });
+              }
+              setPFrom(null);
+              setMPos(null);
+            } else if (tid.startsWith("INPUT_")) {
+              setPFrom({ id: tid, port: "out" });
+              setMPos(null);
+            }
+          }
+        };
+
+        return (
+          <svg
+            ref={svgRef}
+            width="100%"
+            viewBox={`0 0 ${sw} ${sh}`}
+            style={{
+              border: "1px solid #e2e8f0",
+              borderRadius: 8,
+              background: "#f8fafc",
+              userSelect: "none",
+              display: "block",
+              touchAction: "none",
+            }}
+            onMouseMove={(e) => {
+              if (pFrom) {
+                setMPos(svgXY(e));
+              }
+            }}
+            onClick={(e) => {
+              if (e.target === svgRef.current) {
+                setSel(null);
+                setPFrom(null);
+                setMPos(null);
+              }
+            }}
+          >
+            {/* Boundary rectangle */}
+            <rect
+              x={RL}
+              y={RT}
+              width={RR - RL}
+              height={RB - RT}
+              fill="none"
+              stroke="#94a3b8"
+              strokeWidth="1.5"
+              strokeDasharray="7,4"
+              rx="6"
+            />
+
+            {/* Missing gate hint area */}
+            {missingHint && (
+              <rect
+                x={missingHint.x - 38}
+                y={missingHint.y - 28}
+                width="76"
+                height="56"
+                fill="#fef9c3"
+                stroke="#fbbf24"
+                strokeWidth="1.5"
+                strokeDasharray="4,3"
+                rx="8"
+                style={{ pointerEvents: "none" }}
+              />
+            )}
+
+            {/* Input terminals */}
+            {inputLabels.map((lbl, i) => {
+              const p = termP(`INPUT_${lbl}`);
+              const act = pFrom?.id === `INPUT_${lbl}`;
+              return (
+                <g
+                  key={lbl}
+                  onClick={() => termClick(`INPUT_${lbl}`)}
+                  style={{ cursor: readOnly ? "default" : "crosshair" }}
+                >
+                  <text
+                    x={p.x - 14}
+                    y={p.y + 5}
+                    textAnchor="middle"
+                    fontSize="14"
+                    fontWeight="bold"
+                    fill="#1e293b"
+                  >
+                    {lbl}
+                  </text>
+                  <line
+                    x1={p.x - 5}
+                    y1={p.y}
+                    x2={p.x}
+                    y2={p.y}
+                    stroke="#64748b"
+                    strokeWidth="1.5"
+                  />
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={6}
+                    fill={act ? "#fbbf24" : "#3b82f6"}
+                    stroke="#1e40af"
+                    strokeWidth="1.5"
+                  />
+                </g>
+              );
+            })}
+
+            {/* Output terminals */}
+            {outputLabels.map((lbl, i) => {
+              const p = termP(`OUTPUT_${lbl}`);
+              return (
+                <g
+                  key={lbl}
+                  onClick={() => termClick(`OUTPUT_${lbl}`)}
+                  style={{ cursor: readOnly ? "default" : "crosshair" }}
+                >
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={6}
+                    fill="#ef4444"
+                    stroke="#991b1b"
+                    strokeWidth="1.5"
+                  />
+                  <line
+                    x1={p.x}
+                    y1={p.y}
+                    x2={p.x + 5}
+                    y2={p.y}
+                    stroke="#64748b"
+                    strokeWidth="1.5"
+                  />
+                  <text
+                    x={p.x + 18}
+                    y={p.y + 5}
+                    textAnchor="middle"
+                    fontSize="14"
+                    fontWeight="bold"
+                    fill="#1e293b"
+                  >
+                    {lbl}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Connections */}
+            {connections.map((c) => {
+              const fp = absP(c.fromId, c.fromPort),
+                tp = absP(c.toId, c.toPort);
+              if (!fp || !tp) return null;
+              return (
+                <path
+                  key={c.id}
+                  d={wire(fp, tp)}
+                  fill="none"
+                  stroke="#334155"
+                  strokeWidth="1.8"
+                  style={{ cursor: readOnly ? "default" : "pointer" }}
+                  onClick={(ev) => {
+                    if (!readOnly) {
+                      ev.stopPropagation();
+                      onChange({
+                        gates,
+                        connections: connections.filter((x) => x.id !== c.id),
+                      });
+                    }
+                  }}
+                />
+              );
+            })}
+
+            {/* Pending wire */}
+            {pFrom &&
+              mPos &&
+              (() => {
+                const fp = absP(pFrom.id, pFrom.port);
+                return fp ? (
+                  <path
+                    d={wire(fp, mPos)}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="1.8"
+                    strokeDasharray="5,3"
+                    style={{ pointerEvents: "none" }}
+                  />
+                ) : null;
+              })()}
+
+            {/* Gates */}
+            {gates.map((gate) => {
+              const d = GD[gate.type];
+              if (!d) return null;
+              const isSel = sel === gate.id;
+              return (
+                <g
+                  key={gate.id}
+                  transform={`translate(${gate.x},${gate.y})`}
+                  onMouseDown={(e) => {
+                    if (readOnly || pFrom) return;
+                    e.stopPropagation();
+                    const p = svgXY(e);
+                    setDrag({
+                      gid: gate.id,
+                      sx: p.x,
+                      sy: p.y,
+                      ox: gate.x,
+                      oy: gate.y,
+                    });
+                    setSel(gate.id);
+                  }}
+                  style={{
+                    cursor: readOnly
+                      ? "default"
+                      : drag?.gid === gate.id
+                        ? "grabbing"
+                        : "grab",
+                  }}
+                >
+                  {d.arc && (
+                    <path
+                      d={d.arc}
+                      fill="none"
+                      stroke={d.col}
+                      strokeWidth="2"
+                    />
+                  )}
+                  <path
+                    d={d.path}
+                    fill="white"
+                    stroke={isSel ? "#f59e0b" : d.col}
+                    strokeWidth={isSel ? 2.5 : 2}
+                  />
+                  {d.bub && (
+                    <circle
+                      cx={d.bx}
+                      cy={d.by}
+                      r={d.br}
+                      fill="white"
+                      stroke={d.col}
+                      strokeWidth="2"
+                    />
+                  )}
+                  <text
+                    x={d.ox * 0.3}
+                    y={5}
+                    textAnchor="middle"
+                    fontSize="8"
+                    fontWeight="bold"
+                    fill={d.col}
+                    style={{ pointerEvents: "none" }}
+                  >
+                    {d.lbl}
+                  </text>
+                  {d.ins.map((inp, i) => (
+                    <circle
+                      key={i}
+                      cx={inp.dx}
+                      cy={inp.dy}
+                      r={5.5}
+                      fill={pFrom && pFrom.id !== gate.id ? "#fef3c7" : "white"}
+                      stroke={d.col}
+                      strokeWidth="1.5"
+                      style={{ cursor: readOnly ? "default" : "crosshair" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        portClick(gate.id, `in${i}`);
+                      }}
+                    />
+                  ))}
+                  <circle
+                    cx={d.ox}
+                    cy={d.oy}
+                    r={5.5}
+                    fill={pFrom?.id === gate.id ? "#fbbf24" : "white"}
+                    stroke={d.col}
+                    strokeWidth="1.5"
+                    style={{ cursor: readOnly ? "default" : "crosshair" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      portClick(gate.id, "out");
+                    }}
+                  />
+                </g>
+              );
+            })}
+
+            {/* Hints */}
+            {pFrom && (
+              <text
+                x={sw / 2}
+                y={sh - 7}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#64748b"
+              >
+                Click an input port (dot) to connect · Esc to cancel
+              </text>
+            )}
+            {!readOnly && sel && !pFrom && (
+              <text
+                x={sw / 2}
+                y={sh - 7}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#94a3b8"
+              >
+                Delete key removes selected gate
+              </text>
+            )}
+          </svg>
+        );
+      }
+
+      // ── Gate palette ──────────────────────────────────────────────────
+
+      function GatePalette({ onAdd, types }) {
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginBottom: 2,
+              }}
+            >
+              Gates
+            </div>
+            {types.map((t) => {
+              const d = GD[t];
+              return (
+                <button
+                  key={t}
+                  onClick={() => onAdd(t)}
+                  style={{
+                    background: "white",
+                    border: `2px solid ${d.col}`,
+                    color: d.col,
+                    borderRadius: 7,
+                    padding: "5px 7px",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  {d.lbl}
+                </button>
+              );
+            })}
+          </div>
+        );
+      }
+
+      // ── Boolean text input with symbol buttons ────────────────────────
+
+      function BoolInput({ value, onChange, vars = ["A", "B", "C"] }) {
+        const ref = useRef(null);
+        const ins = (tok) => {
+          const el = ref.current;
+          if (!el) return;
+          const s = el.selectionStart,
+            e2 = el.selectionEnd;
+          const nv = value.slice(0, s) + tok + value.slice(e2);
+          onChange(nv);
+          setTimeout(() => {
+            el.setSelectionRange(s + tok.length, s + tok.length);
+            el.focus();
+          }, 0);
+        };
+        const preview = (() => {
+          try {
+            return toLaTeX(parseExpr(value));
+          } catch {
+            return null;
+          }
+        })();
+        const btns = [
+          { l: "¬", v: "¬" },
+          { l: "·", v: "." },
+          { l: "+", v: "+" },
+          { l: "⊕", v: "^" },
+          { l: "(", v: "(" },
+          { l: ")", v: ")" },
+          ...vars.map((v) => ({ l: v, v })),
+          { l: "0", v: "0" },
+          { l: "1", v: "1" },
+        ];
+        return (
+          <div>
+            {preview && (
+              <div
+                style={{
+                  fontSize: 17,
+                  padding: "5px 10px",
+                  background: "#f1f5f9",
+                  borderRadius: 7,
+                  marginBottom: 6,
+                  minHeight: 30,
+                }}
+                dangerouslySetInnerHTML={{ __html: rk(preview) }}
+              />
+            )}
+            <input
+              ref={ref}
+              type="text"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              spellCheck={false}
+              autoComplete="off"
+              style={{
+                width: "100%",
+                border: "2px solid #cbd5e1",
+                borderRadius: 8,
+                padding: "7px 10px",
+                fontFamily: "monospace",
+                fontSize: 14,
+                boxSizing: "border-box",
+              }}
+              placeholder="Type or use buttons…"
+            />
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 4,
+                marginTop: 5,
+              }}
+            >
+              {btns.map((b) => (
+                <button
+                  key={b.v}
+                  onClick={() => ins(b.v)}
+                  style={{
+                    background: "#334155",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 5,
+                    padding: "3px 9px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontSize: 12,
+                  }}
+                >
+                  {b.l}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      // ── Feedback banner ───────────────────────────────────────────────
+
+      function Fb({ ok, msg }) {
+        return (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 14px",
+              borderRadius: 8,
+              background: ok ? "#f0fdf4" : "#fef2f2",
+              border: `1px solid ${ok ? "#86efac" : "#fca5a5"}`,
+              color: ok ? "#166534" : "#991b1b",
+              fontWeight: 600,
+            }}
+          >
+            {ok ? "✓ " : "✗ "}
+            {msg}
+          </div>
+        );
+      }
+
+      // ── Topic A: Build circuit from expression ────────────────────────
+
+      function TopicA() {
+        const [expr, setExpr] = useState(null);
+        const [circ, setCirc] = useState({ gates: [], connections: [] });
+        const [fb, setFb] = useState(null);
+
+        const newQ = () => {
+          setExpr(genExpr(["A", "B", "C"], 2, 5));
+          setCirc({ gates: [], connections: [] });
+          setFb(null);
+        };
+        useEffect(() => {
+          newQ();
+        }, []);
+        if (!expr)
+          return (
+            <div className="p-8 text-center text-slate-500">
+              Generating question…
+            </div>
+          );
+
+        const vars = [...eVars(expr)].sort();
+        const addG = (t) =>
+          setCirc((c) => ({
+            ...c,
+            gates: [
+              ...c.gates,
+              {
+                id: "u" + Date.now(),
+                type: t,
+                x: 280 + Math.random() * 100 - 50,
+                y: 165 + Math.random() * 110 - 55,
+              },
+            ],
+          }));
+
+        const check = () => {
+          if (!circ.connections.find((c) => c.toId === "OUTPUT_Q")) {
+            setFb({
+              ok: false,
+              msg: "No output connected to Q — wire a gate output to the Q terminal.",
+            });
+            return;
+          }
+          const n = 1 << vars.length;
+          for (let mask = 0; mask < n; mask++) {
+            const env = {};
+            vars.forEach((v, i) => (env[`INPUT_${v}`] = !!((mask >> i) & 1)));
+            const expEnv = Object.fromEntries(
+              vars.map((v, i) => [v, !!((mask >> i) & 1)]),
+            );
+            const expected = evalE(expr, expEnv);
+            const res = evalCircuit(circ.gates, circ.connections, env);
+            if (res["OUTPUT_Q"] === undefined) {
+              setFb({
+                ok: false,
+                msg: "Circuit incomplete — some gate inputs are unconnected.",
+              });
+              return;
+            }
+            if (!!res["OUTPUT_Q"] !== expected) {
+              setFb({
+                ok: false,
+                msg: "Incorrect — circuit output does not match the expression for all inputs. Check your gate types and connections.",
+              });
+              return;
+            }
+          }
+          setFb({
+            ok: true,
+            msg: "Correct! Your circuit correctly implements the expression.",
+          });
+        };
+
+        return (
+          <div>
+            <div
+              style={{
+                background: "#0f172a",
+                borderRadius: 12,
+                color: "#fff",
+                textAlign: "center",
+                padding: "12px 20px",
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  color: "#c4b5fd",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  marginBottom: 3,
+                }}
+              >
+                Build a logic circuit for
+              </div>
+              <div
+                style={{ fontSize: 20 }}
+                dangerouslySetInnerHTML={{ __html: rk(`Q = ${toLaTeX(expr)}`) }}
+              />
+            </div>
+            <p className="text-slate-600 text-sm mb-3">
+              Add gates from the palette. Click an output dot to start a wire,
+              then click an input dot to complete it. Click any wire to delete
+              it. Drag gates to reposition. Press Delete to remove the selected
+              gate.
+            </p>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ flexShrink: 0, width: 76 }}>
+                <GatePalette
+                  onAdd={addG}
+                  types={["AND", "OR", "NOT", "NAND", "NOR", "XOR", "XNOR"]}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <CircuitDesigner
+                  gates={circ.gates}
+                  connections={circ.connections}
+                  inputLabels={vars}
+                  outputLabels={["Q"]}
+                  onChange={setCirc}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                onClick={check}
+                style={{
+                  background: "#1d4ed8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 20px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Submit
+              </button>
+              <button
+                onClick={() => setCirc({ gates: [], connections: [] })}
+                style={{
+                  background: "#475569",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Clear
+              </button>
+              <button
+                onClick={newQ}
+                style={{
+                  background: "#64748b",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                New Question
+              </button>
+            </div>
+            {fb && <Fb ok={fb.ok} msg={fb.msg} />}
+          </div>
+        );
+      }
+
+      // ── Topic B: Read circuit → write expression ──────────────────────
+
+      function TopicB() {
+        const [data, setData] = useState(null);
+        const [inp, setInp] = useState("");
+        const [fb, setFb] = useState(null);
+
+        const newQ = () => {
+          const e = genExpr(["A", "B", "C"], 2, 5);
+          const layout = layoutExpr(e);
+          setData({ expr: e, ...layout });
+          setInp("");
+          setFb(null);
+        };
+        useEffect(() => {
+          newQ();
+        }, []);
+        if (!data)
+          return (
+            <div className="p-8 text-center text-slate-500">
+              Generating question…
+            </div>
+          );
+
+        const vars = [...eVars(data.expr)].sort();
+
+        const check = () => {
+          if (!inp.trim()) {
+            setFb({ ok: false, msg: "Enter an expression." });
+            return;
+          }
+          let ue;
+          try {
+            ue = parseExpr(inp);
+          } catch {
+            setFb({
+              ok: false,
+              msg: "Could not parse your expression — check syntax.",
+            });
+            return;
+          }
+          const ok = eqExprs(data.expr, ue);
+          setFb({
+            ok,
+            msg: ok
+              ? "Correct! Your expression matches the circuit output for all inputs."
+              : "Not quite — your expression gives different values to the circuit for some inputs.",
+          });
+        };
+
+        return (
+          <div>
+            <p className="text-slate-700 font-semibold mb-2">
+              Study the logic circuit below, then write a Boolean expression for
+              Q.
+            </p>
+            <CircuitDesigner
+              gates={data.gates}
+              connections={data.connections}
+              inputLabels={vars}
+              outputLabels={["Q"]}
+              readOnly
+            />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                marginTop: 12,
+              }}
+            >
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontSize: 17,
+                  paddingTop: preview(inp) ? 28 : 6,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Q =
+              </span>
+              <div style={{ flex: 1 }}>
+                <BoolInput value={inp} onChange={setInp} vars={vars} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                onClick={check}
+                style={{
+                  background: "#1d4ed8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 20px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Submit
+              </button>
+              <button
+                onClick={newQ}
+                style={{
+                  background: "#64748b",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                New Question
+              </button>
+            </div>
+            {fb && <Fb ok={fb.ok} msg={fb.msg} />}
+          </div>
+        );
+      }
+
+      function preview(v) {
+        try {
+          toLaTeX(parseExpr(v));
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      // ── Topic C: Half & Full adder ────────────────────────────────────
+
+      // Full adder partial: XOR1, AND1, XOR2, OR pre-placed; AND2 (XOR1.out,C → OR.in1) is missing
+      const FA_PARTIAL = {
+        gates: [
+          { id: "fx1", type: "XOR", x: 178, y: 98 },
+          { id: "fa1", type: "AND", x: 178, y: 212 },
+          { id: "fx2", type: "XOR", x: 355, y: 98 },
+          { id: "for", type: "OR", x: 505, y: 178 },
+        ],
+        connections: [
+          {
+            id: "p0",
+            fromId: "INPUT_A",
+            fromPort: "out",
+            toId: "fx1",
+            toPort: "in0",
+          },
+          {
+            id: "p1",
+            fromId: "INPUT_B",
+            fromPort: "out",
+            toId: "fx1",
+            toPort: "in1",
+          },
+          {
+            id: "p2",
+            fromId: "INPUT_A",
+            fromPort: "out",
+            toId: "fa1",
+            toPort: "in0",
+          },
+          {
+            id: "p3",
+            fromId: "INPUT_B",
+            fromPort: "out",
+            toId: "fa1",
+            toPort: "in1",
+          },
+          {
+            id: "p4",
+            fromId: "fx1",
+            fromPort: "out",
+            toId: "fx2",
+            toPort: "in0",
+          },
+          {
+            id: "p5",
+            fromId: "INPUT_C",
+            fromPort: "out",
+            toId: "fx2",
+            toPort: "in1",
+          },
+          {
+            id: "p6",
+            fromId: "fx2",
+            fromPort: "out",
+            toId: "OUTPUT_S",
+            toPort: "in0",
+          },
+          {
+            id: "p7",
+            fromId: "fa1",
+            fromPort: "out",
+            toId: "for",
+            toPort: "in0",
+          },
+          {
+            id: "p8",
+            fromId: "for",
+            fromPort: "out",
+            toId: "OUTPUT_C",
+            toPort: "in0",
+          },
+          // Missing: AND gate(fx1.out, INPUT_C) → for.in1
+        ],
+      };
+
+      function TopicC() {
+        const [isHA, setIsHA] = useState(true);
+        const [circ, setCirc] = useState({ gates: [], connections: [] });
+        const [fb, setFb] = useState(null);
+
+        const newQ = () => {
+          const half = Math.random() < 0.5;
+          setIsHA(half);
+          if (half) setCirc({ gates: [], connections: [] });
+          else
+            setCirc({
+              gates: FA_PARTIAL.gates.map((g) => ({ ...g })),
+              connections: FA_PARTIAL.connections.map((c) => ({ ...c })),
+            });
+          setFb(null);
+        };
+        useEffect(() => {
+          newQ();
+        }, []);
+
+        const addG = (t) =>
+          setCirc((c) => ({
+            ...c,
+            gates: [
+              ...c.gates,
+              {
+                id: "u" + Date.now(),
+                type: t,
+                x: 310 + Math.random() * 60 - 30,
+                y: 178 + Math.random() * 60 - 30,
+              },
+            ],
+          }));
+
+        const haFn = (a, b) => ({ S: a ^ b, C: a & b });
+        const faFn = (a, b, c) => ({
+          S: a ^ b ^ c,
+          C: (a & b) | (b & c) | (a & c),
+        });
+
+        const check = () => {
+          const ins = isHA ? ["A", "B"] : ["A", "B", "C"];
+          const outs = ["S", "C"];
+          const n = 1 << ins.length;
+          for (let mask = 0; mask < n; mask++) {
+            const vals = ins.map((_, i) => (mask >> i) & 1);
+            const env = {};
+            ins.forEach((l, i) => (env[`INPUT_${l}`] = !!vals[i]));
+            const res = evalCircuit(circ.gates, circ.connections, env);
+            const exp = isHA
+              ? haFn(vals[0], vals[1])
+              : faFn(vals[0], vals[1], vals[2]);
+            for (const o of outs) {
+              const actual = res[`OUTPUT_${o}`];
+              if (actual === undefined) {
+                setFb({
+                  ok: false,
+                  msg: `Output ${o} is not connected. Make sure both outputs S and C are wired up.`,
+                });
+                return;
+              }
+              if (!!actual !== !!exp[o]) {
+                setFb({
+                  ok: false,
+                  msg: `Incorrect. For ${ins.map((l, i) => `${l}=${vals[i]}`).join(", ")}, ${o} should be ${exp[o] ? 1 : 0}.`,
+                });
+                return;
+              }
+            }
+          }
+          setFb({
+            ok: true,
+            msg: `Correct! Your ${isHA ? "half" : "full"} adder works perfectly for all input combinations.`,
+          });
+        };
+
+        const ins = isHA ? ["A", "B"] : ["A", "B", "C"];
+
+        return (
+          <div>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "flex-start",
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: 8,
+                  padding: "9px 14px",
+                  flex: 1,
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                }}
+              >
+                {isHA ? (
+                  <span>
+                    <strong>Task — Half Adder:</strong> Build a circuit with
+                    inputs A and B, and <em>two</em> outputs: <strong>S</strong>{" "}
+                    (sum = A ⊕ B) and <strong>C</strong> (carry = A · B).
+                  </span>
+                ) : (
+                  <span>
+                    <strong>Task — Full Adder:</strong> One AND gate is missing
+                    from this circuit. Add it and connect it to complete the
+                    full adder (inputs A, B, C; outputs S and C).
+                    <br />
+                    <em>
+                      Hint: the missing AND gate takes the XOR1 output and input
+                      C, and feeds OR's second input.
+                    </em>
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={newQ}
+                style={{
+                  background: "#64748b",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                New Q
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ flexShrink: 0, width: 76 }}>
+                <GatePalette onAdd={addG} types={["AND", "OR", "NOT", "XOR"]} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <CircuitDesigner
+                  gates={circ.gates}
+                  connections={circ.connections}
+                  inputLabels={ins}
+                  outputLabels={["S", "C"]}
+                  onChange={setCirc}
+                  missingHint={!isHA ? { x: 355, y: 215 } : null}
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <button
+                onClick={check}
+                style={{
+                  background: "#1d4ed8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 20px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Submit
+              </button>
+            </div>
+            {fb && <Fb ok={fb.ok} msg={fb.msg} />}
+          </div>
+        );
+      }
+
+      // ── Working column header (truth table) ───────────────────────────
+
+      function WkgHeader({ lbl, value, onChange }) {
+        const [ed, setEd] = useState(false);
+        const ref = useRef(null);
+        const prev = (() => {
+          if (!value) return null;
+          try {
+            return toLaTeX(parseExpr(value));
+          } catch {
+            return null;
+          }
+        })();
+        const ins = (tok) => {
+          const el = ref.current;
+          if (!el) return;
+          const s = el.selectionStart,
+            e2 = el.selectionEnd;
+          onChange(value.slice(0, s) + tok + value.slice(e2));
+          setTimeout(() => {
+            el.setSelectionRange(s + tok.length, s + tok.length);
+            el.focus();
+          }, 0);
+        };
+        return (
+          <div style={{ textAlign: "center", minWidth: 88 }}>
+            <div
+              style={{
+                fontWeight: 700,
+                fontSize: 12,
+                color: "#334155",
+                marginBottom: 2,
+              }}
+            >
+              {lbl} =
+            </div>
+            {ed ? (
+              <div onMouseDown={(e) => e.stopPropagation()}>
+                <input
+                  ref={ref}
+                  autoFocus
+                  type="text"
+                  value={value}
+                  onChange={(e) => onChange(e.target.value)}
+                  onBlur={() => setEd(false)}
+                  style={{
+                    width: 80,
+                    border: "1px solid #94a3b8",
+                    borderRadius: 4,
+                    padding: "2px 4px",
+                    fontFamily: "monospace",
+                    fontSize: 11,
+                  }}
+                />
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 2,
+                    marginTop: 2,
+                    justifyContent: "center",
+                  }}
+                >
+                  {["¬", ".", "+", " ", "(", ")", "^", "A", "B", "C"]
+                    .filter((t) => t !== " ")
+                    .map((t) => (
+                      <button
+                        key={t}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          ins(t === "^" ? "^" : t);
+                        }}
+                        style={{
+                          background: "#334155",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 3,
+                          padding: "1px 4px",
+                          cursor: "pointer",
+                          fontSize: 9,
+                        }}
+                      >
+                        {t === "." ? "·" : t === "^" ? "⊕" : t}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => setEd(true)}
+                style={{
+                  cursor: "text",
+                  minHeight: 18,
+                  borderBottom: "1px dashed #94a3b8",
+                  padding: "0 2px",
+                  fontSize: 11,
+                  display: "inline-block",
+                  width: "100%",
+                }}
+              >
+                {prev ? (
+                  <span dangerouslySetInnerHTML={{ __html: rk(prev) }} />
+                ) : (
+                  <span style={{ color: "#94a3b8" }}>click…</span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ── Topic D: Truth table ──────────────────────────────────────────
+
+      function TopicD() {
+        const [circ, setCirc] = useState(null);
+        const [tt, setTT] = useState(null);
+        const [cells, setCells] = useState({});
+        const [hdrs, setHdrs] = useState({});
+        const [fb, setFb] = useState(null);
+
+        const newQ = () => {
+          const c = genTTCircuit();
+          const d = buildTTData(c.gates, c.connections);
+          setCirc(c);
+          setTT(d);
+          setCells({});
+          setHdrs({});
+          setFb(null);
+        };
+        useEffect(() => {
+          newQ();
+        }, []);
+        if (!circ || !tt)
+          return (
+            <div className="p-8 text-center text-slate-500">
+              Generating question…
+            </div>
+          );
+
+        const { rows, wLabels } = tt;
+        const setCell = (ri, col, val) =>
+          setCells((p) => ({ ...p, [ri]: { ...p[ri], [col]: val } }));
+
+        const check = () => {
+          for (let i = 0; i < rows.length; i++) {
+            const uv = cells[i]?.Q;
+            if (uv === undefined || uv === "") {
+              setFb({
+                ok: false,
+                msg: `Row ${i + 1} (A=${rows[i].A},B=${rows[i].B},C=${rows[i].C}): Q is not filled in.`,
+              });
+              return;
+            }
+            if (parseInt(uv) !== rows[i].Q) {
+              setFb({
+                ok: false,
+                msg: `Row ${i + 1} (A=${rows[i].A},B=${rows[i].B},C=${rows[i].C}): Q should be ${rows[i].Q}, got ${uv}.`,
+              });
+              return;
+            }
+          }
+          setFb({ ok: true, msg: "Correct! All Q values are right." });
+        };
+
+        return (
+          <div>
+            <p className="text-slate-700 font-semibold mb-2">
+              Study the logic circuit, then complete the truth table. Only the Q
+              (shaded) column is marked — use the working columns however you
+              like.
+            </p>
+            <CircuitDesigner
+              gates={circ.gates}
+              connections={circ.connections}
+              inputLabels={["A", "B", "C"]}
+              outputLabels={["Q"]}
+              readOnly
+              sh={298}
+            />
+            <div style={{ overflowX: "auto", marginTop: 12 }}>
+              <table
+                style={{
+                  borderCollapse: "collapse",
+                  fontSize: 13,
+                  minWidth: "100%",
+                }}
+              >
+                <thead>
+                  <tr>
+                    {["A", "B", "C"].map((l) => (
+                      <th
+                        key={l}
+                        style={{
+                          border: "1px solid #cbd5e1",
+                          padding: "6px 12px",
+                          background: "#f1f5f9",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {l}
+                      </th>
+                    ))}
+                    {wLabels.map((wl) => (
+                      <th
+                        key={wl}
+                        style={{
+                          border: "1px solid #cbd5e1",
+                          padding: "5px 6px",
+                          background: "#f8fafc",
+                          verticalAlign: "top",
+                          minWidth: 96,
+                        }}
+                      >
+                        <WkgHeader
+                          lbl={wl}
+                          value={hdrs[wl] || ""}
+                          onChange={(v) => setHdrs((h) => ({ ...h, [wl]: v }))}
+                        />
+                      </th>
+                    ))}
+                    <th
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        padding: "6px 12px",
+                        background: "#dbeafe",
+                        fontWeight: 800,
+                        fontSize: 15,
+                        minWidth: 58,
+                      }}
+                    >
+                      Q
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, ri) => (
+                    <tr
+                      key={ri}
+                      style={{ background: ri % 2 === 0 ? "#fff" : "#f8fafc" }}
+                    >
+                      {["A", "B", "C"].map((l) => (
+                        <td
+                          key={l}
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            padding: "6px 12px",
+                            textAlign: "center",
+                            fontFamily: "monospace",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {row[l]}
+                        </td>
+                      ))}
+                      {wLabels.map((wl) => (
+                        <td
+                          key={wl}
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            padding: "4px 6px",
+                            textAlign: "center",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            maxLength={1}
+                            value={cells[ri]?.[wl] || ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              if (v === "" || v === "0" || v === "1")
+                                setCell(ri, wl, v);
+                            }}
+                            style={{
+                              width: 34,
+                              textAlign: "center",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: 4,
+                              padding: "4px 0",
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                              fontSize: 14,
+                            }}
+                          />
+                        </td>
+                      ))}
+                      <td
+                        style={{
+                          border: "1px solid #cbd5e1",
+                          padding: "4px 6px",
+                          textAlign: "center",
+                          background: "#dbeafe",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          maxLength={1}
+                          value={cells[ri]?.Q || ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "" || v === "0" || v === "1")
+                              setCell(ri, "Q", v);
+                          }}
+                          style={{
+                            width: 36,
+                            textAlign: "center",
+                            border: "2px solid #93c5fd",
+                            borderRadius: 5,
+                            padding: "4px 0",
+                            fontFamily: "monospace",
+                            fontWeight: 800,
+                            fontSize: 15,
+                            background: "#eff6ff",
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                onClick={check}
+                style={{
+                  background: "#1d4ed8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 20px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Submit
+              </button>
+              <button
+                onClick={newQ}
+                style={{
+                  background: "#64748b",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                New Question
+              </button>
+            </div>
+            {fb && <Fb ok={fb.ok} msg={fb.msg} />}
+          </div>
+        );
+      }
+
+      // ── Main App ──────────────────────────────────────────────────────
+
+      const TOPICS = {
+        build: "Build Circuit from Expression",
+        read: "Read Circuit → Write Expression",
+        adder: "Half & Full Adders",
+        truth: "Truth Tables",
+      };
+
+      function App() {
+        const [active, setActive] = useState(Object.keys(TOPICS));
+        const [showMenu, setShowMenu] = useState(false);
+        const [topic, setTopic] = useState("build");
+        const [qKey, setQKey] = useState(0);
+        const menuRef = useRef(null);
+
+        useEffect(() => {
+          const h = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target))
+              setShowMenu(false);
+          };
+          document.addEventListener("mousedown", h);
+          return () => document.removeEventListener("mousedown", h);
+        }, []);
+
+        const toggle = (k) =>
+          setActive((p) =>
+            p.includes(k) ? p.filter((t) => t !== k) : [...p, k],
+          );
+
+        const applyNew = () => {
+          if (!active.length) return;
+          const t = active[Math.floor(Math.random() * active.length)];
+          setTopic(t);
+          setQKey((k) => k + 1);
+          setShowMenu(false);
+        };
+
+        const activeTabs = Object.entries(TOPICS).filter(([k]) =>
+          active.includes(k),
+        );
+
+        return (
+          <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-12">
+            <header className="bg-blue-700 text-white p-4 shadow-md relative z-20">
+              <div className="max-w-5xl mx-auto flex justify-between items-center">
+                <div>
+                  <h1 className="text-xl font-bold">
+                    AQA Logic Circuits &amp; Truth Tables
+                  </h1>
+                  <p className="text-sm text-blue-100">
+                    Interactive Circuit Design, Gate Analysis &amp; Truth Tables
+                  </p>
+                </div>
+                <div className="relative" ref={menuRef}>
+                  <button
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded transition"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    <span className="hidden sm:inline">Sub-topics</span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                  {showMenu && (
+                    <div className="absolute right-0 mt-2 w-72 bg-white rounded shadow-xl text-slate-800 p-3 border border-slate-200 z-50">
+                      <h3 className="font-bold text-sm mb-2 border-b pb-1">
+                        Filter Topics
+                      </h3>
+                      {Object.entries(TOPICS).map(([k, l]) => (
+                        <label
+                          key={k}
+                          className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 rounded px-1"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={active.includes(k)}
+                            onChange={() => toggle(k)}
+                          />
+                          <span className="text-sm">{l}</span>
+                        </label>
+                      ))}
+                      {!active.length && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Select at least one topic.
+                        </p>
+                      )}
+                      <button
+                        onClick={applyNew}
+                        disabled={!active.length}
+                        className="mt-3 w-full bg-blue-600 text-white text-sm py-2 rounded hover:bg-blue-700 disabled:opacity-50 font-semibold"
+                      >
+                        Apply &amp; New Question
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-5xl mx-auto p-4 mt-6">
+              {!active.length ? (
+                <div className="text-center p-12 bg-white rounded-xl shadow border">
+                  <h2 className="text-2xl font-bold text-slate-700 mb-2">
+                    No Topics Selected
+                  </h2>
+                  <p className="text-slate-500">
+                    Open the settings menu in the top right to select
+                    sub-topics.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="bg-slate-100 border-b border-slate-200 px-4 pt-3 flex gap-1 flex-wrap">
+                    {activeTabs.map(([k, l]) => (
+                      <button
+                        key={k}
+                        onClick={() => {
+                          setTopic(k);
+                          setQKey((n) => n + 1);
+                        }}
+                        style={{
+                          background: topic === k ? "#1d4ed8" : "white",
+                          color: topic === k ? "white" : "#475569",
+                          border:
+                            "1px solid " +
+                            (topic === k ? "#1d4ed8" : "#cbd5e1"),
+                          borderBottom:
+                            topic === k
+                              ? "1px solid white"
+                              : "1px solid #cbd5e1",
+                          borderRadius: "7px 7px 0 0",
+                          padding: "6px 13px",
+                          fontWeight: 600,
+                          fontSize: 13,
+                          cursor: "pointer",
+                          marginBottom: -1,
+                        }}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="p-5">
+                    {active.includes(topic) &&
+                      (topic === "build" ? (
+                        <TopicA key={qKey} />
+                      ) : topic === "read" ? (
+                        <TopicB key={qKey} />
+                      ) : topic === "adder" ? (
+                        <TopicC key={qKey} />
+                      ) : topic === "truth" ? (
+                        <TopicD key={qKey} />
+                      ) : null)}
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+        );
+      }
+
+      ReactDOM.render(<App />, document.getElementById("root"));
+    </script>
+  </body>
+</html>
