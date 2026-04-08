@@ -1,0 +1,1125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Wireless Connectivity</title>
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Custom animations for the simulation */
+      @keyframes pulse-ring {
+        0% {
+          transform: scale(0.8);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(2.5);
+          opacity: 0;
+        }
+      }
+      .signal-wave {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 3px solid #3b82f6;
+        animation: pulse-ring 1.5s infinite linear;
+        pointer-events: none;
+      }
+      .signal-wave-red {
+        border-color: #ef4444;
+      }
+      .signal-wave-green {
+        border-color: #22c55e;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-900 font-sans min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- SVGs for UI ---
+      const CheckIcon = () => (
+        <svg
+          className="w-5 h-5 text-green-600 inline"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M5 13l4 4L19 7"
+          ></path>
+        </svg>
+      );
+      const XIcon = () => (
+        <svg
+          className="w-5 h-5 text-red-600 inline"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M6 18L18 6M6 6l12 12"
+          ></path>
+        </svg>
+      );
+      const LaptopIcon = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+          ></path>
+        </svg>
+      );
+      const RouterIcon = ({ className }) => (
+        <svg
+          className={className}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z"
+          ></path>
+        </svg>
+      );
+
+      // --- Data Models ---
+      const TOPICS = {
+        GENERAL: "General Knowledge (Purpose, Components, Security)",
+        CSMACA: "CSMA/CA & RTS/CTS Simulation",
+      };
+
+      const GENERAL_QUESTIONS = [
+        {
+          id: "g1",
+          type: "mcq",
+          question:
+            "What is the primary purpose of WiFi according to the AQA specification?",
+          options: [
+            "To provide an internet connection directly to a device via a cellular tower.",
+            "To enable devices to connect to a network wirelessly using a local area network based on international standards.",
+            "To encrypt all data passing through a wired ethernet connection.",
+            "To replace the need for an operating system network stack.",
+          ],
+          answer: 1,
+          explanation:
+            "WiFi is a wireless local area network (WLAN) based on international standards (like IEEE 802.11) used to enable devices to connect to a network wirelessly.",
+        },
+        {
+          id: "g2",
+          type: "fill",
+          question:
+            "Which hardware component is required on a device (e.g., a laptop) for it to connect to a wireless network?",
+          words: [
+            { initial: "W", answer: "ireless" },
+            { initial: "N", answer: "etwork" },
+            { initial: "A", answer: "dapter" },
+          ],
+          fullAnswer: "Wireless Network Adapter",
+          explanation:
+            "A Wireless Network Adapter (WNA) or Wireless Network Interface Card (WNIC) is required to receive and transmit radio frequencies.",
+        },
+        {
+          id: "g3",
+          type: "fill",
+          question:
+            "Which component bridges the wireless network to a wired network, allowing wireless devices to communicate with the rest of the LAN?",
+          words: [
+            { initial: "W", answer: "ireless" },
+            { initial: "A", answer: "ccess" },
+            { initial: "P", answer: "oint" },
+          ],
+          fullAnswer: "Wireless Access Point",
+          explanation:
+            "The Wireless Access Point (WAP) acts as a central transmitter and receiver of wireless radio signals.",
+        },
+        {
+          id: "g4",
+          type: "fill",
+          question:
+            "What 32-character identifier names a wireless network? Broadcasting this can be disabled as a security measure.",
+          words: [
+            { initial: "S", answer: "ervice" },
+            { initial: "S", answer: "et" },
+            { initial: "I", answer: "dentifier" },
+          ],
+          fullAnswer: "Service Set Identifier (SSID)",
+          explanation:
+            "Disabling SSID broadcast stops the network from appearing in automatic lists, though it can still be found by determined packet sniffing.",
+        },
+        {
+          id: "g5",
+          type: "fill",
+          question:
+            "To restrict access to specific hardware devices, an administrator can use a...",
+          words: [
+            { initial: "M", answer: "AC" },
+            { initial: "A", answer: "ddress" },
+            { initial: "A", answer: "llow" },
+            { initial: "L", answer: "ist" },
+          ],
+          fullAnswer: "MAC Address Allow List",
+          explanation:
+            "Also historically known as a whitelist, this ensures only devices with registered Media Access Control (MAC) addresses can join the network.",
+        },
+        {
+          id: "g6",
+          type: "mcq",
+          question:
+            "Which of the following is true regarding authentication and encryption in securing a wireless network?",
+          options: [
+            "Requiring a password to authenticate onto the network automatically prevents packets from being intercepted and read.",
+            "Disabling SSID broadcast provides strong encryption.",
+            "Authentication onto the network does NOT prevent packet sniffing; strong encryption (e.g., WPA/WPA2 with a pre-shared key) is required to prevent sniffed packets from being readable.",
+            "MAC address allow lists encrypt the data payloads of allowed devices.",
+          ],
+          answer: 2,
+          explanation:
+            "Authentication only checks if a device is allowed on the network. Without strong encryption (WPA2/WPA3 using PSKs), anyone capturing radio waves in the air could read the data payloads.",
+        },
+      ];
+
+      // --- Reusable Components ---
+
+      const FillInTheBlank = ({
+        id,
+        question,
+        words,
+        fullAnswer,
+        explanation,
+      }) => {
+        const [inputs, setInputs] = useState(words.map(() => ""));
+        const [status, setStatus] = useState("idle"); // idle, correct, incorrect
+        const [showSolution, setShowSolution] = useState(false);
+
+        const checkAnswer = () => {
+          let isCorrect = true;
+          words.forEach((w, idx) => {
+            if (inputs[idx].trim().toLowerCase() !== w.answer.toLowerCase()) {
+              isCorrect = false;
+            }
+          });
+          setStatus(isCorrect ? "correct" : "incorrect");
+          if (isCorrect) setShowSolution(false);
+        };
+
+        const handleChange = (idx, val) => {
+          const newInputs = [...inputs];
+          newInputs[idx] = val;
+          setInputs(newInputs);
+          setStatus("idle");
+        };
+
+        return (
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 mb-6">
+            <p className="font-semibold text-slate-800 mb-4">{question}</p>
+            <div className="flex flex-wrap gap-4 items-center mb-4">
+              {words.map((word, idx) => (
+                <div key={idx} className="flex items-center">
+                  <span className="font-bold text-lg text-slate-700 mr-1">
+                    {word.initial}
+                  </span>
+                  <input
+                    type="text"
+                    className="border-b-2 border-slate-300 focus:border-blue-500 outline-none px-2 py-1 w-24 text-slate-700 bg-slate-50 rounded-t"
+                    value={inputs[idx]}
+                    onChange={(e) => handleChange(idx, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <button
+                onClick={checkAnswer}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-medium transition"
+              >
+                Check Answer
+              </button>
+              {status === "incorrect" && (
+                <button
+                  onClick={() => setShowSolution(!showSolution)}
+                  className="text-slate-500 hover:text-slate-700 underline text-sm transition"
+                >
+                  {showSolution ? "Hide Solution" : "Show Solution"}
+                </button>
+              )}
+              {status === "correct" && (
+                <span className="text-green-600 font-bold flex items-center gap-1">
+                  <CheckIcon /> Correct!
+                </span>
+              )}
+              {status === "incorrect" && !showSolution && (
+                <span className="text-red-600 font-bold flex items-center gap-1">
+                  <XIcon /> Incorrect, try again.
+                </span>
+              )}
+            </div>
+
+            {showSolution && status === "incorrect" && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded text-blue-900">
+                <strong>Solution:</strong> {fullAnswer}
+                <br />
+                <span className="text-sm opacity-80">{explanation}</span>
+              </div>
+            )}
+            {status === "correct" && (
+              <div className="mt-4 p-3 bg-green-50 text-green-900 text-sm rounded border border-green-200">
+                {explanation}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const MultipleChoice = ({
+        id,
+        question,
+        options,
+        answer,
+        explanation,
+      }) => {
+        const [selected, setSelected] = useState(null);
+        const [status, setStatus] = useState("idle");
+        const [showSolution, setShowSolution] = useState(false);
+
+        const handleSelect = (idx) => {
+          setSelected(idx);
+          setStatus("idle");
+        };
+
+        const checkAnswer = () => {
+          if (selected === null) return;
+          const isCorrect = selected === answer;
+          setStatus(isCorrect ? "correct" : "incorrect");
+          if (isCorrect) setShowSolution(false);
+        };
+
+        return (
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 mb-6">
+            <p className="font-semibold text-slate-800 mb-4">{question}</p>
+            <div className="space-y-2 mb-4">
+              {options.map((opt, idx) => (
+                <label
+                  key={idx}
+                  className={`flex items-start p-3 border rounded cursor-pointer transition ${selected === idx ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}
+                >
+                  <input
+                    type="radio"
+                    name={`mcq-${id}`}
+                    className="mt-1 mr-3 text-blue-600 focus:ring-blue-500"
+                    checked={selected === idx}
+                    onChange={() => handleSelect(idx)}
+                  />
+                  <span className="text-slate-700">{opt}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <button
+                onClick={checkAnswer}
+                disabled={selected === null}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded font-medium transition"
+              >
+                Check Answer
+              </button>
+              {status === "incorrect" && (
+                <button
+                  onClick={() => setShowSolution(!showSolution)}
+                  className="text-slate-500 hover:text-slate-700 underline text-sm transition"
+                >
+                  {showSolution ? "Hide Solution" : "Show Solution"}
+                </button>
+              )}
+              {status === "correct" && (
+                <span className="text-green-600 font-bold flex items-center gap-1">
+                  <CheckIcon /> Correct!
+                </span>
+              )}
+              {status === "incorrect" && !showSolution && (
+                <span className="text-red-600 font-bold flex items-center gap-1">
+                  <XIcon /> Incorrect, try again.
+                </span>
+              )}
+            </div>
+
+            {showSolution && status === "incorrect" && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded text-blue-900">
+                <strong>Solution:</strong> {options[answer]}
+                <br />
+                <span className="text-sm opacity-80">{explanation}</span>
+              </div>
+            )}
+            {status === "correct" && (
+              <div className="mt-4 p-3 bg-green-50 text-green-900 text-sm rounded border border-green-200">
+                {explanation}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- CSMA/CA Simulation Engine ---
+
+      const SIM_STEPS = [
+        {
+          id: 0,
+          phase: "Standard CSMA/CA",
+          title: "Data to Send",
+          text: "Device A has prepared a frame to send to the Wireless Access Point (WAP). According to Carrier Sense Multiple Access with Collision Avoidance (CSMA/CA), what must it do first?",
+          question: {
+            type: "fill",
+            text: "What is the process of listening to the channel to see if it is idle called?",
+            initials: ["C", "S"],
+            answer: ["arrier", "ense"],
+          },
+          actionText: "Perform Carrier Sense",
+          visual: {
+            a: "idle",
+            b: "transmitting",
+            wap: "receiving",
+            c: "idle",
+            signals: ["b"],
+          },
+        },
+        {
+          id: 1,
+          phase: "Standard CSMA/CA",
+          title: "Channel is Busy",
+          text: "Device A senses the wireless channel. It detects that the channel is currently BUSY (Device B is transmitting). It continuously monitors the channel until it becomes silent.",
+          question: {
+            type: "mcq",
+            text: "What does Device A do while the channel is busy?",
+            options: [
+              "It continuously monitors the channel until it is idle",
+              "It transmits its data anyway",
+              "It drops the data frame permanently",
+            ],
+            answer: 0,
+          },
+          actionText: "Monitor Channel",
+          visual: {
+            a: "listening-busy",
+            b: "transmitting",
+            wap: "receiving",
+            c: "idle",
+            signals: ["b"],
+          },
+        },
+        {
+          id: 2,
+          phase: "Standard CSMA/CA",
+          title: "Channel is Idle",
+          text: "The channel is now silent (no transmissions detected) so Device A is now ready to transmit.",
+          actionText: "Transmit Data",
+          visual: {
+            a: "listening-idle",
+            b: "idle",
+            wap: "idle",
+            c: "idle",
+            signals: [],
+          },
+        },
+        {
+          id: 3,
+          phase: "Standard CSMA/CA",
+          title: "Data Transmission",
+          text: "Device A successfully transmits its data frame to the WAP.",
+          actionText: "Request Acknowledgement (ACK)",
+          visual: {
+            a: "transmitting",
+            b: "idle",
+            wap: "receiving",
+            c: "idle",
+            signals: ["a"],
+          },
+        },
+        {
+          id: 4,
+          phase: "Standard CSMA/CA",
+          title: "Acknowledgement",
+          text: "The WAP successfully received the data and sends an ACK frame back to Device A.",
+          actionText: "Consider Collision Scenario",
+          visual: {
+            a: "receiving",
+            b: "idle",
+            wap: "transmitting-ack",
+            c: "idle",
+            signals: ["wap-a"],
+          },
+        },
+        {
+          id: 5,
+          phase: "Standard CSMA/CA",
+          title: "Collision & Retransmission",
+          text: "If a collision had occurred (e.g. data was corrupted), no ACK would be received. Device A would wait an exponential random backoff time before retrying.",
+          question: {
+            type: "mcq",
+            text: "Why is it crucial that this backoff time is random rather than fixed?",
+            options: [
+              "Random timers are faster for the CPU to generate.",
+              "To prevent a repeated collision if multiple devices were waiting to retransmit.",
+              "A fixed timer would use too much battery power.",
+            ],
+            answer: 1,
+          },
+          actionText: "Continue to Next Scenario",
+          visual: {
+            a: "waiting",
+            b: "idle",
+            wap: "idle",
+            c: "idle",
+            signals: [],
+          },
+        },
+        {
+          id: 6,
+          phase: "The Hidden Node",
+          title: "A New Problem Arises",
+          text: "Consider a new layout. Device A and Device C are far apart. They can BOTH reach the WAP, but they CANNOT detect each other's signals when doing Carrier Sense.",
+          question: {
+            id: "hidden_node",
+            type: "fill",
+            text: "What is this network problem called?",
+            initials: ["H", "S", "P"],
+            answer: ["idden", "tation", "roblem"],
+          },
+          actionText: "Acknowledge Problem",
+          visual: {
+            a: "idle",
+            b: "hidden",
+            wap: "idle",
+            c: "idle",
+            signals: [],
+            block: true,
+          },
+        },
+        {
+          id: 7,
+          phase: "RTS/CTS",
+          title: "Enable RTS/CTS",
+          text: "Because of the Hidden Station Problem, they might both sense the channel as 'Idle' and transmit simultaneously, colliding at the WAP. To fix this, we enable RTS/CTS.",
+          question: {
+            type: "fill",
+            text: "What does RTS stand for?",
+            initials: ["R", "T", "S"],
+            answer: ["equest", "o", "end"],
+          },
+          actionText: "Send RTS",
+          visual: {
+            a: "listening-idle",
+            b: "hidden",
+            wap: "idle",
+            c: "idle",
+            signals: [],
+            block: true,
+          },
+        },
+        {
+          id: 8,
+          phase: "RTS/CTS",
+          title: "Request to Send",
+          text: "Instead of sending the data payload directly, Device A first sends a tiny 'Request to Send' (RTS) control frame to the WAP, asking for permission to use the channel.",
+          actionText: "WAP Receives RTS",
+          visual: {
+            a: "transmitting-rts",
+            b: "hidden",
+            wap: "receiving",
+            c: "idle",
+            signals: ["a-rts"],
+            block: true,
+          },
+        },
+        {
+          id: 9,
+          phase: "RTS/CTS",
+          title: "Clear to Send",
+          text: "The WAP grants permission by broadcasting a 'Clear to Send' (CTS) frame to ALL devices in its range. Crucially, Device C hears this CTS and knows it must stay quiet.",
+          question: {
+            type: "mcq",
+            text: "Why does Device C know to stay quiet even though it couldn't hear Device A's original RTS?",
+            options: [
+              "Device C guessed Device A was transmitting.",
+              "Device C received the CTS broadcast from the WAP, which it CAN hear.",
+              "Device A sends a separate message directly to Device C.",
+            ],
+            answer: 1,
+          },
+          actionText: "Device C Waits, A Transmits",
+          visual: {
+            a: "receiving-cts",
+            b: "hidden",
+            wap: "transmitting-cts",
+            c: "receiving-cts",
+            signals: ["wap-cts"],
+            block: true,
+          },
+        },
+        {
+          id: 10,
+          phase: "RTS/CTS",
+          title: "Safe Transmission",
+          text: "Device A now safely transmits its data payload, free from collisions. Device C stays silent until it hears the final ACK sent to Device A from the WAP.",
+          actionText: "Complete Protocol",
+          visual: {
+            a: "transmitting",
+            b: "hidden",
+            wap: "receiving",
+            c: "waiting-red",
+            signals: ["a"],
+            block: true,
+          },
+        },
+      ];
+
+      const CsmacaSimulation = () => {
+        const [stepIndex, setStepIndex] = useState(0);
+        const [qStatus, setQStatus] = useState("idle"); // idle, correct, incorrect, revealed
+        const [qInputs, setQInputs] = useState(
+          SIM_STEPS[0].question?.initials
+            ? SIM_STEPS[0].question.initials.map(() => "")
+            : [],
+        );
+        const [qSelected, setQSelected] = useState(null);
+
+        const step = SIM_STEPS[stepIndex];
+
+        const nextStep = () => {
+          if (stepIndex < SIM_STEPS.length - 1) {
+            const nextIdx = stepIndex + 1;
+            setStepIndex(nextIdx);
+            setQStatus("idle");
+            setQInputs(
+              SIM_STEPS[nextIdx].question?.initials
+                ? SIM_STEPS[nextIdx].question.initials.map(() => "")
+                : [],
+            );
+            setQSelected(null);
+          }
+        };
+
+        const resetSim = () => {
+          setStepIndex(0);
+          setQStatus("idle");
+          setQInputs(
+            SIM_STEPS[0].question?.initials
+              ? SIM_STEPS[0].question.initials.map(() => "")
+              : [],
+          );
+          setQSelected(null);
+        };
+
+        const checkSimQuestion = () => {
+          const q = step.question;
+          let isCorrect = false;
+
+          if (q.type === "fill") {
+            isCorrect = qInputs.every((val, idx) => {
+              const expected = q.answer[idx].toLowerCase();
+              if (q.id === "hidden_node" && idx === 1) {
+                return (
+                  val.toLowerCase() === "tation" || val.toLowerCase() === "ode"
+                );
+              }
+              return val.toLowerCase() === expected;
+            });
+          } else if (q.type === "mcq") {
+            isCorrect = qSelected === q.answer;
+          }
+
+          setQStatus(isCorrect ? "correct" : "incorrect");
+        };
+
+        const revealSolution = () => {
+          setQStatus("revealed");
+          if (step.question.type === "fill") {
+            setQInputs(step.question.answer);
+          }
+        };
+
+        return (
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+            <div className="flex justify-between items-center border-b pb-3 mb-6">
+              <h2 className="text-xl font-bold text-slate-800">
+                Interactive Protocol Simulation
+              </h2>
+              <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                Phase: {step.phase}
+              </span>
+            </div>
+
+            {/* Simulation Canvas */}
+            <div className="relative bg-slate-900 rounded-xl h-64 mb-6 flex items-center justify-between px-12 overflow-hidden shadow-inner">
+              {/* Device A */}
+              <div
+                className={`relative z-10 flex flex-col items-center transition-all ${step.visual.a.includes("transmitting") ? "text-blue-400" : "text-slate-300"}`}
+              >
+                {step.visual.signals.includes("a") && (
+                  <div className="absolute top-6 left-1/2 w-64 h-64 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                    <div className="signal-wave"></div>
+                  </div>
+                )}
+                {step.visual.signals.includes("a-rts") && (
+                  <div className="absolute top-6 left-1/2 w-48 h-48 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                    <div className="signal-wave border-dashed"></div>
+                  </div>
+                )}
+
+                <LaptopIcon className="w-12 h-12 relative z-20" />
+                <span className="mt-2 font-mono text-sm font-bold bg-slate-800 px-2 py-1 rounded relative z-20">
+                  Device A
+                </span>
+                {step.visual.a === "waiting" && (
+                  <span className="absolute -top-8 text-xs text-yellow-400 font-bold bg-slate-800 px-2 rounded animate-pulse whitespace-nowrap">
+                    Backoff Timer...
+                  </span>
+                )}
+                {step.visual.a.includes("listening") && (
+                  <span className="absolute -top-8 text-xs text-green-400 font-bold bg-slate-800 px-2 rounded whitespace-nowrap">
+                    Carrier Sense
+                  </span>
+                )}
+                {step.visual.a === "transmitting-rts" && (
+                  <span className="absolute -top-8 text-xs text-blue-400 font-bold bg-slate-800 px-2 rounded whitespace-nowrap">
+                    Sending RTS...
+                  </span>
+                )}
+              </div>
+
+              {/* Wall for Hidden Node */}
+              {step.visual.block && (
+                <div className="absolute top-0 bottom-0 left-1/3 w-2 bg-gradient-to-b from-slate-900 via-slate-600 to-slate-900 z-10 opacity-50 flex items-center justify-center">
+                  <span className="text-[10px] text-white -rotate-90 uppercase tracking-widest bg-slate-800 px-1 whitespace-nowrap">
+                    Obstruction
+                  </span>
+                </div>
+              )}
+
+              {/* WAP (Center) */}
+              <div
+                className={`relative z-10 flex flex-col items-center transition-all ${step.visual.wap.includes("transmitting") ? "text-green-400" : "text-slate-300"}`}
+              >
+                {step.visual.signals.includes("wap-a") && (
+                  <div className="absolute top-8 left-1/2 w-96 h-96 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                    <div className="signal-wave signal-wave-green"></div>
+                  </div>
+                )}
+                {step.visual.signals.includes("wap-cts") && (
+                  <div className="absolute top-8 left-1/2 w-[32rem] h-[32rem] -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                    <div className="signal-wave signal-wave-green border-dashed"></div>
+                  </div>
+                )}
+
+                <RouterIcon className="w-16 h-16 relative z-20" />
+                <span className="mt-2 font-mono text-sm font-bold bg-slate-800 px-2 py-1 rounded border border-slate-600 relative z-20">
+                  WAP
+                </span>
+              </div>
+
+              {/* Device B / C Container */}
+              {step.visual.b !== "hidden" ? (
+                <div
+                  className={`relative z-10 flex flex-col items-center transition-all ${step.visual.b.includes("transmitting") ? "text-blue-400" : "text-slate-300"}`}
+                >
+                  {step.visual.signals.includes("b") && (
+                    <div className="absolute top-6 left-1/2 w-64 h-64 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                      <div className="signal-wave"></div>
+                    </div>
+                  )}
+
+                  <LaptopIcon className="w-12 h-12 relative z-20" />
+                  <span className="mt-2 font-mono text-sm font-bold bg-slate-800 px-2 py-1 rounded relative z-20">
+                    Device B
+                  </span>
+                </div>
+              ) : (
+                <div
+                  className={`relative z-10 flex flex-col items-center transition-all ${step.visual.c === "waiting-red" ? "text-red-400" : "text-slate-300"}`}
+                >
+                  <LaptopIcon className="w-12 h-12 relative z-20" />
+                  <span className="mt-2 font-mono text-sm font-bold bg-slate-800 px-2 py-1 rounded relative z-20">
+                    Device C
+                  </span>
+                  {step.visual.c === "waiting-red" && (
+                    <span className="absolute -top-8 text-xs text-red-400 font-bold bg-slate-800 px-2 rounded whitespace-nowrap">
+                      Suspended (CTS)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Instruction & Interaction Area */}
+            <div className="bg-slate-50 p-6 rounded-lg border border-blue-100 min-h-[220px] flex flex-col justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-blue-900 mb-2">
+                  Step {step.id + 1}: {step.title}
+                </h3>
+                <p className="text-slate-700 mb-4">{step.text}</p>
+
+                {/* Dynamic Question Logic */}
+                {step.question && (
+                  <div className="mb-4 bg-white p-4 rounded border border-slate-200 shadow-sm">
+                    <p className="font-semibold text-slate-800 mb-3">
+                      {step.question.text}
+                    </p>
+
+                    {step.question.type === "fill" && (
+                      <div className="flex flex-wrap gap-3 items-center mb-3">
+                        {step.question.initials.map((init, idx) => (
+                          <div key={idx} className="flex items-center">
+                            <span className="font-bold text-slate-700 mr-1">
+                              {init}
+                            </span>
+                            <input
+                              type="text"
+                              className={`border-b-2 outline-none px-2 py-1 w-24 text-slate-700 bg-slate-50 rounded-t transition ${qStatus === "revealed" ? "border-green-400 text-green-700 font-medium" : "border-slate-300 focus:border-blue-500"}`}
+                              value={qInputs[idx] || ""}
+                              onChange={(e) => {
+                                const newInputs = [...qInputs];
+                                newInputs[idx] = e.target.value;
+                                setQInputs(newInputs);
+                                if (qStatus !== "revealed") setQStatus("idle");
+                              }}
+                              disabled={
+                                qStatus === "revealed" || qStatus === "correct"
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {step.question.type === "mcq" && (
+                      <div className="space-y-2 mb-3">
+                        {step.question.options.map((opt, idx) => (
+                          <label
+                            key={idx}
+                            className={`flex items-start p-2 border rounded transition ${qStatus === "revealed" && step.question.answer === idx ? "border-green-500 bg-green-50" : qSelected === idx ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:bg-slate-50"} ${qStatus === "revealed" || qStatus === "correct" ? "cursor-default" : "cursor-pointer"}`}
+                          >
+                            <input
+                              type="radio"
+                              name={`sim-mcq-${step.id}`}
+                              className="mt-1 mr-3 text-blue-600 focus:ring-blue-500"
+                              checked={
+                                qSelected === idx ||
+                                (qStatus === "revealed" &&
+                                  step.question.answer === idx)
+                              }
+                              onChange={() => {
+                                if (
+                                  qStatus !== "revealed" &&
+                                  qStatus !== "correct"
+                                ) {
+                                  setQSelected(idx);
+                                  setQStatus("idle");
+                                }
+                              }}
+                              disabled={
+                                qStatus === "revealed" || qStatus === "correct"
+                              }
+                            />
+                            <span className="text-slate-700 text-sm">
+                              {opt}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3 mt-2 min-h-[24px]">
+                      {qStatus === "incorrect" && (
+                        <>
+                          <span className="text-red-600 text-sm font-bold flex items-center gap-1">
+                            <XIcon /> Incorrect.
+                          </span>
+                          <button
+                            onClick={revealSolution}
+                            className="text-slate-500 hover:text-slate-700 underline text-sm transition ml-2"
+                          >
+                            View Solution
+                          </button>
+                        </>
+                      )}
+                      {qStatus === "correct" && (
+                        <span className="text-green-600 text-sm font-bold flex items-center gap-1">
+                          <CheckIcon /> Correct! You may proceed.
+                        </span>
+                      )}
+                      {qStatus === "revealed" && (
+                        <span className="text-blue-600 text-sm font-bold flex items-center gap-1">
+                          <CheckIcon /> Solution revealed. You may proceed.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex gap-3">
+                {step.question &&
+                (qStatus === "idle" || qStatus === "incorrect") ? (
+                  <button
+                    onClick={checkSimQuestion}
+                    disabled={
+                      step.question.type === "mcq" && qSelected === null
+                    }
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-bold transition flex-1 shadow-sm"
+                  >
+                    Check Answer
+                  </button>
+                ) : stepIndex < SIM_STEPS.length - 1 ? (
+                  <button
+                    onClick={nextStep}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition flex-1 shadow-sm flex items-center justify-center gap-2"
+                  >
+                    {step.actionText}
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M14 5l7 7m0 0l-7 7m7-7H3"
+                      ></path>
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={resetSim}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition flex-1 shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <CheckIcon /> Simulation Complete - Restart
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-slate-200 h-2 mt-6 rounded-full overflow-hidden">
+              <div
+                className="bg-blue-600 h-2 transition-all duration-500 ease-out"
+                style={{
+                  width: `${((stepIndex + 1) / SIM_STEPS.length) * 100}%`,
+                }}
+              ></div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- Main App Component ---
+      const App = () => {
+        const [selectedTopics, setSelectedTopics] = useState(
+          Object.keys(TOPICS).reduce(
+            (acc, key) => ({ ...acc, [key]: true }),
+            {},
+          ),
+        );
+        const [dropdownOpen, setDropdownOpen] = useState(false);
+        const dropdownRef = useRef(null);
+
+        // Close dropdown on outside click
+        useEffect(() => {
+          const handleClickOutside = (event) => {
+            if (
+              dropdownRef.current &&
+              !dropdownRef.current.contains(event.target)
+            ) {
+              setDropdownOpen(false);
+            }
+          };
+          document.addEventListener("mousedown", handleClickOutside);
+          return () =>
+            document.removeEventListener("mousedown", handleClickOutside);
+        }, []);
+
+        const toggleTopic = (key) => {
+          setSelectedTopics((prev) => ({ ...prev, [key]: !prev[key] }));
+        };
+
+        return (
+          <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+            {/* Header & Filter */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 relative">
+              <div>
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                  Wireless Connectivity
+                </h1>
+                <p className="text-slate-600 mt-1">
+                  AQA A Level Computer Science Interactive
+                </p>
+              </div>
+
+              {/* Topic Filter Dropdown */}
+              <div className="relative z-50" ref={dropdownRef}>
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="flex items-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 transition font-medium text-slate-700"
+                >
+                  <svg
+                    className="w-5 h-5 text-slate-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                    ></path>
+                  </svg>
+                  Filter Topics
+                  <svg
+                    className="w-4 h-4 ml-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
+                  </svg>
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden">
+                    <div className="p-3 bg-slate-50 border-b text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Select Sub-topics
+                    </div>
+                    <div className="p-2">
+                      {Object.entries(TOPICS).map(([key, label]) => (
+                        <label
+                          key={key}
+                          className="flex items-start p-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 mr-3 text-blue-600 rounded focus:ring-blue-500 w-4 h-4"
+                            checked={selectedTopics[key]}
+                            onChange={() => toggleTopic(key)}
+                          />
+                          <span className="text-sm text-slate-700 font-medium">
+                            {label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Main Content Area */}
+            <div className="space-y-8">
+              {/* Render General Questions if selected */}
+              {selectedTopics.GENERAL && (
+                <section className="animate-fade-in">
+                  <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b pb-2">
+                    General Knowledge
+                  </h2>
+                  {GENERAL_QUESTIONS.map((q) => {
+                    if (q.type === "mcq") {
+                      return <MultipleChoice key={q.id} {...q} />;
+                    } else if (q.type === "fill") {
+                      return <FillInTheBlank key={q.id} {...q} />;
+                    }
+                    return null;
+                  })}
+                </section>
+              )}
+
+              {/* Render Simulation if selected */}
+              {selectedTopics.CSMACA && (
+                <section className="animate-fade-in pb-12">
+                  <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b pb-2">
+                    CSMA/CA Protocol
+                  </h2>
+                  <p className="mb-6 text-slate-700 bg-blue-50 p-4 border-l-4 border-blue-500 rounded-r">
+                    <strong>
+                      Carrier Sense Multiple Access with Collision Avoidance
+                    </strong>{" "}
+                    is used in wireless networks instead of Collision{" "}
+                    <em>Detection</em> (CSMA/CD) because wireless adapters
+                    cannot easily transmit and receive at the same time to
+                    detect collisions in the air. Let's step through the
+                    protocol.
+                  </p>
+                  <CsmacaSimulation />
+                </section>
+              )}
+
+              {/* Empty State */}
+              {!selectedTopics.GENERAL && !selectedTopics.CSMACA && (
+                <div className="text-center py-20 bg-white rounded-lg border border-dashed border-slate-300">
+                  <svg
+                    className="w-16 h-16 text-slate-300 mx-auto mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    ></path>
+                  </svg>
+                  <h3 className="text-lg font-bold text-slate-700">
+                    No Topics Selected
+                  </h3>
+                  <p className="text-slate-500">
+                    Please select at least one sub-topic from the filter menu
+                    above.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
