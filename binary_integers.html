@@ -1,0 +1,1508 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Data Representation Interactive</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f3f4f6;
+        color: #1f2937;
+      }
+
+      /* Grid input styles - STRICTLY UNIFORM SIZING */
+      .bit-input {
+        width: 40px;
+        height: 44px;
+        text-align: center;
+        font-size: 1.25rem;
+        font-weight: 700;
+        font-family: Consolas, "Courier New", monospace;
+        border: 2px solid #cbd5e1;
+        border-radius: 6px;
+        background-color: #fff;
+        color: #0f172a;
+        box-sizing: border-box;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .bit-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+      }
+
+      /* Optional scratchpad row coloring */
+      .bit-input.carry {
+        background-color: #f8fafc;
+        border-color: #94a3b8;
+        font-size: 1.1rem;
+      }
+      .bit-input.readonly {
+        background-color: #f1f5f9;
+        border-color: #e2e8f0;
+        color: #475569;
+        cursor: not-allowed;
+      }
+      .bit-input.placeholder {
+        background-color: #e2e8f0;
+        border-color: #cbd5e1;
+        cursor: not-allowed;
+      }
+      .bit-input.invisible-pad {
+        visibility: hidden;
+        border: none;
+        background: transparent;
+      }
+
+      .math-row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 4px;
+        margin-bottom: 4px;
+      }
+      .math-label {
+        font-size: 0.875rem;
+        color: #64748b;
+        font-weight: 600;
+        margin-right: 8px;
+        width: 130px;
+        text-align: right;
+      }
+      .math-divider {
+        height: 2px;
+        background-color: #94a3b8;
+        margin: 8px 0 8px auto;
+        width: calc((40px * 8) + (4px * 7));
+      }
+
+      /* General Inputs (Evaluated) */
+      .text-input {
+        padding: 0.5rem 0.75rem;
+        font-size: 1.1rem;
+        border: 2px solid #cbd5e1;
+        border-radius: 8px;
+        font-family: Consolas, monospace;
+        width: 200px;
+        transition: all 0.2s;
+      }
+      .text-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+      }
+      .text-input.correct {
+        border-color: #10b981;
+        background-color: #ecfdf5;
+        color: #047857;
+        font-weight: bold;
+      }
+      .text-input.incorrect {
+        border-color: #ef4444;
+        background-color: #fef2f2;
+        color: #b91c1c;
+      }
+
+      @media (max-width: 600px) {
+        .bit-input {
+          width: 32px;
+          height: 38px;
+          font-size: 1.1rem;
+        }
+        .math-label {
+          width: 90px;
+          font-size: 0.75rem;
+        }
+        .math-divider {
+          width: calc((32px * 8) + (4px * 7));
+        }
+        .math-row {
+          gap: 4px;
+        }
+      }
+
+      /* Dropdown fade */
+      .fade-in {
+        animation: fadeIn 0.2s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- DATA & CONSTANTS ---
+      const TOPICS = [
+        { id: "bases", label: "Number Bases (Dec/Bin/Hex)" },
+        { id: "units", label: "Units & Capacity" },
+        { id: "unsigned", label: "Unsigned Binary & Range" },
+        { id: "addition", label: "Binary Addition" },
+        { id: "subtraction", label: "Binary Subtraction" },
+        { id: "multiplication", label: "Binary Multiplication" },
+        { id: "twoscomp", label: "Signed Binary (Two's Complement)" },
+      ];
+
+      // --- UTILITY FUNCTIONS ---
+      const rnd = (min, max) =>
+        Math.floor(Math.random() * (max - min + 1)) + min;
+      const toBin = (num, bits) =>
+        (num >>> 0).toString(2).padStart(bits, "0").slice(-bits);
+      const toHex = (num) => num.toString(16).toUpperCase();
+
+      // --- QUESTION GENERATORS ---
+      const generators = {
+        bases: () => {
+          const types = [
+            "dec2bin",
+            "bin2dec",
+            "dec2hex",
+            "hex2dec",
+            "bin2hex",
+            "hex2bin",
+          ];
+          const type = types[rnd(0, types.length - 1)];
+          const val = rnd(1, 255);
+          const bin = toBin(val, 8);
+          const hex = toHex(val);
+
+          let qText, ans, solText;
+          switch (type) {
+            case "dec2bin":
+              qText = (
+                <span>
+                  Convert {val}
+                  <sub>10</sub> to 8-bit unsigned binary.
+                </span>
+              );
+              ans = bin;
+              solText =
+                `Subtract highest powers of 2: ${val} = ` +
+                [128, 64, 32, 16, 8, 4, 2, 1]
+                  .filter((p) => val & p)
+                  .join(" + ") +
+                ` -> ${bin}<sub>2</sub>`;
+              break;
+            case "bin2dec":
+              qText = (
+                <span>
+                  Convert {bin}
+                  <sub>2</sub> to decimal.
+                </span>
+              );
+              ans = val.toString();
+              solText =
+                `Add powers of 2 where bit is 1: ` +
+                [128, 64, 32, 16, 8, 4, 2, 1]
+                  .filter((p, i) => bin[i] === "1")
+                  .join(" + ") +
+                ` = ${val}<sub>10</sub>`;
+              break;
+            case "dec2hex":
+              qText = (
+                <span>
+                  Convert {val}
+                  <sub>10</sub> to hexadecimal.
+                </span>
+              );
+              ans = hex;
+              solText =
+                `${val} ÷ 16 = ${Math.floor(val / 16)} remainder ${val % 16}. ` +
+                `Hex digits: ${toHex(Math.floor(val / 16))} and ${toHex(val % 16)}. Result: ${hex}<sub>16</sub>`;
+              break;
+            case "hex2dec":
+              qText = (
+                <span>
+                  Convert {hex}
+                  <sub>16</sub> to decimal.
+                </span>
+              );
+              ans = val.toString();
+              solText = `(${parseInt(hex[0], 16) || 0} × 16) + (${parseInt(hex[1] || hex[0], 16)} × 1) = ${val}<sub>10</sub>`;
+              break;
+            case "bin2hex":
+              qText = (
+                <span>
+                  Convert {bin}
+                  <sub>2</sub> to hexadecimal using shorthand grouping.
+                </span>
+              );
+              ans = hex;
+              solText =
+                `Split into nibbles: ${bin.slice(0, 4)} | ${bin.slice(4)}. ` +
+                `Convert each nibble: ${parseInt(bin.slice(0, 4), 2)} -> ${toHex(parseInt(bin.slice(0, 4), 2))}, ` +
+                `${parseInt(bin.slice(4), 2)} -> ${toHex(parseInt(bin.slice(4), 2))}. Result: ${hex}<sub>16</sub>`;
+              break;
+            case "hex2bin":
+              qText = (
+                <span>
+                  Convert {hex}
+                  <sub>16</sub> to 8-bit binary.
+                </span>
+              );
+              ans = bin;
+              const h1 = hex.length > 1 ? hex[0] : "0";
+              const h2 = hex.length > 1 ? hex[1] : hex[0];
+              solText =
+                `Convert each hex digit to a 4-bit nibble: ${h1} -> ${toBin(parseInt(h1, 16), 4)}, ` +
+                `${h2} -> ${toBin(parseInt(h2, 16), 4)}. Combine: ${bin}<sub>2</sub>`;
+              break;
+          }
+          return { type: "text", qText, ans, solText, rawAns: ans };
+        },
+
+        units: () => {
+          const scenarios = [
+            () => {
+              const bits = rnd(2, 6);
+              return {
+                qText: (
+                  <span>
+                    How many different values can be represented with {bits}{" "}
+                    bits?
+                  </span>
+                ),
+                ans: Math.pow(2, bits).toString(),
+                solText: `For n bits, there are 2<sup>n</sup> combinations. 2<sup>${bits}</sup> = ${Math.pow(2, bits)}.`,
+              };
+            },
+            () => {
+              const val = rnd(2, 10);
+              return {
+                qText: (
+                  <span>
+                    Calculate the exact number of bytes in {val} kibibytes.
+                  </span>
+                ),
+                ans: (val * 1024).toString(),
+                solText: `1 kibibyte represents 2<sup>10</sup> = 1024 bytes. ${val} × 1024 = ${val * 1024} bytes.`,
+              };
+            },
+            () => {
+              const val = rnd(2, 10);
+              return {
+                qText: (
+                  <span>
+                    Calculate the exact number of bytes in {val} kilobytes.
+                  </span>
+                ),
+                ans: (val * 1000).toString(),
+                solText: `1 kilobyte represents 10<sup>3</sup> = 1000 bytes. ${val} × 1000 = ${val * 1000} bytes.`,
+              };
+            },
+            () => {
+              const val = rnd(2, 8);
+              return {
+                qText: <span>How many bits are in {val} bytes?</span>,
+                ans: (val * 8).toString(),
+                solText: `1 byte is exactly 8 bits. ${val} × 8 = ${val * 8} bits.`,
+              };
+            },
+            () => {
+              const prefixes = [
+                { name: "mebibytes", pwr: "20" },
+                { name: "gibibytes", pwr: "30" },
+                { name: "tebibytes", pwr: "40" },
+              ];
+              const p = prefixes[rnd(0, prefixes.length - 1)];
+              return {
+                qText: (
+                  <span>
+                    1 {p.name} is equal to 2<sup>n</sup> bytes. What is the
+                    value of n?
+                  </span>
+                ),
+                ans: p.pwr,
+                solText: `kibi = 2<sup>10</sup>, mebi = 2<sup>20</sup>, gibi = 2<sup>30</sup>, tebi = 2<sup>40</sup>. Therefore, n = ${p.pwr}.`,
+              };
+            },
+          ];
+          const q = scenarios[rnd(0, scenarios.length - 1)]();
+          return {
+            type: "text",
+            qText: q.qText,
+            ans: q.ans,
+            solText: q.solText,
+            rawAns: q.ans,
+          };
+        },
+
+        unsigned: () => {
+          const scenarios = [
+            () => {
+              const bits = rnd(4, 12);
+              return {
+                type: "text",
+                qText: (
+                  <span>
+                    What is the <b>maximum</b> value that can be represented
+                    using an {bits}-bit unsigned binary integer?
+                  </span>
+                ),
+                ans: (Math.pow(2, bits) - 1).toString(),
+                solText: `The maximum value for n unsigned bits is 2<sup>n</sup> - 1. For ${bits} bits: 2<sup>${bits}</sup> - 1 = ${Math.pow(2, bits)} - 1 = ${Math.pow(2, bits) - 1}.`,
+              };
+            },
+            () => {
+              const val = rnd(50, 200);
+              const valBin = toBin(val, 8);
+              const neededForOverflow = 256 - val;
+              const ansBin = toBin(neededForOverflow, 8);
+              return {
+                type: "text",
+                qText: (
+                  <span>
+                    What would be the smallest unsigned 8-bit binary that would
+                    cause an overflow if added to the unsigned 8-bit binary{" "}
+                    <b>{valBin}</b> if only 8 bits have been reserved for the
+                    result?
+                  </span>
+                ),
+                ans: ansBin,
+                solText: `The maximum value an 8-bit unsigned integer can hold is 255. To cause an overflow, the sum must be at least 256.<br/>256 - ${val} (which is ${valBin} in decimal) = ${neededForOverflow}.<br/>${neededForOverflow} converted to 8-bit binary is <b>${ansBin}</b>.`,
+              };
+            },
+          ];
+          return scenarios[rnd(0, scenarios.length - 1)]();
+        },
+
+        addition: () => {
+          const a = rnd(10, 120);
+          const b = rnd(10, 120);
+          return {
+            type: "addition",
+            a,
+            b,
+            aBin: toBin(a, 8),
+            bBin: toBin(b, 8),
+          };
+        },
+
+        multiplication: () => {
+          const a = rnd(3, 15);
+          const b = rnd(3, 15);
+          return {
+            type: "multiplication",
+            a,
+            b,
+            aBin: toBin(a, 4),
+            bBin: toBin(b, 4),
+          };
+        },
+
+        subtraction: () => {
+          const a = rnd(20, 120);
+          const b = rnd(10, a - 1);
+          return {
+            type: "subtraction",
+            a,
+            b,
+            aBin: toBin(a, 8),
+            bBin: toBin(b, 8),
+            negBBin: toBin(~b + 1, 8),
+          };
+        },
+
+        twoscomp: () => {
+          const scenarios = [
+            () => {
+              // Negate
+              const val = rnd(-127, 127);
+              const bin = toBin(val, 8);
+              const negVal = -val;
+              const negBin = toBin(negVal, 8);
+              return {
+                type: "text",
+                qText: (
+                  <span>
+                    Negate the 8-bit Two's Complement number {bin}
+                    <sub>2</sub>.
+                  </span>
+                ),
+                ans: negBin,
+                solText: `To negate a two's complement number, flip all bits and add 1.<br/>Original: ${bin}<br/>Flipped:  ${toBin(~val & 255, 8)}<br/>Add 1:    ${negBin}`,
+              };
+            },
+            () => {
+              // Decimal to Two's Comp
+              const val = rnd(-128, -1);
+              const bin = toBin(val, 8);
+              return {
+                type: "text",
+                qText: (
+                  <span>
+                    Convert {val}
+                    <sub>10</sub> to 8-bit Two's Complement.
+                  </span>
+                ),
+                ans: bin,
+                solText:
+                  `Step 1: Convert positive ${Math.abs(val)} to binary -> ${toBin(Math.abs(val), 8)}<br/>` +
+                  `Step 2: Flip all bits -> ${toBin(~Math.abs(val) & 255, 8)}<br/>` +
+                  `Step 3: Add 1 -> ${bin}`,
+              };
+            },
+            () => {
+              // Two's Comp to Decimal
+              const val = rnd(-128, -1);
+              const bin = toBin(val, 8);
+              return {
+                type: "text",
+                qText: (
+                  <span>
+                    Convert the 8-bit Two's Complement number {bin}
+                    <sub>2</sub> to decimal.
+                  </span>
+                ),
+                ans: val.toString(),
+                solText:
+                  `MSB is 1, so it's negative. Value is -128 + ` +
+                  [64, 32, 16, 8, 4, 2, 1]
+                    .filter((p, i) => bin[i + 1] === "1")
+                    .join(" + ") +
+                  ` = ${val}<sub>10</sub>.`,
+              };
+            },
+            () => {
+              // Range (Most Negative)
+              const bits = rnd(4, 10);
+              return {
+                type: "text",
+                qText: (
+                  <span>
+                    What is the <b>most negative</b> value that can be
+                    represented with {bits}-bit Two's Complement?
+                  </span>
+                ),
+                ans: (-Math.pow(2, bits - 1)).toString(),
+                solText: `The range for n-bit Two's Complement is -(2<sup>n-1</sup>) to 2<sup>n-1</sup> - 1. Most negative is -(2<sup>${bits}-1</sup>) = ${-Math.pow(2, bits - 1)}.`,
+              };
+            },
+            () => {
+              // Range (Most Positive)
+              const bits = rnd(4, 10);
+              const maxPos = Math.pow(2, bits - 1) - 1;
+              return {
+                type: "text",
+                qText: (
+                  <span>
+                    What is the <b>most positive</b> value that can be
+                    represented with {bits}-bit Two's Complement?
+                  </span>
+                ),
+                ans: maxPos.toString(),
+                solText: `The range for n-bit Two's Complement is -(2<sup>n-1</sup>) to 2<sup>n-1</sup> - 1. Most positive is 2<sup>${bits}-1</sup> - 1 = ${Math.pow(2, bits - 1)} - 1 = ${maxPos}.`,
+              };
+            },
+          ];
+          return scenarios[rnd(0, scenarios.length - 1)]();
+        },
+      };
+
+      const generateQuestion = (selectedTopicIds) => {
+        if (selectedTopicIds.length === 0) return null;
+        const topicId = selectedTopicIds[rnd(0, selectedTopicIds.length - 1)];
+        const q = generators[topicId]();
+        return { id: Date.now(), topicId, ...q };
+      };
+
+      // --- COMPONENTS ---
+
+      // 1. Text Question Component
+      const TextQuestion = ({ question, onResult, status }) => {
+        const [input, setInput] = useState("");
+        const inputRef = useRef(null);
+
+        useEffect(() => {
+          if (status === "playing") {
+            setInput("");
+            if (inputRef.current) inputRef.current.focus();
+          }
+        }, [question.id, status]);
+
+        const submitAns = () => {
+          const isCorrect =
+            input.trim().toLowerCase() === question.ans.toLowerCase();
+          onResult(isCorrect);
+        };
+
+        return (
+          <div className="space-y-4">
+            <div className="text-lg font-medium">{question.qText}</div>
+            <div className="flex gap-3 items-center">
+              <input
+                ref={inputRef}
+                type="text"
+                className={`text-input ${status === "correct" ? "correct" : status === "incorrect" ? "incorrect" : ""}`}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && status === "playing" && submitAns()
+                }
+                disabled={status === "correct"}
+                placeholder="Type answer..."
+              />
+              {status === "playing" && (
+                <button
+                  onClick={submitAns}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold transition"
+                >
+                  Submit Answer
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      // 2. Binary Addition Component
+      const AdditionGrid = ({ question, onResult, status, titleOverride }) => {
+        const BITS = 8;
+        const [sum, setSum] = useState(Array(BITS).fill(""));
+        const [carryIn, setCarryIn] = useState(Array(BITS).fill(""));
+        const [carryOut, setCarryOut] = useState(Array(BITS).fill(""));
+        const [finalAns, setFinalAns] = useState("");
+
+        const sumRefs = useRef([]);
+        const carryInRefs = useRef([]);
+        const carryOutRefs = useRef([]);
+
+        useEffect(() => {
+          if (status === "playing") {
+            setSum(Array(BITS).fill(""));
+            setCarryIn(Array(BITS).fill(""));
+            setCarryOut(Array(BITS).fill(""));
+            setFinalAns("");
+          }
+        }, [question.id, status]);
+
+        const expectedData = React.useMemo(() => {
+          let eSum = Array(BITS).fill("0");
+          let eCarryIn = Array(BITS).fill("0");
+          let eCarryOut = Array(BITS).fill("0");
+          let c = 0;
+          for (let i = BITS - 1; i >= 0; i--) {
+            eCarryIn[i] = c.toString();
+            const aBit = parseInt(question.aBin[i]);
+            const bBit = parseInt(question.bBin[i]);
+            const temp = aBit + bBit + c;
+            eSum[i] = (temp % 2).toString();
+            c = Math.floor(temp / 2);
+            eCarryOut[i] = c.toString();
+          }
+          return { eSum, eCarryIn, eCarryOut };
+        }, [question]);
+
+        const handleInput = (type, index, val) => {
+          if (!/^[01]?$/.test(val)) return;
+          const arr =
+            type === "sum"
+              ? [...sum]
+              : type === "carryIn"
+                ? [...carryIn]
+                : [...carryOut];
+          arr[index] = val;
+
+          if (type === "sum") setSum(arr);
+          else if (type === "carryIn") setCarryIn(arr);
+          else setCarryOut(arr);
+
+          if (val !== "") {
+            if (type === "sum") {
+              if (carryOutRefs.current[index])
+                carryOutRefs.current[index].focus();
+            } else if (type === "carryOut") {
+              if (index > 0 && carryInRefs.current[index - 1])
+                carryInRefs.current[index - 1].focus();
+            } else if (type === "carryIn") {
+              if (sumRefs.current[index]) sumRefs.current[index].focus();
+            }
+          }
+        };
+
+        const submitAnswer = () => {
+          const isCorrect = finalAns.trim() === expectedData.eSum.join("");
+          onResult(isCorrect, {
+            expectedSum: expectedData.eSum,
+            expectedCarryOut: expectedData.eCarryOut,
+          });
+        };
+
+        return (
+          <div className="space-y-4">
+            <div className="text-lg font-medium">
+              {titleOverride || (
+                <span>Add the following 8-bit unsigned binary integers:</span>
+              )}
+              <br />
+              <span className="text-sm text-gray-500 font-normal">
+                Use the grid below for working (optional and ungraded). Submit
+                your final answer below as an <strong>8-bit number</strong>.
+              </span>
+            </div>
+
+            <div className="bg-white p-6 pr-32 md:pr-40 rounded-xl border border-gray-200 inline-block overflow-x-auto max-w-full">
+              {/* Carry In Row */}
+              <div className="math-row">
+                <span className="math-label">Carry In</span>
+                {carryIn.map((v, i) =>
+                  i === BITS - 1 ? (
+                    <div
+                      key={`ci-${i}`}
+                      className="bit-input placeholder"
+                    ></div>
+                  ) : (
+                    <input
+                      key={`ci-${i}`}
+                      ref={(el) => (carryInRefs.current[i] = el)}
+                      type="text"
+                      maxLength={1}
+                      className="bit-input carry"
+                      value={v}
+                      onChange={(e) =>
+                        handleInput("carryIn", i, e.target.value)
+                      }
+                      disabled={status === "correct"}
+                    />
+                  ),
+                )}
+              </div>
+              {/* Operand A */}
+              <div className="math-row">
+                <span className="math-label">Operand A</span>
+                {question.aBin.split("").map((bit, i) => (
+                  <div key={`a-${i}`} className="bit-input readonly">
+                    {bit}
+                  </div>
+                ))}
+              </div>
+              {/* Operand B */}
+              <div className="math-row">
+                <span className="math-label">+ Operand B</span>
+                {question.bBin.split("").map((bit, i) => (
+                  <div key={`b-${i}`} className="bit-input readonly">
+                    {bit}
+                  </div>
+                ))}
+              </div>
+              <div className="math-divider"></div>
+              {/* Sum Row */}
+              <div className="math-row">
+                <div className="math-label flex flex-col items-end justify-center leading-tight">
+                  <span className="font-bold text-gray-800">Sum</span>
+                  {status === "playing" && (
+                    <button
+                      onClick={() =>
+                        setFinalAns(sum.map((v) => v || "0").join(""))
+                      }
+                      className="text-[0.65rem] text-blue-600 hover:text-blue-800 underline mt-1 whitespace-nowrap"
+                      title="Copy working to final answer"
+                    >
+                      copy to answer
+                    </button>
+                  )}
+                </div>
+                {sum.map((v, i) => (
+                  <input
+                    key={`s-${i}`}
+                    ref={(el) => (sumRefs.current[i] = el)}
+                    type="text"
+                    maxLength={1}
+                    className="bit-input"
+                    value={v}
+                    onChange={(e) => handleInput("sum", i, e.target.value)}
+                    disabled={status === "correct"}
+                  />
+                ))}
+              </div>
+              {/* Carry Out Row */}
+              <div className="math-row">
+                <span className="math-label">Carry Out</span>
+                {carryOut.map((v, i) => (
+                  <input
+                    key={`co-${i}`}
+                    ref={(el) => (carryOutRefs.current[i] = el)}
+                    type="text"
+                    maxLength={1}
+                    className="bit-input carry"
+                    value={v}
+                    onChange={(e) => handleInput("carryOut", i, e.target.value)}
+                    disabled={status === "correct"}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <label className="block text-gray-700 font-bold mb-2">
+                Final Answer (8-bit Binary):
+              </label>
+              <div className="flex gap-3 items-center">
+                <input
+                  type="text"
+                  className={`text-input ${status === "correct" ? "correct" : status === "incorrect" ? "incorrect" : ""}`}
+                  value={finalAns}
+                  onChange={(e) => setFinalAns(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && status === "playing" && submitAnswer()
+                  }
+                  disabled={status === "correct"}
+                  placeholder="e.g. 10101010"
+                />
+                {status === "playing" && (
+                  <button
+                    onClick={submitAnswer}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold transition"
+                  >
+                    Submit Final Answer
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // 3. Binary Multiplication Component
+      const MultiplicationGrid = ({ question, onResult, status }) => {
+        const BITS = 4;
+        const OUT_BITS = 8;
+
+        const [partials, setPartials] = useState(
+          Array(BITS).fill(Array(OUT_BITS).fill("")),
+        );
+        const [sumCarry, setSumCarry] = useState(Array(OUT_BITS).fill(""));
+        const [finalSum, setFinalSum] = useState(Array(OUT_BITS).fill(""));
+        const [finalAns, setFinalAns] = useState("");
+
+        const partialRefs = useRef([]);
+        const sumCarryRefs = useRef([]);
+        const finalSumRefs = useRef([]);
+
+        useEffect(() => {
+          if (status === "playing") {
+            setPartials(Array(BITS).fill(Array(OUT_BITS).fill("")));
+            setSumCarry(Array(OUT_BITS).fill(""));
+            setFinalSum(Array(OUT_BITS).fill(""));
+            setFinalAns("");
+          }
+        }, [question.id, status]);
+
+        const expectedData = React.useMemo(() => {
+          let ePartials = [];
+          for (let i = 0; i < BITS; i++) {
+            const bBit = question.bBin[BITS - 1 - i];
+            let pBin = bBit === "1" ? question.aBin + "0".repeat(i) : "0";
+            ePartials.push(pBin.padStart(OUT_BITS, "0").split(""));
+          }
+          const eFinal = toBin(question.a * question.b, OUT_BITS).split("");
+          return { ePartials, eFinal };
+        }, [question]);
+
+        const updatePartial = (rowIdx, colIdx, val) => {
+          if (!/^[01]?$/.test(val)) return;
+          const newPartials = partials.map((row, r) =>
+            r === rowIdx ? row.map((v, c) => (c === colIdx ? val : v)) : row,
+          );
+          setPartials(newPartials);
+
+          if (val !== "" && colIdx > 0) {
+            if (
+              partialRefs.current[rowIdx] &&
+              partialRefs.current[rowIdx][colIdx - 1]
+            ) {
+              partialRefs.current[rowIdx][colIdx - 1].focus();
+            }
+          }
+        };
+
+        const updateFinalSum = (cIdx, val) => {
+          if (!/^[01]?$/.test(val)) return;
+          const newSum = [...finalSum];
+          newSum[cIdx] = val;
+          setFinalSum(newSum);
+
+          if (val !== "") {
+            if (sumCarryRefs.current[cIdx]) sumCarryRefs.current[cIdx].focus();
+          }
+        };
+
+        const updateSumCarry = (cIdx, val) => {
+          if (!/^[01]?$/.test(val)) return;
+          const newCarry = [...sumCarry];
+          newCarry[cIdx] = val;
+          setSumCarry(newCarry);
+
+          if (val !== "" && cIdx > 0) {
+            if (finalSumRefs.current[cIdx - 1])
+              finalSumRefs.current[cIdx - 1].focus();
+          }
+        };
+
+        const submitAnswer = () => {
+          const isCorrect = finalAns.trim() === expectedData.eFinal.join("");
+          onResult(isCorrect, {
+            expectedPartials: expectedData.ePartials,
+            expectedFinal: expectedData.eFinal,
+          });
+        };
+
+        return (
+          <div className="space-y-4">
+            <div className="text-lg font-medium">
+              Multiply {question.aBin} by {question.bBin}:<br />
+              <span className="text-sm text-gray-500 font-normal">
+                Use the grid below for working (optional and ungraded). Submit
+                your final answer below as an <strong>8-bit number</strong>.
+              </span>
+            </div>
+
+            <div className="bg-white p-6 pr-32 md:pr-40 rounded-xl border border-gray-200 inline-block overflow-x-auto max-w-full">
+              <div className="math-row">
+                <span className="math-label text-gray-400">Operand A</span>
+                {/* Padded to align right across 8 bits */}
+                {Array(OUT_BITS - BITS)
+                  .fill(" ")
+                  .map((_, i) => (
+                    <div
+                      key={`pad-a-${i}`}
+                      className="bit-input invisible-pad"
+                    ></div>
+                  ))}
+                {question.aBin.split("").map((bit, i) => (
+                  <div key={`a-${i}`} className="bit-input readonly">
+                    {bit}
+                  </div>
+                ))}
+              </div>
+              <div className="math-row">
+                <span className="math-label text-gray-400">× Operand B</span>
+                {Array(OUT_BITS - BITS)
+                  .fill(" ")
+                  .map((_, i) => (
+                    <div
+                      key={`pad-b-${i}`}
+                      className="bit-input invisible-pad"
+                    ></div>
+                  ))}
+                {question.bBin.split("").map((bit, i) => (
+                  <div key={`b-${i}`} className="bit-input readonly">
+                    {bit}
+                  </div>
+                ))}
+              </div>
+
+              <div className="math-divider"></div>
+
+              {/* Partials */}
+              {partials.map((row, rIdx) => (
+                <div key={`prow-${rIdx}`} className="math-row">
+                  <span className="math-label italic text-gray-500">
+                    Part {rIdx + 1} (× {question.bBin[BITS - 1 - rIdx]})
+                  </span>
+                  {row.map((val, cIdx) => (
+                    <input
+                      key={`p-${rIdx}-${cIdx}`}
+                      ref={(el) => {
+                        if (!partialRefs.current[rIdx])
+                          partialRefs.current[rIdx] = [];
+                        partialRefs.current[rIdx][cIdx] = el;
+                      }}
+                      type="text"
+                      maxLength={1}
+                      className="bit-input"
+                      value={val}
+                      onChange={(e) =>
+                        updatePartial(rIdx, cIdx, e.target.value)
+                      }
+                      disabled={status === "correct"}
+                    />
+                  ))}
+                </div>
+              ))}
+
+              <div className="math-divider"></div>
+
+              {/* Final Sum */}
+              <div className="math-row">
+                <div className="math-label flex flex-col items-end justify-center leading-tight">
+                  <span className="font-bold text-gray-800">Sum</span>
+                  {status === "playing" && (
+                    <button
+                      onClick={() =>
+                        setFinalAns(finalSum.map((v) => v || "0").join(""))
+                      }
+                      className="text-[0.65rem] text-blue-600 hover:text-blue-800 underline mt-1 whitespace-nowrap"
+                      title="Copy working to final answer"
+                    >
+                      copy to answer
+                    </button>
+                  )}
+                </div>
+                {finalSum.map((val, cIdx) => (
+                  <input
+                    key={`fs-${cIdx}`}
+                    ref={(el) => (finalSumRefs.current[cIdx] = el)}
+                    type="text"
+                    maxLength={1}
+                    className="bit-input"
+                    value={val}
+                    onChange={(e) => updateFinalSum(cIdx, e.target.value)}
+                    disabled={status === "correct"}
+                  />
+                ))}
+              </div>
+
+              {/* Carry out for final sum */}
+              <div className="math-row">
+                <span className="math-label text-gray-400">Carry Out</span>
+                {sumCarry.map((val, cIdx) => (
+                  <input
+                    key={`sc-${cIdx}`}
+                    ref={(el) => (sumCarryRefs.current[cIdx] = el)}
+                    type="text"
+                    maxLength={1}
+                    className="bit-input carry"
+                    value={val}
+                    onChange={(e) => updateSumCarry(cIdx, e.target.value)}
+                    disabled={status === "correct"}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <label className="block text-gray-700 font-bold mb-2">
+                Final Answer (8-bit Binary):
+              </label>
+              <div className="flex gap-3 items-center">
+                <input
+                  type="text"
+                  className={`text-input ${status === "correct" ? "correct" : status === "incorrect" ? "incorrect" : ""}`}
+                  value={finalAns}
+                  onChange={(e) => setFinalAns(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && status === "playing" && submitAnswer()
+                  }
+                  disabled={status === "correct"}
+                  placeholder="e.g. 10101010"
+                />
+                {status === "playing" && (
+                  <button
+                    onClick={submitAnswer}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold transition"
+                  >
+                    Submit Final Answer
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // 4. Binary Subtraction Component
+      const SubtractionInteractive = ({ question, onResult, status }) => {
+        const [negInput, setNegInput] = useState("");
+        const [step1Complete, setStep1Complete] = useState(false);
+        const [step1Error, setStep1Error] = useState(false);
+
+        useEffect(() => {
+          if (status === "playing") {
+            setNegInput("");
+            setStep1Complete(false);
+            setStep1Error(false);
+          }
+        }, [question.id, status]);
+
+        const checkNegation = () => {
+          if (negInput.trim() === question.negBBin) {
+            setStep1Error(false);
+            setStep1Complete(true);
+          } else {
+            setStep1Error(true);
+          }
+        };
+
+        const showNegationAnswer = () => {
+          setNegInput(question.negBBin);
+          setStep1Error(false);
+          setStep1Complete(true);
+        };
+
+        return (
+          <div className="space-y-6">
+            {!step1Complete ? (
+              <div className="space-y-4">
+                <div className="text-lg font-medium">
+                  Subtract {question.bBin} from {question.aBin}:<br />
+                  <span className="text-sm text-gray-500 font-normal">
+                    Step 1: Two's complement subtraction uses addition. First,
+                    negate the subtrahend ({question.bBin}).
+                  </span>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-3 items-center">
+                    <input
+                      type="text"
+                      className={`text-input ${step1Error ? "incorrect" : ""}`}
+                      value={negInput}
+                      onChange={(e) => {
+                        setNegInput(e.target.value);
+                        setStep1Error(false);
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && checkNegation()}
+                      placeholder="Negated binary..."
+                    />
+                    <button
+                      onClick={checkNegation}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold transition"
+                    >
+                      Next Step
+                    </button>
+                  </div>
+                  {step1Error && (
+                    <div className="text-red-600 text-sm font-medium flex items-center gap-2 mt-1 fade-in">
+                      <span>
+                        Incorrect negation. Remember to flip all bits and add 1.
+                      </span>
+                      <button
+                        onClick={showNegationAnswer}
+                        className="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 rounded text-xs font-bold transition"
+                      >
+                        Show Answer & Continue
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="fade-in">
+                <AdditionGrid
+                  question={{ ...question, bBin: question.negBBin }}
+                  onResult={onResult}
+                  status={status}
+                  titleOverride={
+                    <span>
+                      Now add the first operand ({question.aBin}) and the
+                      negated second operand ({question.negBBin}):
+                    </span>
+                  }
+                />
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- MAIN APP COMPONENT ---
+      const App = () => {
+        const [selectedTopics, setSelectedTopics] = useState(
+          TOPICS.map((t) => t.id),
+        );
+        const [tempTopics, setTempTopics] = useState(TOPICS.map((t) => t.id));
+        const [showTopicMenu, setShowTopicMenu] = useState(false);
+
+        const [question, setQuestion] = useState(null);
+        const [status, setStatus] = useState("playing"); // 'playing', 'correct', 'incorrect'
+        const [attempts, setAttempts] = useState(0);
+        const [showSolution, setShowSolution] = useState(false);
+
+        const [stats, setStats] = useState({ correct: 0, total: 0 });
+
+        const [calcInput, setCalcInput] = useState("");
+        const [calcResult, setCalcResult] = useState("");
+
+        // Initialize question
+        useEffect(() => {
+          if (!question) handleNewQuestion(selectedTopics);
+        }, []);
+
+        const handleNewQuestion = (topicsToUse = selectedTopics) => {
+          if (topicsToUse.length === 0) {
+            alert("Please select at least one sub-topic!");
+            return;
+          }
+          const q = generateQuestion(topicsToUse);
+          setQuestion(q);
+          setStatus("playing");
+          setAttempts(0);
+          setShowSolution(false);
+        };
+
+        const toggleTopic = (id) => {
+          setTempTopics((prev) =>
+            prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+          );
+        };
+
+        const applyFilter = () => {
+          if (tempTopics.length === 0) {
+            alert("Please select at least one sub-topic!");
+            return;
+          }
+          setSelectedTopics(tempTopics);
+          setShowTopicMenu(false);
+          handleNewQuestion(tempTopics);
+        };
+
+        const openFilterMenu = () => {
+          setTempTopics(selectedTopics);
+          setShowTopicMenu(!showTopicMenu);
+        };
+
+        const handleResult = (isCorrect, solutionData = null) => {
+          setAttempts((prev) => prev + 1);
+
+          if (solutionData) {
+            setQuestion((prev) => ({ ...prev, solutionData }));
+          }
+
+          if (isCorrect) {
+            setStatus("correct");
+            setStats((s) => ({
+              ...s,
+              correct: s.correct + 1,
+              total: s.total + 1,
+            }));
+          } else {
+            setStatus("incorrect");
+            if (attempts === 0) {
+              setStats((s) => ({ ...s, total: s.total + 1 }));
+            }
+          }
+        };
+
+        const evaluateCalc = () => {
+          try {
+            const parsed = calcInput
+              .replace(/\^/g, "**")
+              .toLowerCase()
+              .replace(/\b(sin|cos|tan|sqrt|abs|pi)\b/g, (m) => "Math." + m);
+            const val = Function(`"use strict"; return (${parsed});`)();
+            setCalcResult(
+              Number.isFinite(val)
+                ? Number(val.toFixed(6)).toString()
+                : "Error",
+            );
+          } catch {
+            setCalcResult("Invalid Expression");
+          }
+        };
+
+        const renderSolution = () => {
+          if (!showSolution && status !== "correct") return null;
+
+          let content = null;
+          if (question.type === "text") {
+            content = (
+              <div dangerouslySetInnerHTML={{ __html: question.solText }} />
+            );
+          } else if (
+            question.type === "addition" ||
+            question.type === "subtraction"
+          ) {
+            content = (
+              <div>
+                <p>
+                  <strong>Correct Final Answer:</strong>{" "}
+                  {question.solutionData?.expectedSum.join("")}
+                </p>
+                <p>
+                  <strong>Carries generated (Out):</strong>{" "}
+                  {question.solutionData?.expectedCarryOut?.join("")}
+                </p>
+                <p className="text-sm text-gray-600 mt-2">
+                  Binary addition rules: 0+0=0, 1+0=1, 1+1=0 (carry 1), 1+1+1=1
+                  (carry 1).
+                </p>
+              </div>
+            );
+          } else if (question.type === "multiplication") {
+            content = (
+              <div>
+                <p>
+                  <strong>Correct Final Product:</strong>{" "}
+                  {question.solutionData?.expectedFinal.join("")}
+                </p>
+                <p className="text-sm text-gray-600 mt-2">
+                  Shift the top operand left for every bit in the bottom
+                  operand. Add a row of 0s if the bottom bit is 0. Finally, sum
+                  all partial rows.
+                </p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg fade-in">
+              <h4 className="font-bold text-blue-800 mb-2">Solution</h4>
+              <div className="text-blue-900">{content}</div>
+            </div>
+          );
+        };
+
+        if (!question)
+          return (
+            <div className="p-10 text-center text-gray-600 font-medium text-lg">
+              Loading...
+            </div>
+          );
+
+        return (
+          <div className="max-w-6xl mx-auto my-8 px-4 relative">
+            {/* HEADER */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-1">
+                  Binary Integers
+                </h1>
+                <p className="text-gray-500 font-medium">
+                  AQA A Level Computer Science Interactive
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 relative">
+                <div className="bg-white px-4 py-2 rounded-lg shadow-sm font-semibold text-gray-700">
+                  Score: <span className="text-blue-600">{stats.correct}</span>{" "}
+                  / {stats.total}
+                </div>
+
+                <button
+                  onClick={openFilterMenu}
+                  className="bg-gray-800 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition flex items-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
+                    <path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z" />
+                  </svg>
+                  Filter Topics
+                </button>
+
+                {/* Dropdown Menu */}
+                {showTopicMenu && (
+                  <div className="absolute top-12 right-0 w-80 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-10 fade-in">
+                    <h3 className="font-bold text-gray-800 border-b pb-2 mb-3">
+                      Select Sub-Topics
+                    </h3>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                      {TOPICS.map((t) => (
+                        <label
+                          key={t.id}
+                          className="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 w-4 h-4 text-blue-600 rounded"
+                            checked={tempTopics.includes(t.id)}
+                            onChange={() => toggleTopic(t.id)}
+                          />
+                          <span className="text-sm text-gray-700 leading-tight">
+                            {t.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-4 border-t pt-3 flex justify-between items-center">
+                      <button
+                        onClick={() => setShowTopicMenu(false)}
+                        className="text-sm font-semibold text-gray-500 hover:text-gray-800"
+                      >
+                        Close
+                      </button>
+                      <button
+                        onClick={applyFilter}
+                        className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+              {/* MAIN QUESTION CARD */}
+              <div className="flex-1 w-full bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
+                <div className="mb-6 flex justify-between items-center border-b pb-4">
+                  <span className="uppercase tracking-wider text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+                    {TOPICS.find((t) => t.id === question.topicId)?.label}
+                  </span>
+                </div>
+
+                {question.type === "text" && (
+                  <TextQuestion
+                    key={question.id}
+                    question={question}
+                    onResult={handleResult}
+                    status={status}
+                  />
+                )}
+                {question.type === "addition" && (
+                  <AdditionGrid
+                    key={question.id}
+                    question={question}
+                    onResult={handleResult}
+                    status={status}
+                  />
+                )}
+                {question.type === "subtraction" && (
+                  <SubtractionInteractive
+                    key={question.id}
+                    question={question}
+                    onResult={handleResult}
+                    status={status}
+                  />
+                )}
+                {question.type === "multiplication" && (
+                  <MultiplicationGrid
+                    key={question.id}
+                    question={question}
+                    onResult={handleResult}
+                    status={status}
+                  />
+                )}
+
+                {/* FEEDBACK & ACTIONS */}
+                {status !== "playing" && (
+                  <div
+                    className={`mt-8 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 ${status === "correct" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {status === "correct" ? (
+                        <>
+                          <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0">
+                            ✓
+                          </div>
+                          <span className="text-green-800 font-semibold text-lg">
+                            Correct! Excellent work.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0">
+                            ✗
+                          </div>
+                          <span className="text-red-800 font-semibold text-lg">
+                            Not quite. Try again or check the solution.
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-3">
+                      {status === "incorrect" && !showSolution && (
+                        <button
+                          onClick={() => setShowSolution(true)}
+                          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition shadow-sm"
+                        >
+                          Show Solution
+                        </button>
+                      )}
+                      {status === "incorrect" && (
+                        <button
+                          onClick={() => setStatus("playing")}
+                          className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-medium transition"
+                        >
+                          Try Again
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleNewQuestion()}
+                        className="px-5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-semibold transition shadow-sm"
+                      >
+                        Next Question ➔
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {renderSolution()}
+              </div>
+
+              {/* RIGHT HAND PANEL - CALCULATOR */}
+              <div className="w-full lg:w-80 bg-gray-900 rounded-2xl shadow-xl p-6 text-white shrink-0 lg:sticky lg:top-6">
+                <h3 className="text-emerald-400 font-bold mb-2 text-lg">
+                  Scientific Calculator
+                </h3>
+                <p className="text-gray-400 text-xs mb-4 leading-relaxed">
+                  Try expressions like{" "}
+                  <code className="bg-gray-800 px-1.5 py-0.5 rounded text-gray-200">
+                    2^7
+                  </code>{" "}
+                  or{" "}
+                  <code className="bg-gray-800 px-1.5 py-0.5 rounded text-gray-200">
+                    sqrt(256)
+                  </code>
+                </p>
+
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:border-emerald-400 focus:outline-none transition"
+                    placeholder="Expression..."
+                    value={calcInput}
+                    onChange={(e) => setCalcInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && evaluateCalc()}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={evaluateCalc}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition"
+                    >
+                      =
+                    </button>
+                    <div className="flex-[2] bg-gray-800 border border-gray-700 rounded-lg p-3 text-right font-mono text-emerald-300 overflow-x-auto whitespace-nowrap flex items-center justify-end">
+                      {calcResult || "0"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      ReactDOM.render(<App />, document.getElementById("root"));
+    </script>
+  </body>
+</html>
