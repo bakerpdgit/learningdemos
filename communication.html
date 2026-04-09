@@ -1,0 +1,1506 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Communication Interactive</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        background-color: #f3f4f6;
+        color: #1f2937;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+      }
+      .bit-cell {
+        transition: all 0.2s;
+      }
+      .bit-cell:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+      }
+      .fade-in {
+        animation: fadeIn 0.3s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      /* Custom scrollbar for dropdown */
+      .custom-scroll::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scroll::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+      }
+      .custom-scroll::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      .custom-scroll::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- TOPICS & CONSTANTS ---
+      const TOPICS = {
+        CHAR_SETS: "Character Sets (ASCII & Unicode)",
+        RATES: "Bit Rate / Baud Rate / Bandwidth",
+        SERIAL_PARALLEL: "Parallel vs Serial & Sync vs Async",
+        ERROR_CORRECTION: "Error Correction (Parity, MV, Checksum)",
+      };
+
+      const generateRandomInt = (min, max) =>
+        Math.floor(Math.random() * (max - min + 1)) + min;
+      const toBinary = (num, bits) => num.toString(2).padStart(bits, "0");
+
+      // --- QUESTION GENERATORS ---
+
+      // 1. Character Sets
+      const genAsciiMath = () => {
+        const isUpper = Math.random() > 0.5;
+        const baseChar = isUpper
+          ? generateRandomInt(65, 80)
+          : generateRandomInt(97, 112);
+        const offset = generateRandomInt(2, 10);
+        const targetChar = baseChar + offset;
+        const binaryAns = toBinary(targetChar, 7);
+
+        return {
+          topic: TOPICS.CHAR_SETS,
+          type: "short",
+          text: `If the ASCII character '${String.fromCharCode(baseChar)}' is represented by denary value ${baseChar}, what is the 7-bit pure binary value for the character '${String.fromCharCode(targetChar)}'?`,
+          answer: binaryAns,
+          explanation: `The characters are contiguous in ASCII. '${String.fromCharCode(targetChar)}' is ${offset} positions after '${String.fromCharCode(baseChar)}', so ${baseChar} + ${offset} = ${targetChar}. In 7-bit binary, ${targetChar} is ${binaryAns}.`,
+          visual: { type: "ascii-tape", base: baseChar, offset: offset },
+        };
+      };
+
+      const genUnicodeTheory = () => {
+        const questions = [
+          {
+            q: "What is a primary advantage of Unicode over 7-bit ASCII?",
+            options: [
+              "It requires less storage space per character",
+              "It can represent characters from global alphabets and emojis",
+              "It uses parallel transmission naturally",
+              "It acts as a built-in error checking system",
+            ],
+            a: "It can represent characters from global alphabets and emojis",
+            exp: "Unicode uses up to 32 bits, allowing it to represent millions of unique characters, supporting international languages and symbols.",
+          },
+          {
+            q: "What is a disadvantage of using Unicode instead of ASCII for standard English text?",
+            options: [
+              "It cannot represent standard alphabet characters",
+              "It increases transmission time and storage requirements",
+              "It is incompatible with modern processors",
+              "It requires majority voting to transmit",
+            ],
+            a: "It increases transmission time and storage requirements",
+            exp: "Because Unicode uses more bits per character (typically 16 or 32 bits compared to 7 or 8 bits for ASCII), it requires more storage and bandwidth to transmit.",
+          },
+          {
+            q: "How many distinct characters can standard 7-bit ASCII represent?",
+            options: ["128", "256", "65536", "255"],
+            a: "128",
+            exp: "7 bits can hold 2^7 combinations, which equals 128 (0 to 127).",
+          },
+        ];
+        const q = questions[generateRandomInt(0, questions.length - 1)];
+        return {
+          topic: TOPICS.CHAR_SETS,
+          type: "mcq",
+          text: q.q,
+          options: q.options,
+          answer: q.a,
+          explanation: q.exp,
+          visual: null,
+        };
+      };
+
+      const genBitwiseLogic = () => {
+        const isToUpper = Math.random() > 0.5;
+        let q, a, exp;
+        if (isToUpper) {
+          q =
+            "To convert a lowercase ASCII letter to uppercase, which bitwise operation and 8-bit mask is used?";
+          a = "AND 11011111";
+          exp =
+            "Lowercase letters differ from uppercase by having the 6th bit (value 32) set to 1. To clear it to 0, we AND with a mask where that bit is 0 and all others are 1 (11011111 / 223 / DF).";
+        } else {
+          q =
+            "To convert an ASCII digit (e.g., '5' which is 00110101) to its pure binary numeric value (00000101), what logical operation and mask is used?";
+          a = "AND 00001111";
+          exp =
+            "ASCII digits start with '0011'. To extract just the value, we mask out the upper 4 bits using an AND operation with 00001111 (15 / 0F).";
+        }
+        return {
+          topic: TOPICS.CHAR_SETS,
+          type: "mcq",
+          text: q,
+          options: [
+            "OR 00100000",
+            "AND 11011111",
+            "AND 00001111",
+            "XOR 11111111",
+          ],
+          answer: a,
+          explanation: exp,
+          visual: null,
+        };
+      };
+
+      // 2. Bit rate / Baud rate / Bandwidth
+      const genBitRateCalc = () => {
+        const bauds = [1000, 2400, 4800, 9600];
+        const levels = [2, 4, 8, 16, 32];
+        const baud = bauds[generateRandomInt(0, bauds.length - 1)];
+        const level = levels[generateRandomInt(0, levels.length - 1)];
+        const bitsPerSignal = Math.log2(level);
+        const bitRate = baud * bitsPerSignal;
+
+        return {
+          topic: TOPICS.RATES,
+          type: "short",
+          text: `A communication channel has a baud rate of ${baud} baud. The signal uses ${level} different voltage levels. Calculate the bit rate in bits per second (bps).`,
+          answer: bitRate.toString(),
+          explanation: `Bits per signal = log2(number of signal levels) = log2(${level}) = ${bitsPerSignal} bits. Bit Rate = Baud Rate × Bits per signal = ${baud} × ${bitsPerSignal} = ${bitRate} bps.`,
+          visual: { type: "signal-levels", levels: level, bits: bitsPerSignal },
+        };
+      };
+
+      const genBaudRateCalc = () => {
+        const bauds = [1000, 2400, 4800, 9600];
+        const levels = [2, 4, 8, 16, 32];
+        const baud = bauds[generateRandomInt(0, bauds.length - 1)];
+        const level = levels[generateRandomInt(0, levels.length - 1)];
+        const bitsPerSignal = Math.log2(level);
+        const bitRate = baud * bitsPerSignal;
+
+        return {
+          topic: TOPICS.RATES,
+          type: "short",
+          text: `A communication channel has a bit rate of ${bitRate} bps. The signal uses ${level} different voltage levels. Calculate the baud rate in baud.`,
+          answer: baud.toString(),
+          explanation: `Bits per signal = log2(${level}) = ${bitsPerSignal} bits. Baud Rate = Bit Rate / Bits per signal = ${bitRate} / ${bitsPerSignal} = ${baud} baud.`,
+          visual: null,
+        };
+      };
+
+      const genRateRelationships = () => {
+        return {
+          topic: TOPICS.RATES,
+          type: "mcq",
+          text: "Which of the following graphs accurately depicts the mathematical relationship between Bit Rate (y-axis) and Baud Rate (x-axis) for a given fixed number of signal levels?",
+          options: [
+            "Graph A (Linear through origin)",
+            "Graph B (Linear not through origin)",
+            "Graph C (Exponential)",
+            "Graph D (Quadratic)",
+          ],
+          answer: "Graph A (Linear through origin)",
+          explanation:
+            "Bit Rate = Baud Rate × Bits per signal. Since bits per signal is a constant multiplier, this forms a linear relationship y = mx that passes directly through the origin.",
+          visual: { type: "graphs-mcq" },
+        };
+      };
+
+      const genBandwidthTheory = () => {
+        return {
+          topic: TOPICS.RATES,
+          type: "mcq",
+          text: "Which of the following is the correct AQA definition of Bandwidth in a communication medium?",
+          options: [
+            "The range of frequencies that can be transmitted down the medium in Hertz",
+            "The number of bits transmitted per second",
+            "The number of signal changes occurring per second",
+            "The latency delay measured in milliseconds",
+          ],
+          answer:
+            "The range of frequencies that can be transmitted down the medium in Hertz",
+          explanation:
+            "According to the AQA specification, bandwidth refers strictly to the range of signal frequencies (measured in Hz) that a transmission medium can carry. It is directly proportional to the maximum data rate.",
+          visual: null,
+        };
+      };
+
+      // 3. Serial vs Parallel & Sync vs Async
+      const genParallelIssues = () => {
+        return {
+          topic: TOPICS.SERIAL_PARALLEL,
+          type: "mcq",
+          text: "When data is transmitted over long distances using parallel transmission, two major issues arise. What are they called?",
+          options: [
+            "Skew and Crosstalk",
+            "Attenuation and Collisions",
+            "Jitter and Latency",
+            "Parity errors and Frame drops",
+          ],
+          answer: "Skew and Crosstalk",
+          explanation:
+            "Skew happens when signals travel down different wires at slightly different speeds, arriving out of sync. Crosstalk is electromagnetic interference between the closely packed wires.",
+          visual: { type: "wires" },
+        };
+      };
+
+      const genSerialContext = () => {
+        const scenarios = [
+          {
+            q: "Connecting a computer to a distant server via a long-distance fiber optic cable.",
+            a: "Serial",
+          },
+          {
+            q: "Sending data over an 8-wire bus inside an integrated circuit over a microscopic distance.",
+            a: "Parallel",
+          },
+          {
+            q: "Connecting a peripheral device (like a mouse) over a 2-meter USB cable.",
+            a: "Serial",
+          },
+        ];
+        const s = scenarios[generateRandomInt(0, 2)];
+        return {
+          topic: TOPICS.SERIAL_PARALLEL,
+          type: "mcq",
+          text: `Which transmission method should be used for the following scenario: "${s.q}"?`,
+          options: ["Serial", "Parallel"],
+          answer: s.a,
+          explanation:
+            s.a === "Serial"
+              ? "Over longer distances, serial is preferred to avoid skew and crosstalk, and it's cheaper to wire."
+              : "Parallel is suitable for very short distances (like internal computer buses) where high speed is needed and skew/crosstalk are minimal.",
+          visual: null,
+        };
+      };
+
+      const genSyncAsyncTheory = () => {
+        const isSync = Math.random() > 0.5;
+        let q, a, exp;
+        if (isSync) {
+          q =
+            "Which transmission method relies on a shared clock signal between the sender and receiver to time the data bits, resulting in a continuous stream?";
+          a = "Synchronous";
+          exp =
+            "Synchronous transmission uses a shared clock line or clock data embedded in the signal to keep both devices perfectly timed, allowing continuous blocks of data without start/stop bits.";
+        } else {
+          q =
+            "Which transmission method uses separate clocks and requires a Start bit to synchronise the receiver's clock at the beginning of each character/frame?";
+          a = "Asynchronous";
+          exp =
+            "Asynchronous transmission allows data to be sent in irregular bursts. The receiver's clock is synced by the arrival of the Start bit. Stop bits are used to mark the end of the frame.";
+        }
+        return {
+          topic: TOPICS.SERIAL_PARALLEL,
+          type: "mcq",
+          text: q,
+          options: ["Synchronous", "Asynchronous", "Parallel", "Baseband"],
+          answer: a,
+          explanation: exp,
+          visual: null,
+        };
+      };
+
+      const genAsyncFrame = () => {
+        const data = toBinary(generateRandomInt(50, 120), 8);
+        return {
+          topic: TOPICS.SERIAL_PARALLEL,
+          type: "cells",
+          text: `Below is an asynchronous transmission frame holding the 8-bit data '${data}'. Fill in the missing Start bit and Stop bit in the interactive cells.`,
+          cells: [
+            { label: "Start", value: "0", editable: true },
+            ...data
+              .split("")
+              .map((b, i) => ({ label: `D${i}`, value: b, editable: false })),
+            { label: "Stop", value: "1", editable: true },
+          ],
+          validate: (userAns) => {
+            const start = userAns[0];
+            const stop = userAns[userAns.length - 1];
+            if (start === "" || stop === "") return false;
+            return (
+              (start === "0" && stop === "1") || (start === "1" && stop === "0")
+            );
+          },
+          getSolutionLabel: (userAns, i, cells) => {
+            const startAns = userAns[0];
+            const stopAns = userAns[userAns.length - 1];
+            if (i === 0) {
+              if (stopAns === "0") return "1";
+              if (stopAns === "1") return "0";
+              return "0"; // default
+            }
+            if (i === cells.length - 1) {
+              if (startAns === "0") return "1";
+              if (startAns === "1") return "0";
+              return "1"; // default
+            }
+            return cells[i].value;
+          },
+          explanation:
+            "In asynchronous transmission, a Start bit wakes up the receiver and synchronizes clocks. A Stop bit provides an indefinite pause or processing time. They must be different (e.g. 0 and 1, or 1 and 0) so the receiver can distinguish the end of one frame and the start of the next.",
+          transmissionDirection: "RTL",
+          visual: null,
+        };
+      };
+
+      const genStopBitTheory = () => {
+        return {
+          topic: TOPICS.SERIAL_PARALLEL,
+          type: "mcq",
+          text: "In asynchronous serial communication, what is the primary purpose of the stop bit(s)?",
+          options: [
+            "To provide an indefinite pause, allow receiver processing time, and ensure the next start bit is recognised",
+            "To verify the integrity of the data payload and detect single-bit errors",
+            "To synchronize the shared hardware clock between the sender and receiver",
+            "To indicate that the sender is changing the baud rate of the transmission",
+          ],
+          answer:
+            "To provide an indefinite pause, allow receiver processing time, and ensure the next start bit is recognised",
+          explanation:
+            "The stop bit marks the end of a frame. Because asynchronous data can arrive with arbitrary gaps, the stop bit provides necessary processing time and ensures the line returns to an idle state so the next start bit (which is the opposite logic level) is clearly visible.",
+          visual: null,
+        };
+      };
+
+      // 4. Error Correction
+      const genParityCalc = () => {
+        const isEven = Math.random() > 0.5;
+        const data = toBinary(generateRandomInt(1, 127), 7);
+        const onesCount = data.split("").filter((b) => b === "1").length;
+
+        let parityBit = "0";
+        if (isEven) {
+          parityBit = onesCount % 2 === 0 ? "0" : "1";
+        } else {
+          parityBit = onesCount % 2 === 0 ? "1" : "0";
+        }
+
+        const isMSB = Math.random() > 0.5;
+        const cellArr = data
+          .split("")
+          .map((b, i) => ({ label: `D${6 - i}`, value: b, editable: false }));
+        let finalCells = [];
+
+        if (isMSB) {
+          finalCells = [
+            { label: "Parity (MSB)", value: parityBit, editable: true },
+            ...cellArr,
+          ];
+        } else {
+          finalCells = [
+            ...cellArr,
+            { label: "Parity (LSB)", value: parityBit, editable: true },
+          ];
+        }
+
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "cells",
+          text: `Fill in the missing parity bit in the interactive cell so that the 8-bit block has ${isEven ? "EVEN" : "ODD"} parity. The parity bit is designated as the ${isMSB ? "Most Significant Bit (Left)" : "Least Significant Bit (Right)"}.`,
+          cells: finalCells,
+          explanation: `The data bits are ${data}, containing ${onesCount} ones. To achieve ${isEven ? "Even" : "Odd"} parity, the total number of ones (including parity) must be ${isEven ? "even" : "odd"}, so the parity bit is ${parityBit}.`,
+          transmissionDirection: "RTL",
+          visual: null,
+        };
+      };
+
+      const genParityLetter = () => {
+        const isEven = Math.random() > 0.5;
+        const isMSB = Math.random() > 0.5;
+
+        const baseCode = generateRandomInt(65, 70); // A-F
+        const offset = generateRandomInt(1, 5);
+        const targetCode = baseCode + offset;
+
+        const targetBin = toBinary(targetCode, 7);
+        const onesCount = targetBin.split("").filter((b) => b === "1").length;
+        let parityBit = "0";
+        if (isEven) {
+          parityBit = onesCount % 2 === 0 ? "0" : "1";
+        } else {
+          parityBit = onesCount % 2 === 0 ? "1" : "0";
+        }
+
+        const cellArr = targetBin
+          .split("")
+          .map((b, i) => ({ label: `D${6 - i}`, value: b, editable: true }));
+        let finalCells = [];
+        if (isMSB) {
+          finalCells = [
+            { label: "Parity (MSB)", value: parityBit, editable: true },
+            ...cellArr,
+          ];
+        } else {
+          finalCells = [
+            ...cellArr,
+            { label: "Parity (LSB)", value: parityBit, editable: true },
+          ];
+        }
+
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "cells",
+          text: `The ASCII character '${String.fromCharCode(baseCode)}' is represented by the 7-bit binary value ${toBinary(baseCode, 7)}. Work out the 7-bit code for '${String.fromCharCode(targetCode)}', and fill in the 8-bit frame below using ${isEven ? "EVEN" : "ODD"} parity, where the parity bit is the ${isMSB ? "Most Significant Bit (Left)" : "Least Significant Bit (Right)"}.`,
+          cells: finalCells,
+          explanation: `'${String.fromCharCode(targetCode)}' is ${offset} letters after '${String.fromCharCode(baseCode)}', so its 7-bit code is ${targetBin}. To achieve ${isEven ? "EVEN" : "ODD"} parity across the 8 bits, the parity bit must be ${parityBit}.`,
+          transmissionDirection: "RTL",
+          visual: null,
+        };
+      };
+
+      const genMVEncode = () => {
+        const data = toBinary(generateRandomInt(1, 7), 3);
+        const ans = data
+          .split("")
+          .map((b) => b + b + b)
+          .join("");
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "short",
+          text: `A system uses 3-bit Majority Voting. If the data to be sent is '${data}', write down the exact bit stream that will be transmitted.`,
+          answer: ans,
+          explanation: `In 3-bit Majority Voting, every bit is transmitted 3 times. So '${data[0]}' becomes '${data[0]}${data[0]}${data[0]}', '${data[1]}' becomes '${data[1]}${data[1]}${data[1]}', and '${data[2]}' becomes '${data[2]}${data[2]}${data[2]}'.`,
+          visual: null,
+        };
+      };
+
+      const genMVDecode = () => {
+        // Generate a 3-bit original message
+        const orig = toBinary(generateRandomInt(0, 7), 3).split("");
+        // Encode to 9 bits
+        let transmitted = orig
+          .map((b) => b + b + b)
+          .join("")
+          .split("");
+        // Introduce 1 or 2 random errors
+        const numErrors = generateRandomInt(1, 2);
+        for (let i = 0; i < numErrors; i++) {
+          const errIdx = generateRandomInt(0, 8);
+          transmitted[errIdx] = transmitted[errIdx] === "1" ? "0" : "1";
+        }
+
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "short",
+          text: `A system uses 3-bit Majority Voting. The following 9 bits were received: ${transmitted.join("")}. What is the original 3-bit data stream extracted from this?`,
+          answer: orig.join(""),
+          explanation: `Group into triplets: ${transmitted.slice(0, 3).join("")}, ${transmitted.slice(3, 6).join("")}, ${transmitted.slice(6, 9).join("")}. Taking the mode (majority) of each group gives: ${orig[0]}, ${orig[1]}, ${orig[2]}.`,
+          visual: {
+            type: "mv-blocks",
+            blocks: [
+              transmitted.slice(0, 3).join(""),
+              transmitted.slice(3, 6).join(""),
+              transmitted.slice(6, 9).join(""),
+            ],
+            orig: orig.join(""),
+          },
+        };
+      };
+
+      const genChecksumCalc = () => {
+        const char1 = generateRandomInt(65, 75); // A-K
+        const char2 = generateRandomInt(65, 75); // A-K
+        const sum = char1 + char2;
+        const modulo = 256;
+        const checksum = sum % modulo;
+
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "cells",
+          text: `Calculate the simple checksum of the ASCII characters '${String.fromCharCode(char1)}' (code ${char1}) and '${String.fromCharCode(char2)}' (code ${char2}). The checksum algorithm takes the sum of the values Modulo ${modulo}. Enter the 8-bit binary result.`,
+          cells: toBinary(checksum, 8)
+            .split("")
+            .map((b, i) => ({
+              label: `Bit ${7 - i}`,
+              value: b,
+              editable: true,
+            })),
+          explanation: `Sum = ${char1} + ${char2} = ${sum}. ${sum} Modulo ${modulo} = ${checksum}. In 8-bit binary, ${checksum} is ${toBinary(checksum, 8)}.`,
+          transmissionDirection: "RTL",
+          visual: null,
+        };
+      };
+
+      const genCheckdigit = () => {
+        const d1 = generateRandomInt(1, 9);
+        const d2 = generateRandomInt(1, 9);
+        const d3 = generateRandomInt(1, 9);
+        // Simple Mod 10 weight system: 3, 1, 3
+        const sum = d1 * 3 + d2 * 1 + d3 * 3;
+        const checkdigit = (10 - (sum % 10)) % 10;
+
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "short",
+          text: `A system appends a check digit to 3-digit data blocks. The data digits are multiplied by weights 3, 1, and 3 respectively. The check digit is calculated so that the (Total Sum + Check digit) is a multiple of 10. For data "${d1}${d2}${d3}", what is the check digit?`,
+          answer: checkdigit.toString(),
+          explanation: `Sum = (${d1}×3) + (${d2}×1) + (${d3}×3) = ${sum}. Next multiple of 10 is ${Math.ceil(sum / 10) * 10}. Check digit = ${Math.ceil(sum / 10) * 10} - ${sum} = ${checkdigit}. Check digits are appended and retained with data to catch transcription errors.`,
+          visual: null,
+        };
+      };
+
+      const genCheckdigitValidate = () => {
+        const d1 = generateRandomInt(1, 9);
+        const d2 = generateRandomInt(1, 9);
+        const d3 = generateRandomInt(1, 9);
+        const isValid = Math.random() > 0.5;
+
+        let checkdigit;
+        const sum = d1 * 3 + d2 * 1 + d3 * 3;
+        const correctCheck = (10 - (sum % 10)) % 10;
+
+        if (isValid) {
+          checkdigit = correctCheck;
+        } else {
+          checkdigit = (correctCheck + generateRandomInt(1, 5)) % 10;
+        }
+
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "mcq",
+          text: `A system appends a check digit to 3-digit data blocks using Modulo 10 and weights (3, 1, 3). The rule is: (Total Sum + Check digit) must be a multiple of 10. You receive the data string "${d1}${d2}${d3}${checkdigit}" (where the last digit is the check digit). Is this data accepted or rejected?`,
+          options: ["Accepted", "Rejected"],
+          answer: isValid ? "Accepted" : "Rejected",
+          explanation: `Sum = (${d1}×3) + (${d2}×1) + (${d3}×3) = ${sum}. Adding the check digit ${checkdigit} gives ${sum + checkdigit}. This is ${isValid ? "" : "NOT "}a multiple of 10, so it is ${isValid ? "Accepted" : "Rejected"}. (The correct check digit should be ${correctCheck}).`,
+          visual: null,
+        };
+      };
+
+      const genErrorTheory = () => {
+        const questions = [
+          {
+            q: "What is a major advantage of Majority Voting over simple Parity bits?",
+            a: "It can correct errors, not just detect them.",
+            opts: [
+              "It requires less bandwidth to transmit.",
+              "It can correct errors, not just detect them.",
+              "It guarantees 100% error detection regardless of noise.",
+              "It uses less storage space than a parity bit.",
+            ],
+          },
+          {
+            q: "What is the primary disadvantage of using Parity bits for error detection?",
+            a: "It cannot detect an error if an even number of bits are flipped.",
+            opts: [
+              "It is computationally expensive to calculate.",
+              "It cannot detect an error if an odd number of bits are flipped.",
+              "It cannot detect an error if an even number of bits are flipped.",
+              "It requires a shared clock signal to verify.",
+            ],
+          },
+          {
+            q: "Unlike a checksum, how is a check digit handled after it is calculated and verified?",
+            a: "It is retained as a permanent part of the recorded data.",
+            opts: [
+              "It is discarded before the data is stored.",
+              "It is separated and stored in a different database.",
+              "It is retained as a permanent part of the recorded data.",
+              "It is converted into a parity bit for long-term storage.",
+            ],
+          },
+        ];
+        const q = questions[generateRandomInt(0, 2)];
+        return {
+          topic: TOPICS.ERROR_CORRECTION,
+          type: "mcq",
+          text: q.q,
+          options: q.opts,
+          answer: q.a,
+          explanation: q.a,
+          visual: null,
+        };
+      };
+
+      // Aggregation
+      const GENERATORS = {
+        [TOPICS.CHAR_SETS]: [
+          genAsciiMath,
+          genUnicodeTheory,
+          genBitwiseLogic,
+          genUnicodeTheory,
+        ],
+        [TOPICS.RATES]: [
+          genBitRateCalc,
+          genRateRelationships,
+          genBandwidthTheory,
+          genBitRateCalc,
+          genBaudRateCalc,
+        ],
+        [TOPICS.SERIAL_PARALLEL]: [
+          genParallelIssues,
+          genSyncAsyncTheory,
+          genAsyncFrame,
+          genSyncAsyncTheory,
+          genSerialContext,
+          genStopBitTheory,
+        ],
+        [TOPICS.ERROR_CORRECTION]: [
+          genParityCalc,
+          genMVDecode,
+          genChecksumCalc,
+          genCheckdigit,
+          genParityLetter,
+          genMVEncode,
+          genCheckdigitValidate,
+          genErrorTheory,
+        ],
+      };
+
+      // --- ICONS ---
+      const CheckIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      );
+      const XIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      );
+      const RefreshIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 2v6h-6"></path>
+          <path d="M3 12a9 9 0 1 0 2.63-6.37L21 8"></path>
+        </svg>
+      );
+      const SettingsIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      );
+
+      // --- COMPONENTS ---
+
+      // Visualizations Component
+      const Visualization = ({ visual }) => {
+        if (!visual) return null;
+
+        if (visual.type === "ascii-tape") {
+          return (
+            <div className="flex flex-col items-center my-4 space-y-2 fade-in bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <div className="flex items-center space-x-1">
+                <div className="px-3 py-2 bg-blue-100 text-blue-800 font-mono rounded border border-blue-200 flex flex-col items-center">
+                  <span className="text-xs font-bold text-blue-600">Char</span>
+                  <span className="text-lg">
+                    '{String.fromCharCode(visual.base)}'
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    Code {visual.base}
+                  </span>
+                </div>
+                <div className="px-4 text-gray-400 font-bold">...+? &rarr;</div>
+                <div className="px-3 py-2 bg-purple-100 text-purple-800 font-mono rounded border border-purple-200 flex flex-col items-center border-dashed">
+                  <span className="text-xs font-bold text-purple-600">
+                    Target
+                  </span>
+                  <span className="text-lg">?</span>
+                  <span className="text-xs text-gray-500">Code ?</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 italic text-center max-w-xs">
+                Characters are mapped consecutively in the ASCII table.
+              </p>
+            </div>
+          );
+        }
+
+        if (visual.type === "graphs-mcq") {
+          return (
+            <div className="grid grid-cols-2 gap-4 my-4 fade-in bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              {[
+                {
+                  label: "A",
+                  draw: (
+                    <line
+                      x1="15"
+                      y1="85"
+                      x2="85"
+                      y2="15"
+                      stroke="#3b82f6"
+                      strokeWidth="3"
+                    />
+                  ),
+                },
+                {
+                  label: "B",
+                  draw: (
+                    <line
+                      x1="15"
+                      y1="50"
+                      x2="85"
+                      y2="15"
+                      stroke="#3b82f6"
+                      strokeWidth="3"
+                    />
+                  ),
+                },
+                {
+                  label: "C",
+                  draw: (
+                    <path
+                      d="M 15 85 Q 60 85 85 15"
+                      fill="transparent"
+                      stroke="#3b82f6"
+                      strokeWidth="3"
+                    />
+                  ),
+                },
+                {
+                  label: "D",
+                  draw: (
+                    <path
+                      d="M 15 85 Q 85 85 85 15"
+                      fill="transparent"
+                      stroke="#3b82f6"
+                      strokeWidth="3"
+                    />
+                  ),
+                },
+              ].map((g) => (
+                <div
+                  key={g.label}
+                  className="flex flex-col items-center p-2 rounded bg-gray-50 border border-gray-200"
+                >
+                  <span className="font-bold text-sm mb-2 text-gray-700">
+                    Graph {g.label}
+                  </span>
+                  <svg
+                    width="100"
+                    height="100"
+                    viewBox="0 0 100 100"
+                    className="border-l-2 border-b-2 border-gray-800 overflow-visible"
+                  >
+                    <text
+                      x="-15"
+                      y="10"
+                      fontSize="10"
+                      transform="rotate(-90 -15 10)"
+                      fill="gray"
+                    >
+                      Bit Rate
+                    </text>
+                    <text
+                      x="50"
+                      y="115"
+                      fontSize="10"
+                      fill="gray"
+                      textAnchor="middle"
+                    >
+                      Baud Rate
+                    </text>
+                    {g.draw}
+                  </svg>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        if (visual.type === "graph") {
+          return (
+            <div className="flex flex-col items-center my-4 fade-in bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <svg
+                width="200"
+                height="150"
+                viewBox="0 0 200 150"
+                className="border-l-2 border-b-2 border-gray-800 overflow-visible"
+              >
+                <text
+                  x="-15"
+                  y="10"
+                  fontSize="10"
+                  transform="rotate(-90 -15 10)"
+                  fill="gray"
+                >
+                  Bit Rate
+                </text>
+                <text x="160" y="165" fontSize="10" fill="gray">
+                  Baud Rate
+                </text>
+                <line
+                  x1="0"
+                  y1="150"
+                  x2="180"
+                  y2="20"
+                  stroke="#3b82f6"
+                  strokeWidth="3"
+                />
+                <circle cx="0" cy="150" r="4" fill="#3b82f6" />
+              </svg>
+              <p className="text-xs text-gray-500 mt-6 text-center">
+                Linear relationship directly proportional
+              </p>
+            </div>
+          );
+        }
+
+        if (visual.type === "signal-levels") {
+          return (
+            <div className="flex flex-col items-center my-4 space-y-3 fade-in bg-white p-4 rounded-lg shadow-sm border border-gray-100 w-full">
+              <div className="flex items-center w-full justify-between px-8">
+                <div className="flex flex-col items-center">
+                  <div className="h-20 w-8 border-y-2 border-r-2 border-gray-400 relative">
+                    {Array.from({ length: Math.min(visual.levels, 16) }).map(
+                      (_, i) => (
+                        <div
+                          key={i}
+                          className="absolute left-0 w-8 border-t border-blue-300"
+                          style={{
+                            top: `${(i / (Math.min(visual.levels, 16) - 1)) * 100}%`,
+                          }}
+                        ></div>
+                      ),
+                    )}
+                  </div>
+                  <span className="text-xs mt-2 text-gray-600">
+                    {visual.levels} Levels
+                  </span>
+                </div>
+                <div className="text-gray-400 font-bold">&rarr;</div>
+                <div className="flex flex-col items-center bg-gray-50 p-2 rounded border border-gray-200">
+                  <span className="text-lg font-mono font-bold text-green-600">
+                    ? bits
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    per signal change
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        if (visual.type === "wires") {
+          return (
+            <div className="flex flex-col items-center my-4 space-y-1 fade-in bg-white p-4 rounded-lg shadow-sm border border-gray-100 w-full overflow-hidden">
+              <div className="relative w-full h-24">
+                <div className="absolute top-2 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600 rounded"></div>
+                <div className="absolute top-6 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600 rounded"></div>
+                <div className="absolute top-10 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600 rounded"></div>
+                <div className="absolute top-14 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600 rounded"></div>
+                <div className="absolute top-18 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600 rounded"></div>
+
+                {/* Skew visual */}
+                <div className="absolute top-0 right-10 w-4 h-4 rounded-full bg-red-500 shadow-lg animate-pulse"></div>
+                <div className="absolute top-6 right-16 w-4 h-4 rounded-full bg-red-500 shadow-lg animate-pulse"></div>
+                <div className="absolute top-10 right-4 w-4 h-4 rounded-full bg-red-500 shadow-lg animate-pulse"></div>
+
+                {/* Crosstalk visual (wavy lines between wires) */}
+                <svg
+                  className="absolute top-4 left-1/2 w-8 h-4 text-yellow-500 opacity-70"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M4 12s2-4 4-4 4 4 4 4 2-4 4-4 4 4 4 4" />
+                </svg>
+              </div>
+            </div>
+          );
+        }
+
+        if (visual.type === "mv-blocks") {
+          return (
+            <div className="flex flex-col items-center my-4 space-y-3 fade-in bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <p className="text-xs font-bold text-gray-500 mb-1">
+                Received Stream Grouped into Triplets
+              </p>
+              <div className="flex space-x-4">
+                {visual.blocks.map((block, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <div className="flex border-2 border-gray-300 rounded overflow-hidden">
+                      <div
+                        className={`w-6 h-8 flex items-center justify-center font-mono font-bold ${block[0] === visual.orig[i] ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                      >
+                        {block[0]}
+                      </div>
+                      <div
+                        className={`w-6 h-8 flex items-center justify-center font-mono font-bold border-l border-gray-300 ${block[1] === visual.orig[i] ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                      >
+                        {block[1]}
+                      </div>
+                      <div
+                        className={`w-6 h-8 flex items-center justify-center font-mono font-bold border-l border-gray-300 ${block[2] === visual.orig[i] ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                      >
+                        {block[2]}
+                      </div>
+                    </div>
+                    <div className="text-gray-400 text-xs mt-1">
+                      &darr; Mode
+                    </div>
+                    <div className="text-lg font-mono font-bold text-blue-600">
+                      {visual.orig[i]}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        return null;
+      };
+
+      const App = () => {
+        const [topicsState, setTopicsState] = useState(() =>
+          Object.values(TOPICS).reduce((acc, t) => ({ ...acc, [t]: true }), {}),
+        );
+        const [showDropdown, setShowDropdown] = useState(false);
+
+        const [question, setQuestion] = useState(null);
+        const [userAnswer, setUserAnswer] = useState(null);
+        const [status, setStatus] = useState("idle"); // idle, incorrect, solution, correct
+        const [streak, setStreak] = useState(0);
+
+        const [unusedPool, setUnusedPool] = useState([]);
+        const lastTopicsRef = useRef("");
+
+        const dropdownRef = useRef(null);
+
+        // Close dropdown clicking outside
+        useEffect(() => {
+          const handleClickOutside = (event) => {
+            if (
+              dropdownRef.current &&
+              !dropdownRef.current.contains(event.target)
+            ) {
+              setShowDropdown(false);
+            }
+          };
+          document.addEventListener("mousedown", handleClickOutside);
+          return () =>
+            document.removeEventListener("mousedown", handleClickOutside);
+        }, []);
+
+        const generateQuestion = () => {
+          const activeTopicsList = Object.keys(topicsState).filter(
+            (k) => topicsState[k],
+          );
+          if (activeTopicsList.length === 0) {
+            alert("Please select at least one topic.");
+            return;
+          }
+
+          const activeTopicsStr = activeTopicsList.sort().join(",");
+          let currentPool = [...unusedPool];
+
+          // If the selected subtopics changed, reset the pool to ensure immediate integration
+          if (activeTopicsStr !== lastTopicsRef.current) {
+            currentPool = [];
+            lastTopicsRef.current = activeTopicsStr;
+          }
+
+          // If pool is empty, repopulate and shuffle based on active topics
+          if (currentPool.length === 0) {
+            activeTopicsList.forEach((topicKey) => {
+              const gens = GENERATORS[topicKey];
+              gens.forEach((genFunc, idx) => {
+                currentPool.push({
+                  topicKey,
+                  genFunc,
+                  id: `${topicKey}-${idx}`,
+                });
+              });
+            });
+            currentPool.sort(() => Math.random() - 0.5); // Shuffle
+          }
+
+          const selected = currentPool.pop();
+          setUnusedPool(currentPool);
+
+          const newQ = selected.genFunc();
+          setQuestion(newQ);
+          setStatus("idle");
+
+          // Initialize user answer based on type
+          if (newQ.type === "cells") {
+            setUserAnswer(newQ.cells.map((c) => (c.editable ? "" : c.value)));
+          } else {
+            setUserAnswer("");
+          }
+        };
+
+        useEffect(() => {
+          generateQuestion();
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, []);
+
+        const handleCheck = () => {
+          if (status === "solution" || status === "correct") return;
+
+          let isCorrect = false;
+
+          if (question.type === "mcq" || question.type === "short") {
+            if (!userAnswer || userAnswer.trim() === "") return;
+            isCorrect =
+              userAnswer.toString().trim().toLowerCase() ===
+              question.answer.toString().trim().toLowerCase();
+          } else if (question.type === "cells") {
+            const filled = userAnswer.every(
+              (val, i) => !question.cells[i].editable || val !== "",
+            );
+            if (!filled) return;
+
+            if (question.validate) {
+              isCorrect = question.validate(userAnswer);
+            } else {
+              const expected = question.cells.map((c) => c.value);
+              isCorrect = userAnswer.every((val, i) => val === expected[i]);
+            }
+          }
+
+          if (isCorrect) {
+            setStatus("correct");
+            setStreak((s) => s + 1);
+          } else {
+            setStatus("incorrect");
+            setStreak(0);
+          }
+        };
+
+        const toggleTopic = (topicStr) => {
+          setTopicsState((prev) => ({ ...prev, [topicStr]: !prev[topicStr] }));
+        };
+
+        const handleApplySelection = () => {
+          setShowDropdown(false);
+          generateQuestion();
+        };
+
+        const renderInput = () => {
+          if (!question) return null;
+
+          const isLocked = status === "correct" || status === "solution";
+
+          if (question.type === "mcq") {
+            return (
+              <div className="space-y-3 mt-4">
+                {question.options.map((opt, i) => (
+                  <label
+                    key={i}
+                    className={`flex items-start p-3 border rounded-lg cursor-pointer transition-colors ${userAnswer === opt ? "bg-blue-50 border-blue-400" : "bg-white hover:bg-gray-50 border-gray-200"} ${isLocked ? "opacity-80 pointer-events-none" : ""}`}
+                  >
+                    <input
+                      type="radio"
+                      name="mcq"
+                      value={opt}
+                      checked={userAnswer === opt}
+                      onChange={(e) => setUserAnswer(e.target.value)}
+                      className="mt-1 mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                      disabled={isLocked}
+                    />
+                    <span className="text-gray-800 leading-tight">{opt}</span>
+                  </label>
+                ))}
+              </div>
+            );
+          }
+
+          if (question.type === "short") {
+            return (
+              <div className="mt-4">
+                <input
+                  type="text"
+                  value={userAnswer}
+                  onChange={(e) => setUserAnswer(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCheck()}
+                  disabled={isLocked}
+                  className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow disabled:bg-gray-100 disabled:text-gray-600"
+                  placeholder="Type your answer here..."
+                />
+              </div>
+            );
+          }
+
+          if (question.type === "cells") {
+            return (
+              <div className="mt-6 flex flex-col items-center">
+                <div className="flex flex-wrap gap-2 justify-center items-end">
+                  {question.cells.map((cell, i) => {
+                    const expectedAns = question.getSolutionLabel
+                      ? question.getSolutionLabel(userAnswer, i, question.cells)
+                      : cell.value;
+                    const isCellWrong =
+                      status === "solution" &&
+                      cell.editable &&
+                      userAnswer[i] !== expectedAns;
+
+                    return (
+                      <div
+                        key={i}
+                        className="flex flex-col items-center relative"
+                      >
+                        <span
+                          className="text-xs text-gray-500 font-semibold mb-1 w-12 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+                          title={cell.label}
+                        >
+                          {cell.label}
+                        </span>
+                        <input
+                          type="text"
+                          maxLength={1}
+                          value={userAnswer[i]}
+                          disabled={!cell.editable || isLocked}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "0" || val === "1" || val === "") {
+                              const newAns = [...userAnswer];
+                              newAns[i] = val;
+                              setUserAnswer(newAns);
+
+                              // Auto advance logic
+                              if (val !== "" && i < question.cells.length - 1) {
+                                const nextEditable = question.cells.findIndex(
+                                  (c, idx) => idx > i && c.editable,
+                                );
+                                if (nextEditable !== -1) {
+                                  const inputs =
+                                    document.querySelectorAll(
+                                      ".bit-cell-input",
+                                    );
+                                  if (inputs[nextEditable])
+                                    inputs[nextEditable].focus();
+                                }
+                              }
+                            }
+                          }}
+                          className={`bit-cell bit-cell-input w-12 h-14 text-center text-xl font-mono font-bold border-2 rounded ${cell.editable ? "bg-white border-blue-300 text-blue-900 cursor-text" : "bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"} ${isCellWrong ? "bg-red-50 text-red-600 border-red-400" : ""} ${isLocked && cell.editable && status === "correct" ? "bg-green-50 text-green-600 border-green-400" : ""}`}
+                        />
+                        {isCellWrong && (
+                          <div className="text-xs text-green-600 font-bold mt-1 bg-green-100 px-1 rounded absolute -bottom-6 whitespace-nowrap z-10">
+                            Ans: {expectedAns}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Direction of Transmission Arrow */}
+                {question.transmissionDirection && (
+                  <div className="mt-10 w-full flex flex-col items-center relative opacity-70 mb-4">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-white px-2 z-10 relative">
+                      Direction of Transmission
+                    </div>
+                    <div className="absolute top-1.5 w-full max-w-[16rem] flex items-center px-1">
+                      {question.transmissionDirection === "RTL" ? (
+                        <>
+                          <div className="w-2 h-2 border-t-2 border-l-2 border-gray-400 transform -rotate-45"></div>
+                          <div className="flex-1 border-t-2 border-gray-400 border-dashed"></div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex-1 border-t-2 border-gray-400 border-dashed"></div>
+                          <div className="w-2 h-2 border-t-2 border-r-2 border-gray-400 transform rotate-45"></div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          }
+        };
+
+        return (
+          <div className="min-h-screen flex flex-col items-center py-8 px-4">
+            <div className="max-w-3xl w-full">
+              {/* HEADER */}
+              <div className="flex justify-between items-center mb-6 relative">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+                    <svg
+                      className="w-7 h-7 mr-2 text-blue-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      ></path>
+                    </svg>
+                    AQA Data Communication
+                  </h1>
+                  <p className="text-sm text-gray-500">
+                    Interactive Practice Generator
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  <div className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-bold flex items-center border border-orange-200">
+                    Streak: {streak} 🔥
+                  </div>
+                  <div className="relative" ref={dropdownRef}>
+                    <button
+                      onClick={() => setShowDropdown(!showDropdown)}
+                      className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center shadow-sm transition-colors"
+                    >
+                      <SettingsIcon />
+                      <span className="ml-2 hidden sm:inline text-sm font-medium">
+                        Topics
+                      </span>
+                    </button>
+
+                    {showDropdown && (
+                      <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden fade-in">
+                        <div className="p-3 bg-gray-50 border-b border-gray-200">
+                          <h3 className="text-sm font-bold text-gray-700">
+                            Select Sub-topics
+                          </h3>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto p-2 custom-scroll">
+                          {Object.values(TOPICS).map((topic) => (
+                            <label
+                              key={topic}
+                              className="flex items-center p-2 hover:bg-blue-50 rounded cursor-pointer transition-colors group"
+                            >
+                              <div className="relative flex items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={topicsState[topic]}
+                                  onChange={() => toggleTopic(topic)}
+                                  className="peer h-5 w-5 cursor-pointer appearance-none rounded border-2 border-gray-300 checked:border-blue-600 checked:bg-blue-600 transition-all"
+                                />
+                                <svg
+                                  className="absolute w-3.5 h-3.5 pointer-events-none stroke-white opacity-0 peer-checked:opacity-100 transition-opacity"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  strokeWidth="3"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M4.5 12.75l6 6 9-13.5"
+                                  />
+                                </svg>
+                              </div>
+                              <span className="ml-3 text-sm text-gray-700 group-hover:text-blue-900">
+                                {topic}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="p-3 bg-gray-50 border-t border-gray-200">
+                          <button
+                            onClick={handleApplySelection}
+                            className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
+                          >
+                            Apply & Generate New
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* MAIN CARD */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                {/* Topic Badge */}
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
+                  <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md font-bold uppercase tracking-wider">
+                    {question?.topic}
+                  </span>
+                </div>
+
+                <div className="p-6 sm:p-8">
+                  {/* Question Text */}
+                  <h2 className="text-xl font-medium text-gray-800 mb-2 leading-relaxed">
+                    {question?.text}
+                  </h2>
+
+                  {/* Visual */}
+                  <Visualization visual={question?.visual} />
+
+                  {/* Input */}
+                  <div className="mt-6">{renderInput()}</div>
+
+                  {/* Controls & Feedback */}
+                  <div className="mt-8 flex flex-col space-y-4">
+                    {/* Action Buttons */}
+                    <div className="flex space-x-3">
+                      {(status === "idle" || status === "incorrect") && (
+                        <button
+                          onClick={handleCheck}
+                          className="flex-1 bg-blue-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-blue-700 shadow-md transition-all active:scale-95 flex items-center justify-center"
+                        >
+                          <CheckIcon />
+                          <span className="ml-2">Check Answer</span>
+                        </button>
+                      )}
+
+                      {status === "incorrect" && (
+                        <button
+                          onClick={() => setStatus("solution")}
+                          className="flex-1 bg-gray-100 text-gray-700 font-bold py-3 px-4 rounded-xl border border-gray-300 hover:bg-gray-200 transition-all active:scale-95"
+                        >
+                          Show Solution
+                        </button>
+                      )}
+
+                      {(status === "correct" || status === "solution") && (
+                        <button
+                          onClick={generateQuestion}
+                          className="flex-1 bg-green-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-green-700 shadow-md transition-all active:scale-95 flex items-center justify-center"
+                        >
+                          <RefreshIcon />
+                          <span className="ml-2">Next Question</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Feedback Message */}
+                    {status === "incorrect" && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-start fade-in">
+                        <div className="mt-0.5 mr-2">
+                          <XIcon />
+                        </div>
+                        <div>
+                          <h4 className="font-bold">Not quite right.</h4>
+                          <p className="text-sm mt-1">
+                            Review the question, change your answer and try
+                            again, or view the solution to learn how it's done.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {status === "correct" && (
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-800 flex items-start fade-in">
+                        <div className="mt-0.5 mr-2">
+                          <CheckIcon />
+                        </div>
+                        <div>
+                          <h4 className="font-bold">Correct!</h4>
+                          <p className="text-sm mt-1">{question.explanation}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {status === "solution" && (
+                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-yellow-800 flex items-start fade-in">
+                        <div className="mt-0.5 mr-2">
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            ></path>
+                          </svg>
+                        </div>
+                        <div className="w-full">
+                          <h4 className="font-bold text-yellow-900">
+                            Solution
+                          </h4>
+
+                          {/* Specifically show answer string for non-cell types when revealed */}
+                          {(question.type === "short" ||
+                            question.type === "mcq") && (
+                            <div className="my-2 p-3 bg-white border border-yellow-300 rounded font-bold text-gray-800">
+                              {question.answer}
+                            </div>
+                          )}
+
+                          <p className="text-sm mt-2">{question.explanation}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
