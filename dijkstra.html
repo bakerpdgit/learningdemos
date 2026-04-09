@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Dijkstra Algorithm Tracer</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel for standalone JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: #f3f4f6;
+      }
+      .table-input {
+        width: 100%;
+        height: 100%;
+        min-width: 40px;
+        text-align: center;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        padding: 4px;
+        outline: none;
+      }
+      .table-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+      }
+      .table-cell-locked {
+        background-color: #f9fafb;
+        color: #374151;
+        text-align: center;
+      }
+      .pseudocode-line {
+        padding: 2px 8px;
+        font-family: monospace;
+        font-size: 0.85rem;
+        border-left: 4px solid transparent;
+      }
+      .pseudocode-line.active {
+        background-color: #e0f2fe;
+        border-left-color: #0284c7;
+        font-weight: bold;
+        color: #0369a1;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+      }
+
+      /* SVG Graph Styles */
+      .node-circle {
+        fill: white;
+        stroke: #4b5563;
+        stroke-width: 2;
+        transition: all 0.3s;
+      }
+      .node-text {
+        fill: #1f2937;
+        font-weight: bold;
+        font-size: 16px;
+        user-select: none;
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+      .edge-line {
+        stroke: #9ca3af;
+        stroke-width: 2;
+      }
+      .edge-weight-bg {
+        fill: white;
+      }
+      .edge-weight {
+        fill: #374151;
+        font-size: 14px;
+        font-weight: bold;
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+
+      .node-start {
+        stroke: #10b981;
+        stroke-width: 4;
+      }
+      .node-target {
+        stroke: #8b5cf6;
+        stroke-width: 4;
+      }
+      .node-current {
+        stroke: #f59e0b;
+        stroke-width: 4;
+        fill: #fef3c7;
+      }
+      .node-evaluating {
+        stroke: #3b82f6;
+        stroke-width: 3;
+      }
+      .edge-evaluating {
+        stroke: #3b82f6;
+        stroke-width: 3;
+        stroke-dasharray: 5, 5;
+      }
+
+      .dropdown-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        background-color: white;
+        min-width: 160px;
+        box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+        z-index: 10;
+        border-radius: 6px;
+        padding: 8px;
+        border: 1px solid #e5e7eb;
+      }
+      .dropdown:hover .dropdown-content {
+        display: block;
+      }
+
+      /* Resizer Styles */
+      .resizer-h {
+        width: 8px;
+        cursor: col-resize;
+        background-color: #f8fafc;
+        border-left: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
+        flex-shrink: 0;
+        z-index: 30;
+        transition: background-color 0.2s;
+      }
+      .resizer-h:hover,
+      .resizer-h:active {
+        background-color: #cbd5e1;
+      }
+      .resizer-v {
+        height: 8px;
+        cursor: row-resize;
+        background-color: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e2e8f0;
+        flex-shrink: 0;
+        z-index: 30;
+        transition: background-color 0.2s;
+      }
+      .resizer-v:hover,
+      .resizer-v:active {
+        background-color: #cbd5e1;
+      }
+
+      /* Applied to body during drag to prevent text selection and keep cursor strict */
+      .dragging-h * {
+        cursor: col-resize !important;
+        user-select: none !important;
+      }
+      .dragging-v * {
+        cursor: row-resize !important;
+        user-select: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- GRAPH DATA & DEFINITIONS ---
+      const ALL_GRAPHS = [
+        {
+          id: 1,
+          difficulty: "Easy",
+          name: "Graph 1 (4 Nodes)",
+          nodes: ["A", "B", "C", "D"],
+          start: "A",
+          target: "D",
+          edges: [
+            { u: "A", v: "B", w: 4 },
+            { u: "A", v: "C", w: 2 },
+            { u: "B", v: "C", w: 1 },
+            { u: "B", v: "D", w: 2 },
+            { u: "C", v: "D", w: 5 },
+          ],
+          layout: {
+            A: { x: 50, y: 150 },
+            B: { x: 200, y: 50 },
+            C: { x: 200, y: 250 },
+            D: { x: 350, y: 150 },
+          },
+        },
+        {
+          id: 2,
+          difficulty: "Medium",
+          name: "Graph 2 (5 Nodes)",
+          nodes: ["A", "B", "C", "D", "E"],
+          start: "A",
+          target: "E",
+          edges: [
+            { u: "A", v: "B", w: 6 },
+            { u: "A", v: "C", w: 2 },
+            { u: "B", v: "C", w: 3 },
+            { u: "B", v: "D", w: 1 },
+            { u: "C", v: "D", w: 5 },
+            { u: "C", v: "E", w: 8 },
+            { u: "D", v: "E", w: 3 },
+          ],
+          layout: {
+            A: { x: 50, y: 150 },
+            B: { x: 180, y: 60 },
+            C: { x: 180, y: 240 },
+            D: { x: 310, y: 60 },
+            E: { x: 310, y: 240 },
+          },
+        },
+        {
+          id: 3,
+          difficulty: "Medium",
+          name: "Graph 3 (6 Nodes, Linear)",
+          nodes: ["S", "A", "B", "C", "D", "T"],
+          start: "S",
+          target: "T",
+          edges: [
+            { u: "S", v: "A", w: 2 },
+            { u: "S", v: "B", w: 5 },
+            { u: "A", v: "B", w: 2 },
+            { u: "A", v: "C", w: 6 },
+            { u: "B", v: "D", w: 3 },
+            { u: "C", v: "D", w: 1 },
+            { u: "C", v: "T", w: 4 },
+            { u: "D", v: "T", w: 6 },
+          ],
+          layout: {
+            S: { x: 40, y: 150 },
+            A: { x: 140, y: 70 },
+            B: { x: 140, y: 230 },
+            C: { x: 260, y: 70 },
+            D: { x: 260, y: 230 },
+            T: { x: 360, y: 150 },
+          },
+        },
+        {
+          id: 4,
+          difficulty: "Hard",
+          name: "Graph 4 (7 Nodes)",
+          nodes: ["A", "B", "C", "D", "E", "F", "G"],
+          start: "A",
+          target: "G",
+          edges: [
+            { u: "A", v: "B", w: 3 },
+            { u: "A", v: "C", w: 5 },
+            { u: "B", v: "C", w: 1 },
+            { u: "B", v: "D", w: 4 },
+            { u: "C", v: "E", w: 2 },
+            { u: "D", v: "E", w: 1 },
+            { u: "D", v: "F", w: 5 },
+            { u: "E", v: "F", w: 2 },
+            { u: "F", v: "G", w: 3 },
+            { u: "E", v: "G", w: 6 },
+          ],
+          layout: {
+            A: { x: 40, y: 150 },
+            B: { x: 120, y: 60 },
+            C: { x: 120, y: 240 },
+            D: { x: 210, y: 60 },
+            E: { x: 210, y: 240 },
+            F: { x: 300, y: 150 },
+            G: { x: 380, y: 150 },
+          },
+        },
+        {
+          id: 5,
+          difficulty: "Hard",
+          name: "Graph 5 (8 Nodes)",
+          nodes: ["A", "B", "C", "D", "E", "F", "G", "H"],
+          start: "A",
+          target: "H",
+          edges: [
+            { u: "A", v: "B", w: 4 },
+            { u: "A", v: "C", w: 3 },
+            { u: "A", v: "D", w: 7 },
+            { u: "B", v: "E", w: 2 },
+            { u: "C", v: "E", w: 2 },
+            { u: "C", v: "F", w: 5 },
+            { u: "D", v: "F", w: 1 },
+            { u: "E", v: "G", w: 4 },
+            { u: "F", v: "G", w: 3 },
+            { u: "G", v: "H", w: 2 },
+          ],
+          layout: {
+            A: { x: 40, y: 150 },
+            B: { x: 120, y: 40 },
+            C: { x: 120, y: 150 },
+            D: { x: 120, y: 260 },
+            E: { x: 220, y: 80 },
+            F: { x: 220, y: 220 },
+            G: { x: 320, y: 150 },
+            H: { x: 390, y: 150 },
+          },
+        },
+      ];
+
+      // --- ORACLE FUNCTION ---
+      // Runs Dijkstra internally to generate the correct trace table answers
+      function generateOracle(graph) {
+        let rows = [];
+        let dist = {};
+        let prev = {};
+        graph.nodes.forEach((n) => {
+          dist[n] = Infinity;
+          prev[n] = null;
+        });
+        dist[graph.start] = 0;
+
+        // Helper to strictly order PQ by distance, then alphabetically
+        const getSortedQueue = (qArray, distObj) => {
+          return [...qArray].sort((a, b) => {
+            if (distObj[a] < distObj[b]) return -1;
+            if (distObj[a] > distObj[b]) return 1;
+            return a.localeCompare(b);
+          });
+        };
+
+        let q = [...graph.nodes];
+        q = getSortedQueue(q, dist);
+
+        // Row 0: Initialization
+        rows.push({
+          visited: "-",
+          q_pre: [...q],
+          q: [...q],
+          dist: { ...dist },
+          prev: { ...prev },
+          isTarget: false,
+        });
+
+        while (q.length > 0) {
+          // Front of queue is always min distance now due to sorting
+          let u = q[0];
+          if (dist[u] === Infinity) break; // Remaining are disconnected
+
+          let newQ_pre = q.filter((n) => n !== u);
+
+          if (u === graph.target) {
+            rows.push({
+              visited: u,
+              q_pre: [...newQ_pre],
+              q: [...newQ_pre],
+              dist: { ...dist },
+              prev: { ...prev },
+              isTarget: true,
+            });
+            break;
+          }
+
+          let stepDist = { ...dist };
+          let stepPrev = { ...prev };
+          let neighbors = graph.edges.filter((e) => e.u === u || e.v === u);
+
+          neighbors.forEach((edge) => {
+            let v = edge.u === u ? edge.v : edge.u;
+            if (newQ_pre.includes(v)) {
+              let alt = dist[u] + edge.w;
+              if (alt < stepDist[v]) {
+                stepDist[v] = alt;
+                stepPrev[v] = u;
+                dist[v] = alt;
+                prev[v] = u; // Update global for next iteration
+              }
+            }
+          });
+
+          // Calculate reordered PQ for the UPDATE command phase
+          let newQ_post = getSortedQueue(newQ_pre, stepDist);
+
+          rows.push({
+            visited: u,
+            q_pre: [...newQ_pre],
+            q: [...newQ_post],
+            dist: { ...stepDist },
+            prev: { ...stepPrev },
+            isTarget: false,
+          });
+          q = newQ_post;
+        }
+        return rows;
+      }
+
+      // --- HELPER FUNCTIONS ---
+      const parseDist = (val) => {
+        if (val === undefined || val === null || val === "") return Infinity;
+        const s = String(val).trim().toLowerCase();
+        if (s === "inf" || s === "infinity" || s === "∞" || s === "-")
+          return Infinity;
+        const parsed = parseInt(s, 10);
+        return isNaN(parsed) ? Infinity : parsed;
+      };
+      const parsePrev = (val) => {
+        if (val === undefined || val === null) return null;
+        const s = String(val).trim().toUpperCase();
+        if (s === "" || s === "-" || s === "NULL" || s === "NONE") return null;
+        return s;
+      };
+      // parseQueue no longer auto-sorts alphabetically; it enforces the strict string sequence given
+      const parseQueue = (val) =>
+        String(val)
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "");
+      const formatDist = (val) => (val === Infinity ? "∞" : val);
+      const formatPrev = (val) => (val === null ? "-" : val);
+
+      // --- MAIN APP COMPONENT ---
+      function App() {
+        // Configuration State
+        const [selectedDifficulties, setSelectedDifficulties] = useState([
+          "Easy",
+          "Medium",
+          "Hard",
+        ]);
+        const [activeGraph, setActiveGraph] = useState(ALL_GRAPHS[0]);
+
+        // Simulation State
+        const [oracle, setOracle] = useState([]);
+        const [userTable, setUserTable] = useState([]);
+        const [currentRowIdx, setCurrentRowIdx] = useState(0);
+        /* Phases: 
+               INIT: Filling first row (dist, prev, q)
+               DEQUEUE: Filling visited node
+               EVAL: Filling dist, prev, q for current row
+               DONE: Target dequeued
+               BACKTRACK: Entering final path backwards
+               FINAL_PATH: Entering final path forwards
+            */
+        const [phase, setPhase] = useState("INIT");
+        const [feedback, setFeedback] = useState({
+          type: "info",
+          msg: "Welcome. Follow the pseudocode to begin.",
+        });
+        const [minDistAnswer, setMinDistAnswer] = useState("");
+        const [backtrackPath, setBacktrackPath] = useState("");
+        const [forwardPathAnswer, setForwardPathAnswer] = useState("");
+
+        // --- Panel Resizing State ---
+        const [leftWidth, setLeftWidth] = useState(33.33); // 1/3 default
+        const [topHeight, setTopHeight] = useState(50); // 1/2 default
+
+        const startHorizDrag = (e) => {
+          e.preventDefault();
+          document.body.classList.add("dragging-h");
+
+          const onMouseMove = (moveEvent) => {
+            const newWidthPct = (moveEvent.clientX / window.innerWidth) * 100;
+            setLeftWidth(Math.max(20, Math.min(newWidthPct, 80))); // Clamp 20% to 80%
+          };
+
+          const onMouseUp = () => {
+            document.body.classList.remove("dragging-h");
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          };
+
+          document.addEventListener("mousemove", onMouseMove);
+          document.addEventListener("mouseup", onMouseUp);
+        };
+
+        const startVertDrag = (e) => {
+          e.preventDefault();
+          document.body.classList.add("dragging-v");
+          const leftPane = document.getElementById("left-pane-container");
+          if (!leftPane) return;
+          const rect = leftPane.getBoundingClientRect();
+
+          const onMouseMove = (moveEvent) => {
+            const y = moveEvent.clientY - rect.top;
+            const newHeightPct = (y / rect.height) * 100;
+            setTopHeight(Math.max(20, Math.min(newHeightPct, 80))); // Clamp 20% to 80%
+          };
+
+          const onMouseUp = () => {
+            document.body.classList.remove("dragging-v");
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          };
+
+          document.addEventListener("mousemove", onMouseMove);
+          document.addEventListener("mouseup", onMouseUp);
+        };
+
+        // Initialize Graph
+        useEffect(() => {
+          const correctOracle = generateOracle(activeGraph);
+          setOracle(correctOracle);
+
+          // Setup empty first row for user
+          let initDist = {};
+          let initPrev = {};
+          activeGraph.nodes.forEach((n) => {
+            initDist[n] = "";
+            initPrev[n] = "";
+          });
+
+          setUserTable([
+            { visited: "-", q: "", dist: initDist, prev: initPrev },
+          ]);
+          setCurrentRowIdx(0);
+          setPhase("INIT");
+          setMinDistAnswer("");
+          setBacktrackPath("");
+          setForwardPathAnswer("");
+          setFeedback({
+            type: "info",
+            msg: "Step 1: Initialize the table. Set Start node distance to 0, others to Infinity (∞). Set Prev to hyphen (-). Add all nodes to Priority Queue.",
+          });
+        }, [activeGraph]);
+
+        // Handlers for Input Changes
+        const handleCellChange = (node, field, value) => {
+          let newTable = [...userTable];
+          newTable[currentRowIdx][field][node] = value;
+          setUserTable(newTable);
+        };
+        const handleRowChange = (field, value) => {
+          let newTable = [...userTable];
+          newTable[currentRowIdx][field] = value;
+          setUserTable(newTable);
+        };
+
+        // Validation Engine
+        const checkStep = () => {
+          const uRow = userTable[currentRowIdx];
+          const oRow = oracle[currentRowIdx];
+          let errors = [];
+
+          if (phase === "DEQUEUE") {
+            if (uRow.visited.toUpperCase().trim() !== oRow.visited) {
+              errors.push(
+                `Incorrect node dequeued. You must remove the unvisited node with the lowest distance (Priority Dequeue).`,
+              );
+            }
+            if (parseQueue(uRow.q) !== parseQueue(oRow.q_pre.join(""))) {
+              errors.push(
+                `Priority Queue is incorrect. You must remove the dequeued node from the queue (keeping the remaining nodes in their current order for now).`,
+              );
+            }
+
+            if (errors.length === 0) {
+              handleRowChange("visited", oRow.visited); // format nicely
+              handleRowChange("q", oRow.q_pre.join(", ")); // format nicely
+
+              if (oRow.isTarget) {
+                // Target reached, automatically complete final row
+                let cleanRow = {
+                  ...uRow,
+                  visited: oRow.visited,
+                  q: oRow.q_pre.join(", "),
+                };
+                activeGraph.nodes.forEach((n) => {
+                  cleanRow.dist[n] = formatDist(oRow.dist[n]);
+                  cleanRow.prev[n] = formatPrev(oRow.prev[n]);
+                });
+                let newTable = [...userTable];
+                newTable[currentRowIdx] = cleanRow;
+                setUserTable(newTable);
+                setPhase("MIN_DIST");
+                setFeedback({
+                  type: "success",
+                  msg: `Target ${activeGraph.target} dequeued! Algorithm terminates. First, identify the minimum distance to the target.`,
+                });
+              } else {
+                setPhase("EVAL");
+                setFeedback({
+                  type: "success",
+                  msg: `Correct! Node ${oRow.visited} dequeued and removed from Priority Queue. Now calculate paths to its unvisited neighbors and update Distances and Previous columns.`,
+                });
+              }
+              return;
+            }
+          } else if (phase === "EVAL") {
+            // Check Prevs first so we complain about missing prevs before distances
+            activeGraph.nodes.forEach((n) => {
+              if (parsePrev(uRow.prev[n]) !== oRow.prev[n])
+                errors.push(`Previous node for Node ${n} is incorrect.`);
+              if (parseDist(uRow.dist[n]) !== oRow.dist[n])
+                errors.push(`Distance for Node ${n} is incorrect.`);
+            });
+
+            if (errors.length === 0) {
+              setPhase("UPDATE_PQ");
+              setFeedback({
+                type: "success",
+                msg: `Correct! Now process the UPDATE command. Review the Priority Queue string to reflect any new priorities based on updated distances (lowest distance first, alphabetical tie-break). Make changes if needed and submit.`,
+              });
+              return;
+            }
+          } else if (phase === "INIT" || phase === "UPDATE_PQ") {
+            if (parseQueue(uRow.q) !== parseQueue(oRow.q.join(""))) {
+              if (phase === "INIT") {
+                errors.push(
+                  "Priority Queue is incorrect. Ensure you list all nodes, ordered by distance (Start node first) then alphabetically.",
+                );
+              } else {
+                errors.push(
+                  "Priority Queue is incorrect. It must be ordered strictly by the newly updated distances (lowest distance first). Use alphabetical order for ties.",
+                );
+              }
+            }
+            if (phase === "INIT") {
+              activeGraph.nodes.forEach((n) => {
+                if (parsePrev(uRow.prev[n]) !== oRow.prev[n])
+                  errors.push(`Previous node for Node ${n} is incorrect.`);
+                if (parseDist(uRow.dist[n]) !== oRow.dist[n])
+                  errors.push(`Distance for Node ${n} is incorrect.`);
+              });
+            }
+
+            if (errors.length === 0) {
+              // Format clean row for locked state
+              let cleanRow = { ...uRow, q: oRow.q.join(", ") };
+              activeGraph.nodes.forEach((n) => {
+                cleanRow.dist[n] = formatDist(oRow.dist[n]);
+                cleanRow.prev[n] = formatPrev(oRow.prev[n]);
+              });
+              let newTable = [...userTable];
+              newTable[currentRowIdx] = cleanRow;
+
+              // Setup next row pre-filled with current values (AQA copy-down style)
+              let nextDist = {};
+              let nextPrev = {};
+              activeGraph.nodes.forEach((n) => {
+                nextDist[n] = cleanRow.dist[n];
+                nextPrev[n] = cleanRow.prev[n];
+              });
+              newTable.push({
+                visited: "",
+                q: "",
+                dist: nextDist,
+                prev: nextPrev,
+              });
+              setUserTable(newTable);
+              setCurrentRowIdx(currentRowIdx + 1);
+              setPhase("DEQUEUE");
+              setFeedback({
+                type: "success",
+                msg:
+                  phase === "INIT"
+                    ? `Initialization complete. Now, perform a Priority Dequeue.`
+                    : `Priority Queue updated! Row ${currentRowIdx + 1} complete. Now perform the next Priority Dequeue.`,
+              });
+              return;
+            }
+          }
+
+          if (errors.length > 0) {
+            setFeedback({
+              type: "error",
+              msg: errors[0] + (errors.length > 1 ? " (And other errors)" : ""),
+            });
+          }
+        };
+
+        const checkMinDist = () => {
+          const correctDist =
+            oracle[oracle.length - 1].dist[activeGraph.target];
+          const userDist = parseInt(minDistAnswer.trim(), 10);
+          if (userDist === correctDist) {
+            setPhase("BACKTRACK");
+            setFeedback({
+              type: "success",
+              msg: `Correct! The minimum distance is ${correctDist}. Now perform the backtracking trace.`,
+            });
+          } else {
+            setFeedback({
+              type: "error",
+              msg: `Incorrect. Look at the final distance calculated for the target node (${activeGraph.target}) in the trace table.`,
+            });
+          }
+        };
+
+        const checkBacktrack = () => {
+          let path = [];
+          let curr = activeGraph.target;
+          while (curr !== null) {
+            path.push(curr); // Push appends to end, resulting in Target -> Start
+            curr = oracle[oracle.length - 1].prev[curr];
+          }
+          const backwardStr = path.join("");
+          const userPathStr = backtrackPath
+            .toUpperCase()
+            .replace(/[^A-Z]/g, "");
+
+          if (userPathStr === backwardStr) {
+            setPhase("FINAL_PATH");
+            setBacktrackPath(path.join(" ← ")); // Format beautifully to show direction
+            setFeedback({
+              type: "success",
+              msg: `Correct! You have backtracked successfully. Now state the final path from Start to Target.`,
+            });
+          } else {
+            setFeedback({
+              type: "error",
+              msg: `Incorrect. You must start at the Target (${activeGraph.target}) and list the nodes in reverse order as you read the 'Prev' column back to Start (${activeGraph.start}).`,
+            });
+          }
+        };
+
+        const checkForwardPath = () => {
+          let path = [];
+          let curr = activeGraph.target;
+          while (curr !== null) {
+            path.unshift(curr); // Unshift prepends, resulting in Start -> Target
+            curr = oracle[oracle.length - 1].prev[curr];
+          }
+          const forwardStr = path.join("");
+          const userPathStr = forwardPathAnswer
+            .toUpperCase()
+            .replace(/[^A-Z]/g, "");
+
+          if (userPathStr === forwardStr) {
+            setPhase("DONE");
+            setForwardPathAnswer(path.join(" → ")); // Format beautifully
+            setFeedback({
+              type: "success",
+              msg: `Perfect! You found the shortest path: ${path.join(" → ")} with total weight ${oracle[oracle.length - 1].dist[activeGraph.target]}.`,
+            });
+          } else {
+            setFeedback({
+              type: "error",
+              msg: `Incorrect. The final path should be your backtracked sequence reversed, starting at ${activeGraph.start} and ending at ${activeGraph.target}.`,
+            });
+          }
+        };
+
+        const showHint = () => {
+          let oRow = oracle[currentRowIdx];
+          if (phase === "DEQUEUE") {
+            handleRowChange("visited", oRow.visited);
+            handleRowChange("q", oRow.q_pre.join(", "));
+            setFeedback({
+              type: "info",
+              msg: `Hint applied: Priority Dequeue selects node ${oRow.visited} and removes it from the queue.`,
+            });
+          } else if (phase === "EVAL") {
+            let newTable = [...userTable];
+            activeGraph.nodes.forEach((n) => {
+              newTable[currentRowIdx].dist[n] = formatDist(oRow.dist[n]);
+              newTable[currentRowIdx].prev[n] = formatPrev(oRow.prev[n]);
+            });
+            setUserTable(newTable);
+            setFeedback({
+              type: "info",
+              msg: `Hint applied: Distances and Previous columns updated.`,
+            });
+          } else if (phase === "UPDATE_PQ") {
+            handleRowChange("q", oRow.q.join(", "));
+            setFeedback({
+              type: "info",
+              msg: `Hint applied: Priority Queue updated with remaining unvisited nodes.`,
+            });
+          } else if (phase === "INIT") {
+            let newTable = [...userTable];
+            newTable[currentRowIdx].q = oRow.q.join(", ");
+            activeGraph.nodes.forEach((n) => {
+              newTable[currentRowIdx].dist[n] = formatDist(oRow.dist[n]);
+              newTable[currentRowIdx].prev[n] = formatPrev(oRow.prev[n]);
+            });
+            setUserTable(newTable);
+            setFeedback({
+              type: "info",
+              msg: `Hint applied: Initialization row completed.`,
+            });
+          }
+        };
+
+        // Calculate active pseudocode line
+        let activeLine = 0;
+        if (phase === "INIT")
+          activeLine = 2; // Init loop
+        else if (phase === "DEQUEUE")
+          activeLine = 9; // Dequeue
+        else if (phase === "EVAL")
+          activeLine = 11; // Neighbor eval
+        else if (phase === "UPDATE_PQ")
+          activeLine = 20; // PQ Update
+        else if (
+          phase === "MIN_DIST" ||
+          phase === "BACKTRACK" ||
+          phase === "FINAL_PATH" ||
+          phase === "DONE"
+        )
+          activeLine = 10; // Return
+
+        // Dropdown filter logic
+        const toggleDifficulty = (diff) => {
+          if (selectedDifficulties.includes(diff)) {
+            if (selectedDifficulties.length > 1)
+              setSelectedDifficulties(
+                selectedDifficulties.filter((d) => d !== diff),
+              );
+          } else {
+            setSelectedDifficulties([...selectedDifficulties, diff]);
+          }
+        };
+        const filteredGraphs = ALL_GRAPHS.filter((g) =>
+          selectedDifficulties.includes(g.difficulty),
+        );
+
+        return (
+          <div className="flex flex-col h-screen overflow-hidden">
+            {/* TOP NAVBAR */}
+            <header className="bg-white shadow px-6 py-3 flex justify-between items-center z-20">
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">
+                  Dijkstra's Algorithm Tracer
+                </h1>
+                <p className="text-sm text-gray-500">
+                  AQA A-Level Computer Science
+                </p>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="dropdown relative">
+                  <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center">
+                    Filter Topics (Difficulty) <span className="ml-2">▼</span>
+                  </button>
+                  <div className="dropdown-content">
+                    {["Easy", "Medium", "Hard"].map((diff) => (
+                      <label
+                        key={diff}
+                        className="flex items-center p-2 cursor-pointer hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mr-2"
+                          checked={selectedDifficulties.includes(diff)}
+                          onChange={() => toggleDifficulty(diff)}
+                        />
+                        {diff}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <select
+                  className="bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded shadow font-semibold"
+                  value={activeGraph.id}
+                  onChange={(e) =>
+                    setActiveGraph(
+                      ALL_GRAPHS.find((g) => g.id === parseInt(e.target.value)),
+                    )
+                  }
+                >
+                  {filteredGraphs.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} [{g.difficulty}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </header>
+
+            {/* MAIN CONTENT */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* LEFT PANE: Graph & Pseudocode */}
+              <div
+                id="left-pane-container"
+                style={{ width: `${leftWidth}%`, minWidth: "20%" }}
+                className="bg-white flex flex-col relative z-10 shadow-lg shrink-0"
+              >
+                {/* SVG Graph Visualizer */}
+                <div
+                  style={{ height: `${topHeight}%`, minHeight: "20%" }}
+                  className="bg-gray-50 flex items-center justify-center p-4 relative overflow-hidden shrink-0"
+                >
+                  <svg
+                    width="100%"
+                    height="100%"
+                    viewBox="0 0 450 300"
+                    preserveAspectRatio="xMidYMid meet"
+                  >
+                    {/* Edges */}
+                    {activeGraph.edges.map((edge, i) => {
+                      const posU = activeGraph.layout[edge.u];
+                      const posV = activeGraph.layout[edge.v];
+                      const midX = (posU.x + posV.x) / 2;
+                      const midY = (posU.y + posV.y) / 2;
+                      const isEval =
+                        phase === "EVAL" &&
+                        userTable[currentRowIdx] &&
+                        (userTable[currentRowIdx].visited === edge.u ||
+                          userTable[currentRowIdx].visited === edge.v);
+
+                      return (
+                        <g key={`edge-${i}`}>
+                          <line
+                            x1={posU.x}
+                            y1={posU.y}
+                            x2={posV.x}
+                            y2={posV.y}
+                            className={`edge-line ${isEval ? "edge-evaluating" : ""}`}
+                          />
+                          <rect
+                            x={midX - 10}
+                            y={midY - 10}
+                            width="20"
+                            height="20"
+                            rx="10"
+                            className="edge-weight-bg"
+                          />
+                          <text x={midX} y={midY} className="edge-weight">
+                            {edge.w}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Nodes */}
+                    {activeGraph.nodes.map((n) => {
+                      const pos = activeGraph.layout[n];
+                      let nodeClass = "node-circle";
+                      if (n === activeGraph.start) nodeClass += " node-start";
+                      if (n === activeGraph.target) nodeClass += " node-target";
+                      if (
+                        userTable[currentRowIdx] &&
+                        userTable[currentRowIdx].visited === n
+                      )
+                        nodeClass += " node-current";
+
+                      return (
+                        <g key={`node-${n}`}>
+                          <circle
+                            cx={pos.x}
+                            cy={pos.y}
+                            r="18"
+                            className={nodeClass}
+                          />
+                          <text x={pos.x} y={pos.y} className="node-text">
+                            {n}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    {/* Legend inside SVG */}
+                    <g transform="translate(10, 10)">
+                      <rect
+                        width="130"
+                        height="65"
+                        fill="rgba(255,255,255,0.8)"
+                        rx="4"
+                      />
+                      <circle
+                        cx="20"
+                        cy="20"
+                        r="6"
+                        className="node-start"
+                        fill="white"
+                      />{" "}
+                      <text x="35" y="24" fontSize="10">
+                        Start Node
+                      </text>
+                      <circle
+                        cx="20"
+                        cy="35"
+                        r="6"
+                        className="node-target"
+                        fill="white"
+                      />{" "}
+                      <text x="35" y="39" fontSize="10">
+                        Target Node
+                      </text>
+                      <circle
+                        cx="20"
+                        cy="50"
+                        r="6"
+                        className="node-current"
+                        fill="white"
+                      />{" "}
+                      <text x="35" y="54" fontSize="10">
+                        Current Node
+                      </text>
+                    </g>
+                  </svg>
+                </div>
+
+                {/* Vertical Resizer */}
+                <div
+                  className="resizer-v flex items-center justify-center group"
+                  onMouseDown={startVertDrag}
+                >
+                  <div className="w-8 h-1 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+                </div>
+
+                {/* Pseudocode Panel */}
+                <div className="flex-1 overflow-y-auto bg-[#f8fafc] p-4 font-mono text-sm">
+                  <h3 className="font-bold text-gray-700 mb-2 uppercase text-xs tracking-wider">
+                    AQA Pseudocode Trace
+                  </h3>
+                  <div
+                    className={`pseudocode-line ${activeLine === 1 ? "active" : ""}`}
+                  >
+                    01: SUBROUTINE Dijkstra(Graph, Start, Target)
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
+                  >
+                    02: &nbsp;&nbsp;FOR each Node in Graph
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
+                  >
+                    03: &nbsp;&nbsp;&nbsp;&nbsp;Distance[Node] &larr; INFINITY
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
+                  >
+                    04: &nbsp;&nbsp;&nbsp;&nbsp;Previous[Node] &larr; NULL
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
+                  >
+                    05: &nbsp;&nbsp;&nbsp;&nbsp;ENQUEUE Node in PriorityQueue
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
+                  >
+                    06: &nbsp;&nbsp;ENDFOR
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
+                  >
+                    07: &nbsp;&nbsp;Distance[Start] &larr; 0
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 8 ? "active" : ""}`}
+                  >
+                    08: &nbsp;&nbsp;WHILE PriorityQueue is not empty
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 9 ? "active" : ""}`}
+                  >
+                    09: &nbsp;&nbsp;&nbsp;&nbsp;CurrentNode &larr; DEQUEUE
+                    PriorityQueue
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 10 ? "active" : ""}`}
+                  >
+                    10: &nbsp;&nbsp;&nbsp;&nbsp;IF CurrentNode == Target THEN
+                    RETURN
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    11: &nbsp;&nbsp;&nbsp;&nbsp;FOR each Neighbor of CurrentNode
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    12: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IF Neighbor in
+                    PriorityQueue THEN
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    13: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NewDist
+                    &larr; Dist[Current] + Weight
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    14: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IF
+                    NewDist &lt; Dist[Neighbor] THEN
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    15:
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dist[Neighbor]
+                    &larr; NewDist
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    16:
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Prev[Neighbor]
+                    &larr; CurrentNode
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    17: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ENDIF
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    18: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ENDIF
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
+                  >
+                    19: &nbsp;&nbsp;&nbsp;&nbsp;ENDFOR
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 20 ? "active" : ""}`}
+                  >
+                    20: &nbsp;&nbsp;&nbsp;&nbsp;UPDATE PriorityQueue
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 8 ? "active" : ""}`}
+                  >
+                    21: &nbsp;&nbsp;ENDWHILE
+                  </div>
+                  <div
+                    className={`pseudocode-line ${activeLine === 1 ? "active" : ""}`}
+                  >
+                    22: ENDSUBROUTINE
+                  </div>
+                </div>
+              </div>
+
+              {/* Horizontal Resizer */}
+              <div
+                className="resizer-h flex flex-col items-center justify-center group"
+                onMouseDown={startHorizDrag}
+              >
+                <div className="w-1 h-8 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+              </div>
+
+              {/* RIGHT PANE: Interactive Trace Table */}
+              <div className="flex-1 flex flex-col bg-white overflow-hidden">
+                {/* Feedback Banner */}
+                <div
+                  className={`p-4 border-b font-semibold flex items-center shadow-sm z-10 ${
+                    feedback.type === "error"
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : feedback.type === "success"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200"
+                  }`}
+                >
+                  <span className="mr-2 text-xl">
+                    {feedback.type === "error"
+                      ? "❌"
+                      : feedback.type === "success"
+                        ? "✅"
+                        : "ℹ️"}
+                  </span>
+                  <span>{feedback.msg}</span>
+                </div>
+
+                {/* Table Area */}
+                <div className="flex-1 overflow-auto p-4 bg-gray-50">
+                  <table className="w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden text-sm">
+                    <thead className="bg-gray-200 text-gray-700">
+                      <tr>
+                        <th className="border p-2 min-w-[80px]" rowSpan="2">
+                          Node Visited
+                          <br />
+                          <span className="font-normal text-xs">
+                            (Dequeued)
+                          </span>
+                        </th>
+                        <th className="border p-2 min-w-[120px]" rowSpan="2">
+                          Priority Queue
+                          <br />
+                          <span className="font-normal text-xs">
+                            (Unvisited)
+                          </span>
+                        </th>
+                        <th
+                          className="border p-2 text-center"
+                          colSpan={activeGraph.nodes.length}
+                        >
+                          Distance
+                        </th>
+                        <th
+                          className="border p-2 text-center"
+                          colSpan={activeGraph.nodes.length}
+                        >
+                          Previous
+                        </th>
+                      </tr>
+                      <tr>
+                        {activeGraph.nodes.map((n) => (
+                          <th
+                            key={`th-dist-${n}`}
+                            className="border p-1 bg-gray-100 font-medium"
+                          >
+                            Node {n}
+                          </th>
+                        ))}
+                        {activeGraph.nodes.map((n) => (
+                          <th
+                            key={`th-prev-${n}`}
+                            className="border p-1 bg-gray-100 font-medium"
+                          >
+                            Node {n}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userTable.map((row, rIdx) => {
+                        const isActiveRow = rIdx === currentRowIdx;
+                        const canEditVisited =
+                          isActiveRow && phase === "DEQUEUE";
+                        const canEditQ =
+                          isActiveRow &&
+                          (phase === "DEQUEUE" ||
+                            phase === "UPDATE_PQ" ||
+                            phase === "INIT");
+                        const canEditDist =
+                          isActiveRow && (phase === "EVAL" || phase === "INIT");
+                        const canEditPrev =
+                          isActiveRow && (phase === "EVAL" || phase === "INIT");
+
+                        return (
+                          <tr
+                            key={`row-${rIdx}`}
+                            className={
+                              isActiveRow
+                                ? "bg-blue-50"
+                                : "hover:bg-gray-50 transition-colors"
+                            }
+                          >
+                            {/* Node Visited Cell */}
+                            <td
+                              className={`border p-1 ${!canEditVisited ? "table-cell-locked font-bold" : ""}`}
+                            >
+                              {canEditVisited ? (
+                                <input
+                                  type="text"
+                                  className="table-input font-bold"
+                                  maxLength="1"
+                                  value={row.visited}
+                                  onChange={(e) =>
+                                    handleRowChange(
+                                      "visited",
+                                      e.target.value.toUpperCase(),
+                                    )
+                                  }
+                                  placeholder="?"
+                                  autoFocus
+                                />
+                              ) : (
+                                row.visited
+                              )}
+                            </td>
+
+                            {/* Priority Queue Cell */}
+                            <td
+                              className={`border p-1 ${!canEditQ ? "table-cell-locked text-xs" : ""}`}
+                            >
+                              {canEditQ ? (
+                                <input
+                                  type="text"
+                                  className="table-input text-xs"
+                                  value={row.q}
+                                  onChange={(e) =>
+                                    handleRowChange("q", e.target.value)
+                                  }
+                                  placeholder="e.g. A, B, C"
+                                />
+                              ) : (
+                                <span className="tracking-wider">{row.q}</span>
+                              )}
+                            </td>
+
+                            {/* Distance Cells */}
+                            {activeGraph.nodes.map((n) => (
+                              <td
+                                key={`td-dist-${rIdx}-${n}`}
+                                className={`border p-1 ${!canEditDist ? "table-cell-locked" : ""}`}
+                              >
+                                {canEditDist ? (
+                                  <input
+                                    type="text"
+                                    className="table-input"
+                                    value={row.dist[n]}
+                                    onChange={(e) =>
+                                      handleCellChange(
+                                        n,
+                                        "dist",
+                                        e.target.value,
+                                      )
+                                    }
+                                    placeholder="∞"
+                                  />
+                                ) : (
+                                  <span
+                                    className={
+                                      row.dist[n] === "∞"
+                                        ? "text-gray-400 font-serif text-lg leading-none"
+                                        : ""
+                                    }
+                                  >
+                                    {row.dist[n]}
+                                  </span>
+                                )}
+                              </td>
+                            ))}
+
+                            {/* Previous Cells */}
+                            {activeGraph.nodes.map((n) => (
+                              <td
+                                key={`td-prev-${rIdx}-${n}`}
+                                className={`border p-1 ${!canEditPrev ? "table-cell-locked text-gray-500" : ""}`}
+                              >
+                                {canEditPrev ? (
+                                  <input
+                                    type="text"
+                                    className="table-input"
+                                    maxLength="1"
+                                    value={row.prev[n]}
+                                    onChange={(e) =>
+                                      handleCellChange(
+                                        n,
+                                        "prev",
+                                        e.target.value.toUpperCase(),
+                                      )
+                                    }
+                                    placeholder="-"
+                                  />
+                                ) : (
+                                  row.prev[n]
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Action Controls */}
+                  {phase !== "MIN_DIST" &&
+                    phase !== "BACKTRACK" &&
+                    phase !== "DONE" && (
+                      <div className="mt-6 flex gap-4 justify-end">
+                        <button
+                          onClick={showHint}
+                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-100 font-medium transition-colors"
+                        >
+                          Reveal Step Answer
+                        </button>
+                        <button
+                          onClick={checkStep}
+                          className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold shadow-md transition-colors"
+                        >
+                          {phase === "DEQUEUE"
+                            ? "Verify Priority Dequeue"
+                            : phase === "EVAL"
+                              ? "Verify Distances & Prevs"
+                              : phase === "UPDATE_PQ"
+                                ? "Verify Priority Queue"
+                                : "Submit Step"}
+                        </button>
+                      </div>
+                    )}
+
+                  {/* Final Output UI */}
+                  {(phase === "MIN_DIST" ||
+                    phase === "BACKTRACK" ||
+                    phase === "FINAL_PATH" ||
+                    phase === "DONE") && (
+                    <div className="mt-8 bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm">
+                      <h3 className="text-lg font-bold text-purple-800 mb-4">
+                        Final Algorithm Outputs
+                      </h3>
+
+                      {/* Min Distance Question */}
+                      <div className="mb-6">
+                        <p className="text-purple-700 mb-2 font-semibold">
+                          1. What is the minimum distance from Start (
+                          {activeGraph.start}) to Target ({activeGraph.target})?
+                        </p>
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="number"
+                            className="w-32 p-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg text-center bg-white"
+                            value={minDistAnswer}
+                            onChange={(e) => setMinDistAnswer(e.target.value)}
+                            disabled={phase !== "MIN_DIST"}
+                          />
+                          {phase === "MIN_DIST" && (
+                            <>
+                              <button
+                                onClick={checkMinDist}
+                                className="px-4 py-2 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 transition-colors shadow"
+                              >
+                                Check Distance
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setMinDistAnswer(
+                                    oracle[oracle.length - 1].dist[
+                                      activeGraph.target
+                                    ].toString(),
+                                  )
+                                }
+                                className="px-4 py-2 border border-purple-300 text-purple-700 rounded hover:bg-purple-100 font-medium transition-colors bg-white"
+                              >
+                                Reveal
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Backtrack Path Question */}
+                      {(phase === "BACKTRACK" ||
+                        phase === "FINAL_PATH" ||
+                        phase === "DONE") && (
+                        <div className="mb-6">
+                          <p className="text-purple-700 mb-2 font-semibold">
+                            2. Backtrack to find the route. Read backwards using
+                            the 'Prev' column from Target ({activeGraph.target})
+                            to Start ({activeGraph.start}).
+                          </p>
+                          <div className="flex items-center gap-4">
+                            <input
+                              type="text"
+                              className="flex-1 p-3 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg uppercase tracking-widest bg-white"
+                              placeholder={`e.g. ${activeGraph.target}-...-${activeGraph.start}`}
+                              value={backtrackPath}
+                              onChange={(e) => setBacktrackPath(e.target.value)}
+                              disabled={phase !== "BACKTRACK"}
+                            />
+                            {phase === "BACKTRACK" && (
+                              <>
+                                <button
+                                  onClick={checkBacktrack}
+                                  className="px-6 py-3 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 transition-colors shadow"
+                                >
+                                  Check Backtrack
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    let path = [];
+                                    let curr = activeGraph.target;
+                                    while (curr !== null) {
+                                      path.push(curr);
+                                      curr =
+                                        oracle[oracle.length - 1].prev[curr];
+                                    }
+                                    setBacktrackPath(path.join("-"));
+                                  }}
+                                  className="px-4 py-3 border border-purple-300 text-purple-700 rounded hover:bg-purple-100 font-medium transition-colors bg-white"
+                                >
+                                  Reveal Solution
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Forward Path Question */}
+                      {(phase === "FINAL_PATH" || phase === "DONE") && (
+                        <div>
+                          <p className="text-purple-700 mb-2 font-semibold">
+                            3. State the shortest path from Start (
+                            {activeGraph.start}) to Target ({activeGraph.target}
+                            ).
+                          </p>
+                          <div className="flex items-center gap-4">
+                            <input
+                              type="text"
+                              className="flex-1 p-3 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg uppercase tracking-widest bg-white"
+                              placeholder={`e.g. ${activeGraph.start}-...-${activeGraph.target}`}
+                              value={forwardPathAnswer}
+                              onChange={(e) =>
+                                setForwardPathAnswer(e.target.value)
+                              }
+                              disabled={phase === "DONE"}
+                            />
+                            {phase === "FINAL_PATH" && (
+                              <>
+                                <button
+                                  onClick={checkForwardPath}
+                                  className="px-6 py-3 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 transition-colors shadow"
+                                >
+                                  Check Path
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    let path = [];
+                                    let curr = activeGraph.target;
+                                    while (curr !== null) {
+                                      path.unshift(curr);
+                                      curr =
+                                        oracle[oracle.length - 1].prev[curr];
+                                    }
+                                    setForwardPathAnswer(path.join("-"));
+                                  }}
+                                  className="px-4 py-3 border border-purple-300 text-purple-700 rounded hover:bg-purple-100 font-medium transition-colors bg-white"
+                                >
+                                  Reveal Solution
+                                </button>
+                              </>
+                            )}
+                            {phase === "DONE" && (
+                              <button
+                                onClick={() => {
+                                  const currentIdx = ALL_GRAPHS.findIndex(
+                                    (g) => g.id === activeGraph.id,
+                                  );
+                                  const nextGraph =
+                                    ALL_GRAPHS[
+                                      (currentIdx + 1) % ALL_GRAPHS.length
+                                    ];
+                                  setActiveGraph(nextGraph);
+                                  if (
+                                    !selectedDifficulties.includes(
+                                      nextGraph.difficulty,
+                                    )
+                                  ) {
+                                    setSelectedDifficulties([
+                                      ...selectedDifficulties,
+                                      nextGraph.difficulty,
+                                    ]);
+                                  }
+                                }}
+                                className="px-6 py-3 bg-green-600 text-white rounded font-bold hover:bg-green-700 transition-colors shadow"
+                              >
+                                Try Next Graph
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
