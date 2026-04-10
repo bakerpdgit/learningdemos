@@ -1,0 +1,1346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Search & Sort Tracer</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: #f3f4f6;
+      }
+      .table-input {
+        width: 100%;
+        height: 100%;
+        min-width: 60px;
+        text-align: center;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        padding: 6px;
+        outline: none;
+        background-color: transparent;
+      }
+      .table-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+        background-color: white;
+      }
+      .pseudocode-line {
+        padding: 4px 8px;
+        font-family: monospace;
+        font-size: 0.85rem;
+        border-left: 4px solid transparent;
+        transition: all 0.2s;
+      }
+      .pseudocode-line.active {
+        background-color: #fef08a;
+        border-left-color: #eab308;
+        font-weight: bold;
+        color: #854d0e;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+      }
+
+      .dropdown-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        background-color: white;
+        min-width: 200px;
+        box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+        z-index: 50;
+        border-radius: 6px;
+        padding: 8px;
+        border: 1px solid #e5e7eb;
+      }
+      .dropdown:hover .dropdown-content {
+        display: block;
+      }
+
+      /* Resizer Styles */
+      .resizer-h {
+        width: 8px;
+        cursor: col-resize;
+        background-color: #f8fafc;
+        border-left: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
+        flex-shrink: 0;
+        z-index: 30;
+        transition: background-color 0.2s;
+      }
+      .resizer-h:hover,
+      .resizer-h:active {
+        background-color: #cbd5e1;
+      }
+      .resizer-v {
+        height: 8px;
+        cursor: row-resize;
+        background-color: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e2e8f0;
+        flex-shrink: 0;
+        z-index: 30;
+        transition: background-color 0.2s;
+      }
+      .resizer-v:hover,
+      .resizer-v:active {
+        background-color: #cbd5e1;
+      }
+
+      .dragging-h * {
+        cursor: col-resize !important;
+        user-select: none !important;
+      }
+      .dragging-v * {
+        cursor: row-resize !important;
+        user-select: none !important;
+      }
+
+      /* Array visualizer blocks */
+      .array-box {
+        width: 3rem;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: bold;
+        border: 2px solid #9ca3af;
+        border-radius: 0.5rem;
+        background: white;
+        transition: all 0.2s;
+      }
+      .array-box.highlight {
+        border-color: #3b82f6;
+        background-color: #eff6ff;
+        transform: scale(1.05);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- PROBLEM DEFINITIONS & STEP ORACLES ---
+      const ALL_PROBLEMS = [
+        {
+          id: 1,
+          topic: "Linear Search",
+          name: "Linear Search (Target Present)",
+          arr: [12, 5, 8, 2, 7, 10],
+          target: 7,
+          columns: ["idx", "return"],
+          explanation:
+            "Step line-by-line. Blank cells implicitly carry the value down from the row above.",
+          pseudocode: [
+            "01: SUBROUTINE LinearSearch(arr, target)",
+            "02:   FOR idx = 0 TO LEN(arr) - 1",
+            "03:     IF arr[idx] == target THEN",
+            "04:       RETURN idx",
+            "05:     ENDIF",
+            "06:   ENDFOR",
+            "07:   RETURN -1",
+            "08: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+            add(1);
+            for (let idx = 0; idx < p.arr.length; idx++) {
+              s.idx = idx.toString();
+              add(2);
+              add(3);
+              if (p.arr[idx] === p.target) {
+                s["return"] = idx.toString();
+                add(4);
+                return steps;
+              }
+              add(5);
+              add(6);
+            }
+            add(2);
+            s["return"] = "-1";
+            add(7);
+            return steps;
+          },
+        },
+        {
+          id: 2,
+          topic: "Linear Search",
+          name: "Linear Search (Target Absent)",
+          arr: [4, 9, 2, 1, 6],
+          target: 5,
+          columns: ["idx", "return"],
+          explanation:
+            "Target is absent. Ensure you reach the final return statement.",
+          pseudocode: [
+            "01: SUBROUTINE LinearSearch(arr, target)",
+            "02:   FOR idx = 0 TO LEN(arr) - 1",
+            "03:     IF arr[idx] == target THEN",
+            "04:       RETURN idx",
+            "05:     ENDIF",
+            "06:   ENDFOR",
+            "07:   RETURN -1",
+            "08: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+            add(1);
+            for (let idx = 0; idx < p.arr.length; idx++) {
+              s.idx = idx.toString();
+              add(2);
+              add(3);
+              add(5);
+              add(6);
+            }
+            add(2);
+            s["return"] = "-1";
+            add(7);
+            return steps;
+          },
+        },
+        {
+          id: 3,
+          topic: "Binary Search",
+          name: "Binary Search Iterative (Present)",
+          arr: [2, 5, 8, 12, 16, 23, 38, 56, 72, 91],
+          target: 23,
+          columns: ["low", "high", "mid", "return"],
+          explanation:
+            "Remember AQA uses integer division (DIV). mid = (low + high) DIV 2.",
+          pseudocode: [
+            "01: SUBROUTINE BinarySearch(arr, target)",
+            "02:   low = 0",
+            "03:   high = LEN(arr) - 1",
+            "04:   WHILE low <= high",
+            "05:     mid = (low + high) DIV 2",
+            "06:     IF arr[mid] == target THEN",
+            "07:       RETURN mid",
+            "08:     ELSE IF arr[mid] > target THEN",
+            "09:       high = mid - 1",
+            "10:     ELSE",
+            "11:       low = mid + 1",
+            "12:     ENDIF",
+            "13:   ENDWHILE",
+            "14:   RETURN -1",
+            "15: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+            add(1);
+            let low = 0;
+            s.low = low.toString();
+            add(2);
+            let high = p.arr.length - 1;
+            s.high = high.toString();
+            add(3);
+            while (low <= high) {
+              add(4);
+              let mid = Math.floor((low + high) / 2);
+              s.mid = mid.toString();
+              add(5);
+              add(6);
+              if (p.arr[mid] === p.target) {
+                s["return"] = mid.toString();
+                add(7);
+                return steps;
+              }
+              add(8);
+              if (p.arr[mid] > p.target) {
+                high = mid - 1;
+                s.high = high.toString();
+                add(9);
+              } else {
+                add(10);
+                low = mid + 1;
+                s.low = low.toString();
+                add(11);
+              }
+              add(12);
+              add(13);
+            }
+            add(4);
+            s["return"] = "-1";
+            add(14);
+            return steps;
+          },
+        },
+        {
+          id: 4,
+          topic: "Binary Search",
+          name: "Binary Search Iterative (Absent)",
+          arr: [2, 5, 8, 12, 16, 23, 38, 56, 72, 91],
+          target: 20,
+          columns: ["low", "high", "mid", "return"],
+          explanation:
+            "Trace until low becomes greater than high, triggering the exit condition.",
+          pseudocode: [
+            "01: SUBROUTINE BinarySearch(arr, target)",
+            "02:   low = 0",
+            "03:   high = LEN(arr) - 1",
+            "04:   WHILE low <= high",
+            "05:     mid = (low + high) DIV 2",
+            "06:     IF arr[mid] == target THEN RETURN mid",
+            "07:     ELSE IF arr[mid] > target THEN high = mid - 1",
+            "08:     ELSE low = mid + 1",
+            "09:     ENDIF",
+            "10:   ENDWHILE",
+            "11:   RETURN -1",
+            "12: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+            add(1);
+            let low = 0;
+            s.low = low.toString();
+            add(2);
+            let high = p.arr.length - 1;
+            s.high = high.toString();
+            add(3);
+            while (low <= high) {
+              add(4);
+              let mid = Math.floor((low + high) / 2);
+              s.mid = mid.toString();
+              add(5);
+              add(6);
+              if (p.arr[mid] > p.target) {
+                high = mid - 1;
+                s.high = high.toString();
+                add(7);
+              } else {
+                low = mid + 1;
+                s.low = low.toString();
+                add(8);
+              }
+              add(9);
+              add(10);
+            }
+            add(4);
+            s["return"] = "-1";
+            add(11);
+            return steps;
+          },
+        },
+        {
+          id: 5,
+          topic: "Binary Search",
+          name: "Binary Search Recursive (Present)",
+          arr: [3, 7, 15, 22, 33, 42, 55, 61],
+          target: 42,
+          columns: ["call_number", "low", "high", "mid", "return"],
+          explanation:
+            "When returning from a recursive call, local variables revert to the previous call's state. You MUST write these restored values on a new row in your trace table to acknowledge the scope change!",
+          pseudocode: [
+            "01: SUBROUTINE BinarySearch(arr, target, low, high)",
+            "02:   IF low > high THEN RETURN -1",
+            "03:   mid = (low + high) DIV 2",
+            "04:   IF arr[mid] == target THEN",
+            "05:     RETURN mid",
+            "06:   ELSE IF arr[mid] > target THEN",
+            "07:     RETURN BinarySearch(arr, target, low, mid - 1)",
+            "08:   ELSE",
+            "09:     RETURN BinarySearch(arr, target, mid + 1, high)",
+            "10:   ENDIF",
+            "11: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            let callCount = 0;
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+
+            function bs(l, h) {
+              callCount++;
+              let myCall = callCount.toString();
+              s.call_number = myCall;
+              s.low = l.toString();
+              s.high = h.toString();
+
+              add(1);
+              add(2);
+              if (l > h) {
+                s["return"] = "-1";
+                add(2);
+                return "-1";
+              }
+
+              let m = Math.floor((l + h) / 2);
+              s.mid = m.toString();
+              add(3);
+              add(4);
+              if (p.arr[m] === p.target) {
+                s["return"] = m.toString();
+                add(5);
+                return m.toString();
+              }
+
+              add(6);
+              let res;
+              if (p.arr[m] > p.target) {
+                add(7);
+                let saved = { ...s };
+                res = bs(l, m - 1);
+                s = { ...saved };
+                s["return"] = res;
+                add(7);
+                return res;
+              } else {
+                add(8);
+                add(9);
+                let saved = { ...s };
+                res = bs(m + 1, h);
+                s = { ...saved };
+                s["return"] = res;
+                add(9);
+                return res;
+              }
+            }
+            bs(0, p.arr.length - 1);
+            return steps;
+          },
+        },
+        {
+          id: 6,
+          topic: "Bubble Sort",
+          name: "Bubble Sort (Unoptimized)",
+          arr: [5, 2, 8, 1],
+          target: null,
+          columns: [
+            "pass",
+            "idx",
+            "temp",
+            "arr[0]",
+            "arr[1]",
+            "arr[2]",
+            "arr[3]",
+          ],
+          explanation:
+            "Trace line-by-line. Empty cells imply no change from above.",
+          pseudocode: [
+            "01: SUBROUTINE BubbleSort(arr)",
+            "02:   FOR pass = 1 TO LEN(arr) - 1",
+            "03:     FOR idx = 0 TO LEN(arr) - 2",
+            "04:       IF arr[idx] > arr[idx+1] THEN",
+            "05:         temp = arr[idx]",
+            "06:         arr[idx] = arr[idx+1]",
+            "07:         arr[idx+1] = temp",
+            "08:       ENDIF",
+            "09:     ENDFOR",
+            "10:   ENDFOR",
+            "11: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+            for (let i = 0; i < p.arr.length; i++)
+              s[`arr[${i}]`] = p.arr[i].toString();
+            add(1);
+            let arr = [...p.arr];
+            for (let pass = 1; pass < arr.length; pass++) {
+              s.pass = pass.toString();
+              add(2);
+              for (let idx = 0; idx < arr.length - 1; idx++) {
+                s.idx = idx.toString();
+                add(3);
+                add(4);
+                if (arr[idx] > arr[idx + 1]) {
+                  s.temp = arr[idx].toString();
+                  add(5);
+                  arr[idx] = arr[idx + 1];
+                  s[`arr[${idx}]`] = arr[idx].toString();
+                  add(6);
+                  arr[idx + 1] = parseInt(s.temp);
+                  s[`arr[${idx + 1}]`] = s.temp;
+                  add(7);
+                }
+                add(8);
+                add(9);
+              }
+              add(10);
+            }
+            add(11);
+            return steps;
+          },
+        },
+        {
+          id: 7,
+          topic: "Bubble Sort",
+          name: "Bubble Sort (Optimized w/ Flag)",
+          arr: [3, 1, 4, 5, 6],
+          target: null,
+          columns: [
+            "swapped",
+            "pass",
+            "idx",
+            "temp",
+            "arr[0]",
+            "arr[1]",
+            "arr[2]",
+            "arr[3]",
+            "arr[4]",
+          ],
+          explanation:
+            "Optimized bubble sort stops early if an entire pass happens with swapped = False.",
+          pseudocode: [
+            "01: SUBROUTINE BubbleSort(arr)",
+            "02:   swapped = True",
+            "03:   pass = 1",
+            "04:   WHILE swapped == True AND pass < LEN(arr)",
+            "05:     swapped = False",
+            "06:     FOR idx = 0 TO LEN(arr) - pass - 1",
+            "07:       IF arr[idx] > arr[idx+1] THEN",
+            "08:         temp = arr[idx]",
+            "09:         arr[idx] = arr[idx+1]",
+            "10:         arr[idx+1] = temp",
+            "11:         swapped = True",
+            "12:       ENDIF",
+            "13:     ENDFOR",
+            "14:     pass = pass + 1",
+            "15:   ENDWHILE",
+            "16: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+            for (let i = 0; i < p.arr.length; i++)
+              s[`arr[${i}]`] = p.arr[i].toString();
+            add(1);
+            s.swapped = "TRUE";
+            add(2);
+            s.pass = "1";
+            add(3);
+            let arr = [...p.arr];
+            let swapped = true;
+            let pass = 1;
+            while (swapped && pass < arr.length) {
+              add(4);
+              swapped = false;
+              s.swapped = "FALSE";
+              add(5);
+              for (let idx = 0; idx < arr.length - pass; idx++) {
+                s.idx = idx.toString();
+                add(6);
+                add(7);
+                if (arr[idx] > arr[idx + 1]) {
+                  s.temp = arr[idx].toString();
+                  add(8);
+                  arr[idx] = arr[idx + 1];
+                  s[`arr[${idx}]`] = arr[idx].toString();
+                  add(9);
+                  arr[idx + 1] = parseInt(s.temp);
+                  s[`arr[${idx + 1}]`] = s.temp;
+                  add(10);
+                  swapped = true;
+                  s.swapped = "TRUE";
+                  add(11);
+                }
+                add(12);
+                add(13);
+              }
+              pass++;
+              s.pass = pass.toString();
+              add(14);
+              add(15);
+            }
+            add(4);
+            add(16);
+            return steps;
+          },
+        },
+        {
+          id: 8,
+          topic: "Merge Sort",
+          name: "Merge Sort (8 items, Power of 2)",
+          arr: [5, 2, 8, 1, 9, 3, 7, 4],
+          target: null,
+          columns: ["call_number", "arr", "mid", "Left", "Right", "return"],
+          explanation:
+            "Trace the recursive calls line-by-line. 'arr' is the list passed into the current call. When returning, local variables revert to the previous call's state! Format lists like [5, 2].",
+          pseudocode: [
+            "01: SUBROUTINE MergeSort(arr)",
+            "02:   IF LEN(arr) <= 1 THEN RETURN arr",
+            "03:   mid = LEN(arr) DIV 2",
+            "04:   Left = MergeSort(arr[0 TO mid-1])",
+            "05:   Right = MergeSort(arr[mid TO LEN(arr)-1])",
+            "06:   RETURN Merge(Left, Right)",
+            "07: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            let callCount = 0;
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+
+            function ms(arr) {
+              callCount++;
+              let myCall = callCount.toString();
+              s.call_number = myCall;
+              s.arr = `[${arr.join(", ")}]`;
+
+              add(1);
+              add(2);
+              if (arr.length <= 1) {
+                s["return"] = `[${arr.join(", ")}]`;
+                add(2);
+                return arr;
+              }
+
+              let mid = Math.floor(arr.length / 2);
+              s.mid = mid.toString();
+              add(3);
+
+              add(4);
+              let savedLeft = { ...s };
+              let leftRes = ms(arr.slice(0, mid));
+              s = { ...savedLeft };
+              s.Left = `[${leftRes.join(", ")}]`;
+              add(4);
+
+              add(5);
+              let savedRight = { ...s };
+              let rightRes = ms(arr.slice(mid));
+              s = { ...savedRight };
+              s.Right = `[${rightRes.join(", ")}]`;
+              add(5);
+
+              add(6);
+              let merged = [];
+              let i = 0,
+                j = 0;
+              while (i < leftRes.length && j < rightRes.length) {
+                if (leftRes[i] <= rightRes[j]) merged.push(leftRes[i++]);
+                else merged.push(rightRes[j++]);
+              }
+              while (i < leftRes.length) merged.push(leftRes[i++]);
+              while (j < rightRes.length) merged.push(rightRes[j++]);
+
+              s["return"] = `[${merged.join(", ")}]`;
+              add(6);
+              return merged;
+            }
+            ms(p.arr);
+            return steps;
+          },
+        },
+        {
+          id: 9,
+          topic: "Merge Sort",
+          name: "Merge Sort (9 items, Odd Length)",
+          arr: [5, 2, 8, 1, 9, 3, 7, 4, 6],
+          target: null,
+          columns: ["call_number", "arr", "mid", "Left", "Right", "return"],
+          explanation:
+            "CRITICAL: AQA bounds standard. mid = 9 DIV 2 = 4. Left is index 0 TO 3 (Length 4). Right is index 4 TO 8 (Length 5).",
+          pseudocode: [
+            "01: SUBROUTINE MergeSort(arr)",
+            "02:   IF LEN(arr) <= 1 THEN RETURN arr",
+            "03:   mid = LEN(arr) DIV 2",
+            "04:   Left = MergeSort(arr[0 TO mid-1])",
+            "05:   Right = MergeSort(arr[mid TO LEN(arr)-1])",
+            "06:   RETURN Merge(Left, Right)",
+            "07: ENDSUBROUTINE",
+          ],
+          generateSteps: (p) => {
+            let steps = [];
+            let s = {};
+            let callCount = 0;
+            const add = (l) => steps.push({ line: l, state: { ...s } });
+
+            function ms(arr) {
+              callCount++;
+              let myCall = callCount.toString();
+              s.call_number = myCall;
+              s.arr = `[${arr.join(", ")}]`;
+
+              add(1);
+              add(2);
+              if (arr.length <= 1) {
+                s["return"] = `[${arr.join(", ")}]`;
+                add(2);
+                return arr;
+              }
+
+              let mid = Math.floor(arr.length / 2);
+              s.mid = mid.toString();
+              add(3);
+
+              add(4);
+              let savedLeft = { ...s };
+              let leftRes = ms(arr.slice(0, mid));
+              s = { ...savedLeft };
+              s.Left = `[${leftRes.join(", ")}]`;
+              add(4);
+
+              add(5);
+              let savedRight = { ...s };
+              let rightRes = ms(arr.slice(mid));
+              s = { ...savedRight };
+              s.Right = `[${rightRes.join(", ")}]`;
+              add(5);
+
+              add(6);
+              let merged = [];
+              let i = 0,
+                j = 0;
+              while (i < leftRes.length && j < rightRes.length) {
+                if (leftRes[i] <= rightRes[j]) merged.push(leftRes[i++]);
+                else merged.push(rightRes[j++]);
+              }
+              while (i < leftRes.length) merged.push(leftRes[i++]);
+              while (j < rightRes.length) merged.push(rightRes[j++]);
+
+              s["return"] = `[${merged.join(", ")}]`;
+              add(6);
+              return merged;
+            }
+            ms(p.arr);
+            return steps;
+          },
+        },
+      ];
+
+      // --- MAIN APP COMPONENT ---
+      function App() {
+        // Configuration State
+        const [selectedTopics, setSelectedTopics] = useState([
+          "Linear Search",
+          "Binary Search",
+          "Bubble Sort",
+          "Merge Sort",
+        ]);
+        const [activeProblem, setActiveProblem] = useState(ALL_PROBLEMS[0]);
+
+        // Simulation State
+        const [oracle, setOracle] = useState([]);
+        const [userTable, setUserTable] = useState([]);
+        const [currentStepIdx, setCurrentStepIdx] = useState(0);
+        const [isDone, setIsDone] = useState(false);
+        const [feedback, setFeedback] = useState({
+          type: "info",
+          msg: "Welcome. Read the explanation and start tracing line-by-line.",
+        });
+        const pseudocodeRef = useRef(null);
+
+        // Resizing State
+        const [leftWidth, setLeftWidth] = useState(33.33);
+        const [topHeight, setTopHeight] = useState(40);
+
+        const startHorizDrag = (e) => {
+          e.preventDefault();
+          document.body.classList.add("dragging-h");
+          const onMouseMove = (moveEvent) =>
+            setLeftWidth(
+              Math.max(
+                20,
+                Math.min((moveEvent.clientX / window.innerWidth) * 100, 80),
+              ),
+            );
+          const onMouseUp = () => {
+            document.body.classList.remove("dragging-h");
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          };
+          document.addEventListener("mousemove", onMouseMove);
+          document.addEventListener("mouseup", onMouseUp);
+        };
+
+        const startVertDrag = (e) => {
+          e.preventDefault();
+          document.body.classList.add("dragging-v");
+          const leftPane = document.getElementById("left-pane-container");
+          if (!leftPane) return;
+          const rect = leftPane.getBoundingClientRect();
+          const onMouseMove = (moveEvent) =>
+            setTopHeight(
+              Math.max(
+                15,
+                Math.min(
+                  ((moveEvent.clientY - rect.top) / rect.height) * 100,
+                  85,
+                ),
+              ),
+            );
+          const onMouseUp = () => {
+            document.body.classList.remove("dragging-v");
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          };
+          document.addEventListener("mousemove", onMouseMove);
+          document.addEventListener("mouseup", onMouseUp);
+        };
+
+        const ensureBlankRow = (tableData) => {
+          let lastRow = tableData[tableData.length - 1];
+          let isEmpty = true;
+          for (let key in lastRow) {
+            if (lastRow[key] && String(lastRow[key]).trim() !== "")
+              isEmpty = false;
+          }
+          if (!isEmpty) {
+            let nextRow = {};
+            activeProblem.columns.forEach((c) => (nextRow[c] = ""));
+            return [...tableData, nextRow];
+          }
+          return [...tableData];
+        };
+
+        useEffect(() => {
+          const generatedSteps = activeProblem.generateSteps(activeProblem);
+          setOracle(generatedSteps);
+
+          let initRow = {};
+          activeProblem.columns.forEach((col) => {
+            initRow[col] = generatedSteps[0]?.state[col] || "";
+          });
+
+          setUserTable(ensureBlankRow([initRow]));
+          setCurrentStepIdx(0);
+          setIsDone(false);
+          setFeedback({
+            type: "info",
+            msg: "Trace started. The highlighted line is currently executing. Click Next Step when table is updated.",
+          });
+        }, [activeProblem]);
+
+        useEffect(() => {
+          if (pseudocodeRef.current) {
+            const activeEl = pseudocodeRef.current.querySelector(".active");
+            if (activeEl)
+              activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, [currentStepIdx]);
+
+        // Handlers
+        const handleCellChange = (rIdx, col, value) => {
+          let newTable = [...userTable];
+          newTable[rIdx] = { ...newTable[rIdx], [col]: value };
+          setUserTable(ensureBlankRow(newTable));
+        };
+
+        const formatForCompare = (str) =>
+          String(str).toUpperCase().replace(/[\s]/g, "");
+
+        // Calculates effective state by reading top-to-bottom
+        const getEffectiveState = (tableData) => {
+          let eff = {};
+          let returnCallNum = undefined;
+
+          for (let row of tableData) {
+            let rowCallNum =
+              row["call_number"] !== undefined &&
+              String(row["call_number"]).trim() !== ""
+                ? String(row["call_number"]).trim()
+                : eff["call_number"];
+
+            for (let key in row) {
+              let val = row[key];
+              if (
+                val !== undefined &&
+                val !== null &&
+                String(val).trim() !== "" &&
+                String(val).trim() !== "..."
+              ) {
+                eff[key] = String(val).trim();
+                if (key === "return") {
+                  // Record the specific call scope where the return was registered
+                  returnCallNum = rowCallNum;
+                }
+              }
+            }
+
+            // CRITICAL FIX: If we change scopes (call_number changes), previous return values must NOT carry over
+            if (
+              eff["return"] !== undefined &&
+              eff["call_number"] !== undefined &&
+              eff["call_number"] !== returnCallNum
+            ) {
+              delete eff["return"];
+              returnCallNum = undefined;
+            }
+          }
+          return eff;
+        };
+
+        const checkStep = () => {
+          if (isDone) return;
+          let eff = getEffectiveState(userTable);
+          let exp = oracle[currentStepIdx].state;
+          let errors = [];
+
+          activeProblem.columns.forEach((col) => {
+            let uVal = formatForCompare(eff[col] || "");
+            let eVal = formatForCompare(exp[col] || "");
+            if (uVal !== eVal) {
+              if (eVal === "")
+                errors.push(`'${col}' should not have a value yet.`);
+              else if (uVal === "")
+                errors.push(`You missed updating '${col}'.`);
+              else errors.push(`'${col}' is incorrect.`);
+            }
+          });
+
+          if (errors.length === 0) {
+            if (currentStepIdx >= oracle.length - 1) {
+              setIsDone(true);
+              setFeedback({
+                type: "success",
+                msg: `Excellent! The algorithm trace is complete.`,
+              });
+            } else {
+              setCurrentStepIdx(currentStepIdx + 1);
+              setFeedback({
+                type: "success",
+                msg: `Correct! Proceeding to the next line.`,
+              });
+            }
+          } else {
+            setFeedback({
+              type: "error",
+              msg: errors[0] + " Please fix the trace table before continuing.",
+            });
+          }
+        };
+
+        const showHint = () => {
+          if (isDone) return;
+          let eff = getEffectiveState(userTable);
+          let exp = oracle[currentStepIdx].state;
+          let diff = {};
+          activeProblem.columns.forEach((col) => {
+            if (
+              formatForCompare(eff[col] || "") !==
+              formatForCompare(exp[col] || "")
+            )
+              diff[col] = exp[col] || "";
+          });
+
+          let newTable = [...userTable];
+          let lastRow = newTable[newTable.length - 1];
+          let isDirty = activeProblem.columns.some(
+            (c) => lastRow[c] && String(lastRow[c]).trim() !== "",
+          );
+
+          let targetRowIdx = isDirty ? newTable.length : newTable.length - 1;
+          if (isDirty) {
+            let nextRow = {};
+            activeProblem.columns.forEach((c) => (nextRow[c] = ""));
+            newTable.push(nextRow);
+          }
+
+          for (let col in diff) newTable[targetRowIdx][col] = diff[col];
+
+          setUserTable(ensureBlankRow(newTable));
+          setFeedback({
+            type: "info",
+            msg: `Hint applied. Table now matches expected state for this line. Click 'Next Step'.`,
+          });
+        };
+
+        const effState = getEffectiveState(userTable);
+
+        // Array Visualizer logic
+        const getArrayVisualizer = () => {
+          if (activeProblem.topic === "Merge Sort") {
+            let currentArrStr = effState["arr"]
+              ? effState["arr"].replace(/\[|\]/g, "")
+              : activeProblem.arr.join(", ");
+            let currentArr = currentArrStr
+              .split(",")
+              .map((x) => x.trim())
+              .filter((x) => x !== "");
+
+            return (
+              <div className="flex gap-2 flex-wrap justify-center">
+                {currentArr.map((val, idx) => (
+                  <div key={idx} className="flex flex-col items-center">
+                    <div className="array-box highlight bg-blue-50 text-blue-800">
+                      {val}
+                    </div>
+                    <span className="text-xs text-gray-400 mt-1">{idx}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          }
+
+          return (
+            <div className="flex gap-2 flex-wrap justify-center">
+              {activeProblem.arr.map((val, idx) => {
+                let highlight = false;
+                let labels = [];
+
+                if (activeProblem.topic.includes("Search")) {
+                  if (
+                    effState["idx"] !== undefined &&
+                    parseInt(effState["idx"]) === idx
+                  ) {
+                    highlight = true;
+                    labels.push("idx");
+                  }
+                  if (
+                    effState["low"] !== undefined &&
+                    parseInt(effState["low"]) === idx
+                  )
+                    labels.push("low");
+                  if (
+                    effState["high"] !== undefined &&
+                    parseInt(effState["high"]) === idx
+                  )
+                    labels.push("high");
+                  if (
+                    effState["mid"] !== undefined &&
+                    parseInt(effState["mid"]) === idx
+                  ) {
+                    highlight = true;
+                    labels.push("mid");
+                  }
+                } else if (activeProblem.topic === "Bubble Sort") {
+                  if (
+                    effState["idx"] !== undefined &&
+                    (parseInt(effState["idx"]) === idx ||
+                      parseInt(effState["idx"]) + 1 === idx)
+                  ) {
+                    highlight = true;
+                    labels.push(
+                      parseInt(effState["idx"]) === idx ? "idx" : "idx+1",
+                    );
+                  }
+                }
+
+                return (
+                  <div key={idx} className="flex flex-col items-center">
+                    <div
+                      className={"array-box " + (highlight ? "highlight" : "")}
+                    >
+                      {val}
+                    </div>
+                    <span className="text-xs text-gray-400 mt-1">{idx}</span>
+                    <div className="h-6 mt-1 flex flex-col items-center">
+                      {labels.map((l) => (
+                        <span
+                          key={l}
+                          className="text-[10px] font-bold text-blue-600 uppercase leading-tight"
+                        >
+                          {l}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        };
+
+        const activeLine = oracle[currentStepIdx]
+          ? oracle[currentStepIdx].line
+          : -1;
+
+        const feedbackClass =
+          "p-4 border-b font-semibold flex items-center shadow-sm z-10 " +
+          (feedback.type === "error"
+            ? "bg-red-50 text-red-700 border-red-200"
+            : feedback.type === "success"
+              ? "bg-green-50 text-green-700 border-green-200"
+              : "bg-blue-50 text-blue-700 border-blue-200");
+
+        return (
+          <div className="flex flex-col h-screen overflow-hidden">
+            {/* TOP NAVBAR */}
+            <header className="bg-white shadow px-6 py-3 flex justify-between items-center z-20 shrink-0">
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">
+                  Search & Sort Algorithm Tracer
+                </h1>
+                <p className="text-sm text-gray-500">
+                  AQA A-Level Computer Science
+                </p>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="dropdown relative">
+                  <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 hover:bg-gray-200">
+                    Filter Topics <span className="ml-2">▼</span>
+                  </button>
+                  <div className="dropdown-content">
+                    {[
+                      "Linear Search",
+                      "Binary Search",
+                      "Bubble Sort",
+                      "Merge Sort",
+                    ].map((topic) => (
+                      <label
+                        key={topic}
+                        className="flex items-center p-2 cursor-pointer hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mr-2"
+                          checked={selectedTopics.includes(topic)}
+                          onChange={() => {
+                            const newTopics = selectedTopics.includes(topic)
+                              ? selectedTopics.filter((t) => t !== topic)
+                              : [...selectedTopics, topic];
+                            if (newTopics.length > 0)
+                              setSelectedTopics(newTopics);
+                          }}
+                        />
+                        {topic}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <select
+                  className="bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded shadow font-semibold hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={activeProblem.id}
+                  onChange={(e) =>
+                    setActiveProblem(
+                      ALL_PROBLEMS.find(
+                        (p) => p.id === parseInt(e.target.value),
+                      ),
+                    )
+                  }
+                >
+                  {ALL_PROBLEMS.filter((p) =>
+                    selectedTopics.includes(p.topic),
+                  ).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </header>
+
+            {/* MAIN CONTENT */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* LEFT PANE */}
+              <div
+                id="left-pane-container"
+                style={{ width: leftWidth + "%", minWidth: "20%" }}
+                className="bg-white flex flex-col relative z-10 shadow-lg shrink-0"
+              >
+                {/* Array Visualizer Panel */}
+                <div
+                  style={{ height: topHeight + "%", minHeight: "15%" }}
+                  className="bg-[#f8fafc] flex flex-col items-center justify-center p-4 relative overflow-hidden shrink-0 border-b"
+                >
+                  <h3 className="absolute top-2 left-4 font-bold text-gray-700 uppercase text-xs tracking-wider opacity-60">
+                    Array Data
+                  </h3>
+                  {activeProblem.target !== null && (
+                    <div className="absolute top-2 right-4 bg-yellow-100 border border-yellow-300 text-yellow-800 px-3 py-1 rounded text-sm font-bold shadow-sm">
+                      Target: {activeProblem.target}
+                    </div>
+                  )}
+                  {effState.call_number && (
+                    <div className="absolute top-12 right-4 bg-purple-100 border border-purple-300 text-purple-800 px-3 py-1 rounded text-sm font-bold shadow-sm">
+                      Call Number: {effState.call_number}
+                    </div>
+                  )}
+
+                  {getArrayVisualizer()}
+                </div>
+
+                {/* Vertical Resizer */}
+                <div
+                  className="resizer-v flex items-center justify-center group"
+                  onMouseDown={startVertDrag}
+                >
+                  <div className="w-8 h-1 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+                </div>
+
+                {/* Pseudocode & Explanation Panel */}
+                <div
+                  className="flex-1 overflow-y-auto bg-white p-4 font-mono text-sm flex flex-col"
+                  ref={pseudocodeRef}
+                >
+                  <div className="bg-blue-50 border-l-4 border-blue-500 p-3 mb-4 text-blue-900 font-sans text-sm rounded-r shadow-sm">
+                    <strong className="block mb-1">Instructor Note:</strong>
+                    {activeProblem.explanation}
+                  </div>
+                  <h3 className="font-bold text-gray-700 mb-2 uppercase text-xs tracking-wider mt-2">
+                    Pseudocode Reference
+                  </h3>
+                  {activeProblem.pseudocode.map((line, i) => (
+                    <div
+                      key={i}
+                      className={
+                        "pseudocode-line " +
+                        (activeLine === i + 1 ? "active" : "")
+                      }
+                      dangerouslySetInnerHTML={{
+                        __html: line.replace(/ /g, "&nbsp;"),
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Horizontal Resizer */}
+              <div
+                className="resizer-h flex flex-col items-center justify-center group"
+                onMouseDown={startHorizDrag}
+              >
+                <div className="w-1 h-8 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+              </div>
+
+              {/* RIGHT PANE: Interactive Trace Table */}
+              <div className="flex-1 flex flex-col bg-white overflow-hidden">
+                {/* Feedback Banner */}
+                <div className={feedbackClass}>
+                  <span className="mr-3 text-xl">
+                    {feedback.type === "error"
+                      ? "❌"
+                      : feedback.type === "success"
+                        ? "✅"
+                        : "ℹ️"}
+                  </span>
+                  <span>{feedback.msg}</span>
+                </div>
+
+                {/* Dynamic Table Area */}
+                <div className="flex-1 overflow-auto p-6 bg-gray-50 pb-32">
+                  <table className="w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden text-sm relative">
+                    <thead className="bg-gray-200 text-gray-700 sticky top-0 z-10 shadow-sm">
+                      <tr>
+                        {activeProblem.columns.map((col) => (
+                          <th
+                            key={col}
+                            className="border p-3 font-semibold tracking-wider text-xs"
+                          >
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userTable.map((row, rIdx) => (
+                        <tr
+                          key={"row-" + rIdx}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          {activeProblem.columns.map((col) => (
+                            <td
+                              key={rIdx + "-" + col}
+                              className="border p-1 bg-white"
+                            >
+                              <input
+                                type="text"
+                                className="table-input"
+                                value={row[col] || ""}
+                                onChange={(e) =>
+                                  handleCellChange(rIdx, col, e.target.value)
+                                }
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Completion State */}
+                  {isDone && (
+                    <div className="mt-8 bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm flex flex-col items-center">
+                      <h3 className="text-xl font-bold text-green-800 mb-2">
+                        🎉 Trace Complete!
+                      </h3>
+                      <p className="text-green-700 mb-6 text-center">
+                        You have successfully traced this algorithm end-to-end.
+                      </p>
+                      <button
+                        onClick={() => {
+                          const currentIdx = ALL_PROBLEMS.findIndex(
+                            (p) => p.id === activeProblem.id,
+                          );
+                          const nextProb =
+                            ALL_PROBLEMS[
+                              (currentIdx + 1) % ALL_PROBLEMS.length
+                            ];
+                          setActiveProblem(nextProb);
+                          if (!selectedTopics.includes(nextProb.topic))
+                            setSelectedTopics([
+                              ...selectedTopics,
+                              nextProb.topic,
+                            ]);
+                        }}
+                        className="px-8 py-3 bg-green-600 text-white rounded font-bold hover:bg-green-700 transition-colors shadow-md"
+                      >
+                        Try Next Scenario
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fixed Action Controls at Bottom */}
+                {!isDone && (
+                  <div className="p-4 bg-white border-t flex gap-4 justify-end shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 shrink-0">
+                    <button
+                      onClick={showHint}
+                      className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-100 font-medium transition-colors shadow-sm"
+                    >
+                      Reveal Step Answer
+                    </button>
+                    <button
+                      onClick={checkStep}
+                      className="px-6 py-2.5 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold shadow transition-colors text-lg"
+                    >
+                      Next Step (Execute Line)
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
