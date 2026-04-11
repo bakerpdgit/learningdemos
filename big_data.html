@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Big Data (4.11.1)</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.development.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f3f4f6;
+      }
+      .interactive-container {
+        min-height: 400px;
+      }
+
+      /* Custom Animation Utilities */
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .animate-fade-in {
+        animation: fade-in 0.3s ease-in-out;
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-5px);
+        }
+        50% {
+          transform: translateX(5px);
+        }
+        75% {
+          transform: translateX(-5px);
+        }
+      }
+      .animate-shake {
+        animation: shake 0.4s ease-in-out;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useRef } = React;
+
+      // --- DATA / SPECIFICATION CONTENT ---
+      const TOPICS = [
+        { id: "def", label: "Definition & Characteristics (3 Vs)" },
+        { id: "proc", label: "Distributed Processing & FP" },
+        { id: "schema", label: "Fact-based Model & Graph Schema" },
+      ];
+
+      const ALL_QUESTIONS = [
+        // Definition & Characteristics
+        {
+          id: "d1",
+          topic: "def",
+          type: "mcq",
+          text: "Which of the following is considered the most difficult aspect of handling Big Data?",
+          options: [
+            "Its massive volume requiring large storage",
+            "The high velocity at which it streams",
+            "Its lack of structure",
+            "The cost of server hardware",
+          ],
+          answer: "Its lack of structure",
+        },
+        {
+          id: "d2",
+          topic: "def",
+          type: "fib",
+          text: "Big Data velocity refers to streaming data where the time to respond is typically measured in ___ to seconds.",
+          firstLetter: "m",
+          answer: "milliseconds",
+        },
+        {
+          id: "d3",
+          topic: "def",
+          type: "ms",
+          text: "Why are relational databases often inappropriate for Big Data? (Select all that apply)",
+          options: [
+            "They cannot be installed on modern servers",
+            "They require data to fit into a strict row-and-column format",
+            "They do not scale well across multiple machines",
+            "They can only store numerical data",
+          ],
+          answer: [
+            "They require data to fit into a strict row-and-column format",
+            "They do not scale well across multiple machines",
+          ],
+        },
+        {
+          id: "d4",
+          topic: "def",
+          type: "fib",
+          text: "Because Big Data often lacks structure, m___ learning techniques are needed to discern patterns and extract useful information.",
+          firstLetter: "m",
+          answer: "machine",
+        },
+        {
+          id: "d5",
+          topic: "def",
+          type: "interactive_3v",
+          text: "Match the 3 Vs of Big Data to their correct definitions.",
+        },
+
+        // Processing & FP
+        {
+          id: "p1",
+          topic: "proc",
+          type: "mcq",
+          text: "Why is functional programming often used as a solution for processing Big Data?",
+          options: [
+            "It automatically converts unstructured data to structured tables",
+            "It makes it easier to write correct and efficient distributed code",
+            "It creates massive relational databases automatically",
+            "It runs entirely on a single server to avoid network lag",
+          ],
+          answer:
+            "It makes it easier to write correct and efficient distributed code",
+        },
+        {
+          id: "p2",
+          topic: "proc",
+          type: "fib",
+          text: "Functional programming supports i___ data structures, meaning they cannot be modified after creation. This makes concurrent processing much safer.",
+          firstLetter: "i",
+          answer: "immutable",
+        },
+        {
+          id: "p3",
+          topic: "proc",
+          type: "fib",
+          text: "A key feature of functional programming is s___, meaning functions do not alter or depend on the hidden state of a system.",
+          firstLetter: "s",
+          answer: "statelessness",
+        },
+        {
+          id: "p4",
+          topic: "proc",
+          type: "fib",
+          text: "Functional languages support h___-order functions, which can take other functions as arguments (like map and reduce) to process data across clusters.",
+          firstLetter: "h",
+          answer: "higher",
+        },
+        {
+          id: "p5",
+          topic: "proc",
+          type: "interactive_dist",
+          text: "Simulation: Process a massive unstructured dataset.",
+        },
+
+        // Schema & Models
+        {
+          id: "s1",
+          topic: "schema",
+          type: "mcq",
+          text: "In a fact-based model for representing Big Data, what does each fact capture?",
+          options: [
+            "An entire database row",
+            "A single piece of information",
+            "A complete relational table",
+            "A primary key for a database",
+          ],
+          answer: "A single piece of information",
+        },
+        {
+          id: "s2",
+          topic: "schema",
+          type: "fib",
+          text: "To capture the structure of a complex dataset and the relationships within it, a g___ schema is frequently used.",
+          firstLetter: "g",
+          answer: "graph",
+        },
+        {
+          id: "s3",
+          topic: "schema",
+          type: "ms",
+          text: "Which of the following are the primary components of a graph schema? (Select all that apply)",
+          options: ["Nodes", "Rows", "Edges", "Properties", "Foreign Keys"],
+          answer: ["Nodes", "Edges", "Properties"],
+        },
+        {
+          id: "s4",
+          topic: "schema",
+          type: "interactive_graph",
+          text: "Map the components of a Graph Schema on the diagram below.",
+        },
+      ];
+
+      // --- UTILS ---
+      const shuffleArray = (array) => {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+
+      const checkFibAnswer = (userRaw, correct, firstLetter) => {
+        const user = userRaw.trim().toLowerCase();
+        const ans = correct.toLowerCase();
+        const fl = firstLetter.toLowerCase();
+        return user === ans || fl + user === ans;
+      };
+
+      // --- COMPONENTS ---
+
+      // 1. Icon Component (Inline SVGs for no external dependency)
+      const Icon = ({ name, className = "w-6 h-6" }) => {
+        const icons = {
+          check: (
+            <svg
+              className={className}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          ),
+          x: (
+            <svg
+              className={className}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          ),
+          chevronDown: (
+            <svg
+              className={className}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          ),
+          filter: (
+            <svg
+              className={className}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+              />
+            </svg>
+          ),
+          database: (
+            <svg
+              className={className}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+              />
+            </svg>
+          ),
+          server: (
+            <svg
+              className={className}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+              />
+            </svg>
+          ),
+          arrowRight: (
+            <svg
+              className={className}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M14 5l7 7m0 0l-7 7m7-7H3"
+              />
+            </svg>
+          ),
+        };
+        return icons[name] || null;
+      };
+
+      // 2. Interactive: 3 Vs Matcher
+      const Interactive3V = ({ onComplete, isSolutionMode }) => {
+        const [selectedDef, setSelectedDef] = useState(null);
+        const [matches, setMatches] = useState({
+          Volume: null,
+          Velocity: null,
+          Variety: null,
+        });
+
+        const defs = [
+          {
+            id: "def1",
+            text: "Streaming data, milliseconds to seconds to respond",
+          },
+          { id: "def2", text: "Too big to fit into a single server" },
+          {
+            id: "def3",
+            text: "Data in many forms such as structured, unstructured, text, multimedia",
+          },
+        ];
+
+        const correctMapping = {
+          Volume: "def2",
+          Velocity: "def1",
+          Variety: "def3",
+        };
+
+        useEffect(() => {
+          if (isSolutionMode) {
+            setMatches({ Volume: "def2", Velocity: "def1", Variety: "def3" });
+          }
+        }, [isSolutionMode]);
+
+        useEffect(() => {
+          if (Object.values(matches).every((v) => v !== null)) {
+            // Check if all correct
+            let correct = true;
+            for (let key in matches) {
+              if (matches[key] !== correctMapping[key]) correct = false;
+            }
+            if (correct && !isSolutionMode) onComplete(true);
+            else if (!correct && !isSolutionMode) onComplete(false); // pass false to indicate attempted but wrong
+          }
+        }, [matches]);
+
+        const handleVClick = (vKey) => {
+          if (isSolutionMode) return;
+          if (selectedDef) {
+            setMatches((prev) => {
+              // remove def from elsewhere if already used
+              let newMatches = { ...prev };
+              for (let k in newMatches) {
+                if (newMatches[k] === selectedDef) newMatches[k] = null;
+              }
+              newMatches[vKey] = selectedDef;
+              return newMatches;
+            });
+            setSelectedDef(null);
+          } else if (matches[vKey]) {
+            // deselect
+            setMatches((prev) => ({ ...prev, [vKey]: null }));
+          }
+        };
+
+        return (
+          <div className="flex flex-col gap-6 w-full animate-fade-in select-none">
+            <p className="text-sm text-gray-600 mb-2">
+              1. Click a definition below to select it.
+              <br />
+              2. Click one of the 'V' boxes to assign it.
+            </p>
+
+            <div className="flex gap-4 mb-4">
+              {defs.map((d) => {
+                // is it used?
+                const usedBy = Object.keys(matches).find(
+                  (k) => matches[k] === d.id,
+                );
+                if (usedBy) return null; // hide if used
+
+                return (
+                  <div
+                    key={d.id}
+                    onClick={() => !isSolutionMode && setSelectedDef(d.id)}
+                    className={`p-3 rounded border-2 cursor-pointer transition-all flex-1 text-sm text-center font-medium
+                                        ${selectedDef === d.id ? "border-blue-500 bg-blue-50 shadow-md transform scale-105" : "border-gray-300 bg-white hover:border-blue-300"}`}
+                  >
+                    {d.text}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-around gap-4">
+              {["Volume", "Velocity", "Variety"].map((v) => (
+                <div
+                  key={v}
+                  onClick={() => handleVClick(v)}
+                  className={`flex-1 min-h-[120px] rounded-lg p-4 border-2 flex flex-col items-center justify-center cursor-pointer transition-all
+                                    ${matches[v] ? "border-green-500 bg-green-50" : selectedDef ? "border-blue-300 border-dashed bg-gray-50 hover:bg-blue-50" : "border-gray-200 bg-gray-50"}
+                                    ${isSolutionMode && matches[v] !== correctMapping[v] ? "!border-red-500 !bg-red-50" : ""}
+                                    ${isSolutionMode && matches[v] === correctMapping[v] ? "!border-green-500 !bg-green-100" : ""}`}
+                >
+                  <h3 className="font-bold text-lg mb-2 text-gray-800">{v}</h3>
+                  {matches[v] && (
+                    <span className="text-sm text-center text-gray-700">
+                      {defs.find((d) => d.id === matches[v]).text}
+                    </span>
+                  )}
+                  {!matches[v] && (
+                    <span className="text-xs text-gray-400">
+                      Click to assign
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      };
+
+      // 3. Interactive: Graph Schema Builder
+      const InteractiveGraph = ({ onComplete, isSolutionMode }) => {
+        const [selectedLabel, setSelectedLabel] = useState(null);
+        const [placements, setPlacements] = useState({
+          node1: null,
+          node2: null,
+          edge: null,
+          prop: null,
+        });
+        const labels = ["Node", "Edge", "Property"];
+
+        const correctLogic = {
+          node1: "Node",
+          node2: "Node",
+          edge: "Edge",
+          prop: "Property",
+        };
+
+        useEffect(() => {
+          if (isSolutionMode) {
+            setPlacements(correctLogic);
+          }
+        }, [isSolutionMode]);
+
+        useEffect(() => {
+          if (
+            placements.node1 &&
+            placements.node2 &&
+            placements.edge &&
+            placements.prop
+          ) {
+            let correct = true;
+            for (let key in placements) {
+              if (placements[key] !== correctLogic[key]) correct = false;
+            }
+            if (correct && !isSolutionMode) onComplete(true);
+            else if (!correct && !isSolutionMode) onComplete(false);
+          }
+        }, [placements]);
+
+        const handleSpotClick = (spotId) => {
+          if (isSolutionMode) return;
+          if (selectedLabel) {
+            setPlacements((prev) => ({ ...prev, [spotId]: selectedLabel }));
+            setSelectedLabel(null);
+          } else {
+            setPlacements((prev) => ({ ...prev, [spotId]: null }));
+          }
+        };
+
+        const Spot = ({ id, x, y, labelText }) => {
+          const val = placements[id];
+          const isCorrect = isSolutionMode && val === correctLogic[id];
+          const isWrong = isSolutionMode && val !== correctLogic[id];
+
+          return (
+            <div
+              onClick={() => handleSpotClick(id)}
+              className={`absolute flex items-center justify-center w-24 h-8 rounded shadow text-xs font-bold cursor-pointer transition-colors border-2 transform -translate-x-1/2 -translate-y-1/2
+                            ${val ? "bg-blue-600 text-white border-blue-700" : "bg-white text-gray-500 border-dashed border-gray-400 hover:border-blue-400"}
+                            ${isCorrect ? "!bg-green-600 !border-green-700" : ""}
+                            ${isWrong ? "!bg-red-600 !border-red-700" : ""}`}
+              style={{ left: `${x}%`, top: `${y}%` }}
+            >
+              {val || labelText}
+            </div>
+          );
+        };
+
+        return (
+          <div className="flex flex-col gap-4 w-full animate-fade-in select-none">
+            <p className="text-sm text-gray-600">
+              Select a label, then click a dashed box on the diagram to assign
+              it.
+            </p>
+
+            <div className="flex gap-2 justify-center mb-2">
+              {labels.map((l) => (
+                <button
+                  key={l}
+                  onClick={() => !isSolutionMode && setSelectedLabel(l)}
+                  className={`px-4 py-2 rounded-full font-bold text-sm transition-transform
+                                    ${selectedLabel === l ? "bg-blue-600 text-white scale-110 shadow" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative w-full max-w-lg mx-auto h-64 border rounded bg-gray-50 flex items-center justify-center overflow-hidden">
+              {/* Background lines / SVG for diagram */}
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                {/* Edge Line */}
+                <line
+                  x1="25%"
+                  y1="50%"
+                  x2="75%"
+                  y2="50%"
+                  stroke="#4B5563"
+                  strokeWidth="4"
+                />
+                {/* Node Circles */}
+                <circle
+                  cx="25%"
+                  cy="50%"
+                  r="40"
+                  fill="#93C5FD"
+                  stroke="#3B82F6"
+                  strokeWidth="3"
+                />
+                <circle
+                  cx="75%"
+                  cy="50%"
+                  r="40"
+                  fill="#93C5FD"
+                  stroke="#3B82F6"
+                  strokeWidth="3"
+                />
+                {/* Property attachment line */}
+                <line
+                  x1="25%"
+                  y1="50%"
+                  x2="25%"
+                  y2="80%"
+                  stroke="#9CA3AF"
+                  strokeWidth="2"
+                  strokeDasharray="5,5"
+                />
+                {/* Property Box */}
+                <rect
+                  x="15%"
+                  y="80%"
+                  width="20%"
+                  height="15%"
+                  rx="4"
+                  fill="#FDE047"
+                  stroke="#EAB308"
+                  strokeWidth="2"
+                />
+              </svg>
+
+              {/* Interactive Placements */}
+              <Spot id="node1" x={25} y={30} labelText="Assign..." />
+              <Spot id="edge" x={50} y={40} labelText="Assign..." />
+              <Spot id="node2" x={75} y={30} labelText="Assign..." />
+              <Spot id="prop" x={25} y={87} labelText="Assign..." />
+            </div>
+          </div>
+        );
+      };
+
+      // 4. Interactive: Distributed Processing Simulation
+      const InteractiveDist = ({ onComplete, isSolutionMode }) => {
+        const [step, setStep] = useState(0);
+
+        useEffect(() => {
+          if (isSolutionMode) {
+            setStep(5); // Show end state immediately
+          }
+        }, [isSolutionMode]);
+
+        useEffect(() => {
+          if (step === 5 && !isSolutionMode) {
+            onComplete(true);
+          }
+        }, [step]);
+
+        return (
+          <div className="flex flex-col gap-4 p-4 border rounded-lg bg-white shadow-sm animate-fade-in w-full min-h-[300px]">
+            <h3 className="font-bold text-lg text-gray-800 border-b pb-2">
+              Big Data Processing Simulation
+            </h3>
+
+            {/* Stage 0/1: Setup & DB Fail */}
+            {step <= 1 && (
+              <div className="flex flex-col items-center gap-6 animate-fade-in">
+                <p className="text-center text-sm">
+                  We have a massive stream of unstructured data. We need to
+                  process it. Let's try using a standard relational database on
+                  a single server first.
+                </p>
+                <div
+                  className={`p-6 rounded-full border-4 ${step === 1 ? "border-red-500 bg-red-100 animate-shake" : "border-gray-400 bg-gray-100"}`}
+                >
+                  <Icon
+                    name="database"
+                    className={`w-16 h-16 ${step === 1 ? "text-red-500" : "text-gray-500"}`}
+                  />
+                </div>
+                {step === 1 && (
+                  <p className="text-red-600 font-bold text-sm">
+                    Error: Server overloaded! Relational databases do not scale
+                    well across multiple machines for unstructured Big Data.
+                  </p>
+                )}
+                <button
+                  onClick={() => (step === 0 ? setStep(1) : setStep(2))}
+                  className={`px-4 py-2 rounded font-bold text-white transition-colors ${step === 0 ? "bg-blue-600 hover:bg-blue-700" : "bg-red-600 hover:bg-red-700"}`}
+                >
+                  {step === 0
+                    ? "Process via Single Server"
+                    : "Switch to Distributed Functional Model"}
+                </button>
+              </div>
+            )}
+
+            {/* Stage 2,3,4,5: Functional Distributed Setup */}
+            {step >= 2 && (
+              <div className="flex flex-col items-center gap-4 animate-fade-in h-full justify-between flex-grow">
+                <p className="text-center text-sm font-medium text-blue-800">
+                  {step === 2 &&
+                    "Setup 3 nodes. We need a way to distribute code easily."}
+                  {step === 3 &&
+                    "Using Higher-order functions (MAP). Data is structured immutably."}
+                  {step === 4 && "Servers process statelessly. Now we REDUCE."}
+                  {step === 5 &&
+                    "Success! Correct and efficient distributed processing achieved."}
+                </p>
+
+                <div className="flex justify-between w-full max-w-md mt-4 relative">
+                  {/* Nodes */}
+                  {[1, 2, 3].map((n) => (
+                    <div key={n} className="flex flex-col items-center z-10">
+                      <div
+                        className={`p-3 rounded-full border-2 mb-2 transition-colors duration-500
+                                            ${step >= 2 ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-gray-50"}
+                                            ${step === 4 ? "border-green-500 bg-green-100" : ""}`}
+                      >
+                        <Icon
+                          name="server"
+                          className={`w-8 h-8 ${step >= 2 ? "text-blue-600" : "text-gray-400"} ${step === 4 ? "text-green-600" : ""}`}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-500">
+                        Node {n}
+                      </span>
+                      {/* Data chunk indicator */}
+                      <div
+                        className={`mt-2 w-6 h-6 rounded text-xs flex items-center justify-center text-white font-bold transition-all duration-700
+                                            ${step < 3 ? "opacity-0 translate-y-[-20px]" : "opacity-100 translate-y-0"}
+                                            ${step >= 3 ? "bg-indigo-500" : ""}
+                                            ${step >= 5 ? "opacity-0" : ""}`}
+                      >
+                        D{n}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Final Output Box */}
+                  <div
+                    className={`absolute bottom-[-60px] left-1/2 transform -translate-x-1/2 flex items-center justify-center w-32 h-10 bg-green-500 rounded text-white font-bold transition-all duration-700
+                                    ${step === 5 ? "opacity-100 scale-100" : "opacity-0 scale-50 pointer-events-none"}`}
+                  >
+                    Result Aggregated
+                  </div>
+                </div>
+
+                <div className="mt-16">
+                  {step === 2 && (
+                    <button
+                      onClick={() => setStep(3)}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700 shadow"
+                    >
+                      Apply MAP Function (Distribute)
+                    </button>
+                  )}
+                  {step === 3 && (
+                    <button
+                      onClick={() => setStep(4)}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700 shadow"
+                    >
+                      Process Statelessly
+                    </button>
+                  )}
+                  {step === 4 && (
+                    <button
+                      onClick={() => setStep(5)}
+                      className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow"
+                    >
+                      Apply REDUCE Function (Aggregate)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- MAIN APP ---
+      const App = () => {
+        const [selectedTopics, setSelectedTopics] = useState(
+          TOPICS.map((t) => t.id),
+        );
+        const [filterOpen, setFilterOpen] = useState(false);
+
+        const [usedQuestions, setUsedQuestions] = useState([]);
+        const [currentQ, setCurrentQ] = useState(null);
+        const [options, setOptions] = useState([]); // for mcq/ms
+
+        const [userAnswer, setUserAnswer] = useState(null);
+        const [status, setStatus] = useState("idle"); // idle, correct, incorrect, solution
+
+        // Init & Question Selection
+        const pickNextQuestion = (
+          topics = selectedTopics,
+          used = usedQuestions,
+        ) => {
+          let pool = ALL_QUESTIONS.filter((q) => topics.includes(q.topic));
+          if (pool.length === 0) return null;
+
+          let available = pool.filter((q) => !used.includes(q.id));
+
+          // If all used in current filter, reset used for these topics
+          if (available.length === 0) {
+            const activeIds = pool.map((q) => q.id);
+            const newUsed = used.filter((id) => !activeIds.includes(id));
+            setUsedQuestions(newUsed);
+            available = pool;
+          }
+
+          const next = available[Math.floor(Math.random() * available.length)];
+
+          // Setup question state
+          setCurrentQ(next);
+          setUsedQuestions((prev) => [...prev, next.id]);
+          setUserAnswer(
+            next.type === "ms" ? [] : next.type === "fib" ? "" : null,
+          );
+          setStatus("idle");
+
+          if (next.type === "mcq" || next.type === "ms") {
+            setOptions(shuffleArray(next.options));
+          }
+        };
+
+        // Initial load
+        useEffect(() => {
+          pickNextQuestion();
+        }, []);
+
+        // Handlers
+        const handleApplyFilter = (newTopics) => {
+          if (newTopics.length === 0) {
+            alert("Please select at least one sub-topic.");
+            return;
+          }
+          setSelectedTopics(newTopics);
+          setFilterOpen(false);
+          pickNextQuestion(newTopics, usedQuestions);
+        };
+
+        const handleSubmit = () => {
+          if (currentQ.type === "mcq") {
+            if (!userAnswer) return;
+            setStatus(userAnswer === currentQ.answer ? "correct" : "incorrect");
+          } else if (currentQ.type === "ms") {
+            if (!userAnswer || userAnswer.length === 0) return;
+            const correctAnswers = currentQ.answer;
+            const isRight =
+              userAnswer.length === correctAnswers.length &&
+              userAnswer.every((a) => correctAnswers.includes(a));
+            setStatus(isRight ? "correct" : "incorrect");
+          } else if (currentQ.type === "fib") {
+            if (!userAnswer.trim()) return;
+            const isRight = checkFibAnswer(
+              userAnswer,
+              currentQ.answer,
+              currentQ.firstLetter,
+            );
+            setStatus(isRight ? "correct" : "incorrect");
+          }
+        };
+
+        const handleInteractiveComplete = (success) => {
+          setStatus(success ? "correct" : "incorrect");
+        };
+
+        // Renders
+        const renderFilter = () => {
+          const [tempTopics, setTempTopics] = useState(selectedTopics);
+          useEffect(() => {
+            if (filterOpen) setTempTopics(selectedTopics);
+          }, [filterOpen]);
+
+          const toggle = (id) => {
+            setTempTopics((prev) =>
+              prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+            );
+          };
+
+          return (
+            <div className="relative">
+              <button
+                onClick={() => setFilterOpen(!filterOpen)}
+                className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-md border shadow-sm hover:bg-gray-50 text-sm font-medium text-gray-700"
+              >
+                <Icon name="filter" className="w-4 h-4" /> Topics{" "}
+                <Icon name="chevronDown" className="w-4 h-4" />
+              </button>
+              {filterOpen && (
+                <div className="absolute right-0 mt-2 w-72 bg-white border rounded-md shadow-lg p-4 z-50 animate-fade-in">
+                  <h4 className="font-bold text-sm mb-3 text-gray-800">
+                    Filter Sub-topics
+                  </h4>
+                  <div className="space-y-2 mb-4">
+                    {TOPICS.map((t) => (
+                      <label
+                        key={t.id}
+                        className="flex items-start gap-2 text-sm cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={tempTopics.includes(t.id)}
+                          onChange={() => toggle(t.id)}
+                          className="mt-1 rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-gray-700">{t.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => handleApplyFilter(tempTopics)}
+                    className="w-full bg-blue-600 text-white rounded py-1.5 text-sm font-bold hover:bg-blue-700 transition-colors"
+                  >
+                    Apply & New Question
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const renderQuestionContent = () => {
+          if (!currentQ)
+            return (
+              <div className="p-8 text-center text-gray-500">
+                No questions found for the selected topics.
+              </div>
+            );
+
+          const q = currentQ;
+          const isInteractive = q.type.startsWith("interactive");
+
+          return (
+            <div className="mb-6">
+              <div className="flex gap-2 items-center mb-4">
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded uppercase tracking-wide">
+                  {TOPICS.find((t) => t.id === q.topic)?.label}
+                </span>
+                <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded uppercase tracking-wide">
+                  {q.type === "mcq"
+                    ? "Multiple Choice"
+                    : q.type === "ms"
+                      ? "Select All"
+                      : q.type === "fib"
+                        ? "Fill Blank"
+                        : "Simulation/Diagram"}
+                </span>
+              </div>
+
+              <h2 className="text-xl font-medium text-gray-900 mb-6">
+                {q.text}
+              </h2>
+
+              {/* FIB Handling */}
+              {q.type === "fib" && (
+                <div className="flex items-center gap-2 text-lg">
+                  <span className="font-mono bg-gray-100 px-3 py-2 border rounded font-bold text-blue-800">
+                    {q.firstLetter}
+                  </span>
+                  <input
+                    type="text"
+                    value={userAnswer}
+                    onChange={(e) => setUserAnswer(e.target.value)}
+                    disabled={status === "correct" || status === "solution"}
+                    className="border-2 border-gray-300 rounded px-3 py-2 outline-none focus:border-blue-500 flex-grow font-mono"
+                    placeholder="Type remainder or full word..."
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && status === "idle" && handleSubmit()
+                    }
+                  />
+                </div>
+              )}
+
+              {/* MCQ / MS Handling */}
+              {(q.type === "mcq" || q.type === "ms") && (
+                <div className="space-y-3">
+                  {options.map((opt, i) => {
+                    const isSelected =
+                      q.type === "mcq"
+                        ? userAnswer === opt
+                        : userAnswer.includes(opt);
+                    let optionClass = `flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors `;
+
+                    if (status === "solution") {
+                      const isCorrectOpt =
+                        q.type === "mcq"
+                          ? q.answer === opt
+                          : q.answer.includes(opt);
+                      optionClass += isCorrectOpt
+                        ? "border-green-500 bg-green-50"
+                        : "border-gray-200 opacity-50";
+                    } else if (status === "correct") {
+                      optionClass += isSelected
+                        ? "border-green-500 bg-green-50"
+                        : "border-gray-200 opacity-50";
+                    } else {
+                      optionClass += isSelected
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:bg-gray-50";
+                    }
+
+                    return (
+                      <div
+                        key={i}
+                        className={optionClass}
+                        onClick={() => {
+                          if (status !== "idle" && status !== "incorrect")
+                            return;
+                          if (status === "incorrect") setStatus("idle"); // reset on new click
+                          if (q.type === "mcq") setUserAnswer(opt);
+                          else {
+                            setUserAnswer((prev) =>
+                              prev.includes(opt)
+                                ? prev.filter((x) => x !== opt)
+                                : [...prev, opt],
+                            );
+                          }
+                        }}
+                      >
+                        <div
+                          className={`w-5 h-5 flex items-center justify-center border rounded ${q.type === "mcq" ? "rounded-full" : ""} 
+                                                ${isSelected ? "bg-blue-500 border-blue-500 text-white" : "border-gray-400 bg-white"}`}
+                        >
+                          {isSelected && (
+                            <Icon name="check" className="w-3 h-3" />
+                          )}
+                        </div>
+                        <span className="text-gray-800">{opt}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Interactives */}
+              {q.type === "interactive_3v" && (
+                <Interactive3V
+                  onComplete={handleInteractiveComplete}
+                  isSolutionMode={status === "solution"}
+                />
+              )}
+              {q.type === "interactive_graph" && (
+                <InteractiveGraph
+                  onComplete={handleInteractiveComplete}
+                  isSolutionMode={status === "solution"}
+                />
+              )}
+              {q.type === "interactive_dist" && (
+                <InteractiveDist
+                  onComplete={handleInteractiveComplete}
+                  isSolutionMode={status === "solution"}
+                />
+              )}
+            </div>
+          );
+        };
+
+        const renderFooter = () => {
+          if (!currentQ) return null;
+          const isInteractive = currentQ.type.startsWith("interactive");
+
+          return (
+            <div className="mt-8 border-t pt-4 flex flex-col gap-4">
+              {/* Feedback Banner */}
+              {status === "correct" && (
+                <div className="p-3 bg-green-100 text-green-800 border border-green-300 rounded flex items-center gap-2 animate-fade-in font-medium">
+                  <Icon name="check" /> Excellent! That is correct.
+                </div>
+              )}
+              {status === "incorrect" && (
+                <div className="p-3 bg-red-100 text-red-800 border border-red-300 rounded flex items-center gap-2 animate-fade-in font-medium">
+                  <Icon name="x" /> Incorrect, please try again or view the
+                  solution.
+                </div>
+              )}
+              {status === "solution" && !isInteractive && (
+                <div className="p-3 bg-blue-100 text-blue-800 border border-blue-300 rounded animate-fade-in font-medium">
+                  <span className="block font-bold mb-1">Solution:</span>
+                  {currentQ.type === "fib" ? (
+                    <span>
+                      The correct missing word is:{" "}
+                      <strong>{currentQ.answer}</strong>
+                    </span>
+                  ) : (
+                    <span>The correct answer(s) are highlighted above.</span>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-between items-center">
+                <div>
+                  {status === "incorrect" && (
+                    <button
+                      onClick={() => setStatus("solution")}
+                      className="text-sm font-bold text-gray-500 hover:text-blue-600 underline transition-colors"
+                    >
+                      Show Solution
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  {status === "idle" || status === "incorrect" ? (
+                    !isInteractive ? (
+                      <button
+                        onClick={handleSubmit}
+                        disabled={!userAnswer || userAnswer.length === 0}
+                        className="px-6 py-2 bg-blue-600 text-white rounded font-bold shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Submit Answer
+                      </button>
+                    ) : null /* Interactives trigger submit automatically via onComplete */
+                  ) : (
+                    <button
+                      onClick={() => pickNextQuestion()}
+                      className="px-6 py-2 bg-green-600 text-white rounded font-bold shadow hover:bg-green-700 flex items-center gap-2 animate-fade-in"
+                    >
+                      Next Question{" "}
+                      <Icon name="arrowRight" className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
+            <div className="w-full max-w-3xl bg-white rounded-xl shadow-lg overflow-visible border border-gray-200">
+              {/* Header */}
+              <header className="bg-slate-800 text-white p-5 rounded-t-xl flex justify-between items-center">
+                <div>
+                  <h1 className="text-xl md:text-2xl font-bold">
+                    AQA A Level CS: Big Data
+                  </h1>
+                  <p className="text-sm text-slate-300 mt-1">
+                    Section 4.11.1 Interactive Practice
+                  </p>
+                </div>
+                {renderFilter()}
+              </header>
+
+              {/* Main Content Area */}
+              <main className="p-6 md:p-8 interactive-container flex flex-col justify-between">
+                {renderQuestionContent()}
+                {renderFooter()}
+              </main>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
