@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: Abstraction & Automation</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind config for custom colors/fonts if needed -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              aqa: {
+                light: "#e0f2fe",
+                DEFAULT: "#0ea5e9",
+                dark: "#0369a1",
+              },
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f8fafc;
+      }
+      .node-line {
+        position: absolute;
+        background-color: #cbd5e1;
+        z-index: 0;
+      }
+      .interactive-element {
+        transition: all 0.2s ease-in-out;
+      }
+      .interactive-element:hover {
+        transform: scale(1.02);
+      }
+
+      /* Custom scrollbar for dropdown */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useCallback } = React;
+
+      // --- QUESTION BANK ---
+      const CATEGORIES = [
+        { id: "general", label: "General Abstraction (3.4.1.3)" },
+        {
+          id: "implementing",
+          label: "Implementing Abstraction (3.4.1.4 - 3.4.1.6)",
+        },
+        { id: "data", label: "Data Abstraction (3.4.1.7)" },
+        {
+          id: "decomposition",
+          label: "Decomposition, Comp & Reduction (3.4.1.8 - 3.4.1.10)",
+        },
+        { id: "automation", label: "Automation (3.4.1.11)" },
+      ];
+
+      const QUESTIONS = [
+        // 3.4.1.3 Abstraction
+        {
+          id: "q1",
+          category: "general",
+          type: "fill",
+          text: "Abstraction by {{g}} is a grouping by common characteristics to arrive at a hierarchical relationship of the 'is a kind of' type.",
+          answer: "generalisation",
+          firstLetter: "g",
+        },
+        {
+          id: "q2",
+          category: "general",
+          type: "mcq",
+          text: "Which of the following best describes representational abstraction?",
+          options: [
+            "A representation arrived at by removing unnecessary details.",
+            "Grouping objects by common characteristics into a hierarchy.",
+            "Hiding the specific implementation method of a function.",
+            "Breaking a problem down into smaller, identifiable tasks.",
+          ],
+          answer: 0,
+        },
+        {
+          id: "q3",
+          category: "general",
+          type: "interactive_tube",
+          text: "Representational abstraction removes unnecessary details to solve a problem. If a user just wants to know how many stops are between two stations, click the map that best represents this abstraction.",
+        },
+        {
+          id: "q3b",
+          category: "general",
+          type: "fill",
+          text: "Representational abstraction is a representation arrived at by removing {{u}} details from a problem or model.",
+          answer: "unnecessary",
+          firstLetter: "u",
+        },
+
+        // 3.4.1.4 Information Hiding
+        {
+          id: "q4",
+          category: "implementing",
+          type: "fill",
+          text: "Information hiding is the process of hiding all details of an object that do not contribute to its {{e}} characteristics.",
+          answer: "essential",
+          firstLetter: "e",
+        },
+        {
+          id: "q5",
+          category: "implementing",
+          type: "interactive_car",
+          text: "Information Hiding: Imagine you are modelling a 'Car' object for a driving game. Click to HIDE the details that do NOT contribute to the essential characteristics for the driver (the user interface).",
+        },
+
+        // 3.4.1.5 Procedural Abstraction
+        {
+          id: "q6",
+          category: "implementing",
+          type: "fill",
+          text: "The result of abstracting away the actual values used in any particular computation is a computational pattern or {{m}} - a procedure.",
+          answer: "method",
+          firstLetter: "m",
+        },
+        {
+          id: "q7",
+          category: "implementing",
+          type: "mcq",
+          text: "What does procedural abstraction represent?",
+          options: [
+            "A computational method.",
+            "A data structure.",
+            "A hierarchical categorization.",
+            "A specific mathematical value.",
+          ],
+          answer: 0,
+        },
+
+        // 3.4.1.6 Functional Abstraction
+        {
+          id: "q8",
+          category: "implementing",
+          type: "fill",
+          text: "To get a function requires an abstraction which disregards the particular computation method. This is {{f}} abstraction.",
+          answer: "functional",
+          firstLetter: "f",
+        },
+        {
+          id: "q9",
+          category: "implementing",
+          type: "mcq",
+          text: "What is the key difference between functional abstraction and procedural abstraction?",
+          options: [
+            "Functional abstraction hides the particular computational method, whereas procedural does not.",
+            "Procedural abstraction is for data, functional abstraction is for models.",
+            "Functional abstraction always returns multiple values, procedural returns none.",
+            "There is no difference; they are synonymous.",
+          ],
+          answer: 0,
+        },
+
+        // 3.4.1.7 Data Abstraction
+        {
+          id: "q10",
+          category: "data",
+          type: "fill",
+          text: "Data abstraction enables us to isolate how a compound data object is used from the details of how it is {{c}}.",
+          answer: "constructed",
+          firstLetter: "c",
+        },
+        {
+          id: "q11",
+          category: "data",
+          type: "mcq",
+          text: "If we use a Stack abstract data type in our program, data abstraction means we do NOT need to know:",
+          options: [
+            "Whether it is implemented internally using an array and a pointer, or a linked list.",
+            "That items are added to the top of the stack.",
+            "That items are removed in a Last In First Out (LIFO) order.",
+            "That we use a 'push' operation to add an item.",
+          ],
+          answer: 0,
+        },
+        {
+          id: "q11b",
+          category: "data",
+          type: "fill",
+          text: "Data abstraction hides the details of how data are actually represented, allowing new kinds of data objects to be constructed from {{p}} defined types of data objects.",
+          answer: "previously",
+          firstLetter: "p",
+        },
+
+        // 3.4.1.8 Problem Abstraction/Reduction
+        {
+          id: "q12",
+          category: "decomposition",
+          type: "fill",
+          text: "Problem reduction means details are removed until the problem reduces to one that has {{a}} been solved.",
+          answer: "already",
+          firstLetter: "a",
+        },
+        {
+          id: "q13",
+          category: "decomposition",
+          type: "mcq",
+          text: "What is the primary goal of problem abstraction/reduction?",
+          options: [
+            "To represent a problem in a way that maps to a known, previously solved problem.",
+            "To break a problem down into smaller, parallel executable threads.",
+            "To hide the data structures used from the end user.",
+            "To combine multiple small problems into one large system.",
+          ],
+          answer: 0,
+        },
+
+        // 3.4.1.9 Decomposition
+        {
+          id: "q14",
+          category: "decomposition",
+          type: "fill",
+          text: "Procedural decomposition involves breaking a problem down into sub-problems until each sub-problem accomplishes an {{i}} task.",
+          answer: "identifiable",
+          firstLetter: "i",
+        },
+        {
+          id: "q15",
+          category: "decomposition",
+          type: "interactive_decompose",
+          text: "Procedural Decomposition: Click the complex task blocks to break them down repeatedly until you reach single identifiable tasks (leaf nodes).",
+        },
+
+        // 3.4.1.10 Composition
+        {
+          id: "q16",
+          category: "decomposition",
+          type: "fill",
+          text: "Building data abstractions by combining data objects to form compound data (e.g. creating a tree structure from nodes) is known as {{c}}.",
+          answer: "composition",
+          firstLetter: "c",
+        },
+        {
+          id: "q17",
+          category: "decomposition",
+          type: "mcq",
+          text: "Which of the following is an example of composition abstraction?",
+          options: [
+            "Combining smaller procedures to form a compound procedure.",
+            "Breaking down a main program into sub-routines.",
+            "Removing all geographical details from a transport map.",
+            "Classifying variables into arrays and lists.",
+          ],
+          answer: 0,
+        },
+
+        // 3.4.1.11 Automation
+        {
+          id: "q18",
+          category: "automation",
+          type: "fill",
+          text: "Automation requires putting models into action. This involves creating {{a}} and implementing them in program code.",
+          answer: "algorithms",
+          firstLetter: "a",
+        },
+        {
+          id: "q19",
+          category: "automation",
+          type: "interactive_automation",
+          text: "Automation involves putting models into action. Select the FOUR required steps of automation according to the AQA specification.",
+        },
+        {
+          id: "q20",
+          category: "automation",
+          type: "fill",
+          text: "Computer science is about building clean abstract models of {{m}}, noisy, real world objects or phenomena.",
+          answer: "messy",
+          firstLetter: "m",
+        },
+        {
+          id: "q21",
+          category: "automation",
+          type: "mcq",
+          text: "In order to solve a given problem to the required degree of accuracy, computer scientists build abstract models. To do this they must:",
+          options: [
+            "Determine the minimum amount of detail necessary to model, discarding the rest.",
+            "Include every possible variable and detail from the real world to ensure accuracy.",
+            "Only use numerical data, ignoring all qualitative phenomena.",
+            "Avoid using algorithms until the program code is fully written.",
+          ],
+          answer: 0,
+        },
+      ];
+
+      // --- COMPONENTS ---
+
+      // Icons
+      const FilterIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      );
+      const CheckIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#10b981"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      );
+      const XIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#ef4444"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      );
+      const ChevronDown = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      );
+
+      const Header = ({ selectedCats, setSelectedCats, applyFilters }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const [tempCats, setTempCats] = useState(selectedCats);
+
+        const handleToggle = (id) => {
+          if (tempCats.includes(id)) {
+            setTempCats(tempCats.filter((c) => c !== id));
+          } else {
+            setTempCats([...tempCats, id]);
+          }
+        };
+
+        const handleApply = () => {
+          applyFilters(tempCats);
+          setIsOpen(false);
+        };
+
+        return (
+          <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+            <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center relative">
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold text-slate-800">
+                  AQA A-Level CS
+                </h1>
+                <p className="text-sm text-slate-500">
+                  Abstraction & Automation Interactive
+                </p>
+              </div>
+
+              <div>
+                <button
+                  onClick={() => setIsOpen(!isOpen)}
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  <FilterIcon />
+                  <span className="hidden md:inline">
+                    Topics ({tempCats.length})
+                  </span>
+                  <ChevronDown />
+                </button>
+
+                {isOpen && (
+                  <div className="absolute right-4 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
+                    <div className="p-3 bg-slate-50 border-b border-gray-200 text-sm font-semibold text-slate-700">
+                      Select Subtopics
+                    </div>
+                    <div className="max-h-60 overflow-y-auto p-2">
+                      {CATEGORIES.map((cat) => (
+                        <label
+                          key={cat.id}
+                          className="flex items-start gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 w-4 h-4 text-aqa rounded focus:ring-aqa"
+                            checked={tempCats.includes(cat.id)}
+                            onChange={() => handleToggle(cat.id)}
+                          />
+                          <span className="text-sm text-slate-700">
+                            {cat.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="p-3 border-t border-gray-200 bg-slate-50 flex justify-between items-center">
+                      <button
+                        onClick={() => setTempCats(CATEGORIES.map((c) => c.id))}
+                        className="text-xs text-aqa-dark hover:underline font-medium"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={handleApply}
+                        disabled={tempCats.length === 0}
+                        className="bg-aqa hover:bg-aqa-dark text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Apply Filter
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
+        );
+      };
+
+      const FillInQuestion = ({ question, onAnswer, disabled }) => {
+        const [val, setVal] = useState("");
+
+        // Parse text to find {{letter}}
+        const parts = question.text.split(/\{\{([a-zA-Z0-9])\}\}/);
+
+        const handleSubmit = () => {
+          const normalizedUser = val.trim().toLowerCase();
+          const normalizedTarget = question.answer.toLowerCase();
+          const targetFirstLetter = question.firstLetter.toLowerCase();
+
+          // Allow exact match or match ignoring the provided first letter if user typed it anyway
+          const isCorrect =
+            normalizedUser === normalizedTarget ||
+            targetFirstLetter + normalizedUser === normalizedTarget ||
+            normalizedUser === normalizedTarget.substring(1);
+
+          onAnswer(isCorrect);
+        };
+
+        return (
+          <div className="text-lg text-slate-700 leading-relaxed mb-6">
+            {parts.map((part, i) => {
+              if (i % 2 === 1) {
+                return (
+                  <span key={i} className="inline-flex items-center mx-1">
+                    <span className="bg-slate-200 text-slate-700 font-bold px-2 py-1 rounded-l-md border border-slate-300 border-r-0">
+                      {part}
+                    </span>
+                    <input
+                      type="text"
+                      value={val}
+                      onChange={(e) => setVal(e.target.value)}
+                      disabled={disabled}
+                      className="border border-slate-300 rounded-r-md px-2 py-1 w-32 focus:outline-none focus:ring-2 focus:ring-aqa disabled:bg-slate-50 disabled:text-slate-500"
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && !disabled && handleSubmit()
+                      }
+                      autoFocus
+                    />
+                  </span>
+                );
+              }
+              return <span key={i}>{part}</span>;
+            })}
+            <div className="mt-6">
+              <button
+                onClick={handleSubmit}
+                disabled={disabled || val.trim() === ""}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                Check Answer
+              </button>
+            </div>
+          </div>
+        );
+      };
+
+      const MCQQuestion = ({ question, onAnswer, disabled }) => {
+        const [selected, setSelected] = useState(null);
+
+        // Shuffle options once per question
+        const shuffledOptions = useMemo(() => {
+          const optionsWithIndex = question.options.map((opt, index) => ({
+            text: opt,
+            originalIndex: index,
+          }));
+          // Fisher-Yates shuffle
+          for (let i = optionsWithIndex.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [optionsWithIndex[i], optionsWithIndex[j]] = [
+              optionsWithIndex[j],
+              optionsWithIndex[i],
+            ];
+          }
+          return optionsWithIndex;
+        }, [question.id]);
+
+        const handleSubmit = () => {
+          onAnswer(selected === question.answer);
+        };
+
+        return (
+          <div>
+            <p className="text-lg text-slate-800 font-medium mb-4">
+              {question.text}
+            </p>
+            <div className="flex flex-col gap-3 mb-6">
+              {shuffledOptions.map((opt, i) => (
+                <label
+                  key={i}
+                  className={`flex items-center p-4 border rounded-xl cursor-pointer transition-colors
+                                    ${disabled ? "opacity-75 cursor-not-allowed" : "hover:bg-slate-50"}
+                                    ${selected === opt.originalIndex ? "border-aqa bg-aqa-light/30 ring-1 ring-aqa" : "border-gray-200 bg-white"}`}
+                >
+                  <input
+                    type="radio"
+                    name={`mcq-${question.id}`}
+                    className="w-4 h-4 text-aqa focus:ring-aqa border-gray-300"
+                    checked={selected === opt.originalIndex}
+                    onChange={() => !disabled && setSelected(opt.originalIndex)}
+                    disabled={disabled}
+                  />
+                  <span className="ml-3 text-slate-700">{opt.text}</span>
+                </label>
+              ))}
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={disabled || selected === null}
+              className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              Check Answer
+            </button>
+          </div>
+        );
+      };
+
+      // --- INTERACTIVE DIAGRAM COMPONENTS ---
+
+      const InteractiveTube = ({ question, onAnswer, disabled }) => {
+        const [selected, setSelected] = useState(null);
+
+        const handleSubmit = () => {
+          onAnswer(selected === "abstract");
+        };
+
+        return (
+          <div>
+            <p className="text-lg text-slate-800 mb-4">{question.text}</p>
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              {/* Geographic Map */}
+              <div
+                onClick={() => !disabled && setSelected("geo")}
+                className={`interactive-element cursor-pointer p-4 border-2 rounded-xl bg-white flex flex-col items-center
+                                ${selected === "geo" ? "border-aqa ring-2 ring-aqa ring-offset-2" : "border-gray-200"}
+                                ${disabled ? "opacity-80" : ""}`}
+              >
+                <div className="w-full h-40 bg-slate-50 rounded-lg mb-3 relative overflow-hidden flex items-center justify-center">
+                  {/* Squiggly lines representing geographic reality */}
+                  <svg
+                    width="200"
+                    height="120"
+                    viewBox="0 0 200 120"
+                    className="opacity-70"
+                  >
+                    <path
+                      d="M 10,60 Q 40,20 70,70 T 130,50 T 190,80"
+                      fill="none"
+                      stroke="#ef4444"
+                      strokeWidth="4"
+                    />
+                    <path
+                      d="M 20,20 Q 50,80 100,40 T 180,30"
+                      fill="none"
+                      stroke="#3b82f6"
+                      strokeWidth="4"
+                    />
+                    <circle cx="10" cy="60" r="4" fill="#000" />
+                    <circle cx="70" cy="70" r="4" fill="#000" />
+                    <circle cx="130" cy="50" r="4" fill="#000" />
+                    <circle cx="190" cy="80" r="4" fill="#000" />
+                  </svg>
+                  <div className="absolute bottom-2 right-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                    Geographic Layout
+                  </div>
+                </div>
+                <span className="font-medium text-slate-700">Map A</span>
+              </div>
+
+              {/* Abstract Map */}
+              <div
+                onClick={() => !disabled && setSelected("abstract")}
+                className={`interactive-element cursor-pointer p-4 border-2 rounded-xl bg-white flex flex-col items-center
+                                ${selected === "abstract" ? "border-aqa ring-2 ring-aqa ring-offset-2" : "border-gray-200"}
+                                ${disabled ? "opacity-80" : ""}`}
+              >
+                <div className="w-full h-40 bg-slate-50 rounded-lg mb-3 relative overflow-hidden flex items-center justify-center">
+                  {/* Straight lines representing abstract topology */}
+                  <svg
+                    width="200"
+                    height="120"
+                    viewBox="0 0 200 120"
+                    className="opacity-70"
+                  >
+                    <path
+                      d="M 20,60 L 180,60"
+                      fill="none"
+                      stroke="#ef4444"
+                      strokeWidth="6"
+                    />
+                    <path
+                      d="M 60,20 L 60,100"
+                      fill="none"
+                      stroke="#3b82f6"
+                      strokeWidth="6"
+                    />
+                    <circle
+                      cx="20"
+                      cy="60"
+                      r="5"
+                      fill="#fff"
+                      stroke="#000"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="6"
+                      fill="#fff"
+                      stroke="#000"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="100"
+                      cy="60"
+                      r="5"
+                      fill="#fff"
+                      stroke="#000"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="140"
+                      cy="60"
+                      r="5"
+                      fill="#fff"
+                      stroke="#000"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="180"
+                      cy="60"
+                      r="5"
+                      fill="#fff"
+                      stroke="#000"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="60"
+                      cy="20"
+                      r="5"
+                      fill="#fff"
+                      stroke="#000"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="60"
+                      cy="100"
+                      r="5"
+                      fill="#fff"
+                      stroke="#000"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                  <div className="absolute bottom-2 right-2 bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded">
+                    Topological Layout
+                  </div>
+                </div>
+                <span className="font-medium text-slate-700">Map B</span>
+              </div>
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={disabled || !selected}
+              className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              Check Answer
+            </button>
+          </div>
+        );
+      };
+
+      const InteractiveCar = ({ question, onAnswer, disabled }) => {
+        // true = visible to driver, false = hidden
+        const [visibility, setVisibility] = useState({
+          steering: true,
+          spark: true,
+          brakes: true,
+          fuel: true,
+        });
+
+        const toggle = (key) => {
+          if (disabled) return;
+          setVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+        };
+
+        const handleSubmit = () => {
+          // Correct answer: Steering/Brakes visible. Spark/Fuel hidden.
+          const isCorrect =
+            visibility.steering === true &&
+            visibility.brakes === true &&
+            visibility.spark === false &&
+            visibility.fuel === false;
+          onAnswer(isCorrect);
+        };
+
+        const PartCard = ({ id, label, iconClass }) => (
+          <div
+            onClick={() => toggle(id)}
+            className={`interactive-element cursor-pointer flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all
+                        ${!visibility[id] ? "bg-slate-800 border-slate-800 text-white" : "bg-white border-gray-200 text-slate-700 hover:border-slate-300"}`}
+          >
+            <div className="mb-2 text-2xl">{iconClass}</div>
+            <span className="font-medium text-sm text-center">{label}</span>
+            <span
+              className={`text-xs mt-2 px-2 py-0.5 rounded-full ${!visibility[id] ? "bg-slate-600 text-white" : "bg-green-100 text-green-800"}`}
+            >
+              {visibility[id] ? "Visible to Driver" : "Hidden (Abstracted)"}
+            </span>
+          </div>
+        );
+
+        return (
+          <div>
+            <p className="text-lg text-slate-800 mb-4">{question.text}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <PartCard id="steering" label="Steering Wheel" iconClass="🛞" />
+              <PartCard id="spark" label="Spark Plugs" iconClass="⚡" />
+              <PartCard id="brakes" label="Brake Pedal" iconClass="🛑" />
+              <PartCard id="fuel" label="Fuel Injection Unit" iconClass="⛽" />
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={disabled}
+              className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              Check Answer
+            </button>
+          </div>
+        );
+      };
+
+      const InteractiveDecompose = ({ question, onAnswer, disabled }) => {
+        // Tree state: simple string array of currently expanded node IDs
+        const [expanded, setExpanded] = useState([]);
+
+        const tree = {
+          root: {
+            id: "root",
+            label: "Manage School System",
+            children: ["student", "attendance"],
+          },
+          student: {
+            id: "student",
+            label: "Manage Student",
+            children: ["add_student", "edit_student"],
+          },
+          attendance: {
+            id: "attendance",
+            label: "Record Attendance",
+            children: ["select_class", "mark_register"],
+          },
+        };
+
+        const toggleExpand = (id) => {
+          if (disabled || !tree[id]) return; // disable if not parent or completely disabled
+          if (!expanded.includes(id)) {
+            setExpanded([...expanded, id]);
+          }
+        };
+
+        const handleSubmit = () => {
+          // Correct if all 3 parent nodes are expanded (meaning all 4 leaves are visible)
+          const isCorrect =
+            expanded.includes("root") &&
+            expanded.includes("student") &&
+            expanded.includes("attendance");
+          onAnswer(isCorrect);
+        };
+
+        const renderNode = (nodeId) => {
+          const node = tree[nodeId] || {
+            id: nodeId,
+            label: nodeId.replace("_", " "),
+            children: [],
+          };
+          const isExpanded = expanded.includes(nodeId);
+          const isLeaf = !tree[nodeId];
+
+          if (isExpanded && !isLeaf) {
+            return (
+              <div key={nodeId} className="flex flex-col items-center">
+                <div className="bg-slate-100 text-slate-500 text-sm px-4 py-2 rounded border border-slate-200 mb-4 opacity-60">
+                  {node.label} (Decomposed)
+                </div>
+                <div className="flex gap-4 md:gap-8 relative">
+                  {/* Visual lines */}
+                  <div className="absolute top-[-16px] left-1/4 right-1/4 h-px bg-slate-300"></div>
+                  <div className="absolute top-[-16px] left-1/4 w-px h-4 bg-slate-300"></div>
+                  <div className="absolute top-[-16px] right-1/4 w-px h-4 bg-slate-300"></div>
+
+                  {node.children.map((childId) => renderNode(childId))}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={nodeId} className="flex flex-col items-center">
+              <button
+                onClick={() => toggleExpand(nodeId)}
+                disabled={disabled || isLeaf}
+                className={`interactive-element px-4 py-3 rounded-xl border-2 font-medium shadow-sm transition-all text-center min-w-[120px] max-w-[160px] text-sm
+                                ${isLeaf ? "bg-emerald-50 border-emerald-400 text-emerald-800 cursor-default" : "bg-white border-aqa text-slate-700 hover:bg-aqa-light cursor-pointer"}`}
+              >
+                {isLeaf ? node.label : `Click to decompose:\n${node.label}`}
+              </button>
+            </div>
+          );
+        };
+
+        return (
+          <div className="overflow-x-auto pb-4">
+            <p className="text-lg text-slate-800 mb-6">{question.text}</p>
+            <div className="flex flex-col items-center bg-slate-50 p-6 rounded-xl border border-gray-200 mb-6 min-w-max">
+              {renderNode("root")}
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={disabled}
+              className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              Check Answer
+            </button>
+          </div>
+        );
+      };
+
+      const InteractiveAutomation = ({ question, onAnswer, disabled }) => {
+        const [selected, setSelected] = useState([]);
+
+        const options = [
+          { id: "algo", text: "Creating algorithms" },
+          { id: "hardware", text: "Building physical prototype hardware" },
+          { id: "code", text: "Implementing algorithms in program code" },
+          { id: "data", text: "Implementing models in data structures" },
+          { id: "exec", text: "Executing the code" },
+          { id: "manual", text: "Writing manual testing reports" },
+        ];
+
+        const toggle = (id) => {
+          if (disabled) return;
+          if (selected.includes(id)) {
+            setSelected(selected.filter((item) => item !== id));
+          } else {
+            setSelected([...selected, id]);
+          }
+        };
+
+        const handleSubmit = () => {
+          const correctIds = ["algo", "code", "data", "exec"];
+          const isCorrect =
+            selected.length === 4 &&
+            correctIds.every((id) => selected.includes(id));
+          onAnswer(isCorrect);
+        };
+
+        return (
+          <div>
+            <p className="text-lg text-slate-800 mb-4">{question.text}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+              {options.map((opt) => (
+                <div
+                  key={opt.id}
+                  onClick={() => toggle(opt.id)}
+                  className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center
+                                    ${selected.includes(opt.id) ? "bg-aqa-light/30 border-aqa ring-1 ring-aqa" : "bg-white border-gray-200 hover:border-gray-300"}
+                                    ${disabled && !selected.includes(opt.id) ? "opacity-50" : ""}`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded flex items-center justify-center mr-3 border
+                                    ${selected.includes(opt.id) ? "bg-aqa border-aqa text-white" : "border-gray-300"}`}
+                  >
+                    {selected.includes(opt.id) && (
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="3"
+                          d="M5 13l4 4L19 7"
+                        ></path>
+                      </svg>
+                    )}
+                  </div>
+                  <span className="font-medium text-slate-700">{opt.text}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={disabled}
+              className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              Check Answer
+            </button>
+          </div>
+        );
+      };
+
+      // Main App Component
+      const App = () => {
+        const [selectedCats, setSelectedCats] = useState(
+          CATEGORIES.map((c) => c.id),
+        );
+        const [askedQuestions, setAskedQuestions] = useState([]);
+        const [currentQ, setCurrentQ] = useState(null);
+
+        // Question state
+        const [qStatus, setQStatus] = useState("idle"); // idle | correct | incorrect
+        const [showSolution, setShowSolution] = useState(false);
+
+        // Pool generator
+        const getNextQuestion = useCallback((catsToUse, askedToUse) => {
+          let pool = QUESTIONS.filter((q) => catsToUse.includes(q.category));
+          if (pool.length === 0) return null;
+
+          let unasked = pool.filter((q) => !askedToUse.includes(q.id));
+
+          // If all asked in this pool, reset the asked list for this pool only
+          if (unasked.length === 0) {
+            const poolIds = pool.map((p) => p.id);
+            const newAsked = askedToUse.filter((id) => !poolIds.includes(id));
+            setAskedQuestions(newAsked);
+            unasked = pool;
+          }
+
+          const next = unasked[Math.floor(Math.random() * unasked.length)];
+          return next;
+        }, []);
+
+        // Initial load
+        useEffect(() => {
+          if (!currentQ) {
+            const next = getNextQuestion(selectedCats, askedQuestions);
+            setCurrentQ(next);
+          }
+        }, [currentQ, selectedCats, askedQuestions, getNextQuestion]);
+
+        const handleApplyFilters = (newCats) => {
+          setSelectedCats(newCats);
+          // Reset current question flow
+          setQStatus("idle");
+          setShowSolution(false);
+          setCurrentQ(getNextQuestion(newCats, askedQuestions));
+        };
+
+        const handleAnswer = (isCorrect) => {
+          setQStatus(isCorrect ? "correct" : "incorrect");
+          if (isCorrect) {
+            // Mark as asked if correct
+            if (currentQ && !askedQuestions.includes(currentQ.id)) {
+              setAskedQuestions([...askedQuestions, currentQ.id]);
+            }
+          }
+        };
+
+        const handleNext = () => {
+          setQStatus("idle");
+          setShowSolution(false);
+          setCurrentQ(getNextQuestion(selectedCats, askedQuestions));
+        };
+
+        // Render active question component
+        const renderQuestion = () => {
+          if (!currentQ)
+            return (
+              <div className="p-8 text-center text-slate-500">
+                No questions available for selected filters.
+              </div>
+            );
+
+          const disabled = qStatus === "correct" || showSolution;
+          const props = {
+            key: currentQ.id,
+            question: currentQ,
+            onAnswer: handleAnswer,
+            disabled,
+          };
+
+          switch (currentQ.type) {
+            case "fill":
+              return <FillInQuestion {...props} />;
+            case "mcq":
+              return <MCQQuestion {...props} />;
+            case "interactive_tube":
+              return <InteractiveTube {...props} />;
+            case "interactive_car":
+              return <InteractiveCar {...props} />;
+            case "interactive_decompose":
+              return <InteractiveDecompose {...props} />;
+            case "interactive_automation":
+              return <InteractiveAutomation {...props} />;
+            default:
+              return <div>Unknown question type</div>;
+          }
+        };
+
+        const getSolutionText = () => {
+          if (!currentQ) return "";
+          if (currentQ.type === "fill")
+            return `Correct answer: ${currentQ.firstLetter}${currentQ.answer.substring(1)}`;
+          if (currentQ.type === "mcq")
+            return `Correct answer: ${currentQ.options[currentQ.answer]}`;
+          if (currentQ.type === "interactive_tube")
+            return "Correct answer: Map B (The topological map with straight lines). Representational abstraction removes unnecessary geographical details.";
+          if (currentQ.type === "interactive_car")
+            return "Correct answer: Hide the Spark Plugs and Fuel Injection Unit. A driver only needs essential interface elements like the Steering Wheel and Brake Pedal.";
+          if (currentQ.type === "interactive_decompose")
+            return "Correct answer: Decompose all nodes until you reach 'Add Student', 'Edit Student', 'Select Class', and 'Mark Register'. Decomposition repeatedly breaks problems down until reaching single identifiable tasks.";
+          if (currentQ.type === "interactive_automation")
+            return "Correct answers: Creating algorithms, Implementing algorithms in program code, Implementing models in data structures, Executing the code.";
+          return "";
+        };
+
+        return (
+          <div className="min-h-screen flex flex-col">
+            <Header
+              selectedCats={selectedCats}
+              applyFilters={handleApplyFilters}
+            />
+
+            <main className="flex-grow flex items-start justify-center p-4 md:p-8">
+              <div className="w-full max-w-3xl bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                {/* Progress / Category Tag */}
+                {currentQ && (
+                  <div className="bg-slate-50 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
+                    <span className="text-xs font-bold text-aqa uppercase tracking-wider bg-aqa-light px-2 py-1 rounded">
+                      {
+                        CATEGORIES.find((c) => c.id === currentQ.category)
+                          ?.label
+                      }
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      ID: {currentQ.id}
+                    </span>
+                  </div>
+                )}
+
+                {/* Question Body */}
+                <div className="p-6 md:p-8">{renderQuestion()}</div>
+
+                {/* Feedback Panel */}
+                {(qStatus !== "idle" || showSolution) && (
+                  <div
+                    className={`p-6 border-t ${qStatus === "correct" ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-gray-200"}`}
+                  >
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        {qStatus === "correct" && (
+                          <>
+                            <div className="bg-emerald-100 p-1.5 rounded-full">
+                              <CheckIcon />
+                            </div>
+                            <div>
+                              <span className="font-bold text-emerald-800 block text-lg">
+                                Correct!
+                              </span>
+                              <span className="text-emerald-600 text-sm">
+                                {getSolutionText()}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        {qStatus === "incorrect" && !showSolution && (
+                          <>
+                            <div className="bg-rose-100 p-1.5 rounded-full">
+                              <XIcon />
+                            </div>
+                            <span className="font-bold text-rose-700 text-lg">
+                              Not quite right. Try again!
+                            </span>
+                          </>
+                        )}
+                        {showSolution && qStatus !== "correct" && (
+                          <div className="text-slate-700">
+                            <span className="font-bold block mb-1">
+                              Solution:
+                            </span>
+                            <span className="text-sm bg-white border border-gray-200 px-3 py-2 rounded inline-block">
+                              {getSolutionText()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3 w-full md:w-auto">
+                        {qStatus === "incorrect" && !showSolution && (
+                          <button
+                            onClick={() => setShowSolution(true)}
+                            className="flex-1 md:flex-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors text-sm"
+                          >
+                            Show Solution
+                          </button>
+                        )}
+                        {(qStatus === "correct" || showSolution) && (
+                          <button
+                            onClick={handleNext}
+                            className="flex-1 md:flex-none bg-aqa hover:bg-aqa-dark text-white px-6 py-2 rounded-lg font-bold transition-colors shadow-sm"
+                          >
+                            Next Question &rarr;
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </main>
+
+            <footer className="text-center py-6 text-slate-500 text-sm">
+              Interactive created for AQA A-Level Computer Science (Section
+              3.4.1)
+            </footer>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1528 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: Images & Sound</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+      }
+      .fade-in {
+        animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* Piano key styles */
+      .white-key {
+        fill: white;
+        stroke: #cbd5e1;
+        stroke-width: 1;
+        cursor: pointer;
+        transition: fill 0.1s;
+      }
+      .white-key:hover {
+        fill: #f1f5f9;
+      }
+      .black-key {
+        fill: #1e293b;
+        stroke: #0f172a;
+        stroke-width: 1;
+        cursor: pointer;
+        transition: fill 0.1s;
+      }
+      .black-key:hover {
+        fill: #334155;
+      }
+      .key-active {
+        fill: #818cf8 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- ICONS ---
+      const IconFilter = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+      );
+      const IconCheck = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#16a34a"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      );
+      const IconX = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#dc2626"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      );
+
+      const TOPICS = [
+        "Bitmaps",
+        "Vector Images",
+        "Signals & Data",
+        "File Sizes",
+        "Nyquist's Theorem",
+        "MIDI",
+      ];
+
+      const shuffleArray = (array) => {
+        let newArr = [...array];
+        for (let i = newArr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+        }
+        return newArr;
+      };
+      const cleanString = (str) =>
+        str
+          .toString()
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "");
+
+      // --- QUESTION DATABASE ---
+      const questionsDB = [
+        // === BITMAPS ===
+        {
+          id: "bm_1",
+          topic: "Bitmaps",
+          type: "text",
+          text: "The number of bits stored for each pixel in a bitmap image is known as the c_____ d____.",
+          answerHint: "Two words. First letters: c and d.",
+          check: (ans) =>
+            cleanString(ans) === "colourdepth" ||
+            cleanString(ans) === "colordepth",
+          solution:
+            "Colour depth (or color depth). This determines the maximum number of colours the image can display.",
+        },
+        {
+          id: "bm_2",
+          topic: "Bitmaps",
+          type: "interactive-bitmap-color",
+          text: "Decode the image! A 4x4 bitmap uses a 2-bit colour depth. \nColour Palette: 00 = White, 01 = Red, 10 = Green, 11 = Blue.\n\nBinary stream (Row by row): ",
+          generate: () => {
+            const patterns = [
+              [1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1], // Square ring
+              [0, 3, 3, 0, 3, 0, 0, 3, 3, 0, 0, 3, 0, 3, 3, 0], // Circle
+              [2, 0, 0, 2, 0, 2, 2, 0, 0, 2, 2, 0, 2, 0, 0, 2], // X
+            ];
+            const targetData =
+              patterns[Math.floor(Math.random() * patterns.length)];
+            const targetBinary = targetData
+              .map((val) => val.toString(2).padStart(2, "0"))
+              .join("");
+            const displayBinary = targetBinary.match(/.{1,8}/g).join("  ");
+            return { targetData, displayBinary };
+          },
+          check: (ans, state) =>
+            JSON.stringify(ans) === JSON.stringify(state.targetData),
+          solution: (state) =>
+            `You had to convert each 2-bit pair into the correct colour. The sequence was: ${state.displayBinary}`,
+        },
+
+        // === VECTOR IMAGES ===
+        {
+          id: "vec_1",
+          topic: "Vector Images",
+          type: "interactive-vector",
+          text: "Vector graphics are defined by lists of properties for geometric objects. Adjust the XML properties to perfectly align the solid blue circle with the red target outline.",
+          generate: () => {
+            const target = {
+              cx: Math.floor(Math.random() * 5 + 3) * 10,
+              cy: Math.floor(Math.random() * 5 + 3) * 10,
+              r: Math.floor(Math.random() * 3 + 2) * 10,
+            };
+            return { target, initial: { cx: 20, cy: 20, r: 10 } };
+          },
+          check: (ans, state) =>
+            parseInt(ans.cx) === state.target.cx &&
+            parseInt(ans.cy) === state.target.cy &&
+            parseInt(ans.r) === state.target.r,
+          solution: (state) =>
+            `The target properties were: cx="${state.target.cx}", cy="${state.target.cy}", r="${state.target.r}". Because these are properties, zooming in on vector graphics never causes pixelation.`,
+        },
+        {
+          id: "vec_2",
+          topic: "Vector Images",
+          type: "mcq",
+          text: "Which of the following is a primary ADVANTAGE of using a vector graphic instead of a bitmapped graphic?",
+          generate: () => ({
+            options: shuffleArray([
+              "They scale flawlessly without pixelation.",
+              "They represent photorealistic colours more accurately.",
+              "They use a grid of pixels to represent fine details.",
+              "They process much faster on basic hardware.",
+            ]),
+          }),
+          check: (ans) => ans.includes("scale flawlessly"),
+          solution:
+            "They scale flawlessly without pixelation. Because vector graphics are mathematically defined geometric objects, they are merely recalculated at any size, retaining crisp edges.",
+        },
+        {
+          id: "vec_3",
+          topic: "Vector Images",
+          type: "mcq",
+          text: "In which scenario would a bitmapped graphic be significantly MORE appropriate than a vector graphic?",
+          generate: () => ({
+            options: shuffleArray([
+              "Storing a digital photograph from a camera.",
+              "Designing a company logo that will be printed on billboards and pens.",
+              "Creating architectural CAD (Computer-Aided Design) blueprints.",
+              "Rendering crisp fonts for a website.",
+            ]),
+          }),
+          check: (ans) => ans.includes("digital photograph"),
+          solution:
+            "Storing a digital photograph from a camera. Bitmaps map individual pixels to colours, which is essential for capturing the complex, continuous-tone colour variations found in photographs.",
+        },
+        {
+          id: "vec_4",
+          topic: "Vector Images",
+          type: "mcq",
+          text: "A graphic designer is creating a new logo for a company. The logo needs to be used on small business cards and massive highway billboards. Which format should they use and why?",
+          generate: () => ({
+            options: shuffleArray([
+              "Vector, because it can scale infinitely without loss of quality.",
+              "Bitmap, because it supports millions of colours.",
+              "Vector, because it allows for per-pixel editing.",
+              "Bitmap, because it results in a much smaller file size for large images.",
+            ]),
+          }),
+          check: (ans) =>
+            ans.includes("Vector, because it can scale infinitely"),
+          solution:
+            "Vector, because it can scale infinitely without loss of quality. The properties of the mathematical objects are just multiplied by a scaling factor.",
+        },
+
+        // === SIGNALS & DATA ===
+        {
+          id: "sig_1",
+          topic: "Signals & Data",
+          type: "interactive-adc",
+          text: "Simulation (ADC): We sample the analogue wave at intervals T1, T2, T3, T4. First, click on the EXACT points where the blue wave intersects the 4 vertical dashed interval lines. Then type the 3-bit binary value for the requested sample.",
+          generate: () => {
+            const p1 = Math.random() * Math.PI * 2;
+            const p2 = Math.random() * Math.PI * 2;
+            const getLevel = (x) => {
+              let v = Math.sin(x * 0.025 + p1) + 0.6 * Math.sin(x * 0.04 + p2);
+              return Math.max(0, Math.min(7, ((v + 1.6) / 3.2) * 7));
+            };
+            let path = `M 0 ${240 - (getLevel(0) / 7) * 240}`;
+            for (let x = 1; x <= 400; x += 2) {
+              path += ` L ${x} ${240 - (getLevel(x) / 7) * 240}`;
+            }
+            const intervalsX = [80, 160, 240, 320];
+            const levels = intervalsX.map((x) => Math.round(getLevel(x)));
+            return {
+              path,
+              getLevel,
+              levels,
+              intervalsX,
+              askIndex: Math.floor(Math.random() * 4),
+            };
+          },
+          check: (ans, state) => {
+            if (ans.samplesTaken.length < 4) return false;
+            const targetBinary = state.levels[state.askIndex]
+              .toString(2)
+              .padStart(3, "0");
+            return ans.binaryInput === targetBinary;
+          },
+          solution: (state) => {
+            const targetLevel = state.levels[state.askIndex];
+            const targetBinary = targetLevel.toString(2).padStart(3, "0");
+            return `At T${state.askIndex + 1}, the continuous wave rounds to level ${targetLevel}. In 3-bit binary, ${targetLevel} is ${targetBinary}.`;
+          },
+        },
+        {
+          id: "sig_2",
+          topic: "Signals & Data",
+          type: "interactive-dac",
+          text: "Simulation (DAC): A Digital-to-Analogue Converter reads binary data to reconstruct a stepped analogue signal. Click within the columns on the grid to plot the sample points for this 3-bit digital stream (an 'X' will mark the sample, and the signal level will be held until the next interval):",
+          generate: () => {
+            const levels = Array.from({ length: 4 }, () =>
+              Math.floor(Math.random() * 8),
+            );
+            const binaryStream = levels.map((l) =>
+              l.toString(2).padStart(3, "0"),
+            );
+            return { levels, binaryStream };
+          },
+          check: (ans, state) =>
+            JSON.stringify(ans) === JSON.stringify(state.levels),
+          solution: (state) =>
+            `The binary values represent levels ${state.levels.join(", ")}. The stepped wave holds the amplitude steady for the duration of each sample interval.`,
+        },
+        {
+          id: "sig_3",
+          topic: "Signals & Data",
+          type: "mcq",
+          text: "Which statement correctly describes the fundamental difference between an analogue and a digital signal?",
+          generate: () => ({
+            options: shuffleArray([
+              "Analogue signals are continuous and can take any value in a range, while digital signals are discrete and take specific, quantised values.",
+              "Analogue signals use binary 1s and 0s, while digital signals use continuous electrical voltages.",
+              "Digital signals are always represented by a perfectly smooth sine wave.",
+              "Analogue data cannot be converted into digital data.",
+            ]),
+          }),
+          check: (ans) => ans.includes("continuous and can take any value"),
+          solution:
+            "Analogue signals are continuous (like a smooth wave of voltage), whereas digital signals are discrete and have been quantised into stepped levels.",
+        },
+
+        // === NYQUIST THEOREM ===
+        {
+          id: "nyq_1",
+          topic: "Nyquist's Theorem",
+          type: "interactive-nyquist",
+          text: "Simulation (Nyquist): The blue wave is an analogue signal with a frequency of 5 Hz. Adjust the Sampling Rate slider. If it's too low, the reconstructed samples (red dashed line) will form an entirely different, slower wave (Aliasing). \nTask: Set the slider to the minimum rate required to safely satisfy Nyquist's Theorem, then click Check.",
+          generate: () => ({ targetFreq: 5 }),
+          check: (ans) => ans === 10,
+          solution:
+            "Nyquist's Theorem states the sampling rate must be at least TWICE the highest frequency of the signal. 5 Hz * 2 = 10 Hz minimum.",
+        },
+        {
+          id: "nyq_2",
+          topic: "Nyquist's Theorem",
+          type: "nyquist-diagram-calc",
+          text: "The diagram below shows exactly ONE full cycle (period) of an analogue wave. Calculate the MINIMUM sampling frequency (in Hz) required to digitize this signal according to Nyquist's theorem.",
+          generate: () => {
+            const periods = [0.01, 0.005, 0.02, 0.004, 0.002];
+            const period = periods[Math.floor(Math.random() * periods.length)];
+            const freq = 1 / period;
+            const minSampleFreq = freq * 2;
+            return { period, minSampleFreq };
+          },
+          check: (ans, state) =>
+            parseInt(cleanString(ans)) === state.minSampleFreq,
+          solution: (state) =>
+            `Frequency (f) = 1 / Period (T). \nFirst calculate frequency: f = 1 / ${state.period} = ${1 / state.period} Hz. \nNyquist theorem states the sampling rate must be at least TWICE the highest frequency. \n${1 / state.period} * 2 = ${state.minSampleFreq} Hz.`,
+        },
+
+        // === FILE SIZES ===
+        {
+          id: "fs_1",
+          topic: "File Sizes",
+          type: "text",
+          text: "Calculate the file size in Mebibytes (MiB) for an image that is 2048 x 1024 pixels, supporting 256 colours. (Give answer to 2 decimal places, ignore metadata).",
+          generate: () => ({ ans: (2048 * 1024 * 8) / 8 / 1024 / 1024 }),
+          check: (ans, state) =>
+            parseFloat(ans) === parseFloat(state.ans.toFixed(2)),
+          solution:
+            "Colours = 256, so Colour Depth = log2(256) = 8 bits.\nTotal bits = 2048 x 1024 x 8.\nTotal bytes = (2048 x 1024 x 8) / 8 = 2,097,152 bytes.\nIn MiB = 2,097,152 / 1024 / 1024 = 2.00 MiB.",
+        },
+        {
+          id: "fs_2",
+          topic: "File Sizes",
+          type: "text",
+          text: "A stereo (2 channels) sound is sampled at 40,000 Hz for 5 seconds using a 16-bit resolution. Calculate the file size in Megabytes (MB). (Assume 1 MB = 1,000,000 bytes, give answer to 2 decimal places).",
+          generate: () => {
+            let rate = 40000,
+              res = 16,
+              ch = 2,
+              sec = 5;
+            let bytes = (rate * res * ch * sec) / 8;
+            let mb = bytes / 1000000;
+            return { mb: mb.toFixed(2) };
+          },
+          check: (ans, state) => parseFloat(ans) === parseFloat(state.mb),
+          solution:
+            "Bits per second = 40,000 x 16 x 2 (stereo) = 1,280,000 bits/sec.\nTotal bits for 5s = 6,400,000 bits.\nTotal bytes = 6,400,000 / 8 = 800,000 bytes.\nMegabytes = 800,000 / 1,000,000 = 0.80 MB.",
+        },
+
+        // === MIDI ===
+        {
+          id: "midi_1",
+          topic: "MIDI",
+          type: "interactive-midi",
+          text: "Unlike sampled audio, MIDI files store event messages (instructions) to generate sound. \nTask: Construct the event sequence for a C Major Chord (Notes C, E, G). Click the correct piano keys to add 'Note On' events to your sequence.",
+          generate: () => ({ targetNotes: ["C", "E", "G"] }),
+          check: (ans, state) => {
+            if (ans.length !== 3) return false;
+            const sortedAns = [...ans].sort();
+            const sortedTarget = [...state.targetNotes].sort();
+            return JSON.stringify(sortedAns) === JSON.stringify(sortedTarget);
+          },
+          solution:
+            "MIDI stores data such as Note On, Pitch (C, E, G), Velocity (volume), and Duration. The sequence needed was Note On: C, Note On: E, Note On: G.",
+        },
+        {
+          id: "midi_2",
+          topic: "MIDI",
+          type: "multiselect",
+          text: "Which of the following are advantages of using MIDI over sampled digital audio? (Select ALL that apply)",
+          generate: () => ({
+            options: shuffleArray([
+              "Significantly smaller file size",
+              "Easier to edit individual notes or change pitch/tempo",
+              "Can be easily converted directly to musical notation (a score)",
+              "Can accurately record human speech and acoustic environments",
+              "Requires no processing power to synthesize",
+            ]),
+          }),
+          check: (ans) => {
+            const correctAnswers = [
+              "Significantly smaller file size",
+              "Easier to edit individual notes or change pitch/tempo",
+              "Can be easily converted directly to musical notation (a score)",
+            ];
+            if (ans.length !== correctAnswers.length) return false;
+            return correctAnswers.every((c) => ans.includes(c));
+          },
+          solution:
+            "MIDI files are much smaller, easier to edit (event by event), and map directly to sheet music. They CANNOT easily record human speech or environmental noises, as they only contain instrument instructions.",
+        },
+        {
+          id: "midi_3",
+          topic: "MIDI",
+          type: "mcq",
+          text: "What is the primary advantage of sound sampling (e.g., generating a WAV or MP3 file) compared to MIDI?",
+          generate: () => ({
+            options: shuffleArray([
+              "It can accurately capture complex, real-world sounds like vocals and environmental noise.",
+              "It results in much smaller file sizes.",
+              "It allows for easy editing of individual notes after recording.",
+              "It does not require an ADC (Analogue to Digital Converter).",
+            ]),
+          }),
+          check: (ans) => ans.includes("real-world sounds like vocals"),
+          solution:
+            "Sampled sound captures the actual acoustic waveform, meaning it can record absolutely anything you hear (vocals, speech, nature), whereas MIDI is limited to playing back synthesized instrument events.",
+        },
+      ];
+
+      // --- CUSTOM INTERACTIVE COMPONENTS ---
+
+      const InteractiveNyquistDiagram = ({ qState }) => {
+        return (
+          <div className="flex justify-center my-6">
+            <svg
+              width="400"
+              height="150"
+              className="bg-slate-50 border border-slate-300 rounded shadow-inner"
+            >
+              {/* Draw wave */}
+              <path
+                d="M 50 75 Q 125 -25, 200 75 T 350 75"
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="3"
+              />
+              {/* Center line */}
+              <line
+                x1="20"
+                y1="75"
+                x2="380"
+                y2="75"
+                stroke="#cbd5e1"
+                strokeDasharray="4"
+              />
+              {/* Time interval arrow */}
+              <line
+                x1="50"
+                y1="130"
+                x2="350"
+                y2="130"
+                stroke="#64748b"
+                strokeWidth="2"
+              />
+              <line
+                x1="50"
+                y1="125"
+                x2="50"
+                y2="135"
+                stroke="#64748b"
+                strokeWidth="2"
+              />
+              <line
+                x1="350"
+                y1="125"
+                x2="350"
+                y2="135"
+                stroke="#64748b"
+                strokeWidth="2"
+              />
+              <text
+                x="200"
+                y="120"
+                textAnchor="middle"
+                fill="#475569"
+                className="font-mono text-sm font-bold"
+              >
+                T = {qState.period} seconds
+              </text>
+            </svg>
+          </div>
+        );
+      };
+
+      const InteractiveBitmapColor = ({ qState, value, onChange }) => {
+        const palette = ["#ffffff", "#ef4444", "#22c55e", "#3b82f6"];
+
+        const handleCellClick = (idx) => {
+          const newVal = [...value];
+          newVal[idx] = (newVal[idx] + 1) % 4;
+          onChange(newVal);
+        };
+
+        return (
+          <div className="flex flex-col items-center my-4 space-y-6">
+            <p className="font-mono bg-slate-100 p-3 rounded text-lg tracking-widest font-bold text-indigo-900 border border-slate-200 shadow-inner">
+              {qState.displayBinary}
+            </p>
+            <div className="grid grid-cols-4 gap-1 bg-slate-400 p-1 rounded border border-slate-500">
+              {value.map((colIdx, i) => (
+                <div
+                  key={i}
+                  onClick={() => handleCellClick(i)}
+                  className="w-16 h-16 cursor-pointer hover:opacity-80 transition-colors border border-black/10"
+                  style={{ backgroundColor: palette[colIdx] }}
+                ></div>
+              ))}
+            </div>
+            <div className="flex gap-4 text-sm font-semibold text-slate-600">
+              <div className="flex items-center gap-1">
+                <span className="w-4 h-4 inline-block bg-white border border-slate-300"></span>{" "}
+                00
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-4 h-4 inline-block bg-red-500 border border-slate-300"></span>{" "}
+                01
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-4 h-4 inline-block bg-green-500 border border-slate-300"></span>{" "}
+                10
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-4 h-4 inline-block bg-blue-500 border border-slate-300"></span>{" "}
+                11
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const InteractiveADC = ({ qState, value, onChange }) => {
+        const svgWidth = 400;
+        const svgHeight = 240;
+        const levels = 8;
+        const levelHeight = svgHeight / 7;
+
+        const getY = (lvl) => svgHeight - lvl * levelHeight;
+
+        const handlePointClick = (idx) => {
+          if (!value.samplesTaken[idx]) {
+            const newSamples = [...value.samplesTaken];
+            newSamples[idx] = true;
+            onChange({ ...value, samplesTaken: newSamples });
+          }
+        };
+
+        const allSampled = value.samplesTaken.filter(Boolean).length === 4;
+
+        return (
+          <div className="flex flex-col items-center my-4 space-y-6">
+            <div
+              className="relative border-l-2 border-b-2 border-slate-600 bg-white"
+              style={{ width: svgWidth, height: svgHeight }}
+            >
+              {[...Array(levels)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-full border-t border-dashed border-slate-200"
+                  style={{ top: getY(i) }}
+                >
+                  <span className="absolute -left-8 -top-3 text-xs text-slate-500 font-mono">
+                    {i.toString(2).padStart(3, "0")}
+                  </span>
+                </div>
+              ))}
+
+              <svg
+                className="absolute top-0 left-0"
+                width={svgWidth}
+                height={svgHeight}
+              >
+                <path
+                  d={qState.path}
+                  fill="none"
+                  stroke="#3b82f6"
+                  strokeWidth="3"
+                  opacity="0.8"
+                />
+
+                {qState.intervalsX.map((x, i) => {
+                  const exactWaveY = 240 - (qState.getLevel(x) / 7) * 240;
+                  const isSampled = value.samplesTaken[i];
+                  return (
+                    <g key={i}>
+                      <line
+                        x1={x}
+                        y1="0"
+                        x2={x}
+                        y2={svgHeight}
+                        stroke="#94a3b8"
+                        strokeDasharray="4"
+                      />
+                      <text
+                        x={x - 10}
+                        y={svgHeight - 4}
+                        fontSize="12"
+                        fill="#64748b"
+                        fontWeight="bold"
+                      >
+                        T{i + 1}
+                      </text>
+
+                      {isSampled && (
+                        <circle
+                          cx={x}
+                          cy={getY(qState.levels[i])}
+                          r="6"
+                          fill="#10b981"
+                        />
+                      )}
+
+                      {!isSampled && (
+                        <circle
+                          cx={x}
+                          cy={exactWaveY}
+                          r="14"
+                          fill="#ef4444"
+                          opacity="0.6"
+                          className="cursor-pointer animate-pulse hover:opacity-100"
+                          onClick={() => handlePointClick(i)}
+                        />
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-lg w-full text-center shadow-sm border border-slate-200 min-h-[100px] flex items-center justify-center">
+              {!allSampled ? (
+                <p className="text-slate-700 font-medium">
+                  Click all 4 red intersection points on the wave to sample it.
+                </p>
+              ) : (
+                <div className="fade-in w-full">
+                  <p className="text-indigo-800 font-medium mb-3">
+                    Samples taken and quantised. Look at the green dot at{" "}
+                    <strong className="text-red-600 text-lg">
+                      T{qState.askIndex + 1}
+                    </strong>
+                    . What is its 3-bit binary value?
+                  </p>
+                  <input
+                    type="text"
+                    maxLength="3"
+                    placeholder="000"
+                    value={value.binaryInput}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        binaryInput: e.target.value.replace(/[^01]/g, ""),
+                      })
+                    }
+                    className="border-2 border-indigo-400 text-center text-xl p-2 rounded w-32 font-mono focus:outline-none focus:border-indigo-600 shadow-inner"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const InteractiveDAC = ({ qState, value, onChange }) => {
+        const w = 400;
+        const h = 240;
+        const colWidth = w / 4;
+        const levelHeight = h / 7;
+        const getY = (lvl) => h - lvl * levelHeight;
+
+        const handleColClick = (e, colIdx) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickY = e.clientY - rect.top;
+          let nearestLevel = Math.round((h - clickY) / levelHeight);
+          nearestLevel = Math.max(0, Math.min(7, nearestLevel));
+
+          const newVal = [...value];
+          newVal[colIdx] = nearestLevel;
+          onChange(newVal);
+        };
+
+        return (
+          <div className="flex flex-col items-center my-4 space-y-6">
+            <div className="flex gap-4 font-mono text-xl font-bold text-indigo-900 bg-indigo-50 p-3 rounded border border-indigo-100">
+              {qState.binaryStream.map((bin, i) => (
+                <span
+                  key={i}
+                  className={
+                    value[i] !== -1
+                      ? "opacity-40 line-through"
+                      : "text-blue-600"
+                  }
+                >
+                  {bin}
+                </span>
+              ))}
+            </div>
+
+            <div
+              className="relative border-l-2 border-b-2 border-slate-600 bg-white"
+              style={{ width: w, height: h }}
+            >
+              {[...Array(8)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-full border-t border-dashed border-slate-200"
+                  style={{ top: getY(i) }}
+                >
+                  <span className="absolute -left-8 -top-3 text-xs text-slate-500 font-mono">
+                    {i.toString(2).padStart(3, "0")}
+                  </span>
+                </div>
+              ))}
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="absolute h-full border-l border-dashed border-slate-300 pointer-events-none"
+                  style={{ left: i * colWidth }}
+                ></div>
+              ))}
+
+              <svg
+                className="absolute top-0 left-0 pointer-events-none"
+                width={w}
+                height={h}
+              >
+                {value.map((lvl, i) => {
+                  if (lvl === -1) return null;
+                  const xStart = i * colWidth;
+                  const xEnd = (i + 1) * colWidth;
+                  const y = getY(lvl);
+
+                  return (
+                    <g key={`dac-step-${i}`}>
+                      {/* The 'X' at the sample point */}
+                      <line
+                        x1={xStart - 5}
+                        y1={y - 5}
+                        x2={xStart + 5}
+                        y2={y + 5}
+                        stroke="#ef4444"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1={xStart - 5}
+                        y1={y + 5}
+                        x2={xStart + 5}
+                        y2={y - 5}
+                        stroke="#ef4444"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+
+                      {/* The held value extended 1 unit (colWidth) to the right */}
+                      <line
+                        x1={xStart}
+                        y1={y}
+                        x2={xEnd}
+                        y2={y}
+                        stroke="#ef4444"
+                        strokeWidth="3"
+                      />
+
+                      {/* Vertical jump line connecting to the next step for visual clarity */}
+                      {i < 3 && value[i + 1] !== -1 && (
+                        <line
+                          x1={xEnd}
+                          y1={y}
+                          x2={xEnd}
+                          y2={getY(value[i + 1])}
+                          stroke="#ef4444"
+                          strokeWidth="3"
+                          strokeDasharray="4 4"
+                          opacity="0.4"
+                        />
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+
+              <div className="absolute top-0 left-0 w-full h-full flex">
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="flex-1 h-full cursor-crosshair hover:bg-indigo-50/30 transition-colors"
+                    onClick={(e) => handleColClick(e, i)}
+                  ></div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const InteractiveNyquist = ({ qState, value, onChange }) => {
+        const w = 400;
+        const h = 200;
+        const signalFreq = qState.targetFreq; // 5Hz
+        const phaseShift = Math.PI / 4; // Shift phase so 2x sampling doesn't perfectly hit 0-crossings/peaks
+
+        // Plot across 1 second
+        let wavePath = "";
+        for (let i = 0; i <= 100; i++) {
+          const t = i / 100;
+          const y =
+            100 - Math.sin(2 * Math.PI * signalFreq * t + phaseShift) * 80;
+          wavePath += (i === 0 ? "M " : " L ") + `${t * w} ${y}`;
+        }
+
+        // Sample points based on chosen rate
+        const samplePoints = [];
+        for (let n = 0; n <= value; n++) {
+          const t = n / value;
+          if (t > 1.01) break; // Don't overshoot plotting width
+          const x = t * w;
+          const y =
+            100 - Math.sin(2 * Math.PI * signalFreq * t + phaseShift) * 80;
+          samplePoints.push({ x, y });
+        }
+
+        // Reconstructed wave
+        const reconPath =
+          samplePoints.length > 0
+            ? `M ${samplePoints[0].x} ${samplePoints[0].y} ` +
+              samplePoints.map((p) => `L ${p.x} ${p.y}`).join(" ")
+            : "";
+
+        return (
+          <div className="flex flex-col items-center space-y-6 bg-slate-50 p-4 rounded border border-slate-200">
+            <div className="w-full max-w-[400px]">
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                Sampling Rate: {value} Hz
+              </label>
+              <input
+                type="range"
+                min="2"
+                max="20"
+                step="1"
+                value={value}
+                onChange={(e) => onChange(parseInt(e.target.value))}
+                className="w-full accent-indigo-600"
+              />
+            </div>
+
+            <div
+              className="relative border-2 border-slate-300 bg-white"
+              style={{ width: w, height: h }}
+            >
+              <svg width={w} height={h}>
+                <path
+                  d={wavePath}
+                  fill="none"
+                  stroke="#94a3b8"
+                  strokeWidth="2"
+                  opacity="0.6"
+                />
+                <path
+                  d={reconPath}
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="3"
+                  strokeDasharray="6 4"
+                  opacity="0.8"
+                />
+                {samplePoints.map((p, i) => (
+                  <circle key={i} cx={p.x} cy={p.y} r="5" fill="#1d4ed8" />
+                ))}
+              </svg>
+
+              <div className="absolute top-2 left-2 flex flex-col gap-1 text-xs font-semibold">
+                <span className="text-slate-500">── Original 5 Hz Signal</span>
+                <span className="text-red-500">
+                  --- Reconstructed (Samples)
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const InteractiveMIDI = ({ value, onChange }) => {
+        const keysInfo = [
+          { note: "C", t: "w", offset: 0 },
+          { note: "C#", t: "b", offset: 1 },
+          { note: "D", t: "w", offset: 1 },
+          { note: "D#", t: "b", offset: 2 },
+          { note: "E", t: "w", offset: 2 },
+          { note: "F", t: "w", offset: 3 },
+          { note: "F#", t: "b", offset: 4 },
+          { note: "G", t: "w", offset: 4 },
+          { note: "G#", t: "b", offset: 5 },
+          { note: "A", t: "w", offset: 5 },
+          { note: "A#", t: "b", offset: 6 },
+          { note: "B", t: "w", offset: 6 },
+        ];
+
+        const handleKeyClick = (note) => {
+          if (!value.includes(note)) onChange([...value, note]);
+        };
+
+        return (
+          <div className="flex flex-col md:flex-row gap-8 items-center bg-white p-6 rounded shadow-inner border border-slate-200">
+            <div className="relative" style={{ width: 7 * 40, height: 120 }}>
+              <svg width={7 * 40} height={120}>
+                {keysInfo
+                  .filter((k) => k.t === "w")
+                  .map((k, i) => (
+                    <rect
+                      key={k.note}
+                      x={i * 40}
+                      y={0}
+                      width="40"
+                      height="120"
+                      rx="3"
+                      className={`white-key ${value.includes(k.note) ? "key-active" : ""}`}
+                      onClick={() => handleKeyClick(k.note)}
+                    />
+                  ))}
+                {keysInfo
+                  .filter((k) => k.t === "b")
+                  .map((k) => (
+                    <rect
+                      key={k.note}
+                      x={k.offset * 40 + 26}
+                      y={0}
+                      width="28"
+                      height="75"
+                      rx="2"
+                      className={`black-key ${value.includes(k.note) ? "key-active" : ""}`}
+                      onClick={() => handleKeyClick(k.note)}
+                    />
+                  ))}
+                {keysInfo
+                  .filter((k) => k.t === "w")
+                  .map((k, i) => (
+                    <text
+                      key={k.note + "_lbl"}
+                      x={i * 40 + 20}
+                      y={110}
+                      textAnchor="middle"
+                      fontSize="12"
+                      fill={value.includes(k.note) ? "white" : "#64748b"}
+                      className="pointer-events-none"
+                    >
+                      {k.note}
+                    </text>
+                  ))}
+              </svg>
+            </div>
+
+            <div className="flex-1 w-full border border-slate-300 rounded overflow-hidden">
+              <div className="bg-slate-800 text-white text-xs uppercase font-bold p-2 text-center tracking-wider">
+                Event Sequence (MIDI)
+              </div>
+              <div className="p-3 bg-slate-50 min-h-[120px] font-mono text-sm space-y-2">
+                {value.length === 0 ? (
+                  <p className="text-slate-400 italic text-center mt-6">
+                    Sequence empty. Click keys to add events.
+                  </p>
+                ) : null}
+                {value.map((note, i) => (
+                  <div
+                    key={i}
+                    className="flex justify-between items-center bg-white border border-slate-200 p-2 rounded shadow-sm fade-in"
+                  >
+                    <span className="text-indigo-800 font-bold">
+                      1: Note On
+                    </span>
+                    <span>
+                      Note: <b className="text-red-500">{note}4</b>
+                    </span>
+                    <span>Vel: 80</span>
+                    <button
+                      onClick={() => onChange(value.filter((n) => n !== note))}
+                      className="text-red-400 hover:text-red-600 font-bold ml-2"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const InteractiveVector = ({ qState, value, onChange }) => {
+        const handleChange = (prop, val) => onChange({ ...value, [prop]: val });
+        return (
+          <div className="flex flex-col md:flex-row gap-8 items-center bg-white p-6 rounded border border-slate-200 shadow-inner">
+            <div className="flex-1 w-full flex justify-center">
+              <svg
+                width="200"
+                height="200"
+                className="border-2 border-slate-300 bg-slate-50"
+              >
+                <pattern
+                  id="grid"
+                  width="10"
+                  height="10"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <path
+                    d="M 10 0 L 0 0 0 10"
+                    fill="none"
+                    stroke="#e2e8f0"
+                    strokeWidth="0.5"
+                  />
+                </pattern>
+                <rect width="200" height="200" fill="url(#grid)" />
+
+                <circle
+                  cx={qState.target.cx * 2}
+                  cy={qState.target.cy * 2}
+                  r={qState.target.r * 2}
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="4"
+                  strokeDasharray="6,6"
+                  opacity="0.6"
+                />
+                <circle
+                  cx={(value.cx || 0) * 2}
+                  cy={(value.cy || 0) * 2}
+                  r={(value.r || 0) * 2}
+                  fill="#3b82f6"
+                  opacity="0.8"
+                />
+              </svg>
+            </div>
+            <div className="flex-1 w-full bg-slate-800 text-green-400 p-4 rounded font-mono text-sm shadow-lg">
+              <p className="text-pink-400 mb-2">&lt;svg&gt;</p>
+              <p className="ml-4 text-blue-300">&lt;circle</p>
+              <div className="ml-8 space-y-3 my-2">
+                <div className="flex items-center">
+                  <span className="text-yellow-300 w-10">cx="</span>
+                  <input
+                    type="number"
+                    value={value.cx}
+                    onChange={(e) => handleChange("cx", e.target.value)}
+                    className="w-16 p-1 bg-slate-900 border border-slate-600 text-center rounded text-white"
+                  />
+                  <span className="text-yellow-300">"</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="text-yellow-300 w-10">cy="</span>
+                  <input
+                    type="number"
+                    value={value.cy}
+                    onChange={(e) => handleChange("cy", e.target.value)}
+                    className="w-16 p-1 bg-slate-900 border border-slate-600 text-center rounded text-white"
+                  />
+                  <span className="text-yellow-300">"</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="text-yellow-300 w-10">r="</span>
+                  <input
+                    type="number"
+                    value={value.r}
+                    onChange={(e) => handleChange("r", e.target.value)}
+                    className="w-16 p-1 bg-slate-900 border border-slate-600 text-center rounded text-white"
+                  />
+                  <span className="text-yellow-300">"</span>
+                </div>
+                <div className="flex items-center text-yellow-300">
+                  fill="#3b82f6"
+                </div>
+              </div>
+              <p className="ml-4 text-blue-300">/&gt;</p>
+              <p className="text-pink-400 mt-2">&lt;/svg&gt;</p>
+            </div>
+          </div>
+        );
+      };
+
+      // --- MAIN APP COMPONENT ---
+      const App = () => {
+        const [selectedTopics, setSelectedTopics] = useState(TOPICS);
+        const [showFilter, setShowFilter] = useState(false);
+
+        // Global question bag system
+        const [askedIds, setAskedIds] = useState(new Set());
+        const [activeQ, setActiveQ] = useState(null);
+
+        // Progress information for current filter set
+        const [progressCount, setProgressCount] = useState(0);
+        const [poolSize, setPoolSize] = useState(0);
+
+        const [qState, setQState] = useState(null);
+        const [userAnswer, setUserAnswer] = useState("");
+        const [checkStatus, setCheckStatus] = useState(null);
+        const [showSolution, setShowSolution] = useState(false);
+
+        const loadNextQuestion = (topics) => {
+          const validQs = questionsDB.filter((q) => topics.includes(q.topic));
+          if (validQs.length === 0) {
+            alert("Please select at least one subtopic from the filter menu.");
+            return;
+          }
+
+          // Bag system: get questions not yet asked in this session
+          let unasked = validQs.filter((q) => !askedIds.has(q.id));
+          let newAskedIds = new Set(askedIds);
+
+          // If all have been asked, reset the bag for the currently selected topics
+          if (unasked.length === 0) {
+            validQs.forEach((q) => newAskedIds.delete(q.id));
+            unasked = validQs;
+          }
+
+          // Pick random unasked question
+          const nextQ = unasked[Math.floor(Math.random() * unasked.length)];
+          newAskedIds.add(nextQ.id);
+
+          setAskedIds(newAskedIds);
+          setActiveQ(nextQ);
+
+          // Track progress against active topics
+          const currentlyAskedCount = validQs.filter((q) =>
+            newAskedIds.has(q.id),
+          ).length;
+          setProgressCount(currentlyAskedCount);
+          setPoolSize(validQs.length);
+
+          // Initialize component-specific states
+          if (nextQ.generate) setQState(nextQ.generate());
+          else setQState(null);
+
+          if (nextQ.type === "interactive-bitmap-color")
+            setUserAnswer(new Array(16).fill(0));
+          else if (nextQ.type === "interactive-vector")
+            setUserAnswer({ cx: 20, cy: 20, r: 10 });
+          else if (nextQ.type === "interactive-adc")
+            setUserAnswer({
+              samplesTaken: [false, false, false, false],
+              binaryInput: "",
+            });
+          else if (nextQ.type === "interactive-dac")
+            setUserAnswer([-1, -1, -1, -1]);
+          else if (nextQ.type === "interactive-nyquist") setUserAnswer(5);
+          else if (nextQ.type === "interactive-midi") setUserAnswer([]);
+          else if (nextQ.type === "multiselect") setUserAnswer([]);
+          else setUserAnswer("");
+
+          setCheckStatus(null);
+          setShowSolution(false);
+        };
+
+        // Initial load
+        useEffect(() => {
+          if (!activeQ) loadNextQuestion(selectedTopics);
+        }, []);
+
+        const applyFilters = () => {
+          loadNextQuestion(selectedTopics);
+          setShowFilter(false);
+        };
+
+        if (!activeQ)
+          return (
+            <div className="p-8 text-center">
+              <h2 className="text-xl">Initializing...</h2>
+            </div>
+          );
+
+        // Validate Check button
+        let disableCheck = false;
+        if (activeQ.type === "text" && !userAnswer.trim()) disableCheck = true;
+        if (activeQ.type === "nyquist-diagram-calc" && !userAnswer.trim())
+          disableCheck = true;
+        if (activeQ.type === "mcq" && !userAnswer) disableCheck = true;
+        if (activeQ.type === "multiselect" && userAnswer.length === 0)
+          disableCheck = true;
+        if (
+          activeQ.type === "interactive-adc" &&
+          (userAnswer.samplesTaken.includes(false) ||
+            userAnswer.binaryInput.length < 3)
+        )
+          disableCheck = true;
+        if (activeQ.type === "interactive-dac" && userAnswer.includes(-1))
+          disableCheck = true;
+        if (activeQ.type === "interactive-midi" && userAnswer.length === 0)
+          disableCheck = true;
+
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-indigo-700 text-white shadow-md sticky top-0 z-50">
+              <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center relative">
+                <h1 className="text-xl font-bold tracking-tight">
+                  AQA CS: Images & Sound
+                </h1>
+                <button
+                  onClick={() => setShowFilter(!showFilter)}
+                  className="flex items-center gap-2 hover:bg-indigo-600 px-3 py-2 rounded"
+                >
+                  <IconFilter />{" "}
+                  <span className="hidden sm:inline">Topics</span>
+                </button>
+
+                {showFilter && (
+                  <div className="absolute top-14 right-4 bg-white text-slate-800 rounded shadow-xl w-64 border border-slate-200 overflow-hidden fade-in">
+                    <div className="p-3 bg-slate-50 border-b border-slate-200 font-semibold">
+                      Filter Subtopics
+                    </div>
+                    <div className="max-h-64 overflow-y-auto p-2">
+                      {TOPICS.map((topic) => (
+                        <label
+                          key={topic}
+                          className="flex items-center p-2 hover:bg-indigo-50 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTopics.includes(topic)}
+                            onChange={() =>
+                              setSelectedTopics((prev) =>
+                                prev.includes(topic)
+                                  ? prev.filter((t) => t !== topic)
+                                  : [...prev, topic],
+                              )
+                            }
+                            className="w-4 h-4 text-indigo-600 rounded mr-3"
+                          />
+                          <span className="text-sm">{topic}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="p-2 bg-slate-50 border-t border-slate-200">
+                      <button
+                        onClick={applyFilters}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded text-sm font-medium transition-colors"
+                      >
+                        Apply & New Question
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto mt-8 px-4">
+              <div className="flex justify-between items-center mb-4">
+                <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  {activeQ.topic}
+                </span>
+                <span className="text-sm text-slate-500 font-medium">
+                  Question {progressCount} of {poolSize}
+                </span>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8">
+                <h2 className="text-lg sm:text-xl font-medium text-slate-800 leading-relaxed mb-6 whitespace-pre-wrap">
+                  {activeQ.text}
+                </h2>
+
+                <div className="mb-8">
+                  {activeQ.type === "text" && (
+                    <div>
+                      <input
+                        type="text"
+                        value={userAnswer}
+                        onChange={(e) => setUserAnswer(e.target.value)}
+                        placeholder="Type your answer here..."
+                        className="w-full border-2 border-slate-300 rounded-lg p-3 text-lg focus:border-indigo-500 focus:outline-none transition-colors"
+                        onKeyDown={(e) =>
+                          e.key === "Enter" &&
+                          !disableCheck &&
+                          setCheckStatus(
+                            activeQ.check(userAnswer, qState)
+                              ? "correct"
+                              : "incorrect",
+                          )
+                        }
+                      />
+                      {activeQ.answerHint && (
+                        <p className="mt-2 text-sm text-slate-400 italic">
+                          Hint: {activeQ.answerHint}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {activeQ.type === "nyquist-diagram-calc" && (
+                    <div>
+                      <InteractiveNyquistDiagram qState={qState} />
+                      <input
+                        type="text"
+                        value={userAnswer}
+                        onChange={(e) => setUserAnswer(e.target.value)}
+                        placeholder="Enter the required frequency in Hz..."
+                        className="w-full border-2 border-slate-300 rounded-lg p-3 text-lg focus:border-indigo-500 focus:outline-none transition-colors text-center"
+                        onKeyDown={(e) =>
+                          e.key === "Enter" &&
+                          !disableCheck &&
+                          setCheckStatus(
+                            activeQ.check(userAnswer, qState)
+                              ? "correct"
+                              : "incorrect",
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+                  {activeQ.type === "mcq" && (
+                    <div className="space-y-3">
+                      {qState.options.map((opt, i) => (
+                        <label
+                          key={i}
+                          className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors ${userAnswer === opt ? "border-indigo-600 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="mcq"
+                            value={opt}
+                            checked={userAnswer === opt}
+                            onChange={(e) => setUserAnswer(e.target.value)}
+                            className="w-5 h-5 text-indigo-600 mr-4"
+                          />
+                          <span className="text-slate-700 font-medium">
+                            {opt}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {activeQ.type === "multiselect" && (
+                    <div className="space-y-3">
+                      {qState.options.map((opt, i) => (
+                        <label
+                          key={i}
+                          className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${userAnswer.includes(opt) ? "border-indigo-600 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={userAnswer.includes(opt)}
+                            onChange={(e) => {
+                              if (e.target.checked)
+                                setUserAnswer([...userAnswer, opt]);
+                              else
+                                setUserAnswer(
+                                  userAnswer.filter((ans) => ans !== opt),
+                                );
+                            }}
+                            className="w-5 h-5 mt-1 text-indigo-600 mr-4 rounded focus:ring-indigo-500"
+                          />
+                          <span className="text-slate-700 font-medium">
+                            {opt}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {activeQ.type === "interactive-bitmap-color" && (
+                    <InteractiveBitmapColor
+                      qState={qState}
+                      value={userAnswer}
+                      onChange={setUserAnswer}
+                    />
+                  )}
+                  {activeQ.type === "interactive-adc" && (
+                    <InteractiveADC
+                      qState={qState}
+                      value={userAnswer}
+                      onChange={setUserAnswer}
+                    />
+                  )}
+                  {activeQ.type === "interactive-dac" && (
+                    <InteractiveDAC
+                      qState={qState}
+                      value={userAnswer}
+                      onChange={setUserAnswer}
+                    />
+                  )}
+                  {activeQ.type === "interactive-nyquist" && (
+                    <InteractiveNyquist
+                      qState={qState}
+                      value={userAnswer}
+                      onChange={setUserAnswer}
+                    />
+                  )}
+                  {activeQ.type === "interactive-midi" && (
+                    <InteractiveMIDI
+                      value={userAnswer}
+                      onChange={setUserAnswer}
+                    />
+                  )}
+                  {activeQ.type === "interactive-vector" && (
+                    <InteractiveVector
+                      qState={qState}
+                      value={userAnswer}
+                      onChange={setUserAnswer}
+                    />
+                  )}
+                </div>
+
+                <div className="border-t border-slate-100 pt-6">
+                  {!checkStatus ? (
+                    <button
+                      onClick={() =>
+                        setCheckStatus(
+                          activeQ.check(userAnswer, qState)
+                            ? "correct"
+                            : "incorrect",
+                        )
+                      }
+                      disabled={disableCheck}
+                      className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg shadow-sm"
+                    >
+                      Check Answer
+                    </button>
+                  ) : (
+                    <div
+                      className={`p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between fade-in gap-4 ${checkStatus === "correct" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {checkStatus === "correct" ? <IconCheck /> : <IconX />}
+                        <div>
+                          <h3
+                            className={`font-bold ${checkStatus === "correct" ? "text-green-800" : "text-red-800"}`}
+                          >
+                            {checkStatus === "correct"
+                              ? "Correct!"
+                              : "Incorrect"}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 w-full sm:w-auto">
+                        {checkStatus === "incorrect" && !showSolution && (
+                          <button
+                            onClick={() => setShowSolution(true)}
+                            className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded font-medium"
+                          >
+                            View Solution
+                          </button>
+                        )}
+                        {checkStatus === "incorrect" && (
+                          <button
+                            onClick={() => setCheckStatus(null)}
+                            className="flex-1 sm:flex-none px-4 py-2 bg-slate-800 text-white hover:bg-slate-700 rounded font-medium"
+                          >
+                            Retry
+                          </button>
+                        )}
+                        {checkStatus === "correct" && (
+                          <button
+                            onClick={() => loadNextQuestion(selectedTopics)}
+                            className="w-full sm:w-auto px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-bold shadow"
+                          >
+                            Next Question →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {showSolution && (
+                  <div className="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg fade-in text-blue-900">
+                    <h4 className="font-bold mb-2">Solution</h4>
+                    <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                      {typeof activeQ.solution === "function"
+                        ? activeQ.solution(qState)
+                        : activeQ.solution}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </main>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
