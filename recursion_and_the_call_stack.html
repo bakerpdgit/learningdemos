@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: The Call Stack & Recursion</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+      }
+
+      .stack-frame-enter {
+        animation: slideIn 0.4s ease-out forwards;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .highlight-flash {
+        animation: flashHighlight 1.5s ease-out;
+      }
+
+      @keyframes flashHighlight {
+        0% {
+          background-color: #fef08a;
+        }
+        100% {
+          background-color: transparent;
+        }
+      }
+
+      /* Color Codes for variables */
+      .color-val {
+        color: #2563eb;
+        font-weight: 600;
+      } /* Blue */
+      .color-count {
+        color: #16a34a;
+        font-weight: 600;
+      } /* Green */
+      .color-step {
+        color: #9333ea;
+        font-weight: 600;
+      } /* Purple */
+      .color-res {
+        color: #ea580c;
+        font-weight: 600;
+      } /* Orange */
+
+      .bg-color-val {
+        background-color: #dbeafe;
+        border-color: #bfdbfe;
+        color: #1e3a8a;
+      }
+      .bg-color-count {
+        background-color: #dcfce7;
+        border-color: #bbf7d0;
+        color: #14532d;
+      }
+      .bg-color-step {
+        background-color: #f3e8ff;
+        border-color: #e9d5ff;
+        color: #581c87;
+      }
+      .bg-color-res {
+        background-color: #ffedd5;
+        border-color: #fed7aa;
+        color: #7c2d12;
+      }
+
+      @keyframes subtleBounce {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-4px);
+        }
+      }
+      .animate-subtle-bounce {
+        animation: subtleBounce 0.4s ease-in-out 2;
+      }
+    </style>
+    <style id="global-home-link-style">
+      .global-home-link {
+        display: inline-block;
+        margin: 0.75rem 0 0 0.75rem;
+        font-size: 0.85rem;
+        color: inherit;
+        opacity: 0.8;
+        text-decoration: none;
+      }
+      .global-home-link:hover {
+        opacity: 1;
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="global-home-link" href="index.html"
+      >&larr; Back to Learning Demos</a
+    >
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- PSEUDOCODE DEFINITION ---
+      const PSEUDOCODE = [
+        "FUNCTION process(val, count)",
+        "  step = val * 2",
+        "  IF count <= 0 THEN",
+        "    RETURN step",
+        "  ELSE",
+        "    res = process(step, count - 1)",
+        "    RETURN res + val",
+        "  END IF",
+        "END FUNCTION",
+      ];
+
+      // --- TRACE GENERATOR ---
+      // Pre-computes the entire simulation state to easily step through and test user answers.
+      function generateSimulation(initialVal, initialCount) {
+        let trace = [];
+        let stack = [];
+        let callIdCounter = 1;
+
+        function pushTrace(line, qType = "NONE", expected = null, msg = "") {
+          trace.push({
+            line,
+            stack: JSON.parse(JSON.stringify(stack)),
+            qType,
+            expected,
+            msg,
+          });
+        }
+
+        function execute(val, count, callerId, retLine) {
+          let myId = callIdCounter++;
+          let retStrId = callerId ? callerId : "Main";
+          let retStrLine = retLine ? retLine : "-";
+          let fullRetStr = callerId
+            ? `Call ${callerId}, Line ${retLine}`
+            : "Main Program";
+
+          // 1. Enter subroutine
+          stack.push({
+            id: myId,
+            val,
+            count,
+            step: null,
+            res: null,
+            retAddr: fullRetStr,
+          });
+          pushTrace(
+            1,
+            "NONE",
+            null,
+            `Entering subroutine invocation Call ${myId} -> process(${val}, ${count})`,
+          );
+
+          // 2. Calculate local variable 'step'
+          let stepVal = val * 2;
+          pushTrace(
+            2,
+            "CALC_STEP",
+            { step: stepVal },
+            `Evaluate the expression for the local variable 'step'.`,
+          );
+          stack[stack.length - 1].step = stepVal; // Apply state change
+
+          // 3. IF Condition
+          pushTrace(
+            3,
+            "NONE",
+            null,
+            `Checking base case condition: Is count (${count}) <= 0?`,
+          );
+
+          if (count <= 0) {
+            // 4. RETURN base case
+            pushTrace(
+              4,
+              "CALC_RETURN",
+              { ret: stepVal },
+              `Base case reached. Evaluate the return value.`,
+            );
+            stack.pop(); // Pop frame before returning
+            return stepVal;
+          } else {
+            // 5. ELSE branch
+            pushTrace(
+              5,
+              "NONE",
+              null,
+              `Condition is False. Entering ELSE block.`,
+            );
+
+            // 6. Recursive Call Setup
+            pushTrace(
+              6,
+              "NEW_FRAME",
+              { val: stepVal, count: count - 1, retId: myId, retLine: 6 },
+              `A recursive call is being made. What data will be pushed onto the new stack frame?`,
+            );
+
+            let resVal = execute(stepVal, count - 1, myId, 6);
+
+            // 6 (Return point). Save to 'res'
+            stack[stack.length - 1].res = resVal;
+            pushTrace(
+              6,
+              "NONE",
+              null,
+              `Recursive call returned. The value ${resVal} is saved to the local variable 'res'.`,
+            );
+
+            // 7. RETURN recursive case
+            let retVal = resVal + val;
+            pushTrace(
+              7,
+              "CALC_RETURN",
+              { ret: retVal },
+              `Evaluate the final expression to return to the previous caller.`,
+            );
+            stack.pop();
+            return retVal;
+          }
+        }
+
+        let finalResult = execute(initialVal, initialCount, null, null);
+        pushTrace(
+          9,
+          "END",
+          null,
+          `Simulation complete. Final returned value: ${finalResult}`,
+        );
+        return trace;
+      }
+
+      // --- REACT COMPONENTS ---
+
+      const Icon = ({ name, className }) => {
+        const iconRef = useRef(null);
+
+        useEffect(() => {
+          if (iconRef.current && window.lucide) {
+            iconRef.current.innerHTML = `<i data-lucide="${name}" class="${className || ""}"></i>`;
+            window.lucide.createIcons({ root: iconRef.current });
+          }
+        }, [name, className]);
+
+        return <span ref={iconRef} className="contents"></span>;
+      };
+
+      // Dropdown Filter Menu
+      const FilterMenu = ({ filters, setFilters, onApply }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const menuRef = useRef();
+
+        useEffect(() => {
+          const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target))
+              setIsOpen(false);
+          };
+          document.addEventListener("mousedown", handleClickOutside);
+          return () =>
+            document.removeEventListener("mousedown", handleClickOutside);
+        }, []);
+
+        return (
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="flex items-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-md shadow-sm hover:bg-slate-50 transition-colors text-sm font-medium"
+            >
+              <Icon name="filter" className="w-4 h-4" />
+              Filter Topics
+            </button>
+
+            {isOpen && (
+              <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-50 p-4">
+                <h3 className="font-semibold text-slate-700 mb-3 text-sm">
+                  Interactive Questions:
+                </h3>
+
+                <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.askLocals}
+                    onChange={(e) =>
+                      setFilters({ ...filters, askLocals: e.target.checked })
+                    }
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm text-slate-700">
+                    Compute Local Variables
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.askFrames}
+                    onChange={(e) =>
+                      setFilters({ ...filters, askFrames: e.target.checked })
+                    }
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm text-slate-700">
+                    Stack Frame Pushes
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 mb-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.askReturns}
+                    onChange={(e) =>
+                      setFilters({ ...filters, askReturns: e.target.checked })
+                    }
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm text-slate-700">
+                    Compute Return Values
+                  </span>
+                </label>
+
+                <button
+                  onClick={() => {
+                    onApply();
+                    setIsOpen(false);
+                  }}
+                  className="w-full bg-blue-600 text-white py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Apply & Generate New
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // Main Application Component
+      const App = () => {
+        // State
+        const [trace, setTrace] = useState([]);
+        const [stepIdx, setStepIdx] = useState(0);
+        const [filters, setFilters] = useState({
+          askLocals: true,
+          askFrames: true,
+          askReturns: true,
+        });
+
+        // Interaction State
+        const [inputs, setInputs] = useState({});
+        const [feedback, setFeedback] = useState(null);
+        const [showSolution, setShowSolution] = useState(false);
+
+        // Initialize Simulation
+        const startNewSimulation = () => {
+          const randomVal = Math.floor(Math.random() * 3) + 2; // 2 to 4
+          const randomCount = Math.floor(Math.random() * 2) + 1; // 1 to 2
+          const newTrace = generateSimulation(randomVal, randomCount);
+          setTrace(newTrace);
+          setStepIdx(0);
+          resetInteractionState();
+        };
+
+        // Run once on mount
+        useEffect(() => {
+          startNewSimulation();
+        }, []);
+
+        const resetInteractionState = () => {
+          setInputs({});
+          setFeedback(null);
+          setShowSolution(false);
+        };
+
+        const handleNextStep = () => {
+          if (stepIdx < trace.length - 1) {
+            setStepIdx(stepIdx + 1);
+            resetInteractionState();
+          }
+        };
+
+        const currentStep = trace[stepIdx] || null;
+
+        // Determine if the current question is active based on filters
+        const isQuestionActive = () => {
+          if (!currentStep) return false;
+          if (currentStep.qType === "CALC_STEP" && filters.askLocals)
+            return true;
+          if (currentStep.qType === "NEW_FRAME" && filters.askFrames)
+            return true;
+          if (currentStep.qType === "CALC_RETURN" && filters.askReturns)
+            return true;
+          return false;
+        };
+
+        // Checking user answers
+        const checkAnswer = () => {
+          if (!currentStep || !currentStep.expected) return;
+
+          let isCorrect = true;
+          let errorMsg = "Incorrect. Please review your values and try again.";
+
+          if (currentStep.qType === "CALC_STEP") {
+            if (parseFloat(inputs.step) !== currentStep.expected.step)
+              isCorrect = false;
+          } else if (currentStep.qType === "CALC_RETURN") {
+            if (parseFloat(inputs.ret) !== currentStep.expected.ret)
+              isCorrect = false;
+          } else if (currentStep.qType === "NEW_FRAME") {
+            const v = parseFloat(inputs.val);
+            const c = parseFloat(inputs.count);
+            const rId = inputs.retId;
+            const rLine = parseFloat(inputs.retLine);
+
+            if (
+              v !== currentStep.expected.val ||
+              c !== currentStep.expected.count
+            ) {
+              isCorrect = false;
+              errorMsg =
+                "Incorrect parameters. Remember, parameters take the values passed into the function call.";
+            } else if (
+              rId != currentStep.expected.retId ||
+              rLine !== currentStep.expected.retLine
+            ) {
+              isCorrect = false;
+              errorMsg =
+                "Incorrect return address. Where should the computer return AFTER this new call finishes?";
+            }
+          }
+
+          if (isCorrect) {
+            setFeedback({ type: "success", text: "Correct! Well done." });
+          } else {
+            setFeedback({ type: "error", text: errorMsg });
+          }
+        };
+
+        const renderPseudocode = () => {
+          return (
+            <div className="bg-slate-900 rounded-lg shadow-lg overflow-hidden border border-slate-700 font-mono text-sm">
+              <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 text-slate-300 font-semibold flex justify-between">
+                <span>Pseudocode</span>
+              </div>
+              <div className="p-4 text-slate-300">
+                {PSEUDOCODE.map((line, idx) => {
+                  const lineNum = idx + 1;
+                  const isActive = currentStep && currentStep.line === lineNum;
+
+                  // Basic Syntax Highlighting matching CSS color classes
+                  let highlightedLine = line
+                    .replace(
+                      /\bval\b/g,
+                      '<span class="text-blue-400 font-bold">val</span>',
+                    )
+                    .replace(
+                      /\bcount\b/g,
+                      '<span class="text-green-400 font-bold">count</span>',
+                    )
+                    .replace(
+                      /\bstep\b/g,
+                      '<span class="text-purple-400 font-bold">step</span>',
+                    )
+                    .replace(
+                      /\bres\b/g,
+                      '<span class="text-orange-400 font-bold">res</span>',
+                    )
+                    .replace(
+                      /\bFUNCTION\b/g,
+                      '<span class="text-pink-500">FUNCTION</span>',
+                    )
+                    .replace(
+                      /\bEND FUNCTION\b/g,
+                      '<span class="text-pink-500">END FUNCTION</span>',
+                    )
+                    .replace(
+                      /\bIF\b|\bTHEN\b|\bELSE\b|\bEND IF\b/g,
+                      '<span class="text-yellow-400">$&</span>',
+                    )
+                    .replace(
+                      /\bRETURN\b/g,
+                      '<span class="text-red-400">RETURN</span>',
+                    );
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center px-2 py-1 rounded transition-colors ${isActive ? "bg-slate-700 border-l-4 border-yellow-400" : "border-l-4 border-transparent"}`}
+                    >
+                      <span className="w-6 text-slate-500 inline-block text-right mr-4 select-none">
+                        {lineNum}
+                      </span>
+                      <span
+                        className="whitespace-pre"
+                        dangerouslySetInnerHTML={{ __html: highlightedLine }}
+                      ></span>
+                      {isActive && (
+                        <Icon
+                          name="arrow-left"
+                          className="w-4 h-4 text-yellow-400 ml-auto animate-pulse"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        };
+
+        const renderStackFrames = () => {
+          if (!currentStep || !currentStep.stack) return null;
+          const stack = currentStep.stack;
+
+          return (
+            <div className="flex flex-col-reverse gap-3">
+              {stack.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-slate-300 rounded-lg text-slate-400 bg-slate-50">
+                  <Icon name="layers" className="w-8 h-8 mb-2" />
+                  <span>Call Stack Empty</span>
+                </div>
+              )}
+              {stack.map((frame, idx) => {
+                const isTop = idx === stack.length - 1;
+                return (
+                  <div
+                    key={frame.id}
+                    className={`stack-frame-enter border rounded-lg shadow-md overflow-hidden bg-white transition-all duration-300 ${isTop ? "border-blue-500 shadow-blue-100 ring-2 ring-blue-200" : "border-slate-200 opacity-70 scale-95 origin-bottom"}`}
+                  >
+                    <div
+                      className={`px-3 py-2 border-b flex justify-between items-center text-sm font-bold ${isTop ? "bg-blue-50 text-blue-800" : "bg-slate-100 text-slate-600"}`}
+                    >
+                      <span>Stack Frame: Call {frame.id}</span>
+                      {isTop && (
+                        <span className="bg-blue-600 text-white text-[10px] px-2 py-1 rounded uppercase tracking-wide">
+                          Active (Top)
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <div className="col-span-2 border-b pb-1 text-xs uppercase tracking-wider text-slate-400 font-semibold">
+                        Parameters
+                      </div>
+                      <div className="flex justify-between items-center bg-color-val px-2 py-1 rounded border">
+                        <span>val</span>{" "}
+                        <span className="font-mono">{frame.val}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-color-count px-2 py-1 rounded border">
+                        <span>count</span>{" "}
+                        <span className="font-mono">{frame.count}</span>
+                      </div>
+
+                      <div className="col-span-2 border-b pb-1 mt-1 text-xs uppercase tracking-wider text-slate-400 font-semibold">
+                        Local Variables
+                      </div>
+                      <div className="flex justify-between items-center bg-color-step px-2 py-1 rounded border">
+                        <span>step</span>{" "}
+                        <span className="font-mono">
+                          {frame.step !== null ? frame.step : "?"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center bg-color-res px-2 py-1 rounded border">
+                        <span>res</span>{" "}
+                        <span className="font-mono">
+                          {frame.res !== null ? frame.res : "?"}
+                        </span>
+                      </div>
+
+                      <div className="col-span-2 border-b pb-1 mt-1 text-xs uppercase tracking-wider text-slate-400 font-semibold">
+                        Return Address
+                      </div>
+                      <div className="col-span-2 flex justify-between items-center bg-slate-100 border-slate-200 text-slate-700 px-2 py-1 rounded border font-mono text-xs">
+                        <span>{frame.retAddr}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        };
+
+        const renderInteractionPanel = () => {
+          if (!currentStep) return null;
+
+          const qActive = isQuestionActive();
+          const isEnd = currentStep.qType === "END";
+
+          // Helper to render input field
+          const renderInput = (
+            id,
+            label,
+            placeholder,
+            isDropdown = false,
+            options = [],
+          ) => (
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                {label}
+              </label>
+              {isDropdown ? (
+                <select
+                  className={`w-full p-2 border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${feedback && feedback.type === "error" && !isCorrectMode() ? "border-red-400 bg-red-50" : "border-slate-300"}`}
+                  value={inputs[id] || ""}
+                  onChange={(e) =>
+                    setInputs({ ...inputs, [id]: e.target.value })
+                  }
+                  disabled={feedback?.type === "success" || showSolution}
+                >
+                  <option value="" disabled>
+                    Select...
+                  </option>
+                  {options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  className={`w-full p-2 border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${feedback && feedback.type === "error" && !isCorrectMode() ? "border-red-400 bg-red-50" : "border-slate-300"}`}
+                  placeholder={placeholder}
+                  value={inputs[id] || ""}
+                  onChange={(e) =>
+                    setInputs({ ...inputs, [id]: e.target.value })
+                  }
+                  disabled={feedback?.type === "success" || showSolution}
+                />
+              )}
+            </div>
+          );
+
+          const isCorrectMode = () => feedback?.type === "success";
+
+          return (
+            <div className="bg-white rounded-lg shadow-md border border-slate-200 flex flex-col h-full">
+              <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 font-semibold text-slate-700 flex items-center gap-2">
+                <Icon name="terminal" className="w-5 h-5 text-blue-600" />
+                Execution Step
+              </div>
+
+              <div className="p-5 flex-1 flex flex-col">
+                {/* Message / Instruction */}
+                <p className="text-slate-700 mb-6 font-medium leading-relaxed bg-blue-50 p-3 rounded border border-blue-100 shadow-sm text-sm">
+                  {currentStep.msg}
+                </p>
+
+                {/* Question Form */}
+                {qActive && !isEnd && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4 flex-1">
+                    {currentStep.qType === "CALC_STEP" && (
+                      <>
+                        <p className="text-sm text-slate-600 mb-3">
+                          Calculate{" "}
+                          <span className="color-step font-mono bg-purple-100 px-1 rounded">
+                            step
+                          </span>{" "}
+                          ={" "}
+                          <span className="color-val font-mono bg-blue-100 px-1 rounded">
+                            val
+                          </span>{" "}
+                          * 2
+                        </p>
+                        {renderInput(
+                          "step",
+                          "Value for local variable `step`:",
+                          "Enter number",
+                        )}
+                      </>
+                    )}
+
+                    {currentStep.qType === "CALC_RETURN" && (
+                      <>
+                        <p className="text-sm text-slate-600 mb-3">
+                          Evaluate the return statement on the current line.
+                        </p>
+                        {renderInput(
+                          "ret",
+                          "Value to return:",
+                          "Enter return value",
+                        )}
+                      </>
+                    )}
+
+                    {currentStep.qType === "NEW_FRAME" && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2 text-sm text-slate-600 mb-2">
+                          Identify values for the new stack frame:
+                        </div>
+                        {renderInput("val", "Parameter `val`:", "Enter val")}
+                        {renderInput(
+                          "count",
+                          "Parameter `count`:",
+                          "Enter count",
+                        )}
+
+                        <div className="col-span-2 mt-2 border-t pt-3">
+                          <p className="text-sm font-semibold text-slate-700 mb-2">
+                            Return Address details:
+                          </p>
+                          <div className="grid grid-cols-2 gap-4">
+                            {renderInput(
+                              "retId",
+                              "Return to Call ID:",
+                              "",
+                              true,
+                              [
+                                { value: "Main", label: "Main Program" },
+                                ...currentStep.stack.map((f) => ({
+                                  value: f.id,
+                                  label: `Call ${f.id}`,
+                                })),
+                              ],
+                            )}
+                            {renderInput(
+                              "retLine",
+                              "Return to Line No:",
+                              "",
+                              true,
+                              [
+                                { value: "-", label: "None (Main)" },
+                                { value: "6", label: "Line 6" }, // Hardcoded for this specific algo to prevent overwhelming UI
+                              ],
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="mt-4 flex gap-3">
+                      {!isCorrectMode() && (
+                        <button
+                          onClick={checkAnswer}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm"
+                        >
+                          Check Answer
+                        </button>
+                      )}
+
+                      {!isCorrectMode() && !showSolution && (
+                        <button
+                          onClick={() => setShowSolution(true)}
+                          className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded font-medium text-sm transition-colors"
+                        >
+                          Show Solution
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Feedback Area */}
+                    {feedback && (
+                      <div
+                        className={`mt-4 p-3 rounded text-sm border flex items-start gap-2 ${feedback.type === "success" ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}
+                      >
+                        <Icon
+                          name={
+                            feedback.type === "success"
+                              ? "check-circle"
+                              : "alert-circle"
+                          }
+                          className={`w-5 h-5 flex-shrink-0 ${feedback.type === "success" ? "text-green-600" : "text-red-600"}`}
+                        />
+                        <p>{feedback.text}</p>
+                      </div>
+                    )}
+
+                    {/* Solution Display */}
+                    {showSolution && !isCorrectMode() && (
+                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                        <strong>Solution: </strong>
+                        {currentStep.qType === "CALC_STEP" &&
+                          `step = ${currentStep.expected.step}`}
+                        {currentStep.qType === "CALC_RETURN" &&
+                          `Return value = ${currentStep.expected.ret}`}
+                        {currentStep.qType === "NEW_FRAME" &&
+                          `val = ${currentStep.expected.val}, count = ${currentStep.expected.count}, Return to: Call ${currentStep.expected.retId}, Line ${currentStep.expected.retLine}`}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div className="min-h-screen p-4 md:p-8 flex flex-col max-w-7xl mx-auto">
+            {/* HEADER */}
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-3">
+                  <Icon name="layers" className="text-blue-600" />
+                  The Call Stack & Recursion
+                </h1>
+                <p className="text-slate-500 mt-1 font-medium">
+                  AQA A Level Computer Science Interactive Tool
+                </p>
+              </div>
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <FilterMenu
+                  filters={filters}
+                  setFilters={setFilters}
+                  onApply={startNewSimulation}
+                />
+                <button
+                  onClick={startNewSimulation}
+                  className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium whitespace-nowrap flex items-center gap-2"
+                >
+                  <Icon name="refresh-cw" className="w-4 h-4" /> New Random
+                </button>
+              </div>
+            </header>
+
+            {/* MAIN GRID */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+              {/* Left: Code Block */}
+              <div className="lg:col-span-4 flex flex-col gap-4">
+                {renderPseudocode()}
+
+                {/* Legend / Key */}
+                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                  <h3 className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-3">
+                    Variable Color Key
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-blue-500"></span>{" "}
+                      <span>Parameter (val)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-green-500"></span>{" "}
+                      <span>Parameter (count)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-purple-500"></span>{" "}
+                      <span>Local (step)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-orange-500"></span>{" "}
+                      <span>Local (res)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Middle: Interaction */}
+              <div className="lg:col-span-4 flex flex-col gap-4">
+                {currentStep &&
+                  (!isQuestionActive() ||
+                    feedback?.type === "success" ||
+                    showSolution) &&
+                  currentStep.qType !== "END" && (
+                    <button
+                      onClick={handleNextStep}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-colors shadow-md flex items-center justify-center gap-2 animate-subtle-bounce"
+                    >
+                      Continue <Icon name="arrow-right" className="w-4 h-4" />
+                    </button>
+                  )}
+
+                {currentStep && currentStep.qType === "END" && (
+                  <button
+                    onClick={startNewSimulation}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-colors shadow-md flex items-center justify-center gap-2"
+                  >
+                    <Icon name="rotate-ccw" className="w-5 h-5" /> Restart
+                    Simulation
+                  </button>
+                )}
+
+                {renderInteractionPanel()}
+              </div>
+
+              {/* Right: Call Stack */}
+              <div className="lg:col-span-4 bg-slate-100 rounded-xl p-4 border border-slate-200 shadow-inner flex flex-col">
+                <h2 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2 border-b border-slate-300 pb-2">
+                  <Icon name="server" className="text-slate-500" /> Memory: Call
+                  Stack
+                </h2>
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar relative">
+                  {/* Stack Base visual indicator */}
+                  <div className="absolute bottom-0 w-full border-b-4 border-slate-300 mb-2"></div>
+                  {renderStackFrames()}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
