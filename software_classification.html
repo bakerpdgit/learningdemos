@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA CS Software & Translators Interactive</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.development.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+      crossorigin
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useCallback } = React;
+
+      // --- Icon Components (Replacing lucide-react for standalone usage) ---
+      const IconBase = ({ size = 24, className = "", children }) => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          {children}
+        </svg>
+      );
+      const Filter = (props) => (
+        <IconBase {...props}>
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </IconBase>
+      );
+      const ChevronDown = (props) => (
+        <IconBase {...props}>
+          <polyline points="6 9 12 15 18 9" />
+        </IconBase>
+      );
+      const Check = (props) => (
+        <IconBase {...props}>
+          <polyline points="20 6 9 17 4 12" />
+        </IconBase>
+      );
+      const RefreshCw = (props) => (
+        <IconBase {...props}>
+          <path d="M21 2v6h-6" />
+          <path d="M21 8A9 9 0 1 0 12 21a9 9 0 0 0 8.3-5.5" />
+        </IconBase>
+      );
+      const Eye = (props) => (
+        <IconBase {...props}>
+          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+          <circle cx="12" cy="12" r="3" />
+        </IconBase>
+      );
+      const MousePointer2 = (props) => (
+        <IconBase {...props}>
+          <path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1 .063.882l-5.329 2.857-2.857 5.329a.5.5 0 0 1-.882-.063l-6.5-16z" />
+        </IconBase>
+      );
+      const X = (props) => (
+        <IconBase {...props}>
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </IconBase>
+      );
+
+      // --- Data ---
+      const TOPICS = [
+        "Software Classification",
+        "Role of Operating System",
+        "Classification of Programming Languages",
+        "Types of Translator",
+      ];
+
+      const QUESTIONS = [
+        // --- Software Classification ---
+        {
+          id: 1,
+          topic: "Software Classification",
+          type: "text",
+          text: "The physical components of a computer system are collectively known as:",
+          expected: "hardware",
+          firstLetter: "h",
+          highlightNode: "hardware",
+        },
+        {
+          id: 2,
+          topic: "Software Classification",
+          type: "text",
+          text: "The programs and instructions that run on a computer system are known as:",
+          expected: "software",
+          firstLetter: "s",
+          highlightNode: "software",
+        },
+        {
+          id: 3,
+          topic: "Software Classification",
+          type: "diagram-click",
+          targetNode: "system-software",
+          text: "Click on the software category in the diagram that provides the infrastructure for the computer and includes the OS and translators.",
+        },
+        {
+          id: 4,
+          topic: "Software Classification",
+          type: "diagram-click",
+          targetNode: "app-software",
+          text: "Click on the software category designed to perform specific user-oriented tasks (e.g., word processors, games).",
+        },
+
+        // --- Role of Operating System ---
+        {
+          id: 5,
+          topic: "Role of Operating System",
+          type: "text",
+          text: "The OS handles resource management, allocating processors, memory, and I/O devices among competing...",
+          expected: "processes",
+          firstLetter: "p",
+          highlightNode: "os",
+        },
+        {
+          id: 6,
+          topic: "Role of Operating System",
+          type: "text",
+          text: "A primary role of the operating system is to hide the ______________ of the hardware from the user.",
+          expected: "complexities",
+          firstLetter: "c",
+          highlightNode: "os",
+        },
+        {
+          id: 7,
+          topic: "Role of Operating System",
+          type: "diagram-click",
+          targetNode: "os",
+          text: "Click on the system software component responsible for hiding hardware complexities and managing resources.",
+        },
+        {
+          id: 8,
+          topic: "Role of Operating System",
+          type: "text",
+          text: "A collection of pre-compiled, reusable routines that can be used by other programs is called a...",
+          expected: "library",
+          firstLetter: "l",
+          highlightNode: "library",
+        },
+        {
+          id: 9,
+          topic: "Role of Operating System",
+          type: "text",
+          text: "Programs designed to help maintain, configure, or optimize a computer system are known as ____________ programs.",
+          expected: "utility",
+          firstLetter: "u",
+          highlightNode: "utility",
+        },
+
+        // --- Classification of Programming Languages ---
+        {
+          id: 10,
+          topic: "Classification of Programming Languages",
+          type: "mcq",
+          text: "Which statement best describes machine-code?",
+          options: [
+            "It uses mnemonics for instructions.",
+            "It is executed directly by the CPU without translation.",
+            "It is highly portable across different hardware architectures.",
+            "It requires a compiler to run.",
+          ],
+          correctIndex: 1,
+          highlightNode: "machine-code",
+        },
+        {
+          id: 11,
+          topic: "Classification of Programming Languages",
+          type: "text",
+          text: "Assembly language uses short, memorable keywords to represent machine-code instructions, known as:",
+          expected: "mnemonics",
+          firstLetter: "m",
+          highlightNode: "assembly",
+        },
+        {
+          id: 12,
+          topic: "Classification of Programming Languages",
+          type: "mcq",
+          text: "What is a major advantage of writing code in a high-level language compared to assembly language?",
+          options: [
+            "It allows direct manipulation of hardware registers.",
+            "It takes up significantly less memory.",
+            "It is easier and faster for humans to write, read, and maintain.",
+            "It completely eliminates the need for any translators.",
+          ],
+          correctIndex: 2,
+          highlightNode: "high-level",
+        },
+        {
+          id: 13,
+          topic: "Classification of Programming Languages",
+          type: "mcq",
+          text: 'What characterizes an "imperative" high-level language?',
+          options: [
+            "It describes rules and facts rather than a sequence of steps.",
+            "It consists of a sequence of commands for the computer to execute.",
+            "It uses pure mathematical functions to evaluate expressions.",
+            "It is written in binary code.",
+          ],
+          correctIndex: 1,
+          highlightNode: "imperative",
+        },
+
+        // --- Types of Translator ---
+        {
+          id: 14,
+          topic: "Types of Translator",
+          type: "text",
+          text: "The program translator that converts assembly language into machine code is called an...",
+          expected: "assembler",
+          firstLetter: "a",
+          highlightNode: "assembler",
+        },
+        {
+          id: 15,
+          topic: "Types of Translator",
+          type: "diagram-click",
+          targetNode: "compiler",
+          text: "Click on the translator that converts all source code into object code in a single, distinct process before execution.",
+        },
+        {
+          id: 16,
+          topic: "Types of Translator",
+          type: "mcq",
+          text: "Which of the following is an advantage of using an interpreter?",
+          options: [
+            "The resulting execution is extremely fast.",
+            "It protects the source code from being seen by end-users.",
+            "It translates and executes line-by-line, which is highly beneficial for debugging.",
+            "It produces a standalone executable file that does not need the interpreter again.",
+          ],
+          correctIndex: 2,
+          highlightNode: "interpreter",
+        },
+        {
+          id: 17,
+          topic: "Types of Translator",
+          type: "text",
+          text: "Some compilers produce an intermediate language that is platform-independent. In Java, this is known as:",
+          expected: "bytecode",
+          firstLetter: "b",
+          highlightNode: "compiler",
+        },
+        {
+          id: 18,
+          topic: "Types of Translator",
+          type: "text",
+          text: "The original code written by the programmer is referred to as the ____________ code.",
+          expected: "source",
+          firstLetter: "s",
+        },
+        {
+          id: 19,
+          topic: "Types of Translator",
+          type: "text",
+          text: "The executable machine-code output produced by a compiler is known as the ____________ code.",
+          expected: "object",
+          firstLetter: "o",
+        },
+      ];
+
+      // --- Main App Component ---
+      function App() {
+        const [selectedTopics, setSelectedTopics] = useState(TOPICS);
+        const [isFilterOpen, setIsFilterOpen] = useState(false);
+        const [questionPool, setQuestionPool] = useState([]);
+        const [currentQuestion, setCurrentQuestion] = useState(null);
+
+        // Interactive State
+        const [textInput, setTextInput] = useState("");
+        const [feedback, setFeedback] = useState(null);
+        const [showSolution, setShowSolution] = useState(false);
+        const [completedCount, setCompletedCount] = useState(0);
+
+        const initializeQuestions = useCallback((topicsToUse) => {
+          const relevantQuestions = QUESTIONS.filter((q) =>
+            topicsToUse.includes(q.topic),
+          );
+          if (relevantQuestions.length === 0) return;
+
+          const randomIndex = Math.floor(
+            Math.random() * relevantQuestions.length,
+          );
+          const selected = relevantQuestions[randomIndex];
+
+          const newPool = relevantQuestions.filter(
+            (_, idx) => idx !== randomIndex,
+          );
+          setQuestionPool(newPool);
+          setCurrentQuestion(selected);
+          resetInteractionState();
+        }, []);
+
+        useEffect(() => {
+          initializeQuestions(TOPICS);
+        }, [initializeQuestions]);
+
+        const resetInteractionState = () => {
+          setTextInput("");
+          setFeedback(null);
+          setShowSolution(false);
+        };
+
+        const handleNextQuestion = () => {
+          if (questionPool.length === 0) {
+            initializeQuestions(selectedTopics);
+          } else {
+            const randomIndex = Math.floor(Math.random() * questionPool.length);
+            const selected = questionPool[randomIndex];
+            const newPool = questionPool.filter(
+              (_, idx) => idx !== randomIndex,
+            );
+            setQuestionPool(newPool);
+            setCurrentQuestion(selected);
+            resetInteractionState();
+          }
+        };
+
+        const applyFilters = () => {
+          setIsFilterOpen(false);
+          if (selectedTopics.length === 0) {
+            alert("Please select at least one topic.");
+            setSelectedTopics(TOPICS);
+            initializeQuestions(TOPICS);
+            return;
+          }
+          initializeQuestions(selectedTopics);
+          setCompletedCount(0);
+        };
+
+        const toggleTopic = (topic) => {
+          setSelectedTopics((prev) =>
+            prev.includes(topic)
+              ? prev.filter((t) => t !== topic)
+              : [...prev, topic],
+          );
+        };
+
+        const handleTextSubmit = (e) => {
+          e.preventDefault();
+          if (!currentQuestion) return;
+
+          const cleanInput = textInput.trim().toLowerCase();
+          const cleanExpected = currentQuestion.expected.toLowerCase();
+          const firstLetter = currentQuestion.firstLetter.toLowerCase();
+          const expectedWithoutFirst = cleanExpected.substring(1);
+
+          const isCorrect =
+            cleanInput === cleanExpected || cleanInput === expectedWithoutFirst;
+
+          if (isCorrect) {
+            setFeedback({ type: "success", text: "Correct! Well done." });
+            if (!feedback || feedback.type !== "success")
+              setCompletedCount((c) => c + 1);
+          } else {
+            setFeedback({
+              type: "error",
+              text: "Incorrect. Please try again or view the solution.",
+            });
+          }
+        };
+
+        const handleMcqSelect = (idx) => {
+          if (idx === currentQuestion.correctIndex) {
+            setFeedback({ type: "success", text: "Correct! Well done." });
+            if (!feedback || feedback.type !== "success")
+              setCompletedCount((c) => c + 1);
+          } else {
+            setFeedback({
+              type: "error",
+              text: "Incorrect. Please try again or view the solution.",
+            });
+          }
+        };
+
+        const handleNodeClick = (nodeId) => {
+          if (currentQuestion?.type !== "diagram-click") return;
+
+          if (nodeId === currentQuestion.targetNode) {
+            setFeedback({
+              type: "success",
+              text: "Correct! You identified the right component.",
+            });
+            if (!feedback || feedback.type !== "success")
+              setCompletedCount((c) => c + 1);
+          } else {
+            setFeedback({
+              type: "error",
+              text: "Incorrect. Try clicking a different component.",
+            });
+          }
+        };
+
+        const TreeNode = ({ id, label, className = "" }) => {
+          const isTargetMode = currentQuestion?.type === "diagram-click";
+          const isHighlighted = currentQuestion?.highlightNode === id;
+
+          let baseClass =
+            "relative border-2 rounded-lg p-2 text-center font-medium shadow-sm transition-all duration-300 select-none " +
+            className;
+          let stateClass = "bg-white border-slate-300 text-slate-700";
+
+          if (isTargetMode) {
+            stateClass =
+              "bg-white border-blue-400 text-blue-700 cursor-pointer hover:bg-blue-50 hover:shadow-md hover:border-blue-600 hover:-translate-y-0.5";
+          } else if (isHighlighted) {
+            stateClass =
+              "bg-green-100 border-green-500 text-green-900 shadow-md ring-2 ring-green-300 ring-offset-1 transform scale-105 z-10";
+          }
+
+          return (
+            <div
+              className={`${baseClass} ${stateClass}`}
+              onClick={() => handleNodeClick(id)}
+            >
+              {isTargetMode && (
+                <div className="absolute -top-2 -right-2 bg-blue-500 text-white p-1 rounded-full animate-bounce shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                  <MousePointer2 size={12} />
+                </div>
+              )}
+              <span className="text-sm md:text-base leading-tight">
+                {label}
+              </span>
+            </div>
+          );
+        };
+
+        if (!currentQuestion)
+          return <div className="p-8 text-center">Loading...</div>;
+
+        return (
+          <div className="min-h-screen text-slate-1000 font-sans flex flex-col items-center py-6 px-4">
+            <div className="w-full max-w-8xl bg-white shadow-xl rounded-2xl overflow-hidden flex flex-col">
+              <header className="bg-indigo-700 text-white p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4 relative z-20">
+                <div>
+                  <h1 className="text-2xl font-bold">
+                    AQA A Level CS: Software & Translators
+                  </h1>
+                  <p className="text-indigo-200 text-sm mt-1">
+                    Interactive Revision Map & Assessment
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition-colors border border-indigo-400"
+                  >
+                    <Filter size={18} />
+                    <span>Sub-topics Filter</span>
+                    <ChevronDown
+                      size={18}
+                      className={`transform transition-transform ${isFilterOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {isFilterOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 text-slate-800 overflow-hidden z-50">
+                      <div className="p-3 bg-slate-50 border-b border-slate-200 font-semibold text-sm text-slate-600">
+                        Select Topics to Revise
+                      </div>
+                      <div className="max-h-60 overflow-y-auto p-2">
+                        {TOPICS.map((topic) => (
+                          <label
+                            key={topic}
+                            className="flex items-start gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              className="mt-1 w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                              checked={selectedTopics.includes(topic)}
+                              onChange={() => toggleTopic(topic)}
+                            />
+                            <span className="text-sm">{topic}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="p-3 bg-slate-50 border-t border-slate-200">
+                        <button
+                          onClick={applyFilters}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition-colors"
+                        >
+                          Apply & Get New Question
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </header>
+
+              <div className="flex flex-col lg:flex-row flex-1 p-4 md:p-6 gap-6 md:gap-8">
+                <div className="lg:w-3/5 flex flex-col gap-6">
+                  <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs uppercase tracking-wider">
+                      Reference Map
+                    </span>
+                    System & Language Classification
+                  </h2>
+
+                  <div className="bg-slate-50 rounded-xl p-4 md:p-6 border border-slate-200 shadow-inner flex flex-col gap-6">
+                    <div className="flex flex-col items-center">
+                      <div className="w-full bg-slate-200 h-px mb-4 relative">
+                        <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-2 text-xs font-bold text-slate-500 uppercase">
+                          Computer System
+                        </span>
+                      </div>
+
+                      <div className="flex w-full gap-4 md:gap-8">
+                        <div className="flex-1 flex justify-center mt-2">
+                          <TreeNode
+                            id="hardware"
+                            label="Hardware"
+                            className="w-full max-w-[150px]"
+                          />
+                        </div>
+
+                        <div className="flex-[2] flex flex-col items-center bg-slate-100 p-3 rounded-xl border border-slate-200 relative group">
+                          <TreeNode
+                            id="software"
+                            label="Software"
+                            className="w-full max-w-[150px] mb-4"
+                          />
+
+                          <div className="flex w-full gap-2 md:gap-4 relative before:absolute before:content-[''] before:top-[-16px] before:left-1/2 before:w-px before:h-4 before:bg-slate-300">
+                            <div className="flex-1 flex flex-col items-center bg-indigo-50 p-2 rounded-lg border border-indigo-100">
+                              <TreeNode
+                                id="system-software"
+                                label="System Software"
+                                className="w-full mb-3 text-xs md:text-sm"
+                              />
+                              <div className="grid grid-cols-2 gap-2 w-full">
+                                <TreeNode
+                                  id="os"
+                                  label="Operating System"
+                                  className="text-xs"
+                                />
+                                <TreeNode
+                                  id="utility"
+                                  label="Utility Programs"
+                                  className="text-xs"
+                                />
+                                <TreeNode
+                                  id="library"
+                                  label="Libraries"
+                                  className="text-xs"
+                                />
+                                <TreeNode
+                                  id="translator"
+                                  label="Translators"
+                                  className="text-xs border-dashed"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex-1 flex flex-col items-center bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                              <TreeNode
+                                id="app-software"
+                                label="Application Software"
+                                className="w-full text-xs md:text-sm h-full flex items-center justify-center"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col mt-4">
+                      <div className="w-full bg-slate-200 h-px mb-4 relative">
+                        <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-2 text-xs font-bold text-slate-500 uppercase">
+                          Languages & Translation
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row w-full gap-4">
+                        <div className="flex-1 bg-orange-50 p-3 rounded-xl border border-orange-100 flex flex-col items-center">
+                          <span className="text-xs font-bold text-orange-800 mb-2 uppercase">
+                            Programming Languages
+                          </span>
+                          <div className="flex w-full gap-2">
+                            <div className="flex-1 flex flex-col gap-2">
+                              <TreeNode
+                                id="low-level"
+                                label="Low-Level"
+                                className="text-xs bg-white"
+                              />
+                              <div className="flex gap-1 ml-4 border-l-2 border-orange-200 pl-2 flex-col">
+                                <TreeNode
+                                  id="machine-code"
+                                  label="Machine Code"
+                                  className="text-[10px] md:text-xs !p-1"
+                                />
+                                <TreeNode
+                                  id="assembly"
+                                  label="Assembly"
+                                  className="text-[10px] md:text-xs !p-1"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex-1 flex flex-col gap-2">
+                              <TreeNode
+                                id="high-level"
+                                label="High-Level"
+                                className="text-xs bg-white"
+                              />
+                              <div className="flex gap-1 ml-4 border-l-2 border-orange-200 pl-2 flex-col">
+                                <TreeNode
+                                  id="imperative"
+                                  label="Imperative"
+                                  className="text-[10px] md:text-xs !p-1"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 bg-purple-50 p-3 rounded-xl border border-purple-100 flex flex-col items-center">
+                          <span className="text-xs font-bold text-purple-800 mb-2 uppercase">
+                            Types of Translator
+                          </span>
+                          <div className="grid grid-cols-1 gap-2 w-full">
+                            <TreeNode
+                              id="assembler"
+                              label="Assembler (Assembly → Machine)"
+                              className="text-xs bg-white !text-left"
+                            />
+                            <TreeNode
+                              id="compiler"
+                              label="Compiler (Source → Object Code)"
+                              className="text-xs bg-white !text-left"
+                            />
+                            <TreeNode
+                              id="interpreter"
+                              label="Interpreter (Line-by-line execution)"
+                              className="text-xs bg-white !text-left"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lg:w-2/5 flex flex-col">
+                  <div className="bg-white border-2 border-slate-200 rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden relative">
+                    <div className="bg-slate-50 border-b border-slate-200 p-4">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-bold tracking-wider text-indigo-600 uppercase">
+                          {currentQuestion.topic}
+                        </span>
+                        <span className="text-xs text-slate-400 font-medium">
+                          {QUESTIONS.length - questionPool.length} /{" "}
+                          {QUESTIONS.length}
+                        </span>
+                      </div>
+                      <h3 className="text-lg md:text-xl font-semibold text-slate-800 leading-snug">
+                        {currentQuestion.text}
+                      </h3>
+                    </div>
+
+                    <div className="p-5 md:p-6 flex-1 flex flex-col">
+                      {currentQuestion.type === "diagram-click" && (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-blue-50 border-2 border-dashed border-blue-200 rounded-xl">
+                          <MousePointer2
+                            size={32}
+                            className="text-blue-400 mb-3 animate-bounce"
+                          />
+                          <p className="text-blue-800 font-medium">
+                            Interact with the diagram on the left.
+                          </p>
+                          <p className="text-sm text-blue-600 mt-2">
+                            Find and click the correct component to answer this
+                            question.
+                          </p>
+                        </div>
+                      )}
+
+                      {currentQuestion.type === "text" && (
+                        <form onSubmit={handleTextSubmit} className="mt-4">
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Type your answer:
+                          </label>
+                          <div className="flex items-center">
+                            <div className="bg-slate-100 border border-r-0 border-slate-300 rounded-l-lg px-4 py-3 font-mono font-bold text-slate-600 text-lg">
+                              {currentQuestion.firstLetter.toUpperCase()}
+                            </div>
+                            <input
+                              type="text"
+                              value={textInput}
+                              onChange={(e) => setTextInput(e.target.value)}
+                              placeholder="...finish the word"
+                              className="flex-1 border border-slate-300 rounded-r-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono transition-shadow"
+                              autoFocus
+                            />
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={
+                              !textInput.trim() || feedback?.type === "success"
+                            }
+                            className="mt-4 w-full bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white font-semibold py-3 rounded-lg transition-colors"
+                          >
+                            Check Answer
+                          </button>
+                        </form>
+                      )}
+
+                      {currentQuestion.type === "mcq" && (
+                        <div className="mt-2 flex flex-col gap-3">
+                          {currentQuestion.options.map((option, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => handleMcqSelect(idx)}
+                              disabled={feedback?.type === "success"}
+                              className={`text-left p-4 rounded-xl border-2 transition-all duration-200 
+                              ${
+                                feedback?.type === "success" &&
+                                idx === currentQuestion.correctIndex
+                                  ? "bg-green-100 border-green-500 text-green-900"
+                                  : "bg-white border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700"
+                              } disabled:cursor-default`}
+                            >
+                              <span className="font-semibold mr-2">
+                                {String.fromCharCode(65 + idx)}.
+                              </span>{" "}
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {feedback && (
+                        <div
+                          className={`mt-6 p-4 rounded-xl flex items-start gap-3 ${feedback.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}
+                        >
+                          <div className="mt-0.5">
+                            {feedback.type === "success" ? (
+                              <Check size={20} className="text-green-600" />
+                            ) : (
+                              <X size={20} className="text-red-600" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold">{feedback.text}</p>
+
+                            {feedback.type === "error" && !showSolution && (
+                              <button
+                                onClick={() => setShowSolution(true)}
+                                className="mt-2 text-sm font-medium underline flex items-center gap-1 hover:text-red-900"
+                              >
+                                <Eye size={14} /> Show Solution
+                              </button>
+                            )}
+
+                            {showSolution && feedback.type === "error" && (
+                              <div className="mt-3 bg-white p-3 rounded shadow-sm border border-red-100 text-sm">
+                                <span className="font-bold">
+                                  Correct Answer:
+                                </span>{" "}
+                                {currentQuestion.type === "text"
+                                  ? currentQuestion.expected
+                                  : currentQuestion.type === "mcq"
+                                    ? currentQuestion.options[
+                                        currentQuestion.correctIndex
+                                      ]
+                                    : `The '${currentQuestion.targetNode.replace("-", " ")}' component on the diagram.`}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex-1"></div>
+
+                      <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+                        {feedback?.type === "success" ? (
+                          <button
+                            onClick={handleNextQuestion}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 shadow-md transition-all hover:-translate-y-0.5"
+                          >
+                            Next Question <RefreshCw size={18} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleNextQuestion}
+                            className="text-slate-500 hover:text-slate-700 px-4 py-2 font-medium transition-colors"
+                          >
+                            Skip Question
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
