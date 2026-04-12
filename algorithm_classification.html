@@ -1,0 +1,1608 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Classification of Algorithms</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- KaTeX for LaTeX Math Rendering -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: #f3f4f6;
+      }
+      .fade-in {
+        animation: fadeIn 0.3s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      pre::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      pre::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 4px;
+      }
+
+      /* KaTeX style overrides for better inline flow */
+      .math-inline {
+        display: inline-block;
+        margin: 0 0.15em;
+      }
+      .katex {
+        font-size: 1.1em;
+      }
+      .katex-html {
+        padding-top: 0.2em;
+        padding-bottom: 0.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useCallback, Fragment } = React;
+
+      // --- Icons ---
+      const ChevronDown = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      );
+      const Check = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-green-600"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      );
+      const X = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-red-600"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      );
+      const Filter = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      );
+
+      // --- Components ---
+
+      // MathText Parser
+      const MathText = ({ text }) => {
+        if (typeof text !== "string") return text;
+        const parts = text.split(/(\$[^$]+\$)/g);
+        return (
+          <Fragment>
+            {parts.map((part, i) => {
+              if (part.startsWith("$") && part.endsWith("$")) {
+                const math = part.slice(1, -1);
+                // Fallback rendering if katex isn't ready
+                if (window.katex) {
+                  const html = window.katex.renderToString(math, {
+                    throwOnError: false,
+                  });
+                  return (
+                    <span
+                      key={i}
+                      className="math-inline"
+                      dangerouslySetInnerHTML={{ __html: html }}
+                    />
+                  );
+                }
+                return (
+                  <span key={i} className="italic text-blue-800 font-serif">
+                    {math}
+                  </span>
+                );
+              }
+              return <span key={i}>{part}</span>;
+            })}
+          </Fragment>
+        );
+      };
+
+      // --- Data: Subtopics & Questions ---
+      const SUBTOPICS = [
+        "Complexity Concepts",
+        "Big-O Functions & Graphs",
+        "Deriving Time Complexities",
+        "Permutations & Factorials",
+        "Limits of Computation",
+      ];
+
+      const QUESTIONS = [
+        // Subtopic 1: Complexity Concepts
+        {
+          id: 1,
+          subtopic: "Complexity Concepts",
+          type: "gap-fill",
+          text: "Algorithms can be compared by expressing their complexity as a function relative to the {s|size} of the problem.",
+        },
+        {
+          id: 2,
+          subtopic: "Complexity Concepts",
+          type: "mcq",
+          text: "Which two primary resources are considered when evaluating the efficiency of an algorithm?",
+          options: [
+            "Time and Space (Memory)",
+            "Processing and Bandwidth",
+            "CPU Clock Speed and Network",
+            "Hardware and Software",
+          ],
+          answer: "Time and Space (Memory)",
+        },
+        {
+          id: 3,
+          subtopic: "Complexity Concepts",
+          type: "gap-fill",
+          text: "Efficiently implementing automated abstractions means designing algorithms to run quickly while taking up the minimal amount of resources such as {m|memory}.",
+        },
+
+        // Subtopic 2: Big-O Functions & Graphs
+        {
+          id: 4,
+          subtopic: "Big-O Functions & Graphs",
+          type: "graph-click",
+          text: "Click the line on the graph that represents Logarithmic time complexity: $O(\\log n)$.",
+          answer: "$O(\\log n)$",
+        },
+        {
+          id: 5,
+          subtopic: "Big-O Functions & Graphs",
+          type: "mcq",
+          text: "Which of the following correctly describes a function as a mapping from the domain of Natural numbers to a co-domain of Natural numbers?",
+          options: [
+            "$N \\rightarrow N$",
+            "$R \\rightarrow N$",
+            "$Z \\rightarrow R$",
+            "$N \\rightarrow Z$",
+          ],
+          answer: "$N \\rightarrow N$",
+        },
+        {
+          id: 6,
+          subtopic: "Big-O Functions & Graphs",
+          type: "sorting",
+          text: "Order the following time complexities from MOST efficient (fastest) to LEAST efficient (slowest) for large data sets.",
+          items: [
+            "$O(1)$",
+            "$O(\\log n)$",
+            "$O(n)$",
+            "$O(n^2)$",
+            "$O(2^n)$",
+            "$O(n!)$",
+          ],
+          answer: [
+            "$O(1)$",
+            "$O(\\log n)$",
+            "$O(n)$",
+            "$O(n^2)$",
+            "$O(2^n)$",
+            "$O(n!)$",
+          ],
+        },
+        {
+          id: 7,
+          subtopic: "Big-O Functions & Graphs",
+          type: "gap-fill",
+          text: "An exponential function is represented by equations such as $y = 2^x$ where the variable is in the power. A polynomial function consists of sums of powers of the variable such as {dropdown|$y = 2x^2 + x^3$|$y = 2^x + 1$|$y = \\log_{10}(x)$|$y = 2x$}.",
+        },
+        {
+          id: 24,
+          subtopic: "Big-O Functions & Graphs",
+          type: "graph-click",
+          text: "Click the line on the graph that represents Polynomial time complexity: $O(n^2)$.",
+          answer: "$O(n^2)$",
+        },
+
+        // Subtopic 3: Deriving Time Complexities
+        {
+          id: 8,
+          subtopic: "Deriving Time Complexities",
+          type: "code-complexity",
+          text: "Analyze the code snippet below and select its overall time complexity.",
+          code: [
+            { line: "def print_first_item(items):", indent: 0 },
+            { line: "print(items[0])", indent: 1 },
+          ],
+          overallAnswer: "$O(1)$",
+        },
+        {
+          id: 9,
+          subtopic: "Deriving Time Complexities",
+          type: "code-complexity",
+          text: "Analyze the code snippet below and select its overall time complexity.",
+          code: [
+            { line: "def process_data(items):", indent: 0 },
+            { line: "for i in range(len(items)):", indent: 1 },
+            { line: "print(items[i])", indent: 2 },
+          ],
+          overallAnswer: "$O(n)$",
+        },
+        {
+          id: 10,
+          subtopic: "Deriving Time Complexities",
+          type: "code-complexity",
+          text: "Analyze the nested loop code snippet below and select its overall time complexity.",
+          code: [
+            { line: "def print_pairs(items):", indent: 0 },
+            { line: "for i in range(len(items)):", indent: 1 },
+            { line: "for j in range(len(items)):", indent: 2 },
+            { line: "print(i, j)", indent: 3 },
+          ],
+          overallAnswer: "$O(n^2)$",
+        },
+        {
+          id: 11,
+          subtopic: "Deriving Time Complexities",
+          type: "gap-fill",
+          text: "Binary Search has a worst-case time complexity of {dropdown|$O(\\log n)$|$O(n)$|$O(n \\log n)$|$O(1)$} because it {h|halves} the search space with each comparison, meaning the number of operations grows very slowly as the {s|size} of the data set increases.",
+        },
+        {
+          id: 12,
+          subtopic: "Deriving Time Complexities",
+          type: "gap-fill",
+          text: "Merge Sort has a worst-case time complexity of {dropdown|$O(n \\log n)$|$O(n^2)$|$O(\\log n)$|$O(n)$} because it recursively {d|divides} the list in half (taking logarithmic time) and then merges the sublists by comparing elements, taking {l|linear} time at each level of the recursion.",
+        },
+        {
+          id: 13,
+          subtopic: "Deriving Time Complexities",
+          type: "gap-fill",
+          text: "The time complexity of looking up a value in a Hash Table (assuming a good hash function with no collisions) is {dropdown|$O(1)$|$O(n)$|$O(\\log n)$|$O(n^2)$}. This is an example of {c|constant} time.",
+        },
+        {
+          id: 14,
+          subtopic: "Deriving Time Complexities",
+          type: "gap-fill",
+          text: "Bubble Sort has a worst-case time complexity of {dropdown|$O(n^2)$|$O(n)$|$O(n \\log n)$|$O(2^n)$} (which is an example of {p|polynomial} time) because it uses {n|nested} loops to iterate through the list, potentially making up to $n$ comparisons for each of the $n$ elements.",
+        },
+        {
+          id: 25,
+          subtopic: "Deriving Time Complexities",
+          type: "gap-fill",
+          text: "Linear search has a worst-case time complexity of {dropdown|$O(n)$|$O(1)$|$O(\\log n)$|$O(n^2)$} because in the worst case, the item is at the {e|end} of the list or not present, requiring the algorithm to check {e|every} single element once.",
+        },
+
+        // Subtopic 4: Permutations & Factorials
+        {
+          id: 15,
+          subtopic: "Permutations & Factorials",
+          type: "gap-fill",
+          text: "The number of permutations of $n$ distinct objects, for example the letters of a word, is $n$ {f|factorial} ($n!$).",
+        },
+        {
+          id: 16,
+          subtopic: "Permutations & Factorials",
+          type: "mcq",
+          text: "What is the mathematical definition of $n!$ ($n$ factorial)?",
+          options: [
+            "The product of all positive integers less than or equal to $n$",
+            "The sum of all positive integers up to $n$",
+            "The value of $n$ raised to the power of $n$",
+            "The product of $n$ and 2",
+          ],
+          answer:
+            "The product of all positive integers less than or equal to $n$",
+        },
+        {
+          id: 17,
+          subtopic: "Permutations & Factorials",
+          type: "numerical",
+          text: "Calculate the number of permutations of 5 distinct objects ($5!$).",
+          answer: 120,
+        },
+        {
+          id: 18,
+          subtopic: "Permutations & Factorials",
+          type: "mcq",
+          text: "Comparing Exponential $O(2^n)$ and Factorial $O(n!)$, which grows faster as $n$ increases?",
+          options: [
+            "$O(n!)$ grows faster",
+            "$O(2^n)$ grows faster",
+            "They grow at exactly the same rate",
+            "Neither, they both decrease",
+          ],
+          answer: "$O(n!)$ grows faster",
+        },
+
+        // Subtopic 5: Limits of Computation
+        {
+          id: 19,
+          subtopic: "Limits of Computation",
+          type: "gap-fill",
+          text: "Algorithmic complexity and {h|hardware} impose limits on what can be computed.",
+        },
+        {
+          id: 20,
+          subtopic: "Limits of Computation",
+          type: "classification",
+          text: "Classify the following time complexities into Tractable and Intractable problems.",
+          items: [
+            "$O(1)$",
+            "$O(n)$",
+            "$O(n^2)$",
+            "$O(2^n)$",
+            "$O(n!)$",
+            "$O(n \\log n)$",
+          ],
+          answer: {
+            "Tractable (Polynomial or less)": [
+              "$O(1)$",
+              "$O(n)$",
+              "$O(n \\log n)$",
+              "$O(n^2)$",
+            ],
+            "Intractable (Worse than polynomial)": ["$O(2^n)$", "$O(n!)$"],
+          },
+        },
+        {
+          id: 21,
+          subtopic: "Limits of Computation",
+          type: "gap-fill",
+          text: "Problems that have a polynomial (or less) time solution are called {t|tractable} problems. Problems that have no polynomial time solution are {i|intractable}.",
+        },
+        {
+          id: 22,
+          subtopic: "Limits of Computation",
+          type: "mcq",
+          text: "When tackling intractable problems where finding an optimal solution is too slow, what methods are often used to find a 'good enough' or approximate solution?",
+          options: [
+            "Heuristic methods",
+            "Linear methods",
+            "Recursive methods",
+            "Polynomial methods",
+          ],
+          answer: "Heuristic methods",
+        },
+        {
+          id: 23,
+          subtopic: "Limits of Computation",
+          type: "mcq",
+          text: "Which of the following is considered an intractable problem?",
+          options: [
+            "The Travelling Salesperson Problem",
+            "Binary Search",
+            "Merge Sort",
+            "Calculating the mean of an array",
+          ],
+          answer: "The Travelling Salesperson Problem",
+        },
+      ];
+
+      // --- Question Components ---
+
+      // 1. Multiple Choice Question
+      const MCQ = ({ question, userAnswer, setUserAnswer, showSolution }) => {
+        const [shuffledOptions, setShuffledOptions] = useState([]);
+
+        useEffect(() => {
+          const shuffled = [...question.options].sort(
+            () => Math.random() - 0.5,
+          );
+          setShuffledOptions(shuffled);
+        }, [question.id]);
+
+        return (
+          <div className="flex flex-col gap-3 mt-4">
+            {shuffledOptions.map((opt, idx) => {
+              const isSelected = userAnswer === opt;
+              const isCorrect = opt === question.answer;
+              let btnClass =
+                "text-left p-3 rounded-lg border-2 transition-all duration-200 ease-in-out ";
+
+              if (showSolution) {
+                if (isCorrect)
+                  btnClass +=
+                    "bg-green-100 border-green-500 text-green-900 font-medium shadow-sm";
+                else if (isSelected)
+                  btnClass +=
+                    "bg-red-100 border-red-500 text-red-900 opacity-75";
+                else btnClass += "bg-white border-gray-200 opacity-50";
+              } else {
+                btnClass += isSelected
+                  ? "bg-blue-50 border-blue-500 text-blue-900 shadow-md transform scale-[1.01]"
+                  : "bg-white border-gray-200 hover:border-blue-300 hover:bg-gray-50";
+              }
+
+              return (
+                <button
+                  key={idx}
+                  onClick={() => !showSolution && setUserAnswer(opt)}
+                  className={btnClass}
+                  disabled={showSolution}
+                >
+                  <MathText text={opt} />
+                </button>
+              );
+            })}
+          </div>
+        );
+      };
+
+      // 2. Gap Fill Question
+      const GapFill = ({
+        question,
+        userAnswer,
+        setUserAnswer,
+        showSolution,
+      }) => {
+        const [dropdownOptions, setDropdownOptions] = useState({});
+
+        const parts = useMemo(() => {
+          const regex = /(\{(?:dropdown\|[^}]*|[^|}]*\|[^}]+)\})/g;
+          let gapCount = 0;
+
+          return question.text.split(regex).map((part, index) => {
+            if (part.startsWith("{dropdown|")) {
+              const rawOptions = part.slice(10, -1).split("|");
+              const correct = rawOptions[0]; // First item is always correct
+              const uid = `dd_${index}`;
+              return {
+                type: "dropdown",
+                options: rawOptions,
+                correct,
+                id: uid,
+              };
+            } else if (part.startsWith("{") && part.endsWith("}")) {
+              const [prefix, answer] = part.slice(1, -1).split("|");
+              const uid = `gap_${index}`;
+              return { type: "gap", prefix, answer, id: uid };
+            }
+            return { type: "text", text: part, id: `txt_${index}` };
+          });
+        }, [question.text]);
+
+        // Shuffle dropdowns securely on mount
+        useEffect(() => {
+          const initDrops = {};
+          parts.forEach((p) => {
+            if (p.type === "dropdown") {
+              initDrops[p.id] = [...p.options].sort(() => Math.random() - 0.5);
+            }
+          });
+          setDropdownOptions(initDrops);
+        }, [parts, question.id]);
+
+        const handleChange = (id, val) => {
+          setUserAnswer((prev) => ({ ...prev, [id]: val }));
+        };
+
+        const cleanPrefixAns = (prefix, ans) => {
+          if (ans.toLowerCase().startsWith(prefix.toLowerCase())) {
+            return ans.slice(prefix.length);
+          }
+          return ans;
+        };
+
+        return (
+          <div className="text-lg leading-relaxed bg-white p-6 rounded-lg shadow-sm border border-gray-100 mt-4">
+            {parts.map((part) => {
+              if (part.type === "text")
+                return <MathText key={part.id} text={part.text} />;
+
+              const val = (userAnswer && userAnswer[part.id]) || "";
+
+              if (part.type === "dropdown") {
+                const dOpts = dropdownOptions[part.id] || part.options;
+                const isCorrect = val === part.correct;
+                return (
+                  <select
+                    key={part.id}
+                    value={showSolution ? part.correct : val}
+                    onChange={(e) => handleChange(part.id, e.target.value)}
+                    disabled={showSolution}
+                    className={`mx-2 p-1 border-2 rounded outline-none font-semibold transition-colors align-middle
+                                        ${showSolution ? "border-green-500 bg-green-50 text-green-900" : "border-gray-300 focus:border-blue-500 bg-white text-blue-900"}
+                                    `}
+                  >
+                    <option value="" disabled>
+                      -- select --
+                    </option>
+                    {dOpts.map((opt, i) => {
+                      const displayOpt = opt
+                        .replace(/\$/g, "")
+                        .replace(/\\log/g, "log")
+                        .replace(/\\/g, "");
+                      return (
+                        <option key={i} value={opt}>
+                          {displayOpt}
+                        </option>
+                      );
+                    })}
+                  </select>
+                );
+              }
+
+              if (part.type === "gap") {
+                return (
+                  <span
+                    key={part.id}
+                    className="inline-flex items-baseline mx-1"
+                  >
+                    {part.prefix && (
+                      <span className="font-semibold text-blue-700">
+                        {part.prefix}
+                      </span>
+                    )}
+                    <input
+                      type="text"
+                      value={
+                        showSolution
+                          ? cleanPrefixAns(part.prefix, part.answer)
+                          : val
+                      }
+                      onChange={(e) => handleChange(part.id, e.target.value)}
+                      disabled={showSolution}
+                      className={`w-28 border-b-2 outline-none px-1 text-center font-semibold text-blue-800 transition-colors
+                                            ${showSolution ? "border-green-500 bg-green-50" : "border-gray-400 focus:border-blue-500"}
+                                        `}
+                    />
+                  </span>
+                );
+              }
+            })}
+          </div>
+        );
+      };
+
+      // 3. Numerical Question
+      const Numerical = ({
+        question,
+        userAnswer,
+        setUserAnswer,
+        showSolution,
+      }) => {
+        return (
+          <div className="mt-4">
+            <input
+              type="number"
+              value={showSolution ? question.answer : userAnswer || ""}
+              onChange={(e) => setUserAnswer(e.target.value)}
+              disabled={showSolution}
+              className={`text-2xl p-3 border-2 rounded-lg outline-none w-48 text-center transition-colors
+                            ${showSolution ? "border-green-500 bg-green-50 text-green-900" : "border-gray-300 focus:border-blue-500"}
+                        `}
+              placeholder="Enter number..."
+            />
+          </div>
+        );
+      };
+
+      // 4. Interactive Graph Click
+      const GraphClick = ({
+        question,
+        userAnswer,
+        setUserAnswer,
+        showSolution,
+      }) => {
+        const width = 600;
+        const height = 300;
+        const padding = 40;
+        const graphW = width - padding * 2;
+        const graphH = height - padding * 2;
+
+        const paths = useMemo(
+          () => [
+            { id: "$O(1)$", color: "#10b981", fn: (x) => 20 },
+            {
+              id: "$O(\\log n)$",
+              color: "#0ea5e9",
+              fn: (x) => (x === 0 ? 0 : 30 * Math.log2(x + 1)),
+            },
+            { id: "$O(n)$", color: "#eab308", fn: (x) => 2.2 * x },
+            {
+              id: "$O(n \\log n)$",
+              color: "#f97316",
+              fn: (x) => (x === 0 ? 0 : 0.8 * x * Math.log2(x + 1)),
+            },
+            {
+              id: "$O(n^2)$",
+              color: "#ef4444",
+              fn: (x) => Math.pow(x, 2) / 25,
+            },
+            {
+              id: "$O(2^n)$",
+              color: "#8b5cf6",
+              fn: (x) => Math.pow(1.08, x) * 5,
+            },
+          ],
+          [],
+        );
+
+        const [shuffledLabels, setShuffledLabels] = useState([]);
+        useEffect(() => {
+          setShuffledLabels(
+            [...paths].map((p) => p.id).sort(() => Math.random() - 0.5),
+          );
+        }, [paths, question.id]);
+
+        const generatePathStr = (fn) => {
+          let p = `M ${padding} ${height - padding - fn(0)}`;
+          for (let x = 1; x <= 100; x++) {
+            const px = padding + (x / 100) * graphW;
+            const py = height - padding - fn(x);
+            if (py >= padding) {
+              p += ` L ${px} ${py}`;
+            }
+          }
+          return p;
+        };
+
+        const SvgMathLabel = ({ text, x, y, fill, fontWeight }) => {
+          let clean = text.replace(/\$/g, "").replace(/\\/g, "");
+          if (clean === "O(n^2)") {
+            return (
+              <text
+                x={x}
+                y={y}
+                fill={fill}
+                fontWeight={fontWeight}
+                fontSize="14"
+              >
+                O(n
+                <tspan dy="-6" fontSize="10">
+                  2
+                </tspan>
+                )
+              </text>
+            );
+          }
+          if (clean === "O(2^n)") {
+            return (
+              <text
+                x={x}
+                y={y}
+                fill={fill}
+                fontWeight={fontWeight}
+                fontSize="14"
+              >
+                O(2
+                <tspan dy="-6" fontSize="10">
+                  n
+                </tspan>
+                )
+              </text>
+            );
+          }
+          return (
+            <text x={x} y={y} fill={fill} fontWeight={fontWeight} fontSize="14">
+              {clean}
+            </text>
+          );
+        };
+
+        return (
+          <div className="flex flex-col items-center bg-white p-4 rounded-lg shadow-sm border border-gray-100 relative mt-4">
+            <p className="text-sm text-gray-600 mb-4 self-start bg-blue-50 p-3 rounded w-full">
+              <span className="font-semibold">
+                Curves displayed (random order):{" "}
+              </span>
+              {shuffledLabels.map((lbl, i) => (
+                <Fragment key={i}>
+                  <MathText text={lbl} />
+                  {i < shuffledLabels.length - 1 ? ", " : ""}
+                </Fragment>
+              ))}
+            </p>
+
+            <svg
+              width="100%"
+              viewBox={`0 0 ${width} ${height}`}
+              className="max-w-2xl bg-gray-50 rounded"
+            >
+              {/* Axes */}
+              <line
+                x1={padding}
+                y1={padding}
+                x2={padding}
+                y2={height - padding}
+                stroke="#94a3b8"
+                strokeWidth="2"
+              />
+              <line
+                x1={padding}
+                y1={height - padding}
+                x2={width - padding}
+                y2={height - padding}
+                stroke="#94a3b8"
+                strokeWidth="2"
+              />
+              <text
+                x={width - padding + 5}
+                y={height - padding + 5}
+                fontSize="12"
+                fill="#64748b"
+              >
+                Size (n)
+              </text>
+              <text
+                x={padding - 10}
+                y={padding - 10}
+                fontSize="12"
+                fill="#64748b"
+                textAnchor="middle"
+              >
+                Time
+              </text>
+
+              {/* Paths */}
+              {paths.map((p) => {
+                const isSelected = userAnswer === p.id;
+                const isTarget = p.id === question.answer;
+                const pathStr = generatePathStr(p.fn);
+
+                let strokeWidth = 3;
+                let opacity = 0.7;
+                let strokeColor = p.color;
+
+                if (showSolution) {
+                  if (isTarget) {
+                    strokeWidth = 6;
+                    opacity = 1;
+                  } else {
+                    opacity = 0.2;
+                    strokeColor = "#cbd5e1";
+                  }
+                } else if (isSelected) {
+                  strokeWidth = 6;
+                  opacity = 1;
+                }
+
+                return (
+                  <g
+                    key={p.id}
+                    onClick={() => !showSolution && setUserAnswer(p.id)}
+                    className={!showSolution ? "cursor-pointer" : ""}
+                  >
+                    {/* Invisible wider path for easier clicking */}
+                    <path
+                      d={pathStr}
+                      stroke="transparent"
+                      strokeWidth="20"
+                      fill="none"
+                    />
+                    <path
+                      d={pathStr}
+                      stroke={strokeColor}
+                      strokeWidth={strokeWidth}
+                      fill="none"
+                      opacity={opacity}
+                      className="transition-all duration-200 hover:stroke-[5px]"
+                    />
+                    {showSolution && isTarget && (
+                      <SvgMathLabel
+                        x={width - padding - 60}
+                        y={height - padding - p.fn(90) - 10}
+                        fill={p.color}
+                        fontWeight="bold"
+                        text={p.id}
+                      />
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        );
+      };
+
+      // 5. Code Complexity Derivation
+      const CodeComplexity = ({
+        question,
+        userAnswer,
+        setUserAnswer,
+        showSolution,
+      }) => {
+        const complexities = [
+          "$O(1)$",
+          "$O(\\log n)$",
+          "$O(n)$",
+          "$O(n \\log n)$",
+          "$O(n^2)$",
+          "$O(2^n)$",
+          "$O(n!)$",
+        ];
+
+        return (
+          <div className="bg-gray-900 rounded-lg p-6 font-mono text-sm shadow-md overflow-x-auto mt-4 flex flex-col gap-4">
+            <div className="text-gray-300 bg-black/40 p-4 rounded border border-gray-700">
+              {question.code.map((line, idx) => (
+                <div key={idx} style={{ paddingLeft: `${line.indent * 20}px` }}>
+                  {line.line}
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t-2 border-gray-700 flex justify-end items-center gap-4">
+              <span className="text-yellow-400 font-bold text-base">
+                Overall Time Complexity:
+              </span>
+              <select
+                value={showSolution ? question.overallAnswer : userAnswer || ""}
+                onChange={(e) => setUserAnswer(e.target.value)}
+                disabled={showSolution}
+                className={`bg-gray-800 border-2 rounded px-3 py-2 outline-none font-bold text-lg
+                                ${showSolution ? "border-green-500 text-green-400" : "border-yellow-600 focus:border-yellow-400 text-white"}
+                            `}
+              >
+                <option value="">-- select --</option>
+                {complexities.map((c) => {
+                  const displayOpt = c
+                    .replace(/\$/g, "")
+                    .replace(/\\log/g, "log")
+                    .replace(/\\/g, "");
+                  return (
+                    <option key={c} value={c}>
+                      {displayOpt}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+        );
+      };
+
+      // 6. Sorting Component
+      const Sorting = ({
+        question,
+        userAnswer,
+        setUserAnswer,
+        showSolution,
+      }) => {
+        const [available, setAvailable] = useState([]);
+
+        useEffect(() => {
+          if (!showSolution && (!userAnswer || userAnswer.length === 0)) {
+            const shuffled = [...question.items].sort(
+              () => Math.random() - 0.5,
+            );
+            setAvailable(shuffled);
+            setUserAnswer([]);
+          }
+        }, [question.id, showSolution]);
+
+        const moveToSelected = (item) => {
+          if (showSolution) return;
+          setAvailable((prev) => prev.filter((i) => i !== item));
+          setUserAnswer((prev) => [...(prev || []), item]);
+        };
+
+        const moveToAvailable = (item) => {
+          if (showSolution) return;
+          setUserAnswer((prev) => prev.filter((i) => i !== item));
+          setAvailable((prev) => [...prev, item]);
+        };
+
+        if (showSolution) {
+          return (
+            <div className="flex flex-col gap-2 mt-4">
+              <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                Correct Order (Fastest to Slowest)
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {question.answer.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <div className="bg-green-100 border-2 border-green-500 text-green-900 font-bold px-4 py-2 rounded-lg shadow-sm">
+                      <MathText text={item} />
+                    </div>
+                    {idx < question.answer.length - 1 && (
+                      <span className="text-gray-400 font-bold">→</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-col gap-6 mt-4">
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm min-h-[90px]">
+              <div className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">
+                Your Sequence (Fastest → Slowest)
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                {(userAnswer || []).map((item, idx) => (
+                  <React.Fragment key={`sel-${item}`}>
+                    <div
+                      onClick={() => moveToAvailable(item)}
+                      className="bg-blue-50 hover:bg-blue-100 border-2 border-blue-400 text-blue-900 font-bold px-4 py-2 rounded-lg cursor-pointer shadow-sm transition-transform hover:scale-105"
+                    >
+                      <MathText text={item} />
+                    </div>
+                    {idx < (userAnswer || []).length - 1 && (
+                      <span className="text-gray-400 font-bold">→</span>
+                    )}
+                  </React.Fragment>
+                ))}
+                {(!userAnswer || userAnswer.length === 0) && (
+                  <span className="text-gray-400 italic">
+                    Click items below to build your sequence.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-gray-100 p-5 rounded-xl border border-gray-200">
+              <div className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">
+                Available Complexities
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {available.map((item) => (
+                  <div
+                    key={`avail-${item}`}
+                    onClick={() => moveToSelected(item)}
+                    className="bg-white hover:bg-gray-50 border-2 border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg cursor-pointer shadow-sm transition-transform hover:scale-105"
+                  >
+                    <MathText text={item} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // 7. Classification Component (Drag and Drop + Click menus)
+      const Classification = ({
+        question,
+        userAnswer,
+        setUserAnswer,
+        showSolution,
+      }) => {
+        const categories = Object.keys(question.answer);
+        const [openMenu, setOpenMenu] = useState(null); // Track which item's menu is open
+
+        useEffect(() => {
+          if (!userAnswer) {
+            const initial = categories.reduce(
+              (acc, cat) => ({ ...acc, [cat]: [] }),
+              {},
+            );
+            initial.unassigned = [...question.items].sort(
+              () => Math.random() - 0.5,
+            );
+            setUserAnswer(initial);
+          }
+        }, [question.id]);
+
+        // Close menu if user clicks elsewhere
+        useEffect(() => {
+          const closeMenu = () => setOpenMenu(null);
+          if (openMenu) {
+            window.addEventListener("click", closeMenu);
+            return () => window.removeEventListener("click", closeMenu);
+          }
+        }, [openMenu]);
+
+        const moveItem = (item, fromCat, toCat) => {
+          if (showSolution) return;
+          setUserAnswer((prev) => {
+            const newState = { ...prev };
+            newState[fromCat] = newState[fromCat].filter((i) => i !== item);
+            newState[toCat] = [...newState[toCat], item];
+            return newState;
+          });
+        };
+
+        const handleDragStart = (e, item, source) => {
+          if (showSolution) return;
+          e.dataTransfer.setData(
+            "application/json",
+            JSON.stringify({ item, source }),
+          );
+          e.dataTransfer.effectAllowed = "move";
+          setOpenMenu(null);
+        };
+
+        const handleDrop = (e, targetCat) => {
+          e.preventDefault();
+          if (showSolution) return;
+          const dataStr = e.dataTransfer.getData("application/json");
+          if (dataStr) {
+            const { item, source } = JSON.parse(dataStr);
+            if (source !== targetCat) {
+              moveItem(item, source, targetCat);
+            }
+          }
+        };
+
+        const renderBin = (catName, items, isSource = false) => {
+          const isUnassigned = catName === "unassigned";
+          return (
+            <div
+              className={`flex-1 p-4 rounded-xl border-2 transition-colors ${isUnassigned ? "bg-gray-50 border-dashed border-gray-300" : "bg-white border-blue-200 shadow-sm"}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => handleDrop(e, catName)}
+            >
+              <div className="font-semibold text-gray-700 mb-3">
+                {isUnassigned ? "Drag items from here" : catName}
+              </div>
+              <div className="flex flex-wrap gap-2 min-h-[60px] content-start">
+                {items.map((item) => {
+                  if (showSolution) {
+                    return (
+                      <div
+                        key={item}
+                        className="bg-green-100 border border-green-400 text-green-900 font-bold px-3 py-2 rounded shadow-sm"
+                      >
+                        <MathText text={item} />
+                      </div>
+                    );
+                  }
+
+                  const isMenuOpen = openMenu === item;
+
+                  return (
+                    <div key={item} className="relative">
+                      <div
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, item, catName)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenu(isMenuOpen ? null : item);
+                        }}
+                        className={`cursor-grab active:cursor-grabbing bg-white border-2 hover:border-blue-500 font-bold px-3 py-2 rounded shadow-sm select-none transition-colors
+                                                ${isMenuOpen ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-300"}
+                                            `}
+                      >
+                        <MathText text={item} />
+                      </div>
+
+                      {/* Click Menu Popup */}
+                      {isMenuOpen && (
+                        <div className="absolute flex flex-col bg-white border border-gray-200 shadow-xl rounded-lg z-50 top-full left-0 mt-1 w-48 text-sm overflow-hidden animate-fadeIn">
+                          {categories.map(
+                            (c) =>
+                              c !== catName && (
+                                <div
+                                  key={c}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    moveItem(item, catName, c);
+                                    setOpenMenu(null);
+                                  }}
+                                  className="px-4 py-3 hover:bg-blue-50 border-b last:border-b-0 text-left cursor-pointer font-medium text-gray-700"
+                                >
+                                  Move to {c.split(" ")[0]}
+                                </div>
+                              ),
+                          )}
+                          {!isUnassigned && (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                moveItem(item, catName, "unassigned");
+                                setOpenMenu(null);
+                              }}
+                              className="px-4 py-3 hover:bg-gray-100 text-red-600 text-left cursor-pointer font-medium border-t"
+                            >
+                              Remove
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {items.length === 0 && !isUnassigned && (
+                  <span className="text-gray-400 italic text-sm py-2">
+                    Drop items here
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        const state = userAnswer || {
+          unassigned: question.items,
+          ...categories.reduce((acc, c) => ({ ...acc, [c]: [] }), {}),
+        };
+
+        if (showSolution) {
+          return (
+            <div className="flex flex-col gap-4 md:flex-row mt-4">
+              {categories.map((cat) => renderBin(cat, question.answer[cat]))}
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-col gap-6 mt-4">
+            {renderBin("unassigned", state.unassigned, true)}
+            <div className="flex flex-col gap-4 md:flex-row">
+              {categories.map((cat) => renderBin(cat, state[cat]))}
+            </div>
+            <p className="text-sm text-gray-500 text-center italic bg-blue-50 p-2 rounded">
+              Drag and drop items, or click an item to open the move menu.
+            </p>
+          </div>
+        );
+      };
+
+      // --- Main Application ---
+      const App = () => {
+        const [selectedSubtopics, setSelectedSubtopics] = useState(SUBTOPICS);
+        const [pendingSubtopics, setPendingSubtopics] = useState(SUBTOPICS);
+        const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+        const [questionPool, setQuestionPool] = useState([]);
+        const [currentQuestion, setCurrentQuestion] = useState(null);
+
+        const [userAnswer, setUserAnswer] = useState(null);
+        const [feedback, setFeedback] = useState(null); // null, 'correct', 'incorrect'
+        const [showSolution, setShowSolution] = useState(false);
+
+        // Refill pool safely from exact selection logic
+        const refillPool = useCallback((subtopicsToUse) => {
+          const fullPool = QUESTIONS.filter((q) =>
+            subtopicsToUse.includes(q.subtopic),
+          ).sort(() => Math.random() - 0.5);
+          setQuestionPool(fullPool);
+          if (fullPool.length > 0) {
+            setCurrentQuestion(fullPool[0]);
+            setQuestionPool(fullPool.slice(1));
+          } else {
+            setCurrentQuestion(null);
+          }
+        }, []);
+
+        // Initial setup
+        useEffect(() => {
+          refillPool(selectedSubtopics);
+        }, []);
+
+        // Rigorous strict-pool logic avoiding repeats until pool is exhausted
+        const pickNextQuestion = useCallback(() => {
+          setQuestionPool((prevPool) => {
+            let nextPool = [...prevPool];
+            if (nextPool.length === 0) {
+              // Exhausted, repopulate with currently selected subtopics
+              nextPool = QUESTIONS.filter((q) =>
+                selectedSubtopics.includes(q.subtopic),
+              ).sort(() => Math.random() - 0.5);
+            }
+
+            if (nextPool.length > 0) {
+              setCurrentQuestion(nextPool[0]);
+              return nextPool.slice(1);
+            } else {
+              setCurrentQuestion(null);
+              return [];
+            }
+          });
+
+          // Reset interaction state
+          setUserAnswer(null);
+          setFeedback(null);
+          setShowSolution(false);
+        }, [selectedSubtopics]);
+
+        // Handlers
+        const handleApplyFilters = () => {
+          setSelectedSubtopics(pendingSubtopics);
+          setIsFilterOpen(false);
+          refillPool(pendingSubtopics);
+          setUserAnswer(null);
+          setFeedback(null);
+          setShowSolution(false);
+        };
+
+        const toggleSubtopic = (topic) => {
+          setPendingSubtopics((prev) =>
+            prev.includes(topic)
+              ? prev.filter((t) => t !== topic)
+              : [...prev, topic],
+          );
+        };
+
+        const validateGapFill = (userAnsObj, text) => {
+          if (!userAnsObj) return false;
+          const regex = /(\{(?:dropdown\|[^}]*|[^|}]*\|[^}]+)\})/g;
+          let isCorrect = true;
+
+          text.split(regex).forEach((part, index) => {
+            const uid = part.startsWith("{dropdown")
+              ? `dd_${index}`
+              : `gap_${index}`;
+
+            if (part.startsWith("{dropdown|")) {
+              const correctAns = part.slice(10, -1).split("|")[0];
+              if (userAnsObj[uid] !== correctAns) isCorrect = false;
+            } else if (part.startsWith("{") && part.endsWith("}")) {
+              const [prefix, answer] = part.slice(1, -1).split("|");
+              const uAns = (userAnsObj[uid] || "").toLowerCase().trim();
+              const cAns = answer.toLowerCase().trim();
+
+              // Strict validation allowing pure word or suffix if prefix matches
+              const cleanSuffix = cAns.startsWith(prefix.toLowerCase())
+                ? cAns.slice(prefix.length).trim()
+                : cAns;
+              if (uAns !== cAns && uAns !== cleanSuffix) {
+                isCorrect = false;
+              }
+            }
+          });
+          return isCorrect;
+        };
+
+        const checkAnswer = () => {
+          if (!currentQuestion || userAnswer === null) return;
+
+          let isCorrect = false;
+
+          switch (currentQuestion.type) {
+            case "mcq":
+            case "graph-click":
+              isCorrect = userAnswer === currentQuestion.answer;
+              break;
+            case "gap-fill":
+              isCorrect = validateGapFill(userAnswer, currentQuestion.text);
+              break;
+            case "numerical":
+              isCorrect = parseFloat(userAnswer) === currentQuestion.answer;
+              break;
+            case "code-complexity":
+              isCorrect = userAnswer === currentQuestion.overallAnswer;
+              break;
+            case "sorting":
+              if (
+                !userAnswer ||
+                userAnswer.length !== currentQuestion.answer.length
+              ) {
+                isCorrect = false;
+              } else {
+                isCorrect = userAnswer.every(
+                  (val, index) => val === currentQuestion.answer[index],
+                );
+              }
+              break;
+            case "classification":
+              if (!userAnswer) {
+                isCorrect = false;
+                break;
+              }
+              isCorrect = true;
+              for (const cat of Object.keys(currentQuestion.answer)) {
+                const expected = currentQuestion.answer[cat].slice().sort();
+                const actual = (userAnswer[cat] || []).slice().sort();
+                if (
+                  expected.length !== actual.length ||
+                  !expected.every((val, i) => val === actual[i])
+                ) {
+                  isCorrect = false;
+                }
+              }
+              break;
+            default:
+              break;
+          }
+
+          if (isCorrect) {
+            setFeedback("correct");
+            setShowSolution(true);
+          } else {
+            setFeedback("incorrect");
+          }
+        };
+
+        // Render
+        return (
+          <div className="min-h-screen flex flex-col items-center py-10 px-4">
+            <div className="w-full max-w-4xl bg-white shadow-xl rounded-2xl overflow-hidden flex flex-col">
+              {/* Header & Filters */}
+              <div className="bg-blue-800 text-white p-6 flex justify-between items-center relative z-20">
+                <div>
+                  <h1 className="text-2xl font-bold">
+                    AQA A Level CS: Classification of Algorithms
+                  </h1>
+                  <p className="text-blue-200 text-sm mt-1">
+                    Interactive Topic Review & Practice
+                  </p>
+                </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <Filter /> Topics <ChevronDown />
+                  </button>
+
+                  {isFilterOpen && (
+                    <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-2xl p-4 text-gray-800 border border-gray-100 z-50">
+                      <h3 className="font-bold text-sm mb-3 uppercase tracking-wider text-gray-500">
+                        Select Subtopics
+                      </h3>
+                      <div className="flex flex-col gap-2 mb-4 max-h-60 overflow-y-auto">
+                        {SUBTOPICS.map((topic) => (
+                          <label
+                            key={topic}
+                            className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={pendingSubtopics.includes(topic)}
+                              onChange={() => toggleSubtopic(topic)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium">{topic}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        onClick={handleApplyFilters}
+                        disabled={pendingSubtopics.length === 0}
+                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2 rounded-lg font-semibold transition-colors shadow-sm"
+                      >
+                        Apply & Restart
+                      </button>
+                      {pendingSubtopics.length === 0 && (
+                        <p className="text-xs text-red-500 mt-2 text-center">
+                          Select at least one topic.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Main Content Area */}
+              <div className="p-8 flex-grow flex flex-col z-10 bg-gray-50/50">
+                {!currentQuestion ? (
+                  <div className="text-center py-20 text-gray-500">
+                    <div className="text-4xl mb-4">📚</div>
+                    <h2 className="text-xl font-bold">
+                      No topics selected or pool empty.
+                    </h2>
+                    <p>
+                      Use the filter menu top right to select topics and click
+                      Apply.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="fade-in flex-grow flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                      <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
+                        {currentQuestion.subtopic}
+                      </span>
+                      <span className="text-xs font-bold text-gray-400">
+                        {questionPool.length} questions remaining in cycle
+                      </span>
+                    </div>
+
+                    <h2 className="text-xl font-semibold text-gray-800 mb-2 leading-snug">
+                      {currentQuestion.type !== "gap-fill" && (
+                        <MathText text={currentQuestion.text} />
+                      )}
+                    </h2>
+
+                    <div className="flex-grow">
+                      {currentQuestion.type === "mcq" && (
+                        <MCQ
+                          question={currentQuestion}
+                          userAnswer={userAnswer}
+                          setUserAnswer={setUserAnswer}
+                          showSolution={showSolution}
+                        />
+                      )}
+                      {currentQuestion.type === "gap-fill" && (
+                        <GapFill
+                          question={currentQuestion}
+                          userAnswer={userAnswer}
+                          setUserAnswer={setUserAnswer}
+                          showSolution={showSolution}
+                        />
+                      )}
+                      {currentQuestion.type === "graph-click" && (
+                        <GraphClick
+                          question={currentQuestion}
+                          userAnswer={userAnswer}
+                          setUserAnswer={setUserAnswer}
+                          showSolution={showSolution}
+                        />
+                      )}
+                      {currentQuestion.type === "code-complexity" && (
+                        <CodeComplexity
+                          question={currentQuestion}
+                          userAnswer={userAnswer}
+                          setUserAnswer={setUserAnswer}
+                          showSolution={showSolution}
+                        />
+                      )}
+                      {currentQuestion.type === "sorting" && (
+                        <Sorting
+                          question={currentQuestion}
+                          userAnswer={userAnswer}
+                          setUserAnswer={setUserAnswer}
+                          showSolution={showSolution}
+                        />
+                      )}
+                      {currentQuestion.type === "classification" && (
+                        <Classification
+                          question={currentQuestion}
+                          userAnswer={userAnswer}
+                          setUserAnswer={setUserAnswer}
+                          showSolution={showSolution}
+                        />
+                      )}
+                      {currentQuestion.type === "numerical" && (
+                        <Numerical
+                          question={currentQuestion}
+                          userAnswer={userAnswer}
+                          setUserAnswer={setUserAnswer}
+                          showSolution={showSolution}
+                        />
+                      )}
+                    </div>
+
+                    {/* Action & Feedback Area */}
+                    <div className="mt-8 border-t pt-6 flex flex-col gap-4">
+                      {feedback && (
+                        <div
+                          className={`p-4 rounded-xl flex items-start gap-3 ${feedback === "correct" ? "bg-green-50 border border-green-200" : "bg-orange-50 border border-orange-200"}`}
+                        >
+                          {feedback === "correct" ? (
+                            <Check />
+                          ) : (
+                            <X className="text-orange-600" />
+                          )}
+                          <div className="flex-grow">
+                            <h3
+                              className={`font-bold ${feedback === "correct" ? "text-green-800" : "text-orange-800"}`}
+                            >
+                              {feedback === "correct"
+                                ? "Correct!"
+                                : "Not quite right."}
+                            </h3>
+                            {feedback === "incorrect" && !showSolution && (
+                              <p className="text-orange-700 text-sm mt-1">
+                                Review the logic and try again, or view the
+                                solution if you're stuck.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-3">
+                        {feedback === "incorrect" && !showSolution && (
+                          <button
+                            onClick={() => setShowSolution(true)}
+                            className="px-6 py-3 rounded-xl font-bold border-2 border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                          >
+                            Show Solution
+                          </button>
+                        )}
+
+                        {!feedback ||
+                        (feedback === "incorrect" && !showSolution) ? (
+                          <button
+                            onClick={checkAnswer}
+                            disabled={
+                              userAnswer === null ||
+                              (typeof userAnswer === "object" &&
+                                Object.keys(userAnswer).length === 0)
+                            }
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md active:transform active:scale-95"
+                          >
+                            Check Answer
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => pickNextQuestion()}
+                            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md active:transform active:scale-95 flex items-center gap-2"
+                          >
+                            Next Question{" "}
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="20"
+                              height="20"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M5 12h14" />
+                              <path d="m12 5 7 7-7 7" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
