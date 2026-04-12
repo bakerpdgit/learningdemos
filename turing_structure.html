@@ -1,0 +1,1724 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: Turing Machines Interactive</title>
+    <!-- React & Babel for standalone execution -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Custom styles for animations and Drag&Drop elements */
+      .fade-in {
+        animation: fadeIn 0.4s ease-in;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .state-circle {
+        fill: #ffffff;
+        stroke: #1f2937;
+        stroke-width: 2px;
+      }
+      .state-text {
+        font-family: "Arial", sans-serif;
+        font-weight: bold;
+        font-size: 16px;
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+      .transition-line {
+        fill: none;
+        stroke: #1f2937;
+        stroke-width: 2px;
+      }
+      .transition-text {
+        font-family: "Courier New", Courier, monospace;
+        font-size: 14px;
+        fill: #1f2937;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-800 antialiased min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useCallback } = React;
+
+      // --- QUESTION DATABASE ---
+      const ALL_QUESTIONS = [
+        {
+          id: "q_struct",
+          topic: "Structure",
+          type: "dragdrop",
+          title: "Turing Machine Structure",
+        },
+        {
+          id: "q_func",
+          topic: "Notation",
+          type: "notation_func",
+          title: "Transition Function Notation",
+        },
+        {
+          id: "q_table",
+          topic: "Notation",
+          type: "notation_table",
+          title: "Transition Table Notation",
+        },
+        {
+          id: "q_trace",
+          topic: "Tracing",
+          type: "trace_table",
+          title: "Tracing a Turing Machine",
+        },
+        {
+          id: "q_theory_utm",
+          topic: "UTM & Computability",
+          type: "fillblanks",
+          title: "Universal Turing Machines (UTMs)",
+          instructions:
+            "Complete the sentence summarizing Universal Turing Machines. A first-letter hint is provided.",
+          segments: [
+            {
+              type: "text",
+              content:
+                "A Universal Turing machine (UTM) can simulate any other Turing machine by reading its ",
+            },
+            { type: "blank", id: 1, hint: "d", answer: "description" },
+            { type: "text", content: " from the tape and " },
+            { type: "blank", id: 3, hint: "f", answer: "faithfully" },
+            {
+              type: "text",
+              content:
+                " executes the encoded TM exactly as the original TM would have done, thus acting as an ",
+            },
+            { type: "blank", id: 4, hint: "i", answer: "interpreter" },
+            {
+              type: "text",
+              content:
+                ". The UTM is profoundly important because it provides a formal mathematical model of a general-purpose ",
+            },
+            { type: "blank", id: 2, hint: "c", answer: "computer" },
+            { type: "text", content: "." },
+          ],
+        },
+        {
+          id: "q_theory_halt1",
+          topic: "UTM & Computability",
+          type: "fillblanks",
+          title: "The Halting Problem Statement",
+          instructions:
+            "Complete the definition of the Halting Problem. A first-letter hint is provided.",
+          segments: [
+            {
+              type: "text",
+              content:
+                "The Halting Problem asks: Is it possible to create a Turing Machine which takes on its tape the ",
+            },
+            { type: "blank", id: 1, hint: "d", answer: "description" },
+            {
+              type: "text",
+              content:
+                " of any Turing Machine and its input, and (without running the encoded TM) determines whether it will eventually ",
+            },
+            { type: "blank", id: 2, hint: "h", answer: "halt" },
+            { type: "text", content: " or run forever?" },
+          ],
+        },
+        {
+          id: "q_theory_halt2",
+          topic: "UTM & Computability",
+          type: "fillblanks",
+          title: "Significance of the Halting Problem",
+          instructions:
+            "Complete the sentence regarding the consequences of the Halting Problem. A first-letter hint is provided.",
+          segments: [
+            {
+              type: "text",
+              content:
+                "Given that Alan Turing proved that the Halting Problem could not be solved (it is ",
+            },
+            { type: "blank", id: 1, hint: "u", answer: "undecidable" },
+            {
+              type: "text",
+              content:
+                "), this demonstrates that there are inherent limits to computation, and that some problems are simply not ",
+            },
+            { type: "blank", id: 2, hint: "c", answer: "computable" },
+            { type: "text", content: "." },
+          ],
+        },
+        {
+          id: "q_mcq1",
+          topic: "UTM & Computability",
+          type: "mcq",
+          title: "The Halting Problem",
+          text: "Which of the following best describes the significance of the Halting Problem in Computer Science?",
+          options: [
+            {
+              id: "a",
+              text: "It proves that there are some problems that cannot be solved by any algorithm or computer.",
+              isCorrect: true,
+            },
+            {
+              id: "b",
+              text: "It provides a reliable method to fix infinite loops in all software programs.",
+              isCorrect: false,
+            },
+            {
+              id: "c",
+              text: "It demonstrates that Universal Turing Machines execute instructions faster than standard machines.",
+              isCorrect: false,
+            },
+            {
+              id: "d",
+              text: "It proves that a computer with infinite memory can compute any mathematical truth.",
+              isCorrect: false,
+            },
+          ],
+          explanation:
+            "Alan Turing proved the Halting Problem is undecidable, demonstrating that not all problems are computable.",
+        },
+      ];
+
+      // --- REUSABLE COMPONENTS ---
+
+      // Common action bar for Check / Reveal operations
+      const QuestionActions = ({
+        onCheck,
+        onReveal,
+        showSolution,
+        isCorrect,
+        feedback,
+        feedbackType,
+        extraButtons,
+        checkText = "Check Answer",
+        revealText = "Reveal Solution",
+      }) => {
+        let fbClass = isCorrect
+          ? "bg-green-50 text-green-800 border-green-200"
+          : "bg-red-50 text-red-800 border-red-200";
+        if (feedbackType === "info")
+          fbClass = "bg-blue-50 text-blue-800 border-blue-200";
+        else if (feedbackType === "success")
+          fbClass = "bg-green-50 text-green-800 border-green-200";
+        else if (feedbackType === "error")
+          fbClass = "bg-red-50 text-red-800 border-red-200";
+
+        return (
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="flex flex-wrap gap-3 items-center">
+              <button
+                onClick={onCheck}
+                disabled={showSolution || isCorrect}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded shadow transition disabled:opacity-50"
+              >
+                {checkText}
+              </button>
+              {extraButtons}
+              <button
+                onClick={onReveal}
+                disabled={showSolution || isCorrect}
+                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded shadow transition disabled:opacity-50 ml-auto"
+              >
+                {revealText}
+              </button>
+            </div>
+            {feedback && (
+              <div
+                className={`mt-4 p-4 rounded-lg font-medium text-sm border ${fbClass} fade-in`}
+              >
+                {feedback}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- INTERACTIVE QUESTION COMPONENTS ---
+
+      // 1. Structure Drag and Drop
+      const Q_StructureDragDrop = ({ onSolved }) => {
+        const [placements, setPlacements] = useState({
+          dz_tape: null,
+          dz_cell: null,
+          dz_alphabet: null,
+          dz_head: null,
+          dz_states: null,
+          dz_rules: null,
+        });
+        const [showSolution, setShowSolution] = useState(false);
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [feedback, setFeedback] = useState("");
+
+        const drags = [
+          { id: "tape", label: "Infinite tape" },
+          { id: "cell", label: "Cell" },
+          { id: "alphabet", label: "Alphabet" },
+          { id: "head", label: "Moving read/write head" },
+          { id: "states", label: "Finite set of states" },
+          { id: "rules", label: "Finite set of transition rules" },
+        ];
+
+        const availableDrags = drags.filter(
+          (d) => !Object.values(placements).includes(d.id),
+        );
+
+        const handleDragStart = (e, id) =>
+          e.dataTransfer.setData("text/plain", id);
+
+        const handleDrop = (e, zone) => {
+          e.preventDefault();
+          if (showSolution || isCorrect) return;
+          const id = e.dataTransfer.getData("text/plain");
+          if (id) {
+            const newPlacements = { ...placements };
+            for (let z in newPlacements)
+              if (newPlacements[z] === id) newPlacements[z] = null;
+            newPlacements[zone] = id;
+            setPlacements(newPlacements);
+          }
+        };
+
+        const handleRemove = (zone) => {
+          if (showSolution || isCorrect) return;
+          setPlacements({ ...placements, [zone]: null });
+        };
+
+        const handleCheck = () => {
+          if (
+            placements.dz_tape === "tape" &&
+            placements.dz_cell === "cell" &&
+            placements.dz_alphabet === "alphabet" &&
+            placements.dz_head === "head" &&
+            placements.dz_states === "states" &&
+            placements.dz_rules === "rules"
+          ) {
+            setIsCorrect(true);
+            setFeedback(
+              "Excellent! You have correctly identified all the components of a Turing Machine.",
+            );
+            onSolved();
+          } else {
+            setFeedback(
+              "Not quite. Review the connections carefully and try rearranging them.",
+            );
+          }
+        };
+
+        const handleReveal = () => {
+          setShowSolution(true);
+          setPlacements({
+            dz_tape: "tape",
+            dz_cell: "cell",
+            dz_alphabet: "alphabet",
+            dz_head: "head",
+            dz_states: "states",
+            dz_rules: "rules",
+          });
+          setFeedback("Solution revealed.");
+          onSolved();
+        };
+
+        // Defines exactly where each DropZone `<foreignObject>` is positioned in the SVG space
+        const dzPos = {
+          dz_tape: { x: 20, y: 40 },
+          dz_alphabet: { x: 20, y: 190 },
+          dz_states: { x: 20, y: 340 },
+          dz_cell: { x: 750, y: 40 },
+          dz_head: { x: 750, y: 190 },
+          dz_rules: { x: 750, y: 340 },
+        };
+
+        const renderDropZone = (zone) => (
+          <foreignObject
+            x={dzPos[zone].x}
+            y={dzPos[zone].y}
+            width="190"
+            height="60"
+          >
+            <div
+              className={`w-full h-full border-2 border-dashed ${placements[zone] ? "border-blue-500 bg-blue-50 hover:bg-red-50" : "border-gray-400 bg-gray-50/90 hover:bg-white"} flex items-center justify-center rounded-lg cursor-pointer transition relative group shadow-sm px-2 py-1 select-none`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, zone)}
+              onClick={() => handleRemove(zone)}
+            >
+              {placements[zone] ? (
+                <span className="font-bold text-blue-800 text-center text-sm leading-tight group-hover:opacity-10 transition">
+                  {drags.find((d) => d.id === placements[zone]).label}
+                </span>
+              ) : (
+                <span className="text-gray-400 text-xs uppercase tracking-wider font-semibold text-center">
+                  Drop here
+                </span>
+              )}
+              {placements[zone] && !showSolution && !isCorrect && (
+                <span className="absolute inset-0 flex items-center justify-center text-red-600 opacity-0 group-hover:opacity-100 font-bold transition bg-white/90 rounded-lg text-sm">
+                  Remove
+                </span>
+              )}
+            </div>
+          </foreignObject>
+        );
+
+        return (
+          <div className="fade-in">
+            <p className="mb-6 text-gray-700">
+              Drag and drop the labels to correctly identify the structural
+              components of a Turing Machine model.
+            </p>
+
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm mb-8 overflow-hidden w-full relative aspect-[2.13]">
+              {/* Unified SVG coordinate space (960x450) */}
+              <svg
+                viewBox="0 0 960 450"
+                className="w-full h-full bg-gray-50/30"
+              >
+                <defs>
+                  <marker
+                    id="pointer"
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="7"
+                    refY="4"
+                    orient="auto"
+                  >
+                    <polygon points="0 0, 8 4, 0 8" fill="#9ca3af" />
+                  </marker>
+                  <marker
+                    id="arrowFSM"
+                    markerWidth="10"
+                    markerHeight="7"
+                    refX="9"
+                    refY="3.5"
+                    orient="auto"
+                  >
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+                  </marker>
+                </defs>
+
+                {/* --- TURING MACHINE VISUALS --- */}
+
+                {/* 1. Tape (330 to 630, y=40, h=60) */}
+                <g>
+                  <rect
+                    x="330"
+                    y="40"
+                    width="300"
+                    height="60"
+                    fill="#ffffff"
+                    stroke="#1f2937"
+                    strokeWidth="3"
+                  />
+                  {/* Cell dividers */}
+                  <line
+                    x1="390"
+                    y1="40"
+                    x2="390"
+                    y2="100"
+                    stroke="#1f2937"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="450"
+                    y1="40"
+                    x2="450"
+                    y2="100"
+                    stroke="#1f2937"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="510"
+                    y1="40"
+                    x2="510"
+                    y2="100"
+                    stroke="#1f2937"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="570"
+                    y1="40"
+                    x2="570"
+                    y2="100"
+                    stroke="#1f2937"
+                    strokeWidth="2"
+                  />
+
+                  {/* Symbols */}
+                  <text
+                    x="360"
+                    y="70"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="monospace"
+                    fontSize="24"
+                    fill="#9ca3af"
+                  >
+                    _
+                  </text>
+                  <text
+                    x="420"
+                    y="70"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="monospace"
+                    fontSize="24"
+                    fontWeight="bold"
+                  >
+                    1
+                  </text>
+
+                  {/* Active Cell highlight */}
+                  <rect x="451" y="41" width="58" height="58" fill="#fef08a" />
+                  <line
+                    x1="450"
+                    y1="98"
+                    x2="510"
+                    y2="98"
+                    stroke="#f59e0b"
+                    strokeWidth="4"
+                  />
+                  <text
+                    x="480"
+                    y="70"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="monospace"
+                    fontSize="24"
+                    fontWeight="bold"
+                  >
+                    0
+                  </text>
+
+                  <text
+                    x="540"
+                    y="70"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="monospace"
+                    fontSize="24"
+                    fontWeight="bold"
+                    fill="#2563eb"
+                  >
+                    1
+                  </text>
+                  <text
+                    x="600"
+                    y="70"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="monospace"
+                    fontSize="24"
+                    fill="#9ca3af"
+                  >
+                    _
+                  </text>
+
+                  {/* Faded ends to indicate infinity */}
+                  <rect
+                    x="300"
+                    y="38"
+                    width="30"
+                    height="64"
+                    fill="url(#leftGradient)"
+                  />
+                  <rect
+                    x="630"
+                    y="38"
+                    width="30"
+                    height="64"
+                    fill="url(#rightGradient)"
+                  />
+                  <defs>
+                    <linearGradient
+                      id="leftGradient"
+                      x1="0"
+                      y1="0"
+                      x2="1"
+                      y2="0"
+                    >
+                      <stop offset="0%" stopColor="#f9fafb" />
+                      <stop offset="100%" stopColor="transparent" />
+                    </linearGradient>
+                    <linearGradient
+                      id="rightGradient"
+                      x1="0"
+                      y1="0"
+                      x2="1"
+                      y2="0"
+                    >
+                      <stop offset="0%" stopColor="transparent" />
+                      <stop offset="100%" stopColor="#f9fafb" />
+                    </linearGradient>
+                  </defs>
+                </g>
+
+                {/* 2. Head (pointing at x=480, y=100) */}
+                <g>
+                  <polygon points="480,105 460,130 500,130" fill="#4f46e5" />
+                  <rect
+                    x="465"
+                    y="130"
+                    width="30"
+                    height="40"
+                    rx="3"
+                    fill="#4f46e5"
+                  />
+                </g>
+
+                {/* 3. Alphabet Legend */}
+                <g>
+                  <rect
+                    x="320"
+                    y="145"
+                    width="140"
+                    height="45"
+                    rx="4"
+                    fill="#ffffff"
+                    stroke="#94a3b8"
+                    strokeWidth="2"
+                    strokeDasharray="4 2"
+                  />
+                  <text
+                    x="390"
+                    y="167.5"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="monospace"
+                    fontSize="15"
+                    fill="#334155"
+                    fontWeight="bold"
+                  >
+                    Σ = {"{"} 0, 1, _ {"}"}
+                  </text>
+                </g>
+
+                {/* 4. Finite State Machine */}
+                <g>
+                  <rect
+                    x="370"
+                    y="310"
+                    width="220"
+                    height="110"
+                    rx="12"
+                    fill="#eff6ff"
+                    stroke="#bfdbfe"
+                    strokeWidth="2"
+                  />
+
+                  {/* State S0 */}
+                  <circle
+                    cx="415"
+                    cy="370"
+                    r="25"
+                    fill="#ffffff"
+                    stroke="#f59e0b"
+                    strokeWidth="3"
+                    strokeDasharray="4 2"
+                  />
+                  <text x="415" y="370" className="state-text" fill="#1f2937">
+                    S0
+                  </text>
+
+                  {/* State S1 */}
+                  <circle
+                    cx="565"
+                    cy="370"
+                    r="25"
+                    fill="#ffffff"
+                    stroke="#3b82f6"
+                    strokeWidth="2"
+                  />
+                  <text x="565" y="370" className="state-text" fill="#1f2937">
+                    S1
+                  </text>
+
+                  {/* Transition Rule */}
+                  <path
+                    d="M 440 370 L 530 370"
+                    stroke="#3b82f6"
+                    strokeWidth="2.5"
+                    markerEnd="url(#arrowFSM)"
+                  />
+                  <rect x="455" y="350" width="60" height="20" fill="#eff6ff" />
+                  <text
+                    x="485"
+                    y="360"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="monospace"
+                    fontSize="14"
+                    fontWeight="bold"
+                    fill="#1e3a8a"
+                  >
+                    1, 0, R
+                  </text>
+                </g>
+
+                {/* --- CONNECTION LINES (from DropZone edges to specific targets) --- */}
+
+                {/* Tape Line */}
+                <path
+                  d="M 210 70 L 325 70"
+                  stroke="#9ca3af"
+                  strokeWidth="2.5"
+                  strokeDasharray="4 4"
+                  markerEnd="url(#pointer)"
+                />
+                {/* Cell Line (Points down to top of active cell) */}
+                <path
+                  d="M 750 60 Q 620 15 480 35"
+                  stroke="#9ca3af"
+                  fill="none"
+                  strokeWidth="2.5"
+                  strokeDasharray="4 4"
+                  markerEnd="url(#pointer)"
+                />
+
+                {/* Alphabet Line */}
+                <path
+                  d="M 210 220 Q 260 220 315 167"
+                  stroke="#9ca3af"
+                  fill="none"
+                  strokeWidth="2.5"
+                  strokeDasharray="4 4"
+                  markerEnd="url(#pointer)"
+                />
+                {/* Head Line */}
+                <path
+                  d="M 750 220 Q 550 220 505 155"
+                  stroke="#9ca3af"
+                  fill="none"
+                  strokeWidth="2.5"
+                  strokeDasharray="4 4"
+                  markerEnd="url(#pointer)"
+                />
+
+                {/* States Line (Points to left edge of S0) */}
+                <path
+                  d="M 210 370 L 385 370"
+                  stroke="#9ca3af"
+                  strokeWidth="2.5"
+                  strokeDasharray="4 4"
+                  markerEnd="url(#pointer)"
+                />
+                {/* Rules Line (Curves from top down to point at transition text) */}
+                <path
+                  d="M 750 370 Q 600 310 485 345"
+                  stroke="#9ca3af"
+                  fill="none"
+                  strokeWidth="2.5"
+                  strokeDasharray="4 4"
+                  markerEnd="url(#pointer)"
+                />
+
+                {/* --- HTML DROP ZONES (via foreignObject) --- */}
+                {renderDropZone("dz_tape")}
+                {renderDropZone("dz_alphabet")}
+                {renderDropZone("dz_states")}
+                {renderDropZone("dz_cell")}
+                {renderDropZone("dz_head")}
+                {renderDropZone("dz_rules")}
+              </svg>
+            </div>
+
+            {/* Word Bank */}
+            <div className="flex gap-3 justify-center mt-6 p-5 bg-gray-200 rounded-xl min-h-[5rem] flex-wrap shadow-inner">
+              {availableDrags.map((d) => (
+                <div
+                  key={d.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, d.id)}
+                  className="bg-white border-2 border-gray-300 px-4 py-2.5 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 hover:text-blue-700 cursor-grab active:cursor-grabbing font-bold text-gray-700 transition"
+                >
+                  {d.label}
+                </div>
+              ))}
+              {availableDrags.length === 0 && (
+                <span className="text-gray-500 font-medium italic flex items-center">
+                  All labels placed.
+                </span>
+              )}
+            </div>
+
+            <QuestionActions
+              onCheck={handleCheck}
+              onReveal={handleReveal}
+              showSolution={showSolution}
+              isCorrect={isCorrect}
+              feedback={feedback}
+            />
+          </div>
+        );
+      };
+
+      // 2. Notation: Transition Function
+      const Q_NotationFunc = ({ onSolved }) => {
+        const [inputs, setInputs] = useState(["", "", "", "", ""]);
+        const [showSolution, setShowSolution] = useState(false);
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [feedback, setFeedback] = useState("");
+
+        const expected = ["S0", "0", "S1", "1", "R"];
+
+        const handleCheck = () => {
+          const isMatch = inputs.every(
+            (val, i) => val.trim().toLowerCase() === expected[i].toLowerCase(),
+          );
+          if (isMatch) {
+            setIsCorrect(true);
+            setFeedback(
+              "Correct! You've successfully converted the diagram into transition function notation.",
+            );
+            onSolved();
+          } else {
+            setFeedback(
+              "Incorrect. Remember the format: δ(CurrentState, InputSymbol) = (NextState, OutputSymbol, HeadMove).",
+            );
+          }
+        };
+        const handleReveal = () => {
+          setShowSolution(true);
+          setInputs(expected);
+          setFeedback("Solution revealed.");
+          onSolved();
+        };
+        const setVal = (index, val) => {
+          const n = [...inputs];
+          n[index] = val;
+          setInputs(n);
+        };
+        const vals = showSolution ? expected : inputs;
+
+        return (
+          <div className="fade-in">
+            <p className="mb-6 text-gray-700">
+              Convert the visual state transition below into{" "}
+              <strong>Transition Function</strong> notation.
+            </p>
+
+            {/* Mini Diagram */}
+            <svg
+              viewBox="0 0 300 120"
+              className="w-full max-w-md mx-auto bg-white border border-gray-300 rounded-lg shadow-sm mb-8"
+            >
+              <defs>
+                <marker
+                  id="arrow"
+                  markerWidth="10"
+                  markerHeight="7"
+                  refX="9"
+                  refY="3.5"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 10 3.5, 0 7" fill="#1f2937" />
+                </marker>
+              </defs>
+              <g transform="translate(60, 60)">
+                <circle class="state-circle" cx="0" cy="0" r="25" />
+                <text class="state-text" x="0" y="0">
+                  S0
+                </text>
+              </g>
+              <g transform="translate(240, 60)">
+                <circle class="state-circle" cx="0" cy="0" r="25" />
+                <text class="state-text" x="0" y="0">
+                  S1
+                </text>
+              </g>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrow)"
+                d="M 85 60 L 215 60"
+              />
+              <rect x="125" y="40" width="50" height="20" fill="white" />
+              <text x="150" y="53" class="transition-text" textAnchor="middle">
+                0, 1, R
+              </text>
+            </svg>
+
+            <div className="flex items-center justify-center gap-2 text-2xl font-mono my-8 flex-wrap bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-inner">
+              <span className="font-bold text-gray-800">δ (</span>
+              <input
+                type="text"
+                value={vals[0]}
+                onChange={(e) => setVal(0, e.target.value)}
+                disabled={showSolution || isCorrect}
+                placeholder="State"
+                className="w-16 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
+              />
+              <span className="font-bold text-gray-800">,</span>
+              <input
+                type="text"
+                value={vals[1]}
+                onChange={(e) => setVal(1, e.target.value)}
+                disabled={showSolution || isCorrect}
+                placeholder="In"
+                className="w-12 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
+              />
+              <span className="font-bold text-gray-800">) = (</span>
+              <input
+                type="text"
+                value={vals[2]}
+                onChange={(e) => setVal(2, e.target.value)}
+                disabled={showSolution || isCorrect}
+                placeholder="State"
+                className="w-16 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
+              />
+              <span className="font-bold text-gray-800">,</span>
+              <input
+                type="text"
+                value={vals[3]}
+                onChange={(e) => setVal(3, e.target.value)}
+                disabled={showSolution || isCorrect}
+                placeholder="Out"
+                className="w-12 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
+              />
+              <span className="font-bold text-gray-800">,</span>
+              <input
+                type="text"
+                value={vals[4]}
+                onChange={(e) => setVal(4, e.target.value)}
+                disabled={showSolution || isCorrect}
+                placeholder="Move"
+                className="w-14 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
+              />
+              <span className="font-bold text-gray-800">)</span>
+            </div>
+
+            <QuestionActions
+              onCheck={handleCheck}
+              onReveal={handleReveal}
+              showSolution={showSolution}
+              isCorrect={isCorrect}
+              feedback={feedback}
+            />
+          </div>
+        );
+      };
+
+      // 3. Notation: Transition Table
+      const Q_NotationTable = ({ onSolved }) => {
+        const [inputs, setInputs] = useState(["", "", "", "", ""]);
+        const [showSolution, setShowSolution] = useState(false);
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [feedback, setFeedback] = useState("");
+        const expected = ["S2", "1", "S3", "0", "L"];
+
+        const handleCheck = () => {
+          if (
+            inputs.every(
+              (v, i) => v.trim().toLowerCase() === expected[i].toLowerCase(),
+            )
+          ) {
+            setIsCorrect(true);
+            setFeedback(
+              "Great! The transition function is correctly mapped to the table row.",
+            );
+            onSolved();
+          } else {
+            setFeedback(
+              "Incorrect. Map the function carefully: δ(Current, Input) = (Next, Output, Direction).",
+            );
+          }
+        };
+        const handleReveal = () => {
+          setShowSolution(true);
+          setInputs(expected);
+          setFeedback("Solution revealed.");
+          onSolved();
+        };
+        const vals = showSolution ? expected : inputs;
+        const setVal = (i, v) => {
+          const n = [...inputs];
+          n[i] = v;
+          setInputs(n);
+        };
+
+        return (
+          <div className="fade-in">
+            <p className="mb-6 text-gray-700">
+              Given the transition function rule{" "}
+              <strong>δ(S2, 1) = (S3, 0, L)</strong>, complete the corresponding
+              row in the state transition table.
+            </p>
+
+            <div className="overflow-x-auto shadow rounded-lg border border-gray-300 mb-8">
+              <table className="w-full text-center">
+                <thead className="bg-gray-800 text-white font-semibold">
+                  <tr>
+                    <th className="p-3 border-r border-gray-600">
+                      Current State
+                    </th>
+                    <th className="p-3 border-r border-gray-600">
+                      Input Symbol
+                    </th>
+                    <th className="p-3 border-r border-gray-600">Next State</th>
+                    <th className="p-3 border-r border-gray-600">
+                      Output Symbol
+                    </th>
+                    <th className="p-3">Head Move</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  <tr>
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <td key={i} className="p-2 border-r border-gray-200">
+                        <input
+                          type="text"
+                          value={vals[i]}
+                          onChange={(e) => setVal(i, e.target.value)}
+                          disabled={showSolution || isCorrect}
+                          className="w-full text-center p-2 bg-gray-50 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold text-lg"
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <QuestionActions
+              onCheck={handleCheck}
+              onReveal={handleReveal}
+              showSolution={showSolution}
+              isCorrect={isCorrect}
+              feedback={feedback}
+            />
+          </div>
+        );
+      };
+
+      // 4. Fill in the Blanks (Theory)
+      const Q_FillBlanks = ({ question, onSolved }) => {
+        const initialAnswers = {};
+        question.segments.forEach((s) => {
+          if (s.type === "blank") initialAnswers[s.id] = "";
+        });
+
+        const [answers, setAnswers] = useState(initialAnswers);
+        const [showSolution, setShowSolution] = useState(false);
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [feedback, setFeedback] = useState("");
+
+        const handleCheck = () => {
+          let allOk = true;
+          question.segments.forEach((s) => {
+            if (s.type === "blank") {
+              const u = answers[s.id].trim().toLowerCase();
+              const t = s.answer.toLowerCase();
+              if (u !== t && u !== t.substring(1)) allOk = false;
+            }
+          });
+          if (allOk) {
+            setIsCorrect(true);
+            setFeedback(
+              "Perfect! You correctly identified all the missing words.",
+            );
+            onSolved();
+          } else {
+            setFeedback(
+              "Some words are incorrect. Use the first letter hints to guide you.",
+            );
+          }
+        };
+
+        const handleReveal = () => {
+          setShowSolution(true);
+          const solvedAnswers = {};
+          question.segments.forEach((s) => {
+            if (s.type === "blank") solvedAnswers[s.id] = s.answer.substring(1);
+          });
+          setAnswers(solvedAnswers);
+          setFeedback("Solution revealed.");
+          onSolved();
+        };
+
+        return (
+          <div className="fade-in">
+            <p className="mb-6 text-gray-700">{question.instructions}</p>
+
+            <div className="text-lg leading-loose bg-white p-6 rounded-lg shadow border border-gray-200">
+              {question.segments.map((seg, idx) => {
+                if (seg.type === "text")
+                  return <span key={idx}>{seg.content}</span>;
+                if (seg.type === "blank") {
+                  const val = answers[seg.id];
+                  const isFieldCorrect =
+                    val.trim().toLowerCase() === seg.answer.toLowerCase() ||
+                    val.trim().toLowerCase() ===
+                      seg.answer.toLowerCase().substring(1);
+                  const colorClass = showSolution
+                    ? "text-green-700 border-green-500"
+                    : isCorrect
+                      ? "text-green-700"
+                      : "text-blue-800";
+
+                  return (
+                    <span
+                      key={idx}
+                      className="inline-flex items-baseline border-b-2 border-gray-400 bg-gray-50 px-1 mx-1 rounded-t shadow-sm"
+                    >
+                      <span className={`font-bold ${colorClass}`}>
+                        {seg.hint}
+                      </span>
+                      <input
+                        type="text"
+                        value={
+                          showSolution
+                            ? seg.answer.substring(1)
+                            : answers[seg.id]
+                        }
+                        onChange={(e) =>
+                          setAnswers({ ...answers, [seg.id]: e.target.value })
+                        }
+                        disabled={showSolution || isCorrect}
+                        style={{ width: `max(4rem, ${seg.answer.length}ch)` }}
+                        className={`bg-transparent outline-none focus:bg-white px-1 ${colorClass} font-semibold`}
+                        placeholder="..."
+                      />
+                    </span>
+                  );
+                }
+              })}
+            </div>
+
+            <QuestionActions
+              onCheck={handleCheck}
+              onReveal={handleReveal}
+              showSolution={showSolution}
+              isCorrect={isCorrect}
+              feedback={feedback}
+            />
+          </div>
+        );
+      };
+
+      // 5. Multiple Choice
+      const Q_MCQ = ({ question, onSolved }) => {
+        const [selected, setSelected] = useState(null);
+        const [showSolution, setShowSolution] = useState(false);
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [feedback, setFeedback] = useState("");
+        const [opts, setOpts] = useState([]);
+
+        useEffect(() => {
+          setOpts([...question.options].sort(() => Math.random() - 0.5));
+        }, [question]);
+
+        const handleCheck = () => {
+          if (!selected) {
+            setFeedback("Please select an option.");
+            return;
+          }
+          const opt = opts.find((o) => o.id === selected);
+          if (opt.isCorrect) {
+            setIsCorrect(true);
+            setFeedback("Correct! " + question.explanation);
+            onSolved();
+          } else {
+            setFeedback(
+              "Incorrect. Think about the definition of undecidable problems.",
+            );
+          }
+        };
+        const handleReveal = () => {
+          setShowSolution(true);
+          setSelected(opts.find((o) => o.isCorrect).id);
+          setFeedback("Solution: " + question.explanation);
+          onSolved();
+        };
+
+        return (
+          <div className="fade-in">
+            <p className="mb-6 text-gray-800 text-lg font-medium">
+              {question.text}
+            </p>
+            <div className="space-y-3 mb-6">
+              {opts.map((opt) => (
+                <label
+                  key={opt.id}
+                  className={`block p-4 border-2 rounded-lg cursor-pointer transition ${selected === opt.id ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"} ${(showSolution || isCorrect) && opt.isCorrect ? "border-green-500 bg-green-50 font-bold" : ""}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      checked={selected === opt.id}
+                      onChange={() => setSelected(opt.id)}
+                      disabled={showSolution || isCorrect}
+                      className="w-5 h-5 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-gray-700">{opt.text}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <QuestionActions
+              onCheck={handleCheck}
+              onReveal={handleReveal}
+              showSolution={showSolution}
+              isCorrect={isCorrect}
+              feedback={feedback}
+            />
+          </div>
+        );
+      };
+
+      // 6. Trace Table
+      const Q_TraceTable = ({ onSolved }) => {
+        const solutionTrace = [
+          ["S0", "_", "0*", "0", "1", "_", "_", "_", "_"],
+          ["S1", "_", "_", "0*", "1", "_", "_", "_", "_"],
+          ["S1", "_", "_", "0", "1*", "_", "_", "_", "_"],
+          ["S2", "_", "_", "0", "1", "_*", "_", "_", "_"],
+          ["S3", "_", "_", "0", "1*", "0", "_", "_", "_"],
+          ["S3", "_", "_", "0*", "1", "0", "_", "_", "_"],
+          ["S3", "_", "_*", "0", "1", "0", "_", "_", "_"],
+          ["S0", "_", "_", "0*", "1", "0", "_", "_", "_"],
+          ["S1", "_", "_", "_", "1*", "0", "_", "_", "_"],
+          ["S2", "_", "_", "_", "1", "0*", "_", "_", "_"],
+          ["S2", "_", "_", "_", "1", "0", "_*", "_", "_"],
+          ["S3", "_", "_", "_", "1", "0*", "0", "_", "_"],
+          ["S3", "_", "_", "_", "1*", "0", "0", "_", "_"],
+          ["S3", "_", "_", "_*", "1", "0", "0", "_", "_"],
+          ["S0", "_", "_", "_", "1*", "0", "0", "_", "_"],
+          ["Halt", "_", "_", "_", "1*", "0", "0", "_", "_"],
+        ];
+
+        const [history, setHistory] = useState([solutionTrace[0]]);
+        const [currentRowInput, setCurrentRowInput] = useState(
+          Array(9).fill(""),
+        );
+        const [showSolution, setShowSolution] = useState(false);
+        const [isCorrect, setIsCorrect] = useState(false);
+        const [feedback, setFeedback] = useState("");
+        const [feedbackType, setFeedbackType] = useState(null);
+
+        const cleanStr = (s) => s.replace(/\s+/g, "").toUpperCase();
+
+        // Track current state to highlight on the diagram
+        const currentState = history[history.length - 1][0];
+        const stateCoords = {
+          S0: { x: 100, y: 100 },
+          S1: { x: 300, y: 100 },
+          S2: { x: 500, y: 100 },
+          S3: { x: 300, y: 250 },
+          Halt: { x: 100, y: 250 },
+        };
+
+        const handleCheckRow = () => {
+          if (history.length >= solutionTrace.length) return;
+          const targetRow = solutionTrace[history.length];
+          let isRowCorrect = true;
+          for (let i = 0; i < 9; i++) {
+            if (cleanStr(currentRowInput[i]) !== cleanStr(targetRow[i])) {
+              isRowCorrect = false;
+              break;
+            }
+          }
+
+          if (isRowCorrect) {
+            const newHistory = [...history, targetRow];
+            setHistory(newHistory);
+            setCurrentRowInput(Array(9).fill(""));
+
+            if (newHistory.length === solutionTrace.length) {
+              setIsCorrect(true);
+              setFeedbackType("success");
+              setFeedback(
+                "Outstanding! The entire trace is complete and correct.",
+              );
+              onSolved();
+            } else {
+              setFeedbackType("success");
+              setFeedback("Row correct! Keep going. Proceed to the next row.");
+            }
+          } else {
+            setFeedbackType("error");
+            setFeedback(
+              "Incorrect row. Carefully trace the state diagram, cell values, and ensure the head position is marked with an asterisk (*).",
+            );
+          }
+        };
+
+        const handleReveal = () => {
+          if (history.length >= solutionTrace.length) return;
+          const targetRow = solutionTrace[history.length];
+          const newHistory = [...history, targetRow];
+
+          setHistory(newHistory);
+          setCurrentRowInput(Array(9).fill(""));
+
+          if (newHistory.length === solutionTrace.length) {
+            setIsCorrect(true);
+            setFeedbackType("info");
+            setFeedback("Complete trace revealed.");
+            onSolved();
+          } else {
+            setFeedbackType("info");
+            setFeedback("Next row revealed. Keep going!");
+          }
+        };
+
+        return (
+          <div className="fade-in">
+            <p className="mb-4 text-gray-700">
+              The Turing machine below is designed to shift a contiguous block
+              of <code className="bg-gray-200 px-1 rounded">0</code>s to the
+              right side of a single{" "}
+              <code className="bg-gray-200 px-1 rounded">1</code>.
+            </p>
+            <p className="mb-6 text-sm bg-blue-50 border-l-4 border-blue-500 p-3 text-blue-800">
+              <strong>Task:</strong> Trace the execution row by row. Indicate
+              the current position of the read/write head by appending an
+              asterisk (<code>*</code>) to the cell's symbol (e.g.,{" "}
+              <code>0*</code>).
+            </p>
+
+            <svg
+              width="100%"
+              height="auto"
+              viewBox="0 0 700 380"
+              className="bg-white border rounded shadow-sm mb-6 max-w-2xl mx-auto block"
+            >
+              <defs>
+                <marker
+                  id="arrowhead2"
+                  markerWidth="10"
+                  markerHeight="7"
+                  refX="9"
+                  refY="3.5"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 10 3.5, 0 7" fill="#1f2937" />
+                </marker>
+              </defs>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 125 100 L 265 100"
+              />
+              <rect x="175" y="80" width="50" height="20" fill="white" />
+              <text x="200" y="93" class="transition-text" textAnchor="middle">
+                0, _, R
+              </text>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 325 100 L 465 100"
+              />
+              <rect x="375" y="80" width="50" height="20" fill="white" />
+              <text x="400" y="93" class="transition-text" textAnchor="middle">
+                1, 1, R
+              </text>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 500 125 L 325 240"
+              />
+              <rect x="390" y="165" width="50" height="20" fill="white" />
+              <text x="415" y="178" class="transition-text" textAnchor="middle">
+                _, 0, L
+              </text>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 275 250 L 110 135"
+              />
+              <rect x="160" y="165" width="50" height="20" fill="white" />
+              <text x="185" y="178" class="transition-text" textAnchor="middle">
+                _, _, R
+              </text>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 100 125 L 100 215"
+              />
+              <rect x="65" y="165" width="70" height="20" fill="white" />
+              <text x="100" y="178" class="transition-text" textAnchor="middle">
+                1, 1, Stop
+              </text>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 290 77 C 270 20, 330 20, 310 77"
+              />
+              <rect x="275" y="25" width="50" height="20" fill="white" />
+              <text x="300" y="38" class="transition-text" textAnchor="middle">
+                0, 0, R
+              </text>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 490 77 C 470 20, 530 20, 510 77"
+              />
+              <rect x="475" y="25" width="50" height="20" fill="white" />
+              <text x="500" y="38" class="transition-text" textAnchor="middle">
+                0, 0, R
+              </text>
+              <path
+                class="transition-line"
+                markerEnd="url(#arrowhead2)"
+                d="M 310 273 C 330 330, 270 330, 290 273"
+              />
+              <rect x="270" y="315" width="60" height="35" fill="white" />
+              <text x="300" y="328" class="transition-text" textAnchor="middle">
+                0, 0, L
+              </text>
+              <text x="300" y="343" class="transition-text" textAnchor="middle">
+                1, 1, L
+              </text>
+
+              {/* State Highlight Indicator */}
+              {stateCoords[currentState] && (
+                <g
+                  transform={`translate(${stateCoords[currentState].x}, ${stateCoords[currentState].y})`}
+                  className="transition-all duration-500"
+                >
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="32"
+                    fill="#fef08a"
+                    stroke="#f59e0b"
+                    strokeWidth="4"
+                    className="animate-pulse"
+                  />
+                </g>
+              )}
+
+              <g transform="translate(100, 100)">
+                <circle class="state-circle" cx="0" cy="0" r="25" />
+                <text class="state-text" x="0" y="0">
+                  S0
+                </text>
+              </g>
+              <g transform="translate(300, 100)">
+                <circle class="state-circle" cx="0" cy="0" r="25" />
+                <text class="state-text" x="0" y="0">
+                  S1
+                </text>
+              </g>
+              <g transform="translate(500, 100)">
+                <circle class="state-circle" cx="0" cy="0" r="25" />
+                <text class="state-text" x="0" y="0">
+                  S2
+                </text>
+              </g>
+              <g transform="translate(300, 250)">
+                <circle class="state-circle" cx="0" cy="0" r="25" />
+                <text class="state-text" x="0" y="0">
+                  S3
+                </text>
+              </g>
+              <g transform="translate(100, 250)">
+                <circle class="state-circle" cx="0" cy="0" r="25" />
+                <circle class="state-circle" cx="0" cy="0" r="20" />
+                <text class="state-text" x="0" y="0">
+                  Halt
+                </text>
+              </g>
+            </svg>
+
+            <div className="overflow-x-auto shadow rounded-lg border border-gray-300">
+              <table className="w-full text-center font-mono text-sm">
+                <thead className="bg-gray-800 text-white font-sans">
+                  <tr>
+                    <th className="p-2 border-r border-gray-600">State</th>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <th key={i} className="p-2 border-r border-gray-600 w-10">
+                        C{i}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((row, rIdx) => (
+                    <tr
+                      key={rIdx}
+                      className={rIdx === 0 ? "bg-gray-50" : "bg-green-50"}
+                    >
+                      {row.map((cell, cIdx) => (
+                        <td
+                          key={cIdx}
+                          className="border border-gray-200 p-2 font-bold text-gray-700"
+                        >
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  {!showSolution && !isCorrect && (
+                    <tr className="bg-white relative shadow-inner ring-2 ring-blue-400 inset-0">
+                      {currentRowInput.map((val, cIdx) => (
+                        <td key={cIdx} className="border border-gray-200 p-0">
+                          <input
+                            type="text"
+                            value={val}
+                            onChange={(e) => {
+                              const newRow = [...currentRowInput];
+                              newRow[cIdx] = e.target.value;
+                              setCurrentRowInput(newRow);
+                            }}
+                            className="w-full h-full p-2 text-center focus:outline-none bg-transparent font-bold text-blue-700"
+                            placeholder="?"
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <QuestionActions
+              onCheck={handleCheckRow}
+              onReveal={handleReveal}
+              showSolution={showSolution}
+              isCorrect={isCorrect}
+              feedback={feedback}
+              feedbackType={feedbackType}
+              checkText="Check Current Row"
+              revealText="Reveal Next Row"
+              extraButtons={null}
+            />
+          </div>
+        );
+      };
+
+      // --- DEFINED OUTSIDE TO PREVENT REMOUNT/STATE LOSS BUG ---
+      const QuestionRenderer = ({ question, onSolved }) => {
+        if (!question) return null;
+        const props = { question, onSolved };
+        switch (question.type) {
+          case "dragdrop":
+            return <Q_StructureDragDrop {...props} />;
+          case "notation_func":
+            return <Q_NotationFunc {...props} />;
+          case "notation_table":
+            return <Q_NotationTable {...props} />;
+          case "trace_table":
+            return <Q_TraceTable {...props} />;
+          case "fillblanks":
+            return <Q_FillBlanks {...props} />;
+          case "mcq":
+            return <Q_MCQ {...props} />;
+          default:
+            return <div>Unknown question type.</div>;
+        }
+      };
+
+      // --- MAIN APP AND LOGIC ---
+
+      const FilterMenu = ({ activeTopics, onApply }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const [local, setLocal] = useState(activeTopics);
+
+        return (
+          <div className="relative">
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg shadow flex items-center gap-2 font-medium text-white transition"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                ></path>
+              </svg>
+              Filter Sub-topics
+            </button>
+            {isOpen && (
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 p-5">
+                <h4 className="font-bold mb-4 text-gray-800 border-b pb-2">
+                  Select Sub-topics
+                </h4>
+                {Object.keys(local).map((topic) => (
+                  <label
+                    key={topic}
+                    className="flex items-center gap-3 mb-3 cursor-pointer group"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={local[topic]}
+                      onChange={() =>
+                        setLocal({ ...local, [topic]: !local[topic] })
+                      }
+                      className="rounded text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer"
+                    />
+                    <span className="text-gray-700 group-hover:text-blue-600 transition font-medium">
+                      {topic}
+                    </span>
+                  </label>
+                ))}
+                <button
+                  onClick={() => {
+                    onApply(local);
+                    setIsOpen(false);
+                  }}
+                  className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg shadow transition"
+                >
+                  Apply Selection
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const App = () => {
+        const defaultTopics = {
+          Structure: true,
+          Notation: true,
+          Tracing: true,
+          "UTM & Computability": true,
+        };
+        const [activeTopics, setActiveTopics] = useState(defaultTopics);
+        const [history, setHistory] = useState([]);
+        const [currentQuestion, setCurrentQuestion] = useState(null);
+        const [canNext, setCanNext] = useState(false);
+
+        const pickNextQuestion = (topics) => {
+          setHistory((prevHistory) => {
+            let available = ALL_QUESTIONS.filter((q) => topics[q.topic]);
+            if (available.length === 0) {
+              setCurrentQuestion(null);
+              return prevHistory;
+            }
+
+            let unasked = available.filter((q) => !prevHistory.includes(q.id));
+
+            // Reset history for these specific topics if all questions have been asked
+            if (unasked.length === 0) {
+              const availableIds = available.map((q) => q.id);
+              let newHistory = prevHistory.filter(
+                (id) => !availableIds.includes(id),
+              );
+              unasked = available;
+
+              // Try to prevent immediately repeating the exact same question if possible
+              if (unasked.length > 1 && currentQuestion) {
+                unasked = unasked.filter((q) => q.id !== currentQuestion.id);
+              }
+
+              const pick = unasked[Math.floor(Math.random() * unasked.length)];
+              setCurrentQuestion(pick);
+              setCanNext(false);
+              return [...newHistory, pick.id];
+            }
+
+            const pick = unasked[Math.floor(Math.random() * unasked.length)];
+            setCurrentQuestion(pick);
+            setCanNext(false);
+            return [...prevHistory, pick.id];
+          });
+        };
+
+        useEffect(() => {
+          pickNextQuestion(activeTopics);
+        }, []);
+
+        const handleApplyFilter = (newTopics) => {
+          setActiveTopics(newTopics);
+          pickNextQuestion(newTopics);
+        };
+
+        return (
+          <div className="flex flex-col min-h-screen">
+            <header className="bg-gray-900 text-white p-5 shadow-lg border-b-4 border-indigo-500">
+              <div className="max-w-5xl mx-auto flex justify-between items-center">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-wide uppercase">
+                    AQA A-Level CS
+                  </h1>
+                  <h2 className="text-indigo-300 font-medium mt-1">
+                    Interactive Turing Machines
+                  </h2>
+                </div>
+                <FilterMenu
+                  activeTopics={activeTopics}
+                  onApply={handleApplyFilter}
+                />
+              </div>
+            </header>
+
+            <main className="flex-grow max-w-5xl mx-auto w-full p-6 py-10">
+              {currentQuestion ? (
+                <div className="bg-white rounded-2xl shadow-xl p-8 relative border border-gray-200">
+                  <div className="absolute -top-4 -right-4 bg-indigo-100 text-indigo-800 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-md border border-indigo-200">
+                    {currentQuestion.topic}
+                  </div>
+
+                  <h2 className="text-2xl font-bold text-gray-800 border-b-2 border-gray-100 pb-4 mb-6 flex items-center gap-3">
+                    <span className="bg-blue-600 w-2 h-8 rounded-full"></span>
+                    {currentQuestion.title}
+                  </h2>
+
+                  <QuestionRenderer
+                    key={currentQuestion.id}
+                    question={currentQuestion}
+                    onSolved={() => setCanNext(true)}
+                  />
+
+                  {canNext && (
+                    <div className="mt-8 text-right border-t border-gray-100 pt-6 fade-in">
+                      <button
+                        onClick={() => pickNextQuestion(activeTopics)}
+                        className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition transform hover:-translate-y-0.5"
+                      >
+                        Next Question ➜
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-md p-12 text-center text-gray-500 border border-gray-200">
+                  <svg
+                    className="w-16 h-16 mx-auto mb-4 text-gray-300"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                    ></path>
+                  </svg>
+                  <p className="text-lg">
+                    No questions available for the selected topics.
+                  </p>
+                  <p className="text-sm mt-2">
+                    Use the filter menu in the top right to select sub-topics.
+                  </p>
+                </div>
+              )}
+            </main>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
