@@ -1,0 +1,1437 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: Consequences of Computing</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- FontAwesome for Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+
+    <style>
+      body {
+        font-family: "Inter", system-ui, sans-serif;
+      }
+      .fade-in {
+        animation: fadeIn 0.3s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-slate-100 text-slate-800 min-h-screen pb-12">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      // --- QUESTION DATABASE ---
+      // Carefully aligned to AQA A-Level Spec 4.8.1
+      const questionsDB = [
+        {
+          id: 1,
+          topic: "Moral",
+          type: "mcq",
+          question: "Which scenario best represents an individual MORAL issue?",
+          options: [
+            "A developer deciding whether to whistleblow on their employer's unsafe software practices.",
+            "A company drafting its corporate privacy policy.",
+            "The government passing a new data protection law.",
+            "The difference in censorship laws between the UK and China.",
+          ],
+          correctAnswer:
+            "A developer deciding whether to whistleblow on their employer's unsafe software practices.",
+          explanation:
+            "Moral issues relate to an individual's personal sense of right and wrong, such as whistleblowing. Corporate policies are ethical, laws are legal, and geographical differences are cultural.",
+        },
+        {
+          id: 2,
+          topic: "Ethical",
+          type: "mcq",
+          question:
+            "In the context of the AQA specification, which of the following best describes an ETHICAL issue?",
+          options: [
+            "A societal debate on whether companies should be allowed to use AI to screen job applicants.",
+            "An individual deciding whether to download a pirated movie.",
+            "The specific clauses within the Data Protection Act.",
+            "The hardware differences between computers in urban and rural areas.",
+          ],
+          correctAnswer:
+            "A societal debate on whether companies should be allowed to use AI to screen job applicants.",
+          explanation:
+            "Ethical issues are about the wider society or community view of what is right and wrong. AI bias impacts society on a large scale.",
+        },
+        {
+          id: 3,
+          topic: "Cultural",
+          type: "categorisation",
+          question:
+            "The 'Digital Divide'—the gap between demographics and regions that have access to modern tech and those that don't—is primarily considered what type of issue?",
+          categories: ["Moral", "Ethical", "Cultural", "Legal"],
+          correctAnswer: "Cultural",
+          explanation:
+            "The digital divide deeply affects the culture, opportunities, and interactions of different geographical and demographic subgroups.",
+        },
+        {
+          id: 4,
+          topic: "Legal",
+          type: "keyword",
+          question:
+            "Which UK legislation strictly regulates the interception of electronic communications and the use of surveillance by public bodies? (Acronym or full name)",
+          firstLetter: "R",
+          correctAnswers: [
+            "ripa",
+            "regulation of investigatory powers act",
+            "regulation of investigatory powers act 2000",
+          ],
+          explanation:
+            "The correct answer is RIPA (Regulation of Investigatory Powers Act). This act governs surveillance and interception of digital communications.",
+        },
+        {
+          id: 5,
+          topic: "Legal",
+          type: "mcq",
+          question:
+            "Which of the following is a primary challenge facing legislators in the digital age, as highlighted by AQA?",
+          options: [
+            "The internet is global and borderless, whereas laws are typically restricted to specific geographical jurisdictions.",
+            "There is too much consensus on ethical guidelines worldwide.",
+            "Software engineers refuse to talk to governments.",
+            "Encryption makes it physically impossible to write legislation.",
+          ],
+          correctAnswer:
+            "The internet is global and borderless, whereas laws are typically restricted to specific geographical jurisdictions.",
+          explanation:
+            "The global nature of the internet makes it difficult to enforce local laws when servers, companies, and perpetrators are based overseas.",
+        },
+        {
+          id: 6,
+          topic: "Spec Concepts",
+          type: "keyword",
+          question:
+            "According to the AQA spec, software and their algorithms are not neutral; they embed moral and cultural _______. (Enter the missing plural word)",
+          firstLetter: "V",
+          correctAnswers: ["values"],
+          explanation:
+            "The correct answer is 'values'. Algorithms reflect the biases, beliefs, and values of the developers who create them and the data they are trained on.",
+        },
+        {
+          id: 7,
+          topic: "Spec Concepts",
+          type: "keyword",
+          question:
+            "Developments in digital technologies have enabled massive transformations in the capacity to amass, analyse, distribute, and _______ personal information. (Enter the missing word)",
+          firstLetter: "D",
+          correctAnswers: ["disseminate"],
+          explanation:
+            "The correct answer is 'disseminate'. To disseminate means to spread information widely. The digital age makes it effortless to broadcast personal data globally.",
+        },
+        {
+          id: 8,
+          topic: "Spec Concepts",
+          type: "mcq",
+          question:
+            "Because software is deployed on a massive global scale, what is the consequence for individual software engineers according to the AQA specification?",
+          options: [
+            "They have the potential to produce great good, but also the ability to cause great harm.",
+            "They must learn the laws of every single country before writing code.",
+            "They are legally immune to any damage caused by their software.",
+            "Their moral values are erased when the code is compiled.",
+          ],
+          correctAnswer:
+            "They have the potential to produce great good, but also the ability to cause great harm.",
+          explanation:
+            "Scale amplifies both the positive impacts (e.g., global connectivity, medical advances) and negative impacts (e.g., massive data breaches or systemic bias).",
+        },
+        {
+          id: 9,
+          topic: "Legal",
+          type: "keyword",
+          question:
+            "Which UK act protects intellectual property and makes it illegal to copy, modify, or distribute software or digital media without permission?",
+          firstLetter: "C",
+          correctAnswers: [
+            "cdpa",
+            "copyright design and patents act",
+            "copyright designs and patents act",
+            "copyright design and patents act 1988",
+            "copyright designs and patents act 1988",
+          ],
+          explanation:
+            "The correct answer is CDPA (Copyright, Designs and Patents Act 1988). It protects creators' rights over their digital content and code.",
+        },
+        {
+          id: 10,
+          topic: "Spec Concepts",
+          type: "scenario",
+          question:
+            "AQA Hypothetical Case Study: You are a Project Manager proposing to bring Google Street View technology to a remote village. Classify these project considerations correctly:",
+          items: [
+            {
+              id: "A",
+              text: "Providing an innovative navigation and exploration service globally.",
+            },
+            {
+              id: "B",
+              text: "Intrusion into the lives of people who may not fully understand the implications.",
+            },
+            {
+              id: "C",
+              text: "Holding thorough consultations with village leaders before deploying cameras.",
+            },
+            {
+              id: "D",
+              text: "Accepting a loss of cultural isolation in exchange for potential economic and educational connectivity.",
+            },
+          ],
+          categories: ["Benefit", "Risk", "Safeguard", "Trade-off"],
+          correctAnswers: {
+            A: "Benefit",
+            B: "Risk",
+            C: "Safeguard",
+            D: "Trade-off",
+          },
+          explanation:
+            "Hypotheticals isolate ethical principles. Benefits are positive outcomes, Risks are potential harms, Safeguards are mitigations/protections, and Trade-offs involve accepting a negative consequence for a greater positive outcome.",
+        },
+        {
+          id: 11,
+          topic: "Legal",
+          type: "keyword",
+          question:
+            "Which law is designed to protect personal data stored on computers, mandating that it must be kept securely and only used for its intended purpose?",
+          firstLetter: "D",
+          correctAnswers: [
+            "dpa",
+            "data protection act",
+            "data protection act 2018",
+            "dpa 2018",
+            "gdpr",
+            "general data protection regulation",
+            "data protection act 1998",
+          ],
+          explanation:
+            "The correct answer is DPA (Data Protection Act). The 2018 act (which implements GDPR in the UK) sets strict rules on how personal information can be amassed and analysed.",
+        },
+        {
+          id: 12,
+          topic: "Moral",
+          type: "categorisation",
+          question:
+            "A student finds a USB stick containing the final exam paper and decides to look at it because 'everyone else would'. This scenario primarily highlights a lack of personal judgement, known as a _______ issue.",
+          categories: ["Moral", "Ethical", "Cultural", "Legal"],
+          correctAnswer: "Moral",
+          explanation:
+            "While accessing unauthorized data is illegal, the internal decision-making process based on personal rationale ('everyone else would') is a moral issue.",
+        },
+        {
+          id: 13,
+          topic: "Spec Concepts",
+          type: "keyword",
+          question:
+            "Developments have enabled transformations in the capacity to ______ and analyse personal information. (Enter the missing word)",
+          firstLetter: "A",
+          correctAnswers: ["amass"],
+          explanation:
+            "The correct answer is 'amass'. 'Amass' means to gather a large amount of data over a period of time, which Big Data and modern digital systems do constantly.",
+        },
+        {
+          id: 14,
+          topic: "Cultural",
+          type: "mcq",
+          question:
+            "Which of the following represents a CULTURAL issue in computing rather than purely legal or moral?",
+          options: [
+            "The impact of 'always-on' social media on societal attention spans and human interaction.",
+            "A software engineer stealing proprietary code.",
+            "The passing of the Data Protection Act.",
+            "An individual hacking into a school network.",
+          ],
+          correctAnswer:
+            "The impact of 'always-on' social media on societal attention spans and human interaction.",
+          explanation:
+            "Cultural issues deal with how technology changes the nature, habits, traditions, and culture of society as a whole.",
+        },
+        {
+          id: 15,
+          topic: "Ethical",
+          type: "categorisation",
+          question:
+            "A company deliberately designs its social media feed algorithm to promote outrage and anger because it increases user engagement and ad revenue. This is primarily a(n) _______ issue concerning corporate responsibility.",
+          categories: ["Moral", "Ethical", "Cultural", "Legal"],
+          correctAnswer: "Ethical",
+          explanation:
+            "Corporate policies and algorithm designs that affect the wellbeing of society at large fall heavily under ethical issues.",
+        },
+        {
+          id: 16,
+          topic: "Legal",
+          type: "mcq",
+          question:
+            "Apart from the global and borderless nature of the internet, what is another major challenge for legislators in the digital age?",
+          options: [
+            "The pace of technological development often vastly outstrips the time it takes to draft and pass new laws.",
+            "Politicians are legally barred from using computer systems.",
+            "Computer code cannot be printed on paper for legal review.",
+            "Ethical guidelines automatically become law without parliamentary approval.",
+          ],
+          correctAnswer:
+            "The pace of technological development often vastly outstrips the time it takes to draft and pass new laws.",
+          explanation:
+            "Technology evolves incredibly quickly (e.g. rapid AI development), meaning laws are often outdated or insufficient by the time they are finally enacted.",
+        },
+        {
+          id: 17,
+          topic: "Legal",
+          type: "keyword",
+          question:
+            "Which UK act makes it a criminal offence to gain unauthorised access to a computer system or make unauthorised modifications to computer material?",
+          firstLetter: "C",
+          correctAnswers: [
+            "cma",
+            "computer misuse act",
+            "computer misuse act 1990",
+          ],
+          explanation:
+            "The correct answer is CMA (Computer Misuse Act 1990). It is the primary UK legislation criminalising hacking and malware distribution.",
+        },
+        {
+          id: 18,
+          topic: "Spec Concepts",
+          type: "contextual_scenario",
+          question:
+            "Contextual Case Study: Evaluate the consequences of local police forces deploying Live Facial Recognition (LFR) AI at large public events.",
+          items: [
+            {
+              id: "p1",
+              prefix: "Societal debate over mass surveillance versus public ",
+              missingWords: ["safety"],
+              firstLetter: "s",
+              suffix: ".",
+              category: "Ethical",
+              isFollowUp: false,
+            },
+            {
+              id: "p2",
+              prefix:
+                "It shifts the balance of power between the state and the ",
+              missingWords: ["citizen", "citizens"],
+              firstLetter: "c",
+              suffix: ".",
+              category: "Ethical",
+              isFollowUp: true,
+            },
+            {
+              id: "p3",
+              prefix: "Normalising this technology could lead to a ",
+              missingWords: ["dystopian", "dystopia"],
+              firstLetter: "d",
+              suffix: " society.",
+              category: "Ethical",
+              isFollowUp: true,
+            },
+            {
+              id: "p4",
+              prefix:
+                "An individual officer deciding whether to trust an algorithm over their own ",
+              missingWords: ["judgement", "judgment"],
+              firstLetter: "j",
+              suffix: ".",
+              category: "Moral",
+              isFollowUp: false,
+            },
+            {
+              id: "p5",
+              prefix:
+                "The personal distress caused to an individual who is falsely ",
+              missingWords: ["identified", "accused", "arrested"],
+              firstLetter: "i",
+              suffix: ".",
+              category: "Moral",
+              isFollowUp: true,
+            },
+            {
+              id: "p6",
+              prefix:
+                "A developer feeling guilty for writing code that was later used to ",
+              missingWords: ["arrest", "apprehend"],
+              firstLetter: "a",
+              suffix: " innocent people.",
+              category: "Moral",
+              isFollowUp: true,
+            },
+            {
+              id: "p7",
+              prefix:
+                "Potential violation of the Data Protection Act regarding ",
+              missingWords: ["biometric", "biometrics"],
+              firstLetter: "b",
+              suffix: " data.",
+              category: "Legal",
+              isFollowUp: false,
+            },
+            {
+              id: "p8",
+              prefix: "The lack of specific, up-to-date ",
+              missingWords: ["legislation", "laws"],
+              firstLetter: "l",
+              suffix: " governing police use of AI.",
+              category: "Legal",
+              isFollowUp: true,
+            },
+            {
+              id: "p9",
+              prefix:
+                "Questions around whether an automated flag constitutes reasonable ",
+              missingWords: ["suspicion"],
+              firstLetter: "s",
+              suffix: " for a search.",
+              category: "Legal",
+              isFollowUp: true,
+            },
+            {
+              id: "p10",
+              prefix:
+                "Disproportionate misidentification rates for certain ethnic ",
+              missingWords: ["minorities", "minority"],
+              firstLetter: "m",
+              suffix: ".",
+              category: "Cultural",
+              isFollowUp: false,
+            },
+            {
+              id: "p11",
+              prefix: "This bias can damage trust and cohesion within local ",
+              missingWords: ["communities", "community"],
+              firstLetter: "c",
+              suffix: ".",
+              category: "Cultural",
+              isFollowUp: true,
+            },
+            {
+              id: "p12",
+              prefix:
+                "leading to a chilling effect on the cultural right to peaceful ",
+              missingWords: ["protest", "protesting"],
+              firstLetter: "p",
+              suffix: ".",
+              category: "Cultural",
+              isFollowUp: true,
+            },
+          ],
+          explanation:
+            "Contextual problems require analyzing impacts across all four categories. Ethical issues relate to society's direction. Moral issues involve individual guilt and choices. Legal deals with legislation (or lack thereof), and Cultural addresses demographics, minorities, and societal traditions like protesting.",
+        },
+        {
+          id: 19,
+          topic: "Spec Concepts",
+          type: "contextual_scenario",
+          question:
+            "Contextual Case Study: Discuss the consequences of global social media platforms continuously amassing user data to feed algorithmic timelines.",
+          items: [
+            {
+              id: "s1",
+              prefix:
+                "Companies prioritizing engagement and profit over user mental ",
+              missingWords: ["health"],
+              firstLetter: "h",
+              suffix: ".",
+              category: "Ethical",
+              isFollowUp: false,
+            },
+            {
+              id: "s2",
+              prefix: "The societal impact of echo chambers polarizing public ",
+              missingWords: ["opinion", "opinions"],
+              firstLetter: "o",
+              suffix: ".",
+              category: "Ethical",
+              isFollowUp: true,
+            },
+            {
+              id: "s3",
+              prefix: "and the potential manipulation of democratic ",
+              missingWords: ["elections", "election"],
+              firstLetter: "e",
+              suffix: ".",
+              category: "Ethical",
+              isFollowUp: true,
+            },
+            {
+              id: "s4",
+              prefix: "A user's personal decision to trade their privacy for ",
+              missingWords: ["convenience"],
+              firstLetter: "c",
+              suffix: ".",
+              category: "Moral",
+              isFollowUp: false,
+            },
+            {
+              id: "s5",
+              prefix: "An employee deciding whether to whistleblow on the ",
+              missingWords: ["harm", "harms"],
+              firstLetter: "h",
+              suffix: " the algorithm causes.",
+              category: "Moral",
+              isFollowUp: true,
+            },
+            {
+              id: "s6",
+              prefix:
+                "Parents choosing at what age to let their child create an ",
+              missingWords: ["account", "accounts"],
+              firstLetter: "a",
+              suffix: ".",
+              category: "Moral",
+              isFollowUp: true,
+            },
+            {
+              id: "s7",
+              prefix:
+                "Difficulty enforcing local laws when the company is based in a different ",
+              missingWords: ["jurisdiction", "jurisdictions"],
+              firstLetter: "j",
+              suffix: ".",
+              category: "Legal",
+              isFollowUp: false,
+            },
+            {
+              id: "s8",
+              prefix: "Obtaining genuinely informed ",
+              missingWords: ["consent"],
+              firstLetter: "c",
+              suffix: " from users hidden in complex Terms of Service.",
+              category: "Legal",
+              isFollowUp: true,
+            },
+            {
+              id: "s9",
+              prefix: "Ensuring compliance with the General Data Protection ",
+              missingWords: ["regulation"],
+              firstLetter: "r",
+              suffix: " (GDPR).",
+              category: "Legal",
+              isFollowUp: true,
+            },
+            {
+              id: "s10",
+              prefix: "The alteration of traditional human communication and ",
+              missingWords: ["attention"],
+              firstLetter: "a",
+              suffix: " spans.",
+              category: "Cultural",
+              isFollowUp: false,
+            },
+            {
+              id: "s11",
+              prefix: "Imposing Western tech values on different global ",
+              missingWords: ["cultures", "culture"],
+              firstLetter: "c",
+              suffix: ".",
+              category: "Cultural",
+              isFollowUp: true,
+            },
+            {
+              id: "s12",
+              prefix:
+                "The digital divide where those without access miss out on modern cultural ",
+              missingWords: ["participation"],
+              firstLetter: "p",
+              suffix: ".",
+              category: "Cultural",
+              isFollowUp: true,
+            },
+          ],
+          explanation:
+            "A holistic analysis of a global platform must consider the massive scale of algorithms. Cultural changes (attention/communication), Legal challenges (global vs local laws), Ethical impacts (democracy/society), and Moral choices (user/employee decisions).",
+        },
+      ];
+
+      // --- UTILITY FUNCTIONS ---
+      const shuffleArray = (arr) => {
+        const newArr = [...arr];
+        for (let i = newArr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+        }
+        return newArr;
+      };
+
+      const checkKeyword = (inputStr, correctList, firstLetter) => {
+        if (!inputStr) return false;
+        // Clean strings (lowercase, alphanumeric only)
+        let cleanUser = inputStr
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]/g, "");
+        let cleanFirst = firstLetter.toLowerCase();
+
+        for (let ans of correctList) {
+          let cleanAns = ans
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]/g, "");
+          // Allow exact match OR match assuming they didn't retype the provided first letter
+          if (cleanUser === cleanAns || cleanFirst + cleanUser === cleanAns) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // --- MAIN APP COMPONENT ---
+      const App = () => {
+        const allTopics = [
+          "Moral",
+          "Ethical",
+          "Cultural",
+          "Legal",
+          "Spec Concepts",
+        ];
+
+        // State
+        const [selectedTopics, setSelectedTopics] = React.useState(allTopics);
+        const [pool, setPool] = React.useState([]);
+        const [totalInLoop, setTotalInLoop] = React.useState(0);
+        const [currentQuestion, setCurrentQuestion] = React.useState(null);
+        const [currentOptions, setCurrentOptions] = React.useState([]);
+
+        // Answer State
+        const [userAnswer, setUserAnswer] = React.useState("");
+        const [scenarioAnswer, setScenarioAnswer] = React.useState({});
+        const [contextualAnswer, setContextualAnswer] = React.useState({});
+
+        // Feedback State
+        const [isCorrect, setIsCorrect] = React.useState(null);
+        const [showSolution, setShowSolution] = React.useState(false);
+
+        // UI State
+        const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+        const inputRef = React.useRef(null);
+
+        // Initialize loop on first mount
+        React.useEffect(() => {
+          initLoop(allTopics);
+        }, []);
+
+        // Auto-focus keyword inputs
+        React.useEffect(() => {
+          if (
+            currentQuestion?.type === "keyword" &&
+            inputRef.current &&
+            !showSolution &&
+            isCorrect === null
+          ) {
+            inputRef.current.focus();
+          }
+        }, [currentQuestion, showSolution, isCorrect]);
+
+        const initLoop = (topicsToUse) => {
+          let filtered = questionsDB.filter((q) =>
+            topicsToUse.includes(q.topic),
+          );
+          if (filtered.length === 0) {
+            alert("Please select at least one sub-topic to continue.");
+            return;
+          }
+          let shuffled = shuffleArray(filtered);
+          setTotalInLoop(shuffled.length);
+          loadNextQuestion(shuffled);
+          setIsMenuOpen(false);
+        };
+
+        const loadNextQuestion = (forcedPool = null) => {
+          let activePool = forcedPool || pool;
+
+          // If pool is empty, restart the loop automatically
+          if (activePool.length === 0) {
+            let filtered = questionsDB.filter((q) =>
+              selectedTopics.includes(q.topic),
+            );
+            if (filtered.length === 0) {
+              alert("No questions found for the selected topics.");
+              return;
+            }
+            activePool = shuffleArray(filtered);
+            setTotalInLoop(activePool.length);
+          }
+
+          const nextQ = activePool[0];
+          const newPool = activePool.slice(1);
+
+          setPool(newPool);
+          setCurrentQuestion(nextQ);
+
+          // Reset states
+          setUserAnswer("");
+          setScenarioAnswer({});
+          setContextualAnswer({});
+          setIsCorrect(null);
+          setShowSolution(false);
+
+          // Setup question specific state
+          if (nextQ.type === "mcq") {
+            setCurrentOptions(shuffleArray(nextQ.options));
+          } else if (nextQ.type === "scenario") {
+            let initScen = {};
+            nextQ.items.forEach((item) => {
+              initScen[item.id] = "";
+            });
+            setScenarioAnswer(initScen);
+          } else if (nextQ.type === "contextual_scenario") {
+            let initAns = {};
+            nextQ.items.forEach((item) => {
+              initAns[item.id] = {
+                wordInput: "",
+                revealedCount: item.firstLetter.length,
+                wordSolved: false,
+                solvedWord: "",
+                category: "",
+                rowStatus: "pending",
+              };
+            });
+            setContextualAnswer(initAns);
+          }
+        };
+
+        const handleTopicToggle = (topic) => {
+          setSelectedTopics((prev) => {
+            if (prev.includes(topic)) return prev.filter((t) => t !== topic);
+            return [...prev, topic];
+          });
+        };
+
+        const handleAnswerChange = (val) => {
+          setUserAnswer(val);
+          if (isCorrect === false) setIsCorrect(null); // Reset feedback if user changes mind
+        };
+
+        const handleScenarioChange = (id, cat) => {
+          setScenarioAnswer({ ...scenarioAnswer, [id]: cat });
+          if (isCorrect === false) setIsCorrect(null);
+        };
+
+        const handleContextualWordChange = (id, val, item) => {
+          let currentState = contextualAnswer[id];
+          let primaryWord = item.missingWords[0];
+          let prefix = primaryWord.substring(0, currentState.revealedCount);
+
+          let cleanUser = val
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]/g, "");
+          let cleanPrefix = prefix.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+          let isMatch = false;
+          let matchedWord = primaryWord;
+
+          for (let ans of item.missingWords) {
+            let cleanAns = ans
+              .toLowerCase()
+              .trim()
+              .replace(/[^a-z0-9]/g, "");
+            if (
+              cleanUser === cleanAns ||
+              cleanPrefix + cleanUser === cleanAns
+            ) {
+              isMatch = true;
+              matchedWord = ans;
+              break;
+            }
+          }
+
+          if (isMatch) {
+            setContextualAnswer((prev) => ({
+              ...prev,
+              [id]: {
+                ...prev[id],
+                wordInput: "",
+                wordSolved: true,
+                solvedWord: matchedWord,
+                rowStatus: "categorizing",
+              },
+            }));
+          } else {
+            setContextualAnswer((prev) => ({
+              ...prev,
+              [id]: { ...prev[id], wordInput: val },
+            }));
+          }
+        };
+
+        const revealNextLetter = (id, item) => {
+          setContextualAnswer((prev) => {
+            let current = prev[id];
+            let primaryWord = item.missingWords[0];
+            let nextCount = current.revealedCount + 1;
+
+            if (nextCount >= primaryWord.length) {
+              return {
+                ...prev,
+                [id]: {
+                  ...current,
+                  revealedCount: primaryWord.length,
+                  wordSolved: true,
+                  solvedWord: primaryWord,
+                  rowStatus: "categorizing",
+                  wordInput: "",
+                },
+              };
+            } else {
+              return {
+                ...prev,
+                [id]: { ...current, revealedCount: nextCount },
+              };
+            }
+          });
+        };
+
+        const handleContextualCategoryChange = (id, cat, item) => {
+          let isCorrectCat = cat === item.category;
+          setContextualAnswer((prev) => ({
+            ...prev,
+            [id]: {
+              ...prev[id],
+              category: cat,
+              rowStatus: isCorrectCat ? "correct" : "incorrect",
+            },
+          }));
+        };
+
+        const submitAnswer = () => {
+          if (
+            currentQuestion.type === "mcq" ||
+            currentQuestion.type === "categorisation"
+          ) {
+            if (!userAnswer) return;
+            setIsCorrect(userAnswer === currentQuestion.correctAnswer);
+          } else if (currentQuestion.type === "keyword") {
+            if (!userAnswer) return;
+            let correct = checkKeyword(
+              userAnswer,
+              currentQuestion.correctAnswers,
+              currentQuestion.firstLetter,
+            );
+            setIsCorrect(correct);
+          } else if (currentQuestion.type === "scenario") {
+            let allAnswered = currentQuestion.items.every(
+              (i) => scenarioAnswer[i.id] !== "",
+            );
+            if (!allAnswered) {
+              alert("Please classify all items before checking your answer.");
+              return;
+            }
+            let allCorrect = currentQuestion.items.every(
+              (i) =>
+                scenarioAnswer[i.id] === currentQuestion.correctAnswers[i.id],
+            );
+            setIsCorrect(allCorrect);
+          }
+        };
+
+        React.useEffect(() => {
+          if (
+            currentQuestion &&
+            currentQuestion.type === "contextual_scenario"
+          ) {
+            let keys = Object.keys(contextualAnswer);
+            if (
+              keys.length > 0 &&
+              keys.length === currentQuestion.items.length
+            ) {
+              let allDone = currentQuestion.items.every(
+                (i) =>
+                  contextualAnswer[i.id]?.rowStatus === "correct" ||
+                  contextualAnswer[i.id]?.rowStatus === "incorrect",
+              );
+              if (allDone && isCorrect !== "completed_contextual") {
+                setIsCorrect("completed_contextual");
+              }
+            }
+          }
+        }, [contextualAnswer, currentQuestion, isCorrect]);
+
+        // --- RENDERERS ---
+
+        const renderMCQ = () => (
+          <div className="space-y-3 mt-6 fade-in">
+            {currentOptions.map((opt) => {
+              let btnClass =
+                "w-full text-left p-4 rounded-xl border-2 transition-all duration-200 shadow-sm ";
+
+              if (showSolution) {
+                if (opt === currentQuestion.correctAnswer)
+                  btnClass += "bg-green-50 border-green-500 text-green-900";
+                else if (opt === userAnswer)
+                  btnClass +=
+                    "bg-red-50 border-red-400 text-red-800 opacity-60";
+                else btnClass += "bg-white border-slate-200 opacity-50";
+              } else if (isCorrect) {
+                if (opt === currentQuestion.correctAnswer)
+                  btnClass += "bg-green-50 border-green-500 text-green-900";
+                else btnClass += "bg-white border-slate-200 opacity-50";
+              } else {
+                if (opt === userAnswer)
+                  btnClass +=
+                    "bg-indigo-50 border-indigo-500 text-indigo-900 ring-1 ring-indigo-500";
+                else
+                  btnClass +=
+                    "bg-white border-slate-300 hover:bg-slate-50 hover:border-indigo-300 text-slate-700";
+              }
+
+              return (
+                <button
+                  key={opt}
+                  onClick={() => handleAnswerChange(opt)}
+                  disabled={showSolution || isCorrect}
+                  className={btnClass}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        );
+
+        const renderCategorisation = () => (
+          <div className="grid grid-cols-2 gap-4 mt-8 fade-in">
+            {currentQuestion.categories.map((cat) => {
+              let btnClass =
+                "p-5 text-center rounded-xl font-bold text-lg border-2 transition-all shadow-sm ";
+
+              if (showSolution) {
+                if (cat === currentQuestion.correctAnswer)
+                  btnClass += "bg-green-50 border-green-500 text-green-800";
+                else if (cat === userAnswer)
+                  btnClass +=
+                    "bg-red-50 border-red-400 text-red-800 opacity-60";
+                else btnClass += "bg-slate-50 border-slate-200 text-slate-400";
+              } else if (isCorrect) {
+                if (cat === currentQuestion.correctAnswer)
+                  btnClass += "bg-green-50 border-green-500 text-green-800";
+                else
+                  btnClass +=
+                    "bg-slate-50 border-slate-200 text-slate-400 opacity-50";
+              } else {
+                if (cat === userAnswer)
+                  btnClass +=
+                    "bg-indigo-600 border-indigo-700 text-white shadow-md transform scale-[1.02]";
+                else
+                  btnClass +=
+                    "bg-white border-slate-300 text-slate-700 hover:bg-indigo-50 hover:border-indigo-400";
+              }
+
+              return (
+                <button
+                  key={cat}
+                  onClick={() => handleAnswerChange(cat)}
+                  disabled={showSolution || isCorrect}
+                  className={btnClass}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
+        );
+
+        const renderKeyword = () => (
+          <div className="mt-8 flex flex-col items-center justify-center fade-in">
+            <div className="relative flex items-center w-full max-w-md shadow-sm">
+              <span className="absolute left-4 font-bold text-2xl text-indigo-700 select-none">
+                {currentQuestion.firstLetter}
+              </span>
+              <input
+                ref={inputRef}
+                type="text"
+                value={userAnswer}
+                onChange={(e) => handleAnswerChange(e.target.value)}
+                disabled={showSolution || isCorrect}
+                placeholder="... type the missing keyword or acronym"
+                className="w-full pl-12 pr-4 py-4 text-xl border-2 border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-slate-800 font-semibold"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitAnswer();
+                }}
+              />
+            </div>
+          </div>
+        );
+
+        const renderScenario = () => (
+          <div className="space-y-5 mt-6 fade-in">
+            {currentQuestion.items.map((item) => (
+              <div
+                key={item.id}
+                className="p-4 md:p-5 border-2 border-slate-200 rounded-xl bg-white shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-colors hover:border-indigo-200"
+              >
+                <div className="text-base font-medium text-slate-700 lg:w-3/5 leading-relaxed">
+                  <i className="fas fa-caret-right text-indigo-400 mr-2"></i>{" "}
+                  {item.text}
+                </div>
+                <div className="lg:w-2/5 flex flex-wrap gap-2 justify-start lg:justify-end">
+                  {currentQuestion.categories.map((cat) => {
+                    let isSelected = scenarioAnswer[item.id] === cat;
+                    let isCorrectAns =
+                      currentQuestion.correctAnswers[item.id] === cat;
+
+                    let btnClass =
+                      "px-3 py-1.5 text-sm font-bold rounded-lg transition-all border shadow-sm ";
+
+                    if (showSolution) {
+                      if (isCorrectAns)
+                        btnClass +=
+                          "bg-green-100 text-green-800 border-green-500 ring-2 ring-green-500 ring-offset-1";
+                      else if (isSelected)
+                        btnClass +=
+                          "bg-red-50 text-red-600 border-red-300 opacity-60";
+                      else
+                        btnClass += "bg-white text-slate-400 border-slate-200";
+                    } else if (isCorrect) {
+                      if (isCorrectAns)
+                        btnClass +=
+                          "bg-green-100 text-green-800 border-green-500";
+                      else
+                        btnClass +=
+                          "bg-white text-slate-300 border-slate-200 opacity-50";
+                    } else {
+                      if (isSelected)
+                        btnClass +=
+                          "bg-indigo-600 text-white border-indigo-700 shadow-md";
+                      else
+                        btnClass +=
+                          "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:border-indigo-300";
+                    }
+
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => handleScenarioChange(item.id, cat)}
+                        className={btnClass}
+                        disabled={showSolution || isCorrect}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+        const renderContextualScenario = () => (
+          <div className="space-y-4 mt-6 fade-in">
+            <p className="text-sm font-medium text-slate-600 mb-4 bg-indigo-50 p-3 rounded-lg border border-indigo-100 flex items-center gap-2">
+              <i className="fas fa-info-circle text-indigo-500"></i>
+              Complete the missing word (use [+] for hints) to reveal the
+              categories, then select the correct category.
+            </p>
+            {currentQuestion.items.map((item) => {
+              let ans = contextualAnswer[item.id] || {
+                wordInput: "",
+                revealedCount: 1,
+                wordSolved: false,
+                rowStatus: "pending",
+              };
+              let primaryWord = item.missingWords[0];
+              let prefix = primaryWord.substring(0, ans.revealedCount);
+
+              let rowClass =
+                "p-4 md:p-5 border-2 rounded-xl flex flex-col xl:flex-row gap-4 xl:items-center justify-between transition-colors shadow-sm ";
+              if (item.isFollowUp)
+                rowClass += " ml-4 md:ml-12 border-l-4 border-l-indigo-300 ";
+
+              if (ans.rowStatus === "correct") {
+                rowClass += "bg-green-50 border-green-200";
+              } else if (ans.rowStatus === "incorrect") {
+                rowClass += "bg-red-50 border-red-200";
+              } else if (ans.rowStatus === "categorizing") {
+                rowClass += "bg-indigo-50 border-indigo-200 shadow-md";
+              } else {
+                rowClass += "bg-white border-slate-200 hover:border-indigo-200";
+              }
+
+              return (
+                <div key={item.id} className={rowClass}>
+                  {/* Text with inline input */}
+                  <div className="text-base text-slate-700 leading-relaxed xl:w-3/5 flex flex-wrap items-center gap-1.5">
+                    {item.isFollowUp && (
+                      <span className="text-indigo-400 mr-1 opacity-70 font-bold">
+                        ...
+                      </span>
+                    )}
+                    {!item.isFollowUp && (
+                      <i className="fas fa-caret-right text-indigo-400 mr-1"></i>
+                    )}
+                    <span>{item.prefix}</span>
+
+                    <div
+                      className={`inline-flex border-2 rounded-md px-2 py-1 items-center transition-colors ${
+                        ans.rowStatus === "correct"
+                          ? "bg-green-100 border-green-500 text-green-900 font-bold"
+                          : ans.rowStatus === "incorrect"
+                            ? "bg-red-100 border-red-400 text-red-900 font-bold"
+                            : ans.wordSolved
+                              ? "bg-indigo-100 border-indigo-500 text-indigo-900 font-bold"
+                              : "bg-slate-50 border-slate-300 shadow-inner focus-within:border-indigo-500"
+                      }`}
+                    >
+                      <span
+                        className={`font-bold mr-0.5 ${ans.wordSolved ? "" : "text-indigo-700"}`}
+                      >
+                        {prefix}
+                      </span>
+                      {ans.wordSolved ? (
+                        <span className="min-w-[4rem] px-1">
+                          {ans.solvedWord.substring(ans.revealedCount)}
+                        </span>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            value={ans.wordInput}
+                            onChange={(e) =>
+                              handleContextualWordChange(
+                                item.id,
+                                e.target.value,
+                                item,
+                              )
+                            }
+                            className="outline-none bg-transparent min-w-[5rem] max-w-[8rem] text-slate-800 font-semibold"
+                          />
+                          <button
+                            onClick={() => revealNextLetter(item.id, item)}
+                            className="ml-2 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors px-1"
+                            title="Reveal next letter"
+                          >
+                            <i className="fas fa-plus-square text-lg"></i>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <span>{item.suffix}</span>
+                  </div>
+
+                  {/* Categories */}
+                  <div className="xl:w-2/5 flex flex-wrap gap-2 justify-start xl:justify-end min-h-[2.5rem]">
+                    {ans.wordSolved &&
+                      ["Moral", "Ethical", "Cultural", "Legal"].map((cat) => {
+                        let isSelected = ans.category === cat;
+                        let isCorrectCat = item.category === cat;
+
+                        let btnClass =
+                          "px-3 py-1.5 text-xs md:text-sm font-bold rounded-lg transition-all border shadow-sm ";
+
+                        if (ans.rowStatus === "correct") {
+                          if (isCorrectCat)
+                            btnClass +=
+                              "bg-green-100 text-green-800 border-green-500 ring-2 ring-green-500 ring-offset-1";
+                          else
+                            btnClass +=
+                              "bg-white text-slate-300 border-slate-100 opacity-40";
+                        } else if (ans.rowStatus === "incorrect") {
+                          if (isCorrectCat)
+                            btnClass +=
+                              "bg-green-100 text-green-800 border-green-500 ring-2 ring-green-500 ring-offset-1";
+                          else if (isSelected)
+                            btnClass +=
+                              "bg-red-100 text-red-700 border-red-500 opacity-80 line-through";
+                          else
+                            btnClass +=
+                              "bg-white text-slate-300 border-slate-100 opacity-40";
+                        } else {
+                          // 'categorizing' state
+                          btnClass +=
+                            "bg-white text-slate-600 border-slate-300 hover:bg-indigo-50 hover:border-indigo-400 hover:text-indigo-700 hover:shadow-md";
+                        }
+
+                        return (
+                          <button
+                            key={cat}
+                            onClick={() =>
+                              handleContextualCategoryChange(item.id, cat, item)
+                            }
+                            className={btnClass}
+                            disabled={
+                              ans.rowStatus === "correct" ||
+                              ans.rowStatus === "incorrect"
+                            }
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+        const renderFeedback = () => {
+          if (isCorrect === "completed_contextual") {
+            let correctCount = currentQuestion.items.filter(
+              (i) => contextualAnswer[i.id]?.rowStatus === "correct",
+            ).length;
+            let totalCount = currentQuestion.items.length;
+
+            let message =
+              correctCount === totalCount
+                ? "Perfect Score!"
+                : "Scenario Completed";
+            let icon =
+              correctCount === totalCount
+                ? "fa-star text-yellow-500"
+                : "fa-flag-checkered text-blue-500";
+            let bgClass =
+              correctCount === totalCount
+                ? "bg-yellow-50 border-yellow-200 text-yellow-900"
+                : "bg-blue-50 border-blue-200 text-blue-900";
+
+            return (
+              <div
+                className={`mt-8 p-6 border rounded-xl flex flex-col items-center fade-in ${bgClass}`}
+              >
+                <div className="flex items-center gap-2 font-bold text-xl mb-2">
+                  <i className={`fas ${icon} text-2xl`}></i> {message} (
+                  {correctCount}/{totalCount})
+                </div>
+                <p className="text-center font-medium mb-6 opacity-90">
+                  {currentQuestion.explanation}
+                </p>
+                <button
+                  onClick={() => loadNextQuestion()}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-md transition-transform transform hover:-translate-y-0.5"
+                >
+                  Next Question <i className="fas fa-arrow-right ml-2"></i>
+                </button>
+              </div>
+            );
+          }
+
+          if (isCorrect === null && !showSolution) {
+            if (currentQuestion.type === "contextual_scenario") return null;
+            return (
+              <div className="mt-8 flex justify-end border-t border-slate-200 pt-6">
+                <button
+                  onClick={submitAnswer}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-md transition-transform transform hover:-translate-y-0.5 flex items-center gap-2"
+                >
+                  <i className="fas fa-check"></i> Check Answer
+                </button>
+              </div>
+            );
+          }
+
+          if (isCorrect) {
+            return (
+              <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-xl text-green-900 flex flex-col items-center fade-in">
+                <div className="flex items-center gap-2 font-bold text-xl mb-3 text-green-700">
+                  <i className="fas fa-check-circle text-2xl"></i> Correct!
+                </div>
+                <p className="text-center text-green-800 font-medium mb-6">
+                  {currentQuestion.explanation}
+                </p>
+                <button
+                  onClick={() => loadNextQuestion()}
+                  className="px-8 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-bold shadow-md transition-transform transform hover:-translate-y-0.5"
+                >
+                  Next Question <i className="fas fa-arrow-right ml-2"></i>
+                </button>
+              </div>
+            );
+          }
+
+          if (isCorrect === false && !showSolution) {
+            return (
+              <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-xl text-red-900 flex flex-col items-center fade-in">
+                <div className="flex items-center gap-2 font-bold text-xl mb-2 text-red-700">
+                  <i className="fas fa-times-circle text-2xl"></i> Not Quite
+                  Right
+                </div>
+                <p className="text-center mb-6 font-medium text-red-800">
+                  You can adjust your answer and try again, or view the
+                  solution.
+                </p>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setShowSolution(true)}
+                    className="px-6 py-3 bg-white border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 font-bold transition-colors shadow-sm"
+                  >
+                    Show Solution <i className="fas fa-eye ml-2"></i>
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          if (showSolution) {
+            return (
+              <div className="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 flex flex-col items-center fade-in">
+                <div className="flex items-center gap-2 font-bold text-xl mb-3 text-blue-700">
+                  <i className="fas fa-info-circle text-2xl"></i> Solution
+                </div>
+                <p className="text-center font-medium mb-6">
+                  {currentQuestion.explanation}
+                </p>
+                <button
+                  onClick={() => loadNextQuestion()}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-md transition-transform transform hover:-translate-y-0.5"
+                >
+                  Next Question <i className="fas fa-arrow-right ml-2"></i>
+                </button>
+              </div>
+            );
+          }
+        };
+
+        return (
+          <div className="min-h-screen relative">
+            {/* Header */}
+            <header className="bg-indigo-800 text-white p-4 shadow-md sticky top-0 z-40">
+              <div className="max-w-4xl mx-auto flex justify-between items-center">
+                <div>
+                  <h1 className="text-xl md:text-2xl font-bold tracking-tight">
+                    AQA A-Level CS
+                  </h1>
+                  <p className="text-indigo-200 text-xs md:text-sm font-medium tracking-wide uppercase mt-0.5">
+                    4.8 Consequences of Computing
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-600 px-4 py-2.5 rounded-lg transition-colors shadow-sm font-semibold text-sm"
+                  >
+                    <i className="fas fa-filter"></i>{" "}
+                    <span className="hidden md:inline">Topics Filter</span>
+                    <i
+                      className={`fas fa-chevron-${isMenuOpen ? "up" : "down"} text-xs ml-1`}
+                    ></i>
+                  </button>
+
+                  {isMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setIsMenuOpen(false)}
+                      ></div>
+                      <div className="absolute right-0 mt-3 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 p-5 text-slate-800 z-50 fade-in">
+                        <h3 className="font-bold text-xs text-slate-500 mb-4 uppercase tracking-widest border-b pb-2">
+                          Filter Sub-topics
+                        </h3>
+                        <div className="space-y-3 mb-5">
+                          {allTopics.map((topic) => (
+                            <label
+                              key={topic}
+                              className="flex items-center gap-3 cursor-pointer p-1.5 hover:bg-slate-50 rounded-md group"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedTopics.includes(topic)}
+                                onChange={() => handleTopicToggle(topic)}
+                                className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 border-slate-300"
+                              />
+                              <span className="font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors">
+                                {topic}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => initLoop(selectedTopics)}
+                          className="w-full py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-md"
+                        >
+                          Apply & Restart
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </header>
+
+            {/* Main Content Area */}
+            <main className="max-w-4xl mx-auto p-4 md:p-6 mt-4">
+              {currentQuestion ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 fade-in">
+                  {/* Question Metadata */}
+                  <div className="flex flex-wrap justify-between items-center mb-6 border-b border-slate-100 pb-4 gap-4">
+                    <span className="bg-indigo-50 text-indigo-700 text-sm font-bold px-4 py-1.5 rounded-md uppercase tracking-wide flex items-center gap-2">
+                      <i className="fas fa-tag"></i> {currentQuestion.topic}
+                    </span>
+                    <span className="text-sm font-bold text-slate-500 bg-slate-100 px-4 py-1.5 rounded-md flex items-center gap-2">
+                      <i className="fas fa-layer-group text-slate-400"></i> Q{" "}
+                      {totalInLoop - pool.length} of {totalInLoop}
+                    </span>
+                  </div>
+
+                  {/* Question Prompt */}
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-800 leading-snug mb-2">
+                    {currentQuestion.question}
+                  </h2>
+
+                  {currentQuestion.type === "scenario" && (
+                    <p className="text-slate-500 mb-6 font-medium text-sm border-l-4 border-indigo-300 pl-3">
+                      Select the most appropriate category for each project
+                      consideration to build the case study argument.
+                    </p>
+                  )}
+
+                  {/* Interactive Question Module */}
+                  {currentQuestion.type === "mcq" && renderMCQ()}
+                  {currentQuestion.type === "categorisation" &&
+                    renderCategorisation()}
+                  {currentQuestion.type === "keyword" && renderKeyword()}
+                  {currentQuestion.type === "scenario" && renderScenario()}
+                  {currentQuestion.type === "contextual_scenario" &&
+                    renderContextualScenario()}
+
+                  {/* Dynamic Feedback */}
+                  {renderFeedback()}
+                </div>
+              ) : (
+                <div className="text-center p-16">
+                  <i className="fas fa-spinner fa-spin text-5xl text-indigo-500 mb-6"></i>
+                  <p className="text-slate-600 font-bold text-lg">
+                    Loading interactive content...
+                  </p>
+                </div>
+              )}
+            </main>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
