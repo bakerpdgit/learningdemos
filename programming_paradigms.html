@@ -1,0 +1,2027 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Programming Paradigms</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f3f4f6;
+        overflow-x: hidden;
+      }
+      .uml-box {
+        border: 2px solid #1f2937;
+        border-radius: 6px;
+        background: white;
+        width: 190px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+      .uml-header {
+        background: #e5e7eb;
+        border-bottom: 2px solid #1f2937;
+        padding: 6px;
+        text-align: center;
+        font-weight: bold;
+        cursor: grab;
+        position: relative;
+        border-radius: 4px 4px 0 0;
+      }
+      .uml-header:active {
+        cursor: grabbing;
+      }
+      .uml-box > div:last-child {
+        border-radius: 0 0 4px 4px;
+      }
+
+      .connector-node {
+        width: 16px;
+        height: 16px;
+        background: #fbbf24;
+        border: 2px solid #b45309;
+        border-radius: 50%;
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        cursor: crosshair;
+        z-index: 10;
+        transition: transform 0.2s;
+      }
+      .connector-node:hover {
+        transform: scale(1.3);
+      }
+
+      /* Shake animation for incorrect answers */
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        10%,
+        30%,
+        50%,
+        70%,
+        90% {
+          transform: translateX(-5px);
+        }
+        20%,
+        40%,
+        60%,
+        80% {
+          transform: translateX(5px);
+        }
+      }
+      .shake-animation {
+        animation: shake 0.5s;
+      }
+
+      /* Code Block Styling */
+      .code-font {
+        font-family: "Courier New", Courier, monospace;
+      }
+      .droppable-slot {
+        min-height: 32px;
+        min-width: 160px;
+        border: 2px dashed #9ca3af;
+        transition: all 0.2s;
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .droppable-slot.drag-over {
+        border-color: #3b82f6;
+        background-color: rgba(59, 130, 246, 0.2);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // --- Icons (Inline SVGs) ---
+      const CheckIcon = () => (
+        <svg
+          className="w-6 h-6 text-green-600 inline"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M5 13l4 4L19 7"
+          />
+        </svg>
+      );
+      const XIcon = () => (
+        <svg
+          className="w-6 h-6 text-red-600 inline"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      );
+      const FilterIcon = () => (
+        <svg
+          className="w-5 h-5 inline"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+          />
+        </svg>
+      );
+      const TrashIcon = () => (
+        <svg
+          className="w-4 h-4 inline mr-1"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+          />
+        </svg>
+      );
+
+      const shuffleArray = (array) => {
+        let shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      };
+
+      const strip = (s) => (s ? s.replace(/\s+/g, "").toLowerCase() : "");
+
+      // --- Question Bank ---
+      const ALL_QUESTIONS = [
+        // Procedural & Structured
+        {
+          id: "p1",
+          subtopic: "Procedural",
+          type: "mcq",
+          prompt:
+            "Which of the following is a primary advantage of the structured approach to programming?",
+          options: [
+            "Easier to test and debug because modules are independent.",
+            "It allows variables to be accessed from anywhere in the program.",
+            "It automatically generates the necessary class diagrams.",
+            "It guarantees that the program will run faster.",
+          ],
+          correctOption:
+            "Easier to test and debug because modules are independent.",
+          solution:
+            "The structured approach breaks a problem down into smaller, manageable modules (procedures/functions). This makes individual parts easier to test, debug, and maintain.",
+        },
+        {
+          id: "p2",
+          subtopic: "Procedural",
+          type: "fib",
+          prompt:
+            "The structured approach is often represented visually using a tool that shows how modules are broken down top-down. This is called a [FIB] chart.",
+          firstLetter: "h",
+          fullWord: "hierarchy",
+          solution:
+            "A hierarchy chart visually represents the structure of a program, showing the top-down decomposition of modules.",
+        },
+        {
+          id: "p3",
+          subtopic: "Procedural",
+          type: "hierarchy-builder",
+          prompt:
+            "Construct a valid hierarchy chart for a simple game. The main module is 'Game Loop'. It breaks down into 'Update State' and 'Render Graphics'. 'Update State' further breaks down into 'Check Collisions'.",
+          options: [
+            "Check Collisions",
+            "Game Loop",
+            "Update State",
+            "Render Graphics",
+          ],
+          correctConfig: {
+            root: "Game Loop",
+            child1: "Update State",
+            child2: "Render Graphics",
+            grandchild: "Check Collisions",
+          },
+          solution:
+            "Game Loop is the root. Its immediate children are Update State and Render Graphics. Check Collisions is a child of Update State.",
+        },
+
+        // OOP Concepts & Code Match
+        {
+          id: "o1",
+          subtopic: "OOP Concepts",
+          type: "fib",
+          prompt:
+            "Creating a concrete object based on a class blueprint using a constructor is known as [FIB].",
+          firstLetter: "i",
+          fullWord: "instantiation",
+          solution:
+            "Instantiation is the process of creating an instance (an object) of a class.",
+        },
+        {
+          id: "o2",
+          subtopic: "OOP Concepts",
+          type: "fib",
+          prompt:
+            "The concept of hiding the internal state and requiring all interaction to be performed through an object's methods is called [FIB].",
+          firstLetter: "e",
+          fullWord: "encapsulation",
+          solution:
+            "Encapsulation groups data and methods together and protects the data by restricting direct access, usually using private access modifiers.",
+        },
+        {
+          id: "o3",
+          subtopic: "OOP Concepts",
+          type: "mcq",
+          prompt:
+            "What is the correct definition of polymorphism in the context of OOP?",
+          options: [
+            "Objects of different classes can be treated as objects of a common superclass, and the correct overridden method is executed at runtime.",
+            "A child class inherits all attributes and methods of its parent class.",
+            "A class can be composed of multiple other independent objects.",
+            "Hiding the implementation details from the user.",
+          ],
+          correctOption:
+            "Objects of different classes can be treated as objects of a common superclass, and the correct overridden method is executed at runtime.",
+          solution:
+            "Polymorphism (many forms) allows entities of different types to be treated uniformly, often achieved through method overriding in inherited classes.",
+        },
+        {
+          id: "o4",
+          subtopic: "OOP Concepts",
+          type: "mcq",
+          prompt:
+            "Which of the following is a key object-oriented design principle?",
+          options: [
+            "Favour composition over inheritance.",
+            "Maximise global variables for easy access.",
+            "Program to implementation, not interfaces.",
+            "Encapsulate what remains constant.",
+          ],
+          correctOption: "Favour composition over inheritance.",
+          solution:
+            "Favouring composition over inheritance creates systems that are more flexible and less tightly coupled than deep inheritance trees.",
+        },
+        {
+          id: "o5",
+          subtopic: "OOP Concepts",
+          type: "code-match",
+          prompt:
+            "Drag and drop the correct OOP terminology to describe the annotated lines in this pseudocode focusing on OOP fundamentals.",
+          codeLines: [
+            { text: "CLASS BankAccount", slotId: "slot1" },
+            { text: "  PRIVATE balance: REAL", slotId: "slot2" },
+            { text: "", slotId: null },
+            { text: "  PUBLIC PROCEDURE deposit(amount: REAL)", slotId: null },
+            { text: "    balance <- balance + amount", slotId: null },
+            { text: "  ENDPROCEDURE", slotId: null },
+            { text: "ENDCLASS", slotId: null },
+            { text: "", slotId: null },
+            { text: "BankAccount myAcc <- NEW BankAccount()", slotId: "slot3" },
+          ],
+          terms: ["Class", "Object", "Instantiation", "Encapsulation"],
+          correctMapping: {
+            slot1: "Class",
+            slot2: "Encapsulation", // Represented by making data private and controlled via methods
+            slot3: "Instantiation",
+          },
+          solution:
+            "The blueprint definition is the 'Class'. Making data PRIVATE to restrict direct access is an example of 'Encapsulation'. Using NEW creates a concrete instance, which is 'Instantiation' (Object was a distractor).",
+        },
+        {
+          id: "o6",
+          subtopic: "OOP Concepts",
+          type: "code-match",
+          prompt:
+            "Drag and drop the correct OOP terminology regarding Inheritance and Polymorphism.",
+          codeLines: [
+            { text: "CLASS Character", slotId: null },
+            { text: "  PROTECTED health: INTEGER", slotId: "slot1" },
+            { text: "  PUBLIC VIRTUAL PROCEDURE attack()", slotId: "slot2" },
+            { text: '    PRINT("Basic attack")', slotId: null },
+            { text: "  ENDPROCEDURE", slotId: null },
+            { text: "ENDCLASS", slotId: null },
+            { text: "", slotId: null },
+            { text: "CLASS Wizard INHERITS Character", slotId: "slot3" },
+            { text: "  PUBLIC PROCEDURE attack()", slotId: "slot4" },
+            { text: '    PRINT("Magic spell!")', slotId: null },
+            { text: "  ENDPROCEDURE", slotId: null },
+            { text: "ENDCLASS", slotId: null },
+          ],
+          terms: [
+            "Protected Attribute",
+            "Virtual Method",
+            "Inheritance",
+            "Overriding",
+            "Polymorphism",
+          ],
+          correctMapping: {
+            slot1: "Protected Attribute",
+            slot2: "Virtual Method",
+            slot3: "Inheritance",
+            slot4: "Overriding",
+          },
+          solution:
+            "'PROTECTED' denotes a Protected Attribute. 'VIRTUAL' allows a method to be redefined, creating a Virtual Method. 'INHERITS' is Inheritance. Replacing the parent's method is Overriding. (Polymorphism was a distractor).",
+        },
+        {
+          id: "o7",
+          subtopic: "OOP Concepts",
+          type: "code-match",
+          prompt:
+            "Drag and drop the correct terminology regarding advanced relationships and static/abstract structures.",
+          codeLines: [
+            { text: "CLASS Shape", slotId: null },
+            { text: "  PUBLIC ABSTRACT PROCEDURE draw()", slotId: "slot1" },
+            { text: "ENDCLASS", slotId: null },
+            { text: "", slotId: null },
+            { text: "CLASS Car", slotId: null },
+            { text: "  PRIVATE myEngine : Engine", slotId: null },
+            { text: "  PUBLIC PROCEDURE NEW()", slotId: null },
+            { text: "    myEngine <- NEW Engine()", slotId: "slot2" },
+            { text: "  ENDPROCEDURE", slotId: null },
+            { text: "", slotId: null },
+            { text: "  PUBLIC STATIC PROCEDURE getWheels()", slotId: "slot3" },
+            { text: "    RETURN 4", slotId: null },
+            { text: "  ENDPROCEDURE", slotId: null },
+            { text: "ENDCLASS", slotId: null },
+          ],
+          terms: [
+            "Abstract Method",
+            "Composition",
+            "Aggregation",
+            "Static Method",
+          ],
+          correctMapping: {
+            slot1: "Abstract Method",
+            slot2: "Composition",
+            slot3: "Static Method",
+          },
+          solution:
+            "'ABSTRACT' defines an Abstract Method (no body). Creating an Engine *inside* the Car constructor implies strong ownership, which is Composition (if the car is destroyed, the engine is). 'STATIC' denotes a class-level Static Method.",
+        },
+        {
+          id: "o8",
+          subtopic: "OOP Concepts",
+          type: "code-match",
+          prompt:
+            "Drag and drop the terminology. Focus on how objects are created and how overridden methods are handled dynamically in collections.",
+          codeLines: [
+            { text: "Wizard myWiz <- NEW Wizard()", slotId: "slot1" },
+            { text: "Warrior myWar <- NEW Warrior()", slotId: null },
+            { text: "", slotId: null },
+            { text: "Character[] party <- [myWiz, myWar]", slotId: null },
+            { text: "FOR EACH member IN party", slotId: null },
+            {
+              text: "  // Executes Wizard or Warrior attack depending on runtime object",
+              slotId: null,
+            },
+            { text: "  member.attack()", slotId: "slot2" },
+            { text: "ENDFOR", slotId: null },
+          ],
+          terms: [
+            "Polymorphism",
+            "Instantiation",
+            "Encapsulation",
+            "Composition",
+          ],
+          correctMapping: {
+            slot1: "Instantiation",
+            slot2: "Polymorphism",
+          },
+          solution:
+            "Using NEW to create an object is Instantiation. Calling a method (like attack) on a base class reference (member) that dynamically resolves to the subclass's overridden method is Polymorphism.",
+        },
+
+        // UML & Relationships
+        {
+          id: "u1",
+          subtopic: "UML Class Diagrams",
+          type: "fib",
+          prompt:
+            "In a UML class diagram, a protected access specifier is denoted by the symbol [FIB].",
+          firstLetter: "#",
+          fullWord: "#",
+          solution: "Public is (+), Private is (-), and Protected is (#).",
+        },
+        {
+          id: "u2",
+          subtopic: "UML Class Diagrams",
+          type: "uml-rel",
+          prompt:
+            "Relationship: A 'House' is made up of 'Rooms'. If the House is demolished, the Rooms cease to exist entirely. Select the correct UML relationship line from House to Room.",
+          entity1: "House",
+          entity2: "Room",
+          correctRel: "composition-left",
+          solution:
+            "Composition (represented by a filled diamond on the parent) indicates a strong 'has-a' relationship. The diamond goes on the 'House'.",
+        },
+        {
+          id: "u3",
+          subtopic: "UML Class Diagrams",
+          type: "uml-rel",
+          prompt:
+            "Relationship: A 'Pond' contains 'Ducks'. If the Pond dries up, the Ducks fly away and continue to exist. Select the correct UML relationship line from Pond to Duck.",
+          entity1: "Pond",
+          entity2: "Duck",
+          correctRel: "aggregation-left",
+          solution:
+            "Aggregation (represented by a hollow diamond on the parent) indicates a weaker 'has-a' relationship. The diamond goes on the 'Pond'.",
+        },
+        {
+          id: "u3b",
+          subtopic: "UML Class Diagrams",
+          type: "uml-rel",
+          prompt:
+            "Relationship: A 'Warrior' is a specific type of 'Character' in a game. Select the correct UML relationship line from Warrior to Character.",
+          entity1: "Warrior",
+          entity2: "Character",
+          correctRel: "inheritance-right",
+          solution:
+            "Inheritance (represented by a hollow arrow pointing to the superclass). Since Warrior IS A Character, the arrow points to Character (on the right).",
+        },
+        {
+          id: "u4",
+          subtopic: "UML Class Diagrams",
+          type: "uml-builder",
+          prompt:
+            "Construct the UML class diagram for 'Player'. \n- Private attribute: 'score'\n- Public methods: 'getScore()', 'setScore(s: Int)'. \nLeave unused slots empty.",
+          availableAttrs: ["score"],
+          availableMeths: ["getScore()", "setScore(s: Int)"],
+          correctConfig: {
+            className: "Player",
+            attrs: [{ mod: "-", name: "score" }],
+            methods: [
+              { mod: "+", name: "getScore()" },
+              { mod: "+", name: "setScore(s: Int)" },
+            ],
+          },
+          solution:
+            "Class Name: Player. Attribute: '-' for private and 'score'. Methods: '+' for public and 'getScore()' / 'setScore(s: Int)'.",
+        },
+        {
+          id: "u5",
+          subtopic: "UML Class Diagrams",
+          type: "complex-uml",
+          prompt:
+            "Construct the UML diagram:\n1. 'School' aggregates 'Student'.\n2. 'Student' inherits from 'Person'.\n3. 'School' has a private attribute 'students: Student[]' and a public method 'addStudent(s: Student)'.\n4. 'Student' has private attribute 'grade' & public methods 'getGrade()', 'setGrade(g: Int)'.\n5. 'Person' has protected attribute 'name' & public methods 'getName()', 'setName(n: String)'.\n(Drag boxes to organise, drag yellow circles to connect them).",
+          classes: ["School", "Student", "Person"],
+          availableAttrs: ["students: Student[]", "grade", "name"],
+          availableMeths: [
+            "addStudent(s: Student)",
+            "getGrade()",
+            "setGrade(g: Int)",
+            "getName()",
+            "setName(n: String)",
+          ],
+          correctConfig: {
+            nodes: [
+              {
+                name: "School",
+                attrs: [{ mod: "-", name: "students: Student[]" }],
+                meths: [{ mod: "+", name: "addStudent(s: Student)" }],
+              },
+              {
+                name: "Student",
+                attrs: [{ mod: "-", name: "grade" }],
+                meths: [
+                  { mod: "+", name: "getGrade()" },
+                  { mod: "+", name: "setGrade(g: Int)" },
+                ],
+              },
+              {
+                name: "Person",
+                attrs: [{ mod: "#", name: "name" }],
+                meths: [
+                  { mod: "+", name: "getName()" },
+                  { mod: "+", name: "setName(n: String)" },
+                ],
+              },
+            ],
+            edges: [
+              { from: "School", to: "Student", type: "aggregation" },
+              { from: "Student", to: "Person", type: "inheritance" },
+            ],
+          },
+          solution:
+            "School (- students: Student[], + addStudent(s: Student)). Student (- grade, + getGrade(), + setGrade(g: Int)). Person (# name, + getName(), + setName(n: String)). Aggregation: Hollow diamond at School pointing to Student. Inheritance: Hollow arrow pointing to Person from Student.",
+        },
+        {
+          id: "u6",
+          subtopic: "UML Class Diagrams",
+          type: "complex-uml",
+          prompt:
+            "Construct the UML diagram:\n1. 'Car' is composed of 'Engine'.\n2. 'Car' inherits from 'Vehicle'.\n3. 'Car' has a private attribute 'engine: Engine' and public methods 'drive(dist: Real)', 'getEngine()'.\n4. 'Engine' has private attribute 'hp' and public methods 'start(key: String)', 'getHp()'.\n5. 'Vehicle' has protected attribute 'speed' and public methods 'getSpeed()', 'setSpeed(s: Real)'.",
+          classes: ["Engine", "Car", "Vehicle"],
+          availableAttrs: ["engine: Engine", "hp", "speed"],
+          availableMeths: [
+            "drive(dist: Real)",
+            "getEngine()",
+            "start(key: String)",
+            "getHp()",
+            "getSpeed()",
+            "setSpeed(s: Real)",
+          ],
+          correctConfig: {
+            nodes: [
+              {
+                name: "Engine",
+                attrs: [{ mod: "-", name: "hp" }],
+                meths: [
+                  { mod: "+", name: "start(key: String)" },
+                  { mod: "+", name: "getHp()" },
+                ],
+              },
+              {
+                name: "Car",
+                attrs: [{ mod: "-", name: "engine: Engine" }],
+                meths: [
+                  { mod: "+", name: "drive(dist: Real)" },
+                  { mod: "+", name: "getEngine()" },
+                ],
+              },
+              {
+                name: "Vehicle",
+                attrs: [{ mod: "#", name: "speed" }],
+                meths: [
+                  { mod: "+", name: "getSpeed()" },
+                  { mod: "+", name: "setSpeed(s: Real)" },
+                ],
+              },
+            ],
+            edges: [
+              { from: "Car", to: "Engine", type: "composition" },
+              { from: "Car", to: "Vehicle", type: "inheritance" },
+            ],
+          },
+          solution:
+            "Engine (- hp, + start(key: String), + getHp()). Car (- engine: Engine, + drive(dist: Real), + getEngine()). Vehicle (# speed, + getSpeed(), + setSpeed(s: Real)). Composition: Filled diamond at Car pointing to Engine. Inheritance: Hollow arrow pointing to Vehicle from Car.",
+        },
+      ];
+
+      const TOPICS = [...new Set(ALL_QUESTIONS.map((q) => q.subtopic))];
+
+      // --- Question Sub-components ---
+
+      const MCQ = ({ question, onAnswerChange }) => {
+        const [shuffledOptions, setShuffledOptions] = useState([]);
+        const [selected, setSelected] = useState(null);
+
+        useEffect(() => {
+          setShuffledOptions(shuffleArray(question.options));
+          setSelected(null);
+          onAnswerChange(null);
+        }, [question]);
+
+        return (
+          <div className="space-y-3 mt-2">
+            {shuffledOptions.map((opt, idx) => (
+              <div
+                key={idx}
+                onClick={() => {
+                  setSelected(opt);
+                  onAnswerChange(opt);
+                }}
+                className={`p-3 border-2 rounded cursor-pointer transition-colors ${selected === opt ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300 bg-white"}`}
+              >
+                {opt}
+              </div>
+            ))}
+          </div>
+        );
+      };
+
+      const FIB = ({ question, onAnswerChange }) => {
+        const [val, setVal] = useState("");
+        useEffect(() => {
+          setVal("");
+          onAnswerChange("");
+        }, [question]);
+
+        const parts = question.prompt.split(`[FIB]`);
+        return (
+          <div className="mt-4 text-lg font-medium text-gray-800 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r shadow-sm">
+            {parts.map((part, i) => (
+              <React.Fragment key={i}>
+                {part}
+                {i < parts.length - 1 && (
+                  <span className="inline-flex items-center mx-1">
+                    <span className="font-bold text-blue-800 mr-1">
+                      {question.firstLetter}
+                    </span>
+                    <input
+                      type="text"
+                      value={val}
+                      onChange={(e) => {
+                        setVal(e.target.value);
+                        onAnswerChange(e.target.value);
+                      }}
+                      className="border-b-2 border-gray-400 outline-none focus:border-blue-500 w-32 px-1 text-center font-bold text-blue-700 bg-white rounded-t"
+                      placeholder="..."
+                    />
+                  </span>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        );
+      };
+
+      const UMLRelationship = ({ question, onAnswerChange }) => {
+        const [relType, setRelType] = useState("none");
+        useEffect(() => {
+          setRelType("none");
+          onAnswerChange("none");
+        }, [question]);
+
+        const cycleRel = () => {
+          const types = [
+            "none",
+            "inheritance-left",
+            "inheritance-right",
+            "aggregation-left",
+            "aggregation-right",
+            "composition-left",
+            "composition-right",
+          ];
+          const nextType = types[(types.indexOf(relType) + 1) % types.length];
+          setRelType(nextType);
+          onAnswerChange(nextType);
+        };
+
+        const renderLine = () => {
+          const svgProps = {
+            className: "w-full h-10",
+            viewBox: "0 0 100 40",
+            preserveAspectRatio: "none",
+          };
+          switch (relType) {
+            case "inheritance-left":
+              return (
+                <svg {...svgProps}>
+                  <polygon
+                    points="0,20 15,10 15,30"
+                    fill="white"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="15"
+                    y1="20"
+                    x2="100"
+                    y2="20"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                </svg>
+              );
+            case "inheritance-right":
+              return (
+                <svg {...svgProps}>
+                  <polygon
+                    points="100,20 85,10 85,30"
+                    fill="white"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="0"
+                    y1="20"
+                    x2="85"
+                    y2="20"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                </svg>
+              );
+            case "aggregation-left":
+              return (
+                <svg {...svgProps}>
+                  <polygon
+                    points="0,20 15,10 30,20 15,30"
+                    fill="white"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="30"
+                    y1="20"
+                    x2="100"
+                    y2="20"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                </svg>
+              );
+            case "aggregation-right":
+              return (
+                <svg {...svgProps}>
+                  <polygon
+                    points="100,20 85,10 70,20 85,30"
+                    fill="white"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="0"
+                    y1="20"
+                    x2="70"
+                    y2="20"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                </svg>
+              );
+            case "composition-left":
+              return (
+                <svg {...svgProps}>
+                  <polygon
+                    points="0,20 15,10 30,20 15,30"
+                    fill="black"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="30"
+                    y1="20"
+                    x2="100"
+                    y2="20"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                </svg>
+              );
+            case "composition-right":
+              return (
+                <svg {...svgProps}>
+                  <polygon
+                    points="100,20 85,10 70,20 85,30"
+                    fill="black"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                  <line
+                    x1="0"
+                    y1="20"
+                    x2="70"
+                    y2="20"
+                    stroke="black"
+                    strokeWidth="2"
+                  />
+                </svg>
+              );
+            default:
+              return (
+                <div className="text-gray-400 italic text-sm mt-3">
+                  Click to connect
+                </div>
+              );
+          }
+        };
+
+        const typeLabels = {
+          none: "No Relationship",
+          "inheritance-left": "Inherits From (Left)",
+          "inheritance-right": "Inherits From (Right)",
+          "aggregation-left": "Aggregation (Diamond Left)",
+          "aggregation-right": "Aggregation (Diamond Right)",
+          "composition-left": "Composition (Diamond Left)",
+          "composition-right": "Composition (Diamond Right)",
+        };
+
+        return (
+          <div className="mt-8 flex flex-col items-center space-y-6">
+            <p className="text-sm text-gray-600 mb-2">
+              Click the center connector to change the UML relationship.
+            </p>
+            <div className="flex items-center w-full max-w-2xl justify-between px-4">
+              <div className="uml-box shadow-md">
+                <div className="uml-header py-4">{question.entity1}</div>
+              </div>
+              <div
+                className="flex-grow px-2 cursor-pointer flex flex-col items-center hover:bg-gray-100 rounded h-16 justify-center transition-colors"
+                onClick={cycleRel}
+              >
+                {renderLine()}
+                <div className="text-xs font-bold text-blue-800 mt-1">
+                  {typeLabels[relType]}
+                </div>
+              </div>
+              <div className="uml-box shadow-md">
+                <div className="uml-header py-4">{question.entity2}</div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const UMLClassBuilder = ({ question, onAnswerChange }) => {
+        const [state, setState] = useState({
+          className: "",
+          attrs: [
+            { mod: "", name: "" },
+            { mod: "", name: "" },
+          ],
+          methods: [
+            { mod: "", name: "" },
+            { mod: "", name: "" },
+          ],
+        });
+        useEffect(() => {
+          const init = {
+            className: "",
+            attrs: [
+              { mod: "", name: "" },
+              { mod: "", name: "" },
+            ],
+            methods: [
+              { mod: "", name: "" },
+              { mod: "", name: "" },
+            ],
+          };
+          setState(init);
+          onAnswerChange(init);
+        }, [question]);
+
+        const updateField = (section, idx, field, val) => {
+          const newState = { ...state };
+          if (section === "className") newState.className = val;
+          else newState[section][idx][field] = val;
+          setState(newState);
+          onAnswerChange(newState);
+        };
+
+        return (
+          <div className="mt-6 flex justify-center">
+            <div className="uml-box w-80 shadow-lg">
+              <div className="bg-gray-200 border-b-2 border-gray-800 p-2 text-center">
+                <input
+                  type="text"
+                  placeholder="ClassName"
+                  className="w-full text-center font-bold bg-transparent outline-none border-b border-dashed border-gray-400 focus:border-blue-500"
+                  value={state.className}
+                  onChange={(e) =>
+                    updateField("className", null, null, e.target.value)
+                  }
+                />
+              </div>
+              <div className="p-2 border-b-2 border-gray-800 bg-white min-h-[60px]">
+                <div className="text-xs text-gray-400 mb-1">Attributes</div>
+                {state.attrs.map((attr, i) => (
+                  <div key={`attr-${i}`} className="flex space-x-2 mb-1">
+                    <select
+                      className="border rounded px-1 outline-none bg-gray-50"
+                      value={attr.mod}
+                      onChange={(e) =>
+                        updateField("attrs", i, "mod", e.target.value)
+                      }
+                    >
+                      <option value=""> </option>
+                      <option value="+">+</option>
+                      <option value="-">-</option>
+                      <option value="#">#</option>
+                    </select>
+                    <select
+                      className="w-full border-b outline-none text-sm px-1 focus:border-blue-500 bg-transparent"
+                      value={attr.name}
+                      onChange={(e) =>
+                        updateField("attrs", i, "name", e.target.value)
+                      }
+                    >
+                      <option value=""> </option>
+                      {question.availableAttrs &&
+                        question.availableAttrs.map((a) => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div className="p-2 bg-white min-h-[60px]">
+                <div className="text-xs text-gray-400 mb-1">Methods</div>
+                {state.methods.map((meth, i) => (
+                  <div key={`meth-${i}`} className="flex space-x-2 mb-1">
+                    <select
+                      className="border rounded px-1 outline-none bg-gray-50"
+                      value={meth.mod}
+                      onChange={(e) =>
+                        updateField("methods", i, "mod", e.target.value)
+                      }
+                    >
+                      <option value=""> </option>
+                      <option value="+">+</option>
+                      <option value="-">-</option>
+                      <option value="#">#</option>
+                    </select>
+                    <select
+                      className="w-full border-b outline-none text-sm px-1 focus:border-blue-500 bg-transparent"
+                      value={meth.name}
+                      onChange={(e) =>
+                        updateField("methods", i, "name", e.target.value)
+                      }
+                    >
+                      <option value=""> </option>
+                      {question.availableMeths &&
+                        question.availableMeths.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- Free-form Complex UML Builder ---
+      const ComplexUMLBuilder = ({ question, onAnswerChange }) => {
+        const containerRef = useRef(null);
+
+        const [nodes, setNodes] = useState([]);
+        const [edges, setEdges] = useState([]);
+
+        const [draggingNode, setDraggingNode] = useState(null);
+        const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+        const [drawingEdge, setDrawingEdge] = useState(null); // { fromIdx, currentX, currentY }
+        const [edgeModal, setEdgeModal] = useState(null); // { fromIdx, toIdx, x, y }
+
+        useEffect(() => {
+          const initNodes = question.classes.map((cls, i) => ({
+            name: cls,
+            x: 20 + i * 240,
+            y: 60,
+            attrs: [
+              { mod: "", name: "" },
+              { mod: "", name: "" },
+            ],
+            meths: [
+              { mod: "", name: "" },
+              { mod: "", name: "" },
+            ],
+          }));
+          setNodes(initNodes);
+          setEdges([]);
+          setEdgeModal(null);
+          onAnswerChange({ nodes: initNodes, edges: [] });
+        }, [question]);
+
+        const updateNodeData = (idx, type, arrIdx, subfield, val) => {
+          // Perform a deep copy of nodes to ensure React state updates perfectly without mutating previous references
+          const newNodes = nodes.map((n, i) => {
+            if (i !== idx) return n;
+            const newNode = { ...n };
+            newNode[type] = n[type].map((item, j) => {
+              if (j !== arrIdx) return item;
+              return { ...item, [subfield]: val };
+            });
+            return newNode;
+          });
+
+          setNodes(newNodes);
+          onAnswerChange({ nodes: newNodes, edges });
+        };
+
+        const onPointerMove = (e) => {
+          if (!containerRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+
+          if (draggingNode !== null) {
+            const newNodes = [...nodes];
+            newNodes[draggingNode].x = x - dragOffset.x;
+            newNodes[draggingNode].y = y - dragOffset.y;
+            setNodes(newNodes);
+          } else if (drawingEdge !== null) {
+            setDrawingEdge({ ...drawingEdge, currentX: x, currentY: y });
+          }
+        };
+
+        const onPointerUp = (e) => {
+          if (draggingNode !== null) {
+            setDraggingNode(null);
+            onAnswerChange({ nodes, edges });
+          }
+          if (drawingEdge !== null) {
+            if (containerRef.current) {
+              const rect = containerRef.current.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+
+              let droppedOn = null;
+              for (let i = 0; i < nodes.length; i++) {
+                if (i === drawingEdge.fromIdx) continue;
+                const n = nodes[i];
+                // Generous hitbox around the target node to easily catch the drop
+                if (
+                  x > n.x - 30 &&
+                  x < n.x + 220 &&
+                  y > n.y - 30 &&
+                  y < n.y + 180
+                ) {
+                  droppedOn = i;
+                  break;
+                }
+              }
+
+              if (droppedOn !== null) {
+                setEdgeModal({
+                  fromIdx: drawingEdge.fromIdx,
+                  toIdx: droppedOn,
+                  x,
+                  y,
+                });
+              }
+            }
+            setDrawingEdge(null);
+          }
+        };
+
+        const addEdge = (type, from, to) => {
+          // Prevent duplicate edges between same two nodes
+          const filteredEdges = edges.filter(
+            (e) =>
+              !(e.from === from && e.to === to) &&
+              !(e.from === to && e.to === from),
+          );
+          const newEdges = [...filteredEdges, { from, to, type }];
+          setEdges(newEdges);
+          setEdgeModal(null);
+          onAnswerChange({ nodes, edges: newEdges });
+        };
+
+        return (
+          <div
+            className="mt-4 border rounded bg-gray-50 relative select-none"
+            style={{ height: "400px" }}
+            ref={containerRef}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerUp}
+          >
+            <div className="absolute top-2 right-2 z-20">
+              <button
+                onClick={() => {
+                  setEdges([]);
+                  onAnswerChange({ nodes, edges: [] });
+                }}
+                className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+              >
+                <TrashIcon /> Clear Lines
+              </button>
+            </div>
+            <div className="absolute bottom-2 left-2 text-xs text-gray-400 italic pointer-events-none">
+              Drag boxes to move. Drag yellow circles to connect.
+            </div>
+
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+              <defs>
+                <marker
+                  id="arrow"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="12"
+                  refY="6"
+                  orient="auto"
+                >
+                  <polygon
+                    points="0,0 12,6 0,12"
+                    fill="white"
+                    stroke="black"
+                    strokeWidth="1.5"
+                  />
+                </marker>
+                <marker
+                  id="diamond-hollow"
+                  markerWidth="14"
+                  markerHeight="10"
+                  refX="0"
+                  refY="5"
+                  orient="auto"
+                >
+                  <polygon
+                    points="0,5 7,0 14,5 7,10"
+                    fill="white"
+                    stroke="black"
+                    strokeWidth="1.5"
+                  />
+                </marker>
+                <marker
+                  id="diamond-filled"
+                  markerWidth="14"
+                  markerHeight="10"
+                  refX="0"
+                  refY="5"
+                  orient="auto"
+                >
+                  <polygon
+                    points="0,5 7,0 14,5 7,10"
+                    fill="black"
+                    stroke="black"
+                    strokeWidth="1.5"
+                  />
+                </marker>
+              </defs>
+
+              {edges.map((e, idx) => {
+                const n1 = nodes[e.from];
+                const n2 = nodes[e.to];
+                // Approximate center of the nodes based on new width and dynamic height
+                const x1 = n1.x + 95;
+                const y1 = n1.y + 70;
+                const x2 = n2.x + 95;
+                const y2 = n2.y + 70;
+
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const angle = Math.atan2(dy, dx);
+                const r = 100; // rough radius to edge of box
+                const startX = x1 + Math.cos(angle) * r;
+                const startY = y1 + Math.sin(angle) * r;
+                const endX = x2 - Math.cos(angle) * r;
+                const endY = y2 - Math.sin(angle) * r;
+
+                let mStart = "",
+                  mEnd = "";
+                if (e.type === "inheritance") mEnd = "url(#arrow)";
+                else if (e.type === "aggregation")
+                  mStart = "url(#diamond-hollow)";
+                else if (e.type === "composition")
+                  mStart = "url(#diamond-filled)";
+
+                return (
+                  <line
+                    key={idx}
+                    x1={startX}
+                    y1={startY}
+                    x2={endX}
+                    y2={endY}
+                    stroke="black"
+                    strokeWidth="2"
+                    markerStart={mStart}
+                    markerEnd={mEnd}
+                  />
+                );
+              })}
+
+              {drawingEdge && (
+                <line
+                  x1={nodes[drawingEdge.fromIdx].x + 190}
+                  y1={nodes[drawingEdge.fromIdx].y + 10}
+                  x2={drawingEdge.currentX}
+                  y2={drawingEdge.currentY}
+                  stroke="#9ca3af"
+                  strokeWidth="2"
+                  strokeDasharray="4"
+                />
+              )}
+            </svg>
+
+            {nodes.map((node, idx) => (
+              <div
+                key={idx}
+                className="uml-box absolute z-10 shadow-lg"
+                style={{ left: node.x, top: node.y }}
+              >
+                <div
+                  className="uml-header"
+                  onPointerDown={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setDragOffset({
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top,
+                    });
+                    setDraggingNode(idx);
+                  }}
+                >
+                  {node.name}
+                  <div
+                    className="connector-node"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      setDrawingEdge({
+                        fromIdx: idx,
+                        currentX: node.x + 190,
+                        currentY: node.y + 10,
+                      });
+                    }}
+                  />
+                </div>
+                <div className="p-1 bg-white border-b border-gray-300">
+                  <div className="text-[10px] text-gray-400">Attributes</div>
+                  {node.attrs.map((attr, aIdx) => (
+                    <div key={aIdx} className="flex space-x-1 mt-1">
+                      <select
+                        className="border rounded px-1 outline-none text-xs bg-gray-50"
+                        value={attr.mod}
+                        onChange={(e) =>
+                          updateNodeData(
+                            idx,
+                            "attrs",
+                            aIdx,
+                            "mod",
+                            e.target.value,
+                          )
+                        }
+                      >
+                        <option value=""> </option>
+                        <option value="+">+</option>
+                        <option value="-">-</option>
+                        <option value="#">#</option>
+                      </select>
+                      <select
+                        className="w-full border-b outline-none text-xs px-1 focus:border-blue-500 bg-transparent text-ellipsis overflow-hidden"
+                        value={attr.name}
+                        onChange={(e) =>
+                          updateNodeData(
+                            idx,
+                            "attrs",
+                            aIdx,
+                            "name",
+                            e.target.value,
+                          )
+                        }
+                      >
+                        <option value=""> </option>
+                        {question.availableAttrs &&
+                          question.availableAttrs.map((a) => (
+                            <option key={a} value={a}>
+                              {a}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <div className="p-1 bg-white">
+                  <div className="text-[10px] text-gray-400">Methods</div>
+                  {node.meths.map((meth, mIdx) => (
+                    <div key={mIdx} className="flex space-x-1 mt-1">
+                      <select
+                        className="border rounded px-1 outline-none text-xs bg-gray-50"
+                        value={meth.mod}
+                        onChange={(e) =>
+                          updateNodeData(
+                            idx,
+                            "meths",
+                            mIdx,
+                            "mod",
+                            e.target.value,
+                          )
+                        }
+                      >
+                        <option value=""> </option>
+                        <option value="+">+</option>
+                        <option value="-">-</option>
+                        <option value="#">#</option>
+                      </select>
+                      <select
+                        className="w-full border-b outline-none text-xs px-1 focus:border-blue-500 bg-transparent text-ellipsis overflow-hidden"
+                        value={meth.name}
+                        onChange={(e) =>
+                          updateNodeData(
+                            idx,
+                            "meths",
+                            mIdx,
+                            "name",
+                            e.target.value,
+                          )
+                        }
+                      >
+                        <option value=""> </option>
+                        {question.availableMeths &&
+                          question.availableMeths.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Explicit Edge Selection Menu */}
+            {edgeModal && (
+              <div
+                className="absolute z-50 bg-white border-2 border-blue-500 shadow-xl rounded p-2 text-sm w-72"
+                style={{
+                  left: Math.min(edgeModal.x, 550),
+                  top: Math.min(edgeModal.y, 200),
+                }}
+              >
+                <div className="font-bold border-b pb-1 mb-2 text-blue-800">
+                  Select Relationship
+                </div>
+                <div className="space-y-1">
+                  <button
+                    onClick={() =>
+                      addEdge("aggregation", edgeModal.fromIdx, edgeModal.toIdx)
+                    }
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                  >
+                    <b>{nodes[edgeModal.fromIdx].name}</b> aggregates{" "}
+                    <b>{nodes[edgeModal.toIdx].name}</b>
+                  </button>
+                  <button
+                    onClick={() =>
+                      addEdge("aggregation", edgeModal.toIdx, edgeModal.fromIdx)
+                    }
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                  >
+                    <b>{nodes[edgeModal.toIdx].name}</b> aggregates{" "}
+                    <b>{nodes[edgeModal.fromIdx].name}</b>
+                  </button>
+                  <div className="h-px bg-gray-200 my-1"></div>
+                  <button
+                    onClick={() =>
+                      addEdge("composition", edgeModal.fromIdx, edgeModal.toIdx)
+                    }
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                  >
+                    <b>{nodes[edgeModal.fromIdx].name}</b> is composed of{" "}
+                    <b>{nodes[edgeModal.toIdx].name}</b>
+                  </button>
+                  <button
+                    onClick={() =>
+                      addEdge("composition", edgeModal.toIdx, edgeModal.fromIdx)
+                    }
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                  >
+                    <b>{nodes[edgeModal.toIdx].name}</b> is composed of{" "}
+                    <b>{nodes[edgeModal.fromIdx].name}</b>
+                  </button>
+                  <div className="h-px bg-gray-200 my-1"></div>
+                  <button
+                    onClick={() =>
+                      addEdge("inheritance", edgeModal.fromIdx, edgeModal.toIdx)
+                    }
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                  >
+                    <b>{nodes[edgeModal.fromIdx].name}</b> inherits from{" "}
+                    <b>{nodes[edgeModal.toIdx].name}</b>
+                  </button>
+                  <button
+                    onClick={() =>
+                      addEdge("inheritance", edgeModal.toIdx, edgeModal.fromIdx)
+                    }
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                  >
+                    <b>{nodes[edgeModal.toIdx].name}</b> inherits from{" "}
+                    <b>{nodes[edgeModal.fromIdx].name}</b>
+                  </button>
+                </div>
+                <button
+                  onClick={() => setEdgeModal(null)}
+                  className="mt-3 text-xs text-red-500 w-full text-center hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const CodeMatch = ({ question, onAnswerChange }) => {
+        const [availableTerms, setAvailableTerms] = useState([]);
+        const [slots, setSlots] = useState({});
+
+        useEffect(() => {
+          setAvailableTerms(shuffleArray(question.terms));
+          setSlots({});
+          onAnswerChange({});
+        }, [question]);
+
+        const handleDragStart = (e, term, sourceSlot) => {
+          e.dataTransfer.setData("term", term);
+          if (sourceSlot) e.dataTransfer.setData("sourceSlot", sourceSlot);
+        };
+        const handleDrop = (e, targetSlot) => {
+          e.preventDefault();
+          const term = e.dataTransfer.getData("term");
+          const sourceSlot = e.dataTransfer.getData("sourceSlot");
+          if (!term) return;
+          const newSlots = { ...slots };
+          if (targetSlot) {
+            if (newSlots[targetSlot])
+              setAvailableTerms((prev) => [...prev, newSlots[targetSlot]]);
+            newSlots[targetSlot] = term;
+            if (sourceSlot) delete newSlots[sourceSlot];
+            else setAvailableTerms((prev) => prev.filter((t) => t !== term));
+          } else {
+            if (sourceSlot) {
+              delete newSlots[sourceSlot];
+              if (!availableTerms.includes(term))
+                setAvailableTerms((prev) => [...prev, term]);
+            }
+          }
+          setSlots(newSlots);
+          onAnswerChange(newSlots);
+        };
+
+        return (
+          <div className="mt-4 flex flex-col gap-4 items-start w-full">
+            {/* Horizontal Term Bank */}
+            <div
+              className="w-full bg-gray-100 p-4 rounded border-2 border-dashed border-gray-300 min-h-[80px]"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, null)}
+            >
+              <h4 className="font-bold text-gray-700 mb-3 text-sm">
+                Term Bank (Drag these into the empty slots):
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {availableTerms.map((term) => (
+                  <div
+                    key={term}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, term, null)}
+                    className="bg-white border border-blue-400 text-blue-800 px-3 py-1.5 rounded shadow-sm cursor-grab active:cursor-grabbing text-sm font-semibold"
+                  >
+                    {term}
+                  </div>
+                ))}
+                {availableTerms.length === 0 && (
+                  <span className="text-sm text-gray-400 italic">
+                    All terms placed.
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Full width Code Area */}
+            <div className="w-full bg-gray-800 text-green-400 p-4 rounded shadow-inner overflow-x-auto">
+              <table className="w-full code-font text-sm">
+                <tbody>
+                  {question.codeLines.map((line, idx) => (
+                    <tr key={idx}>
+                      <td className="py-1 whitespace-pre">{line.text}</td>
+                      <td className="w-48 pl-4">
+                        {line.slotId && (
+                          <div
+                            className={`droppable-slot flex items-center justify-center rounded text-xs text-gray-800 font-bold ${slots[line.slotId] ? "bg-blue-100 border-blue-400 border-solid" : ""}`}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => handleDrop(e, line.slotId)}
+                          >
+                            {slots[line.slotId] ? (
+                              <div
+                                draggable
+                                onDragStart={(e) =>
+                                  handleDragStart(
+                                    e,
+                                    slots[line.slotId],
+                                    line.slotId,
+                                  )
+                                }
+                                className="w-full h-full p-2 cursor-grab text-center"
+                              >
+                                {slots[line.slotId]}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic font-normal">
+                                Drop here
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      };
+
+      const HierarchyBuilder = ({ question, onAnswerChange }) => {
+        const [state, setState] = useState({
+          root: "",
+          child1: "",
+          child2: "",
+          grandchild: "",
+        });
+        useEffect(() => {
+          const init = { root: "", child1: "", child2: "", grandchild: "" };
+          setState(init);
+          onAnswerChange(init);
+        }, [question]);
+
+        const updateNode = (nodeKey, val) => {
+          const newState = { ...state, [nodeKey]: val };
+          setState(newState);
+          onAnswerChange(newState);
+        };
+
+        const NodeSelect = ({ nodeKey, label }) => (
+          <div className="flex flex-col items-center">
+            <span className="text-xs text-gray-500 mb-1">{label}</span>
+            <select
+              className="border-2 border-gray-400 p-2 rounded bg-white shadow-sm font-semibold text-sm outline-none focus:border-blue-500"
+              value={state[nodeKey]}
+              onChange={(e) => updateNode(nodeKey, e.target.value)}
+            >
+              <option value="">-- Select --</option>
+              {question.options.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+
+        return (
+          <div className="mt-8 flex flex-col items-center w-full">
+            <div className="relative">
+              <NodeSelect nodeKey="root" label="Top Level" />
+              <div className="absolute top-full left-1/2 w-px h-8 bg-black -translate-x-1/2"></div>
+              <div className="absolute top-[calc(100%+31px)] left-[-100px] w-[200px] h-px bg-black transform -translate-x-1/2 translate-x-[100px]"></div>
+              <div className="absolute top-[calc(100%+32px)] left-[-100px] w-px h-6 bg-black"></div>
+              <div className="absolute top-[calc(100%+32px)] right-[-100px] w-px h-6 bg-black"></div>
+            </div>
+            <div className="flex justify-between w-[400px] mt-14 relative">
+              <div className="relative flex flex-col items-center w-1/2">
+                <NodeSelect nodeKey="child1" label="Sub Module 1" />
+                <div className="absolute top-full left-1/2 w-px h-8 bg-black -translate-x-1/2"></div>
+              </div>
+              <div className="w-1/2 flex justify-center">
+                <NodeSelect nodeKey="child2" label="Sub Module 2" />
+              </div>
+            </div>
+            <div className="flex justify-start w-[400px] mt-8">
+              <div className="w-1/2 flex justify-center">
+                <NodeSelect nodeKey="grandchild" label="Sub-sub Module" />
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- Main App Component ---
+      const App = () => {
+        const [isFilterOpen, setIsFilterOpen] = useState(false);
+        const [selectedTopics, setSelectedTopics] = useState([...TOPICS]);
+        const [tempSelectedTopics, setTempSelectedTopics] = useState([
+          ...TOPICS,
+        ]);
+        const [queue, setQueue] = useState([]);
+        const [currentQIndex, setCurrentQIndex] = useState(0);
+        const [totalInLoop, setTotalInLoop] = useState(0);
+        const [userAnswer, setUserAnswer] = useState(null);
+        const [status, setStatus] = useState("idle");
+        const [showSolution, setShowSolution] = useState(false);
+        const [shake, setShake] = useState(false);
+
+        const initQueue = (topics) => {
+          const filtered = ALL_QUESTIONS.filter((q) =>
+            topics.includes(q.subtopic),
+          );
+          if (filtered.length === 0) {
+            setQueue([]);
+            return;
+          }
+          const shuffled = shuffleArray(filtered);
+          setQueue(shuffled);
+          setTotalInLoop(shuffled.length);
+          setCurrentQIndex(0);
+          resetInteractionState();
+        };
+
+        useEffect(() => {
+          initQueue(selectedTopics);
+        }, []);
+
+        const resetInteractionState = () => {
+          setUserAnswer(null);
+          setStatus("idle");
+          setShowSolution(false);
+          setShake(false);
+        };
+        const handleTopicToggle = (topic) =>
+          setTempSelectedTopics((prev) =>
+            prev.includes(topic)
+              ? prev.filter((t) => t !== topic)
+              : [...prev, topic],
+          );
+        const applyFilters = () => {
+          if (tempSelectedTopics.length === 0) {
+            alert("Please select at least one subtopic.");
+            return;
+          }
+          setSelectedTopics(tempSelectedTopics);
+          setIsFilterOpen(false);
+          initQueue(tempSelectedTopics);
+        };
+
+        const currentQ = queue[currentQIndex];
+
+        const validateAnswer = () => {
+          if (!currentQ) return;
+          let isCorrect = false;
+
+          if (currentQ.type === "mcq")
+            isCorrect = userAnswer === currentQ.correctOption;
+          else if (currentQ.type === "fib") {
+            if (currentQ.fullWord === "" && currentQ.firstLetter === "#")
+              isCorrect = userAnswer.trim() === "" || userAnswer.trim() === "#";
+            else {
+              let cleanUser = userAnswer.trim().toLowerCase();
+              let expected = currentQ.fullWord.toLowerCase();
+              let firstL = currentQ.firstLetter.toLowerCase();
+              isCorrect =
+                cleanUser === expected || firstL + cleanUser === expected;
+            }
+          } else if (currentQ.type === "uml-rel")
+            isCorrect = userAnswer === currentQ.correctRel;
+          else if (currentQ.type === "uml-builder") {
+            if (!userAnswer) return;
+            const c = currentQ.correctConfig;
+            const u = userAnswer;
+
+            // Allows students to enter properties in either slot
+            let attrsMatch = true;
+            let methsMatch = true;
+            for (let cAttr of c.attrs) {
+              const found = u.attrs.find(
+                (ua) =>
+                  ua.mod === cAttr.mod && strip(ua.name) === strip(cAttr.name),
+              );
+              if (!found) {
+                attrsMatch = false;
+                break;
+              }
+            }
+            for (let cMeth of c.methods) {
+              const found = u.methods.find(
+                (um) =>
+                  um.mod === cMeth.mod && strip(um.name) === strip(cMeth.name),
+              );
+              if (!found) {
+                methsMatch = false;
+                break;
+              }
+            }
+            isCorrect =
+              c.className.toLowerCase() === u.className.trim().toLowerCase() &&
+              attrsMatch &&
+              methsMatch;
+          } else if (currentQ.type === "complex-uml") {
+            if (!userAnswer) return;
+            const c = currentQ.correctConfig;
+            const u = userAnswer;
+
+            const findNode = (name) => u.nodes.find((n) => n.name === name);
+
+            let nodesCorrect = true;
+            for (let cNode of c.nodes) {
+              const uNode = findNode(cNode.name);
+              if (!uNode) {
+                nodesCorrect = false;
+                break;
+              }
+
+              // Check if all required attrs exist anywhere in the user's box
+              for (let cAttr of cNode.attrs) {
+                if (!cAttr.name) continue;
+                const found = uNode.attrs.find(
+                  (ua) =>
+                    ua.mod === cAttr.mod &&
+                    strip(ua.name) === strip(cAttr.name),
+                );
+                if (!found) {
+                  nodesCorrect = false;
+                  break;
+                }
+              }
+              // Check methods
+              for (let cMeth of cNode.meths) {
+                if (!cMeth.name) continue;
+                const found = uNode.meths.find(
+                  (um) =>
+                    um.mod === cMeth.mod &&
+                    strip(um.name) === strip(cMeth.name),
+                );
+                if (!found) {
+                  nodesCorrect = false;
+                  break;
+                }
+              }
+            }
+
+            let edgesCorrect = true;
+            if (c.edges.length !== u.edges.length) edgesCorrect = false;
+            else {
+              for (let cEdge of c.edges) {
+                const fromIdx = u.nodes.findIndex((n) => n.name === cEdge.from);
+                const toIdx = u.nodes.findIndex((n) => n.name === cEdge.to);
+                const edgeExists = u.edges.find(
+                  (e) =>
+                    e.from === fromIdx &&
+                    e.to === toIdx &&
+                    e.type === cEdge.type,
+                );
+                if (!edgeExists) {
+                  edgesCorrect = false;
+                  break;
+                }
+              }
+            }
+            isCorrect = nodesCorrect && edgesCorrect;
+          } else if (currentQ.type === "code-match") {
+            if (!userAnswer) return;
+            isCorrect = true;
+            for (const [slotId, correctTerm] of Object.entries(
+              currentQ.correctMapping,
+            )) {
+              if (userAnswer[slotId] !== correctTerm) {
+                isCorrect = false;
+                break;
+              }
+            }
+            if (
+              Object.keys(currentQ.correctMapping).length !==
+              Object.keys(userAnswer).length
+            )
+              isCorrect = false;
+          } else if (currentQ.type === "hierarchy-builder") {
+            if (!userAnswer) return;
+            isCorrect =
+              userAnswer.root === currentQ.correctConfig.root &&
+              userAnswer.child1 === currentQ.correctConfig.child1 &&
+              userAnswer.child2 === currentQ.correctConfig.child2 &&
+              userAnswer.grandchild === currentQ.correctConfig.grandchild;
+          }
+
+          if (isCorrect) {
+            setStatus("correct");
+            setShowSolution(true);
+          } else {
+            setStatus("incorrect");
+            setShake(true);
+            setTimeout(() => setShake(false), 500);
+          }
+        };
+
+        const nextQuestion = () => {
+          if (currentQIndex + 1 < queue.length) {
+            setCurrentQIndex((prev) => prev + 1);
+            resetInteractionState();
+          } else initQueue(selectedTopics);
+        };
+
+        if (queue.length === 0)
+          return (
+            <div className="flex items-center justify-center h-screen">
+              <div className="bg-white p-6 rounded shadow max-w-md text-center">
+                <h2 className="text-xl font-bold mb-4">No Questions Found</h2>
+                <button
+                  onClick={() => setIsFilterOpen(true)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded"
+                >
+                  Open Filters
+                </button>
+                {isFilterOpen && (
+                  <div className="mt-4 text-left border-t pt-4">
+                    {TOPICS.map((t) => (
+                      <label
+                        key={t}
+                        className="flex items-center space-x-2 my-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={tempSelectedTopics.includes(t)}
+                          onChange={() => handleTopicToggle(t)}
+                        />
+                        <span>{t}</span>
+                      </label>
+                    ))}
+                    <button
+                      onClick={applyFilters}
+                      className="mt-2 w-full bg-blue-800 text-white py-1 rounded"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+
+        const canProgress = status === "correct" || showSolution;
+        const isSubmitDisabled =
+          userAnswer === null ||
+          userAnswer === "" ||
+          userAnswer === "none" ||
+          (typeof userAnswer === "object" &&
+            Object.keys(userAnswer).length === 0 &&
+            currentQ.type !== "complex-uml");
+
+        return (
+          <div className="min-h-screen flex flex-col items-center py-10 px-4">
+            <div className="w-full max-w-4xl bg-white shadow-xl rounded-xl overflow-hidden flex flex-col">
+              <div className="bg-blue-900 text-white p-4 flex justify-between items-center relative">
+                <div>
+                  <h1 className="text-xl font-bold">
+                    Programming Paradigms (AQA 4.1.2)
+                  </h1>
+                  <p className="text-sm text-blue-200 mt-1">
+                    Interactive Learning Environment
+                  </p>
+                </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className="flex items-center space-x-2 bg-blue-800 hover:bg-blue-700 px-3 py-2 rounded transition-colors"
+                  >
+                    <FilterIcon />
+                    <span>Topics</span>
+                  </button>
+                  {isFilterOpen && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white border rounded shadow-2xl z-50 text-gray-800 p-3">
+                      <div className="font-bold border-b pb-2 mb-2">
+                        Filter Subtopics
+                      </div>
+                      {TOPICS.map((t) => (
+                        <label
+                          key={t}
+                          className="flex items-center space-x-2 py-1 cursor-pointer hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={tempSelectedTopics.includes(t)}
+                            onChange={() => handleTopicToggle(t)}
+                            className="w-4 h-4 text-blue-600"
+                          />
+                          <span className="text-sm">{t}</span>
+                        </label>
+                      ))}
+                      <button
+                        onClick={applyFilters}
+                        className="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded font-semibold transition-colors"
+                      >
+                        Apply Filter
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 border-b flex justify-between">
+                <span>Subtopic: {currentQ.subtopic}</span>
+                <span>
+                  Question {currentQIndex + 1} of {totalInLoop} (Current Loop)
+                </span>
+              </div>
+
+              <div className="p-6 flex-grow">
+                {currentQ.type !== "fib" && (
+                  <div className="text-lg font-medium text-gray-800 mb-4 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r whitespace-pre-line">
+                    {currentQ.prompt}
+                  </div>
+                )}
+
+                <div className="min-h-[250px] mb-4">
+                  {currentQ.type === "mcq" && (
+                    <MCQ question={currentQ} onAnswerChange={setUserAnswer} />
+                  )}
+                  {currentQ.type === "fib" && (
+                    <FIB question={currentQ} onAnswerChange={setUserAnswer} />
+                  )}
+                  {currentQ.type === "uml-rel" && (
+                    <UMLRelationship
+                      question={currentQ}
+                      onAnswerChange={setUserAnswer}
+                    />
+                  )}
+                  {currentQ.type === "uml-builder" && (
+                    <UMLClassBuilder
+                      question={currentQ}
+                      onAnswerChange={setUserAnswer}
+                    />
+                  )}
+                  {currentQ.type === "complex-uml" && (
+                    <ComplexUMLBuilder
+                      question={currentQ}
+                      onAnswerChange={setUserAnswer}
+                    />
+                  )}
+                  {currentQ.type === "code-match" && (
+                    <CodeMatch
+                      question={currentQ}
+                      onAnswerChange={setUserAnswer}
+                    />
+                  )}
+                  {currentQ.type === "hierarchy-builder" && (
+                    <HierarchyBuilder
+                      question={currentQ}
+                      onAnswerChange={setUserAnswer}
+                    />
+                  )}
+                </div>
+
+                {status !== "idle" && (
+                  <div
+                    className={`mt-4 p-4 rounded flex items-start space-x-3 ${status === "correct" ? "bg-green-100 border border-green-300 text-green-800" : "bg-red-100 border border-red-300 text-red-800"}`}
+                  >
+                    <div className="mt-0.5">
+                      {status === "correct" ? <CheckIcon /> : <XIcon />}
+                    </div>
+                    <div className="flex-grow">
+                      <h3 className="font-bold text-lg mb-1">
+                        {status === "correct" ? "Correct!" : "Incorrect"}
+                      </h3>
+                      {status === "incorrect" && !showSolution && (
+                        <p className="text-sm">
+                          Try again to find the right answer, or view the
+                          solution.
+                        </p>
+                      )}
+                      {showSolution && (
+                        <div className="mt-2 text-sm bg-white bg-opacity-60 p-3 rounded text-gray-800 border border-gray-200 shadow-sm">
+                          <strong>Solution:</strong> {currentQ.solution}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-gray-50 border-t p-4 flex justify-between items-center">
+                <div>
+                  {status === "incorrect" && !showSolution && (
+                    <button
+                      onClick={() => setShowSolution(true)}
+                      className="text-gray-600 underline text-sm hover:text-gray-800"
+                    >
+                      Show Solution
+                    </button>
+                  )}
+                </div>
+                <div className="flex space-x-3">
+                  {!canProgress ? (
+                    <button
+                      onClick={validateAnswer}
+                      disabled={isSubmitDisabled}
+                      className={`px-6 py-2 rounded font-bold shadow transition-all ${isSubmitDisabled ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg"} ${shake ? "shake-animation" : ""}`}
+                    >
+                      Submit Answer
+                    </button>
+                  ) : (
+                    <button
+                      onClick={nextQuestion}
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold shadow hover:shadow-lg transition-all"
+                    >
+                      Next Question ➔
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
