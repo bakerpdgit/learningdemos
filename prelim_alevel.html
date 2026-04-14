@@ -1,0 +1,2646 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS — Ants Simulation Tracer</title>
+
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #0f172a;
+        color: #f8fafc;
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #1e293b;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+      .grid-bg {
+        background-image: radial-gradient(#334155 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+      .active-line {
+        background-color: rgba(59, 130, 246, 0.5);
+        border-left: 4px solid #60a5fa;
+        margin-left: -4px;
+        padding-left: 4px;
+      }
+      .monaco-trace-line {
+        background: linear-gradient(90deg, rgba(37, 99, 235, 0.4), rgba(37, 99, 235, 0.08));
+        border-left: 3px solid #60a5fa;
+      }
+      .monaco-trace-glyph {
+        background: #60a5fa;
+        border-radius: 999px;
+        margin-left: 6px;
+        width: 10px !important;
+        height: 10px !important;
+      }
+      .monaco-editor,
+      .monaco-editor .overflow-guard {
+        border-radius: 0 0 0.75rem 0.75rem;
+      }
+      pre code {
+        font-family: "Courier New", Courier, monospace;
+      }
+
+      /* Node Animations for Class Diagram */
+      .diagram-node {
+        transition: all 0.3s ease;
+      }
+      .diagram-node.active {
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(96, 165, 250, 0.6);
+        border-color: #60a5fa;
+      }
+      .resize-handle-col {
+        cursor: col-resize;
+        width: 8px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 2px;
+        z-index: 20;
+      }
+      .resize-handle-row {
+        cursor: row-resize;
+        height: 8px;
+        flex-shrink: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 2px 0;
+        z-index: 20;
+      }
+      .resize-handle-col:hover .resize-bar,
+      .resize-handle-row:hover .resize-bar {
+        background: #60a5fa;
+      }
+      .resize-bar {
+        background: #475569;
+        border-radius: 999px;
+        transition: background 0.15s;
+      }
+      .monaco-breakpoint-glyph {
+        background: #ef4444;
+        border-radius: 999px;
+        margin-left: 6px;
+        width: 10px !important;
+        height: 10px !important;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Redacted variant: the prelim code must be opened from a local file. -->
+
+    <!-- Pyodide worker script, dynamically loaded -->
+    <script id="worker-script" type="text/javascript">
+      self.onmessage = async function (e) {
+        if (e.data.type === "init") {
+          try {
+            importScripts(
+              "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js",
+            );
+          } catch (error) {
+            postMessage({
+              type: "error",
+              error:
+                "Failed to load Pyodide in the worker. If Cross-Origin Isolation is enabled, all remote scripts must allow CORS/CORP. " +
+                error.message,
+            });
+            return;
+          }
+
+          const sab = e.data.sab;
+          const int32View = new Int32Array(sab);
+          const uint8View = new Uint8Array(sab);
+
+          let pyodide = await loadPyodide({
+            stdout: (text) => postMessage({ type: "print", text }),
+            stderr: (text) => postMessage({ type: "error", error: text }),
+          });
+
+          // Expose JS blocking functions to Python
+          pyodide.globals.set(
+            "js_trace_callback",
+            (line, func, cls, stateStr) => {
+              postMessage({ type: "trace", line, func, cls, state: stateStr });
+
+              // Block execution until Main thread wakes us up via SAB
+              Atomics.store(int32View, 0, 1);
+              Atomics.wait(int32View, 0, 1);
+
+              // Read command and sync breakpoints into Python global (SAB slots 500-599)
+              const cmd = Atomics.load(int32View, 1);
+              const bpCount = Atomics.load(int32View, 500);
+              const bps = [];
+              for (let i = 0; i < bpCount && i < 99; i++) {
+                bps.push(Atomics.load(int32View, 501 + i));
+              }
+              pyodide.globals.set("current_breakpoints", pyodide.toPy(bps));
+              return cmd;
+            },
+          );
+
+          pyodide.globals.set("js_input_callback", (promptText) => {
+            postMessage({ type: "input", prompt: promptText });
+
+            // Block execution for input string
+            Atomics.store(int32View, 0, 2);
+            Atomics.wait(int32View, 0, 2);
+
+            // TextDecoder cannot decode a view backed directly by SharedArrayBuffer,
+            // so copy the bytes into a regular Uint8Array first.
+            const len = Math.max(0, Atomics.load(int32View, 2));
+            const decoder = new TextDecoder();
+            const copiedBytes = new Uint8Array(len);
+            copiedBytes.set(uint8View.subarray(12, 12 + len));
+            return decoder.decode(copiedBytes);
+          });
+
+          // Non-blocking state push — called by Python's my_input before blocking for user input
+          pyodide.globals.set("js_send_state", (line, func, cls, stateStr) => {
+            postMessage({ type: "trace", line, func, cls, state: stateStr });
+          });
+
+          // Python Tracing Logic via sys.settrace
+          const setupCode = `
+import ast
+import sys
+import json
+import builtins
+
+# Override built-in input to use our blocking SAB implementation
+def my_input(prompt=""):
+    # Push a fresh state snapshot so the grid/inspector are current when the input bar appears
+    try:
+        caller = sys._getframe(1)
+        fn, cls, st = snapshot_state(caller)
+        js_send_state(caller.f_lineno, fn, cls, st)
+    except Exception:
+        pass
+    return js_input_callback(prompt)
+builtins.input = my_input
+
+source_lines = user_code_str.splitlines()
+
+tree = ast.parse(user_code_str, filename="simulation.py")
+control_blocks = []
+for node in ast.walk(tree):
+    if isinstance(node, (ast.If, ast.For, ast.While)) and hasattr(node, "end_lineno"):
+        control_blocks.append({
+            "start": node.lineno,
+            "end": node.end_lineno,
+            "kind": type(node).__name__,
+        })
+
+frame_depths = {}
+pending_action = None
+current_breakpoints = []
+MAX_ITEMS = 120
+MAX_STRING = 120
+
+def is_serializable_local(name, value):
+    if name.startswith("__"):
+        return False
+    if callable(value):
+        return False
+    if isinstance(value, type(sys)):
+        return False
+    return True
+
+def format_scalar(value):
+    if isinstance(value, str):
+        if len(value) > MAX_STRING:
+            return value[: MAX_STRING - 1] + "…"
+        return value
+    if isinstance(value, float):
+        return round(value, 4)
+    return value
+
+def summarize_value(value):
+    if isinstance(value, str):
+        preview = format_scalar(value)
+        return repr(preview)
+    if value is None or isinstance(value, (bool, int, float)):
+        return repr(value)
+    if isinstance(value, (list, tuple, set)):
+        return f"{type(value).__name__}[{len(value)}]"
+    if isinstance(value, dict):
+        return f"dict {{{len(value)}}}"
+    return getattr(value, "__class__", type(value)).__name__
+
+def serialize_value(value, path_ids=None):
+    if path_ids is None:
+        path_ids = set()
+
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return {
+            "kind": "primitive",
+            "type": type(value).__name__,
+            "value": format_scalar(value),
+            "summary": summarize_value(value),
+        }
+
+    if isinstance(value, (list, tuple, set)):
+        object_id = id(value)
+        if object_id in path_ids:
+            return {
+                "kind": "reference",
+                "type": type(value).__name__,
+                "summary": f"{type(value).__name__} (circular)",
+            }
+
+        next_ids = set(path_ids)
+        next_ids.add(object_id)
+        sequence = list(value)
+        return {
+            "kind": "sequence",
+            "type": type(value).__name__,
+            "length": len(sequence),
+            "summary": f"{type(value).__name__}[{len(sequence)}]",
+            "truncated": len(sequence) > MAX_ITEMS,
+            "items": [
+                {
+                    "label": f"[{index}]",
+                    "value": serialize_value(item, next_ids),
+                }
+                for index, item in enumerate(sequence[:MAX_ITEMS])
+            ],
+        }
+
+    if isinstance(value, dict):
+        object_id = id(value)
+        if object_id in path_ids:
+            return {
+                "kind": "reference",
+                "type": "dict",
+                "summary": "dict (circular)",
+            }
+
+        next_ids = set(path_ids)
+        next_ids.add(object_id)
+        entries = []
+        for key, item in list(value.items())[:MAX_ITEMS]:
+            if callable(item) or isinstance(item, type(sys)):
+                continue
+            entries.append({
+                "label": repr(key),
+                "value": serialize_value(item, next_ids),
+            })
+        return {
+            "kind": "mapping",
+            "type": "dict",
+            "length": len(value),
+            "summary": f"dict {{{len(value)}}}",
+            "truncated": len(value) > MAX_ITEMS,
+            "entries": entries,
+        }
+
+    if hasattr(value, "__dict__"):
+        object_id = id(value)
+        if object_id in path_ids:
+            return {
+                "kind": "reference",
+                "type": value.__class__.__name__,
+                "summary": f"{value.__class__.__name__} (circular)",
+            }
+
+        next_ids = set(path_ids)
+        next_ids.add(object_id)
+        attributes = []
+        for name, item in value.__dict__.items():
+            if name.startswith("__") or callable(item) or isinstance(item, type(sys)):
+                continue
+            attributes.append({
+                "label": name,
+                "value": serialize_value(item, next_ids),
+            })
+        return {
+            "kind": "object",
+            "type": value.__class__.__name__,
+            "summary": f"{value.__class__.__name__} ({len(attributes)} attrs)",
+            "attrs": attributes,
+        }
+
+    return {
+        "kind": "primitive",
+        "type": type(value).__name__,
+        "value": summarize_value(value),
+        "summary": summarize_value(value),
+    }
+
+def build_scope_snapshot(frame, func_name, class_name):
+    parameter_names = []
+    positional_and_keyword = frame.f_code.co_argcount + frame.f_code.co_kwonlyargcount
+    parameter_names.extend(frame.f_code.co_varnames[:positional_and_keyword])
+
+    next_index = positional_and_keyword
+    if frame.f_code.co_flags & 0x04:
+        parameter_names.append(frame.f_code.co_varnames[next_index])
+        next_index += 1
+    if frame.f_code.co_flags & 0x08:
+        parameter_names.append(frame.f_code.co_varnames[next_index])
+
+    parameter_entries = []
+    seen_names = set()
+    for name in parameter_names:
+        if name not in frame.f_locals:
+            continue
+        value = frame.f_locals[name]
+        if not is_serializable_local(name, value):
+            continue
+        seen_names.add(name)
+        parameter_entries.append({
+            "label": name,
+            "value": serialize_value(value),
+        })
+
+    local_entries = []
+    for name, value in frame.f_locals.items():
+        if name in seen_names or not is_serializable_local(name, value):
+            continue
+        local_entries.append({
+            "label": name,
+            "value": serialize_value(value),
+        })
+
+    locals_view = {
+        "label": f"{func_name} locals",
+        "node": {
+            "kind": "scope",
+            "type": func_name,
+            "summary": f"{len(parameter_entries)} params • {len(local_entries)} locals",
+            "entries": [
+                {
+                    "label": "Parameters",
+                    "value": {
+                        "kind": "mapping",
+                        "type": "parameters",
+                        "length": len(parameter_entries),
+                        "summary": f"{len(parameter_entries)} parameters",
+                        "entries": parameter_entries,
+                    },
+                },
+                {
+                    "label": "Locals",
+                    "value": {
+                        "kind": "mapping",
+                        "type": "locals",
+                        "length": len(local_entries),
+                        "summary": f"{len(local_entries)} locals",
+                        "entries": local_entries,
+                    },
+                },
+            ],
+        },
+    }
+
+    views = {
+        "locals": locals_view,
+    }
+
+    key_basis = f"frame:{id(frame)}"
+
+    if "self" in frame.f_locals:
+        instance = frame.f_locals["self"]
+        views["attributes"] = {
+            "label": f"{class_name} attributes",
+            "node": serialize_value(instance),
+        }
+        key_basis = f"self:{class_name}:{id(instance)}"
+    elif "ThisSimulation" in frame.f_locals:
+        simulation = frame.f_locals["ThisSimulation"]
+        views["attributes"] = {
+            "label": "ThisSimulation attributes",
+            "node": serialize_value(simulation),
+        }
+        key_basis = f"simulation:{id(simulation)}"
+
+    return {
+        "key": f"{key_basis}:{func_name}:{class_name or 'global'}",
+        "label": class_name or func_name,
+        "views": views,
+    }
+
+def ensure_frame_depth(frame):
+    frame_id = id(frame)
+    if frame_id not in frame_depths:
+        parent = frame.f_back
+        parent_depth = frame_depths.get(id(parent), -1) if parent is not None else -1
+        frame_depths[frame_id] = parent_depth + 1
+    return frame_depths[frame_id]
+
+def get_depth(frame):
+    return ensure_frame_depth(frame)
+
+def find_innermost_control_block(line_no):
+    matches = [block for block in control_blocks if block["start"] <= line_no <= block["end"]]
+    if not matches:
+        return None
+    return min(matches, key=lambda block: (block["end"] - block["start"], -block["start"]))
+
+def should_pause(frame, line_no):
+    global pending_action
+    if pending_action is None:
+        return True
+
+    action_type = pending_action["type"]
+    depth = get_depth(frame)
+    frame_id = id(frame)
+
+    if action_type == "step_over":
+        if depth > pending_action["depth"]:
+            return False
+        if depth == pending_action["depth"] and frame_id == pending_action["frame_id"] and line_no == pending_action["line"]:
+            return False
+        pending_action = None
+        return True
+
+    if action_type == "out_block":
+        if depth > pending_action["depth"]:
+            return False
+        if depth == pending_action["depth"] and frame_id == pending_action["frame_id"] and pending_action["start"] <= line_no <= pending_action["end"]:
+            return False
+        pending_action = None
+        return True
+
+    if action_type == "out_function":
+        if depth > pending_action["depth"]:
+            return False
+        pending_action = None
+        return True
+
+    if action_type == "continue":
+        if line_no in current_breakpoints:
+            pending_action = None
+            return True
+        return False
+
+    pending_action = None
+    return True
+
+def find_sim_from_frame(frame):
+    """Walk the call stack to locate the Simulation object from any frame depth."""
+    cur = frame
+    while cur is not None:
+        ts = cur.f_locals.get('ThisSimulation')
+        if ts is not None:
+            return ts
+        s = cur.f_locals.get('self')
+        if s is not None and type(s).__name__ == 'Simulation':
+            return s
+        cur = cur.f_back
+    return frame.f_globals.get('ThisSimulation')
+
+def snapshot_state(frame):
+    """Return (func_name, class_name, sim_state_json) for the given frame."""
+    func_name = frame.f_code.co_name
+    class_name = ""
+    if 'self' in frame.f_locals:
+        class_name = frame.f_locals['self'].__class__.__name__
+    sim = find_sim_from_frame(frame)
+    if sim:
+        try:
+            state = {
+                "Rows": getattr(sim, '_NumberOfRows', 0),
+                "Cols": getattr(sim, '_NumberOfColumns', 0),
+                "Nests": [{"r": n.GetRow(), "c": n.GetColumn(), "food": n.GetFoodLevel()} for n in getattr(sim, '_Nests', [])],
+                "Ants": [{"id": a.GetID(), "r": a.GetRow(), "c": a.GetColumn(), "type": a.GetTypeOfAnt(), "food": getattr(a, '_AmountOfFoodCarried', 0)} for a in getattr(sim, '_Ants', [])],
+                "Pheromones": [{"r": p.GetRow(), "c": p.GetColumn(), "s": p.GetStrength()} for p in getattr(sim, '_Pheromones', [])],
+                "Food": [{"r": c.GetRow(), "c": c.GetColumn(), "amt": getattr(c, '_AmountOfFood', 0)} for c in getattr(sim, '_Grid', []) if getattr(c, '_AmountOfFood', 0) > 0],
+                "Inspector": build_scope_snapshot(frame, func_name, class_name),
+            }
+            return func_name, class_name, json.dumps(state)
+        except Exception:
+            pass
+    try:
+        return func_name, class_name, json.dumps({"Inspector": build_scope_snapshot(frame, func_name, class_name)})
+    except Exception:
+        return func_name, class_name, "{}"
+
+def trace_calls(frame, event, arg):
+    global pending_action
+
+    if frame.f_code.co_filename != "simulation.py":
+        return trace_calls
+
+    if event == "call":
+        ensure_frame_depth(frame)
+        return trace_calls
+
+    if event == "return":
+        frame_depths.pop(id(frame), None)
+        return trace_calls
+
+    if event != "line":
+        return trace_calls
+
+    ensure_frame_depth(frame)
+    line_no = frame.f_lineno
+
+    # Skip def/class/decorator lines — they define, not execute, so no value pausing there
+    if line_no <= len(source_lines):
+        stripped = source_lines[line_no - 1].strip()
+        if stripped.startswith('def ') or stripped.startswith('class ') or stripped.startswith('@'):
+            return trace_calls
+
+    if not should_pause(frame, line_no):
+        return trace_calls
+
+    func_name, class_name, sim_state = snapshot_state(frame)
+    current_depth = get_depth(frame)
+
+    # Send execution state to JS and block. Receive command when unblocked.
+    cmd = js_trace_callback(line_no, func_name, class_name, sim_state)
+    if cmd == 2: # 2 == Step Over
+        pending_action = {
+            "type": "step_over",
+            "depth": current_depth,
+            "frame_id": id(frame),
+            "line": line_no,
+        }
+    elif cmd == 3: # 3 == Step Out Block
+        current_block = find_innermost_control_block(line_no)
+        if current_block is not None:
+            pending_action = {
+                "type": "out_block",
+                "depth": current_depth,
+                "frame_id": id(frame),
+                "start": current_block["start"],
+                "end": current_block["end"],
+            }
+        elif func_name != "<module>":
+            pending_action = {
+                "type": "out_function",
+                "depth": max(current_depth - 1, 0),
+            }
+        else:
+            pending_action = {
+                "type": "step_over",
+                "depth": current_depth,
+                "frame_id": id(frame),
+                "line": line_no,
+            }
+    elif cmd == 4: # 4 == Continue until breakpoint
+        pending_action = {"type": "continue"}
+    else:
+        pending_action = None
+
+    return trace_calls
+
+sys.settrace(trace_calls)
+`;
+          try {
+            const userCode = e.data.code;
+            pyodide.globals.set("user_code_str", userCode);
+            await pyodide.runPythonAsync(setupCode);
+
+            await pyodide.runPythonAsync(`
+code_obj = compile(user_code_str, "simulation.py", "exec")
+exec(code_obj, globals())
+                    `);
+
+            postMessage({ type: "done" });
+          } catch (err) {
+            postMessage({ type: "error", error: err.toString() });
+          }
+        }
+      };
+    </script>
+
+    <!-- Main React Application -->
+    <script type="text/babel">
+      const { useState, useEffect, useRef, useDeferredValue, startTransition } =
+        React;
+      const TRACE_CMD_STEP_INTO = 1;
+      const TRACE_CMD_STEP_OVER = 2;
+      const TRACE_CMD_STEP_OUT_BLOCK = 3;
+      const TRACE_CMD_CONTINUE = 4;
+      const DEFAULT_CODE_FILENAME = "simulation.py";
+      const MONACO_BASE_URL =
+        "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs";
+
+      let monacoLoaderPromise = null;
+
+      const EXPLANATIONS = {
+        Main: "The main entry point. Sets up parameters, creates the Simulation object, and starts the menu loop.",
+        DisplayMenu: "Outputs the list of available actions the user can take.",
+        GetChoice: "Reads the user's menu selection.",
+        GetCellReference:
+          "Prompts the user for a specific row and column to inspect.",
+        "Simulation.__init__":
+          "Initializes a new Simulation. Sets up grid dimensions, places nests, and randomly scatters initial food cells.",
+        "Simulation.SetUpANestAt":
+          "Creates a Nest at a coordinate. Also spawns 1 Queen ant and several Worker ants there.",
+        "Simulation.AddFoodToCell":
+          "Adds a specific quantity of food to a target Cell on the Grid.",
+        "Simulation.__GetIndex":
+          "Converts a 2D (Row, Column) coordinate into a 1D array index for accessing the flattened Grid list.",
+        "Simulation.__GetIndicesOfNeighbours":
+          "Calculates the grid indices of all valid surrounding adjacent cells (up to 8).",
+        "Simulation.__GetIndexOfNeighbourWithStrongestPheromone":
+          "Scans all surrounding valid cells to identify which one contains the strongest pheromone trace.",
+        "Simulation.AdvanceStage":
+          "Iterates the simulation forward by processing pheromone decay, ant movement/foraging, and nest population logic.",
+        "Entity.__init__":
+          "Base initialization for any object located on the grid, providing Row and Column properties.",
+        "Cell.__init__":
+          "Initializes a static Grid space that can contain Food.",
+        "Ant.__init__":
+          "Base initialization for an Ant, logging its Home Nest coordinates, tracking age, and assigning a unique ID.",
+        "Ant._ChangeCell":
+          "Translates a 0-8 directional index choice into a physical (Row, Column) coordinate change.",
+        "WorkerAnt.ChooseCellToMoveTo":
+          "Determines movement. If carrying food, heads straight home. If not, follows strongest pheromone, or moves randomly.",
+        "Nest.AdvanceStage":
+          "Handles colony logic: decreases food based on ant counts. Culls ants if starving, or randomly spawns new Queens/Workers if thriving.",
+        "Pheromone.AdvanceStage":
+          "Decays the strength of a pheromone marker each turn, destroying it if strength hits 0.",
+      };
+
+      const getExplanation = (func, cls) => {
+        const key1 = `${cls}.${func}`;
+        const key2 = func;
+        if (EXPLANATIONS[key1]) return EXPLANATIONS[key1];
+        if (EXPLANATIONS[key2]) return EXPLANATIONS[key2];
+        return `Executing ${cls ? cls + "." : ""}${func} ...`;
+      };
+
+      const loadExternalScript = (src) =>
+        new Promise((resolve, reject) => {
+          const existing = document.querySelector(`script[src="${src}"]`);
+          if (existing) {
+            if (existing.dataset.loaded === "true") {
+              resolve();
+              return;
+            }
+            existing.addEventListener("load", () => resolve(), { once: true });
+            existing.addEventListener(
+              "error",
+              () =>
+                reject(new Error(`Failed to load remote script: ${src}`)),
+              { once: true },
+            );
+            return;
+          }
+
+          const script = document.createElement("script");
+          script.src = src;
+          script.async = true;
+          script.crossOrigin = "anonymous";
+          script.onload = () => {
+            script.dataset.loaded = "true";
+            resolve();
+          };
+          script.onerror = () =>
+            reject(new Error(`Failed to load remote script: ${src}`));
+          document.head.appendChild(script);
+        });
+
+      const loadMonacoEditor = async () => {
+        if (window.monaco?.editor) return window.monaco;
+        if (monacoLoaderPromise) return monacoLoaderPromise;
+
+        monacoLoaderPromise = (async () => {
+          await loadExternalScript(`${MONACO_BASE_URL}/loader.js`);
+
+          if (!window.require) {
+            throw new Error("Monaco loader did not expose window.require.");
+          }
+
+          window.MonacoEnvironment = {
+            getWorkerUrl() {
+              return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+self.MonacoEnvironment = { baseUrl: "${MONACO_BASE_URL}/" };
+importScripts("${MONACO_BASE_URL}/base/worker/workerMain.js");
+              `)}`;
+            },
+          };
+
+          window.require.config({
+            paths: { vs: MONACO_BASE_URL },
+          });
+
+          return new Promise((resolve, reject) => {
+            window.require(["vs/editor/editor.main"], () => {
+              resolve(window.monaco);
+            }, reject);
+          });
+        })();
+
+        return monacoLoaderPromise;
+      };
+
+      const sanitizeDiagramIdentifier = (value) =>
+        (value || "")
+          .trim()
+          .split(".")
+          .pop()
+          .replace(/[^A-Za-z0-9_]/g, "");
+
+      const parseBaseList = (value) =>
+        (value || "")
+          .split(",")
+          .map((part) => sanitizeDiagramIdentifier(part))
+          .filter(Boolean);
+
+      const extractConstructorNames = (expression) => {
+        const matches = [];
+        const regex = /(^|[^.\w])([A-Z][A-Za-z0-9_]*)\s*\(/g;
+        let match = regex.exec(expression);
+        while (match) {
+          matches.push(match[2]);
+          match = regex.exec(expression);
+        }
+        return matches;
+      };
+
+      const getLineagePath = (className, classByName) => {
+        const lineage = [];
+        const visited = new Set();
+        let current = className;
+        while (current && !visited.has(current) && classByName[current]) {
+          lineage.push(current);
+          visited.add(current);
+          current = classByName[current].primaryBase || null;
+        }
+        return lineage;
+      };
+
+      const getMostSpecificCommonAncestor = (targets, classByName) => {
+        if (targets.length === 0) return null;
+        const firstLineage = getLineagePath(targets[0], classByName);
+        return (
+          firstLineage.find((candidate) =>
+            targets.every((target) =>
+              getLineagePath(target, classByName).includes(candidate),
+            ),
+          ) || targets[0]
+        );
+      };
+
+      const analyzePythonClasses = (source) => {
+        const lines = cleanCodeText(source).split("\n");
+        const classByName = {};
+        const orderedNames = [];
+        const contextStack = [];
+
+        const ensureClass = (name, line) => {
+          if (!classByName[name]) {
+            classByName[name] = {
+              name,
+              line,
+              bases: [],
+              primaryBase: null,
+              attributeTargets: {},
+              compositionTargets: [],
+            };
+            orderedNames.push(name);
+          }
+          return classByName[name];
+        };
+
+        const addAttributeTarget = (record, attrName, targetName) => {
+          if (!attrName || !targetName) return;
+          if (!record.attributeTargets[attrName]) {
+            record.attributeTargets[attrName] = new Set();
+          }
+          record.attributeTargets[attrName].add(targetName);
+        };
+
+        lines.forEach((rawLine, index) => {
+          const expandedLine = rawLine.replace(/\t/g, "    ");
+          const trimmedLine = expandedLine.trim();
+          if (!trimmedLine || trimmedLine.startsWith("#")) return;
+
+          const indent =
+            expandedLine.length - expandedLine.trimStart().length;
+
+          while (
+            contextStack.length > 0 &&
+            indent <= contextStack[contextStack.length - 1].indent
+          ) {
+            contextStack.pop();
+          }
+
+          const classMatch = trimmedLine.match(
+            /^class\s+([A-Za-z_][A-Za-z0-9_]*)(?:\(([^)]*)\))?\s*:/,
+          );
+          if (classMatch) {
+            const record = ensureClass(classMatch[1], index + 1);
+            record.bases = parseBaseList(classMatch[2]);
+            contextStack.push({
+              type: "class",
+              name: classMatch[1],
+              indent,
+            });
+            return;
+          }
+
+          const defMatch = trimmedLine.match(/^def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/);
+          if (defMatch) {
+            contextStack.push({
+              type: "def",
+              name: defMatch[1],
+              indent,
+            });
+            return;
+          }
+
+          const currentClassContext = [...contextStack]
+            .reverse()
+            .find((entry) => entry.type === "class");
+          if (!currentClassContext) return;
+
+          const currentClass = ensureClass(currentClassContext.name, index + 1);
+          const directAssignment = trimmedLine.match(
+            /^self\.(\w+)\s*=\s*([A-Z][A-Za-z0-9_]*)\s*\(/,
+          );
+          if (directAssignment) {
+            addAttributeTarget(
+              currentClass,
+              directAssignment[1],
+              directAssignment[2],
+            );
+          }
+
+          const appendRegex =
+            /self\.(\w+)\.(?:append|add)\(\s*([A-Z][A-Za-z0-9_]*)\s*\(/g;
+          let appendMatch = appendRegex.exec(trimmedLine);
+          while (appendMatch) {
+            addAttributeTarget(
+              currentClass,
+              appendMatch[1],
+              appendMatch[2],
+            );
+            appendMatch = appendRegex.exec(trimmedLine);
+          }
+
+          const listAssignment = trimmedLine.match(/^self\.(\w+)\s*=\s*\[(.*)\]\s*$/);
+          if (listAssignment) {
+            extractConstructorNames(listAssignment[2]).forEach((targetName) => {
+              addAttributeTarget(currentClass, listAssignment[1], targetName);
+            });
+          }
+
+          const extendMatch = trimmedLine.match(/^self\.(\w+)\.extend\((.*)\)\s*$/);
+          if (extendMatch) {
+            extractConstructorNames(extendMatch[2]).forEach((targetName) => {
+              addAttributeTarget(currentClass, extendMatch[1], targetName);
+            });
+          }
+        });
+
+        const classNames = new Set(orderedNames);
+        const childMap = {};
+        orderedNames.forEach((name) => {
+          childMap[name] = [];
+        });
+
+        orderedNames.forEach((name) => {
+          const record = classByName[name];
+          record.primaryBase =
+            record.bases.find((baseName) => classNames.has(baseName)) || null;
+          if (record.primaryBase) {
+            childMap[record.primaryBase].push(record.name);
+          }
+        });
+
+        orderedNames.forEach((name) => {
+          const record = classByName[name];
+          const compositionTargets = Object.entries(record.attributeTargets)
+            .map(([attrName, targetSet]) => {
+              const internalTargets = [...targetSet].filter((targetName) =>
+                classNames.has(targetName),
+              );
+              if (internalTargets.length === 0) return null;
+              return {
+                attr: attrName,
+                target:
+                  internalTargets.length === 1
+                    ? internalTargets[0]
+                    : getMostSpecificCommonAncestor(
+                        internalTargets,
+                        classByName,
+                      ),
+                rawTargets: internalTargets,
+              };
+            })
+            .filter(Boolean)
+            .filter(
+              (edge, index, allEdges) =>
+                allEdges.findIndex(
+                  (candidate) => candidate.target === edge.target,
+                ) === index,
+            );
+          record.compositionTargets = compositionTargets;
+        });
+
+        return {
+          classes: orderedNames.map((name) => classByName[name]),
+          classByName,
+          childMap,
+          inheritanceRoots: orderedNames.filter(
+            (name) => !classByName[name].primaryBase,
+          ),
+          compositionGroups: orderedNames
+            .map((name) => ({
+              owner: name,
+              edges: classByName[name].compositionTargets,
+            }))
+            .filter((group) => group.edges.length > 0),
+          lineages: Object.fromEntries(
+            orderedNames.map((name) => [
+              name,
+              getLineagePath(name, classByName),
+            ]),
+          ),
+        };
+      };
+
+      const isClassActiveInDiagram = (diagramModel, currentClass, classId) =>
+        !!currentClass &&
+        (diagramModel?.lineages?.[currentClass] || []).includes(classId);
+
+      const getDiagramNodeWidth = (label) =>
+        Math.max(92, Math.min(170, label.length * 7 + 34));
+
+      const UML_NODE_HEIGHT = 34;
+      const UML_GROUP_GAP = 36;
+      const UML_NODE_GAP = 20;
+      const UML_SECTION_GAP = 48;
+
+      const UmlClassBox = ({ x, y, width, label, active }) => (
+        <g>
+          <rect
+            x={x}
+            y={y}
+            width={width}
+            height={UML_NODE_HEIGHT}
+            rx="10"
+            fill={active ? "#1d4ed8" : "#334155"}
+            stroke={active ? "#93c5fd" : "#64748b"}
+            strokeWidth={active ? 2.5 : 1.5}
+          />
+          <text
+            x={x + width / 2}
+            y={y + UML_NODE_HEIGHT / 2 + 4}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="700"
+            fill="#e2e8f0"
+          >
+            {label}
+          </text>
+        </g>
+      );
+
+      const buildCompositionLayout = (diagramModel) => {
+        const groups = diagramModel.compositionGroups || [];
+        if (groups.length === 0) {
+          return { width: 420, height: 54, groups: [] };
+        }
+
+        let cursorY = 0;
+        let maxWidth = 420;
+
+        const laidOutGroups = groups.map((group) => {
+          const ownerWidth = getDiagramNodeWidth(group.owner);
+          const childWidths = group.edges.map((edge) =>
+            getDiagramNodeWidth(edge.target),
+          );
+          const childrenRowWidth =
+            childWidths.reduce((sum, width) => sum + width, 0) +
+            Math.max(0, childWidths.length - 1) * UML_NODE_GAP;
+          const groupWidth = Math.max(ownerWidth, childrenRowWidth, 260);
+          const childY = cursorY + 88;
+          const groupHeight = 144;
+          const ownerX = (groupWidth - ownerWidth) / 2;
+          const childStartX = (groupWidth - childrenRowWidth) / 2;
+          let childCursorX = childStartX;
+
+          const children = group.edges.map((edge, index) => {
+            const childWidth = childWidths[index];
+            const child = {
+              ...edge,
+              x: childCursorX,
+              y: childY,
+              width: childWidth,
+            };
+            childCursorX += childWidth + UML_NODE_GAP;
+            return child;
+          });
+
+          cursorY += groupHeight + UML_GROUP_GAP;
+          maxWidth = Math.max(maxWidth, groupWidth);
+
+          return {
+            owner: group.owner,
+            x: ownerX,
+            y: cursorY - groupHeight - UML_GROUP_GAP,
+            width: ownerWidth,
+            children,
+            groupWidth,
+          };
+        });
+
+        return {
+          width: maxWidth,
+          height: Math.max(laidOutGroups.length * 180, cursorY - UML_GROUP_GAP),
+          groups: laidOutGroups,
+        };
+      };
+
+      const buildInheritanceLayout = (diagramModel) => {
+        const buildTree = (name) => ({
+          name,
+          children: (diagramModel.childMap?.[name] || []).map(buildTree),
+        });
+
+        const measureTree = (node) => {
+          const nodeWidth = getDiagramNodeWidth(node.name);
+          const childLayouts = node.children.map(measureTree);
+          const childWidth =
+            childLayouts.reduce((sum, child) => sum + child.subtreeWidth, 0) +
+            Math.max(0, childLayouts.length - 1) * UML_NODE_GAP;
+
+          return {
+            ...node,
+            nodeWidth,
+            subtreeWidth: Math.max(nodeWidth, childWidth, 120),
+            depth:
+              childLayouts.length > 0
+                ? 1 + Math.max(...childLayouts.map((child) => child.depth))
+                : 1,
+            childLayouts,
+          };
+        };
+
+        const placeTree = (layout, startX, startY) => {
+          const nodeX = startX + (layout.subtreeWidth - layout.nodeWidth) / 2;
+          const node = {
+            name: layout.name,
+            x: nodeX,
+            y: startY,
+            width: layout.nodeWidth,
+            children: [],
+          };
+
+          const totalChildrenWidth =
+            layout.childLayouts.reduce(
+              (sum, child) => sum + child.subtreeWidth,
+              0,
+            ) +
+            Math.max(0, layout.childLayouts.length - 1) * UML_NODE_GAP;
+          let childCursorX =
+            startX + (layout.subtreeWidth - totalChildrenWidth) / 2;
+
+          node.children = layout.childLayouts.map((childLayout) => {
+            const child = placeTree(childLayout, childCursorX, startY + 96);
+            childCursorX += childLayout.subtreeWidth + UML_NODE_GAP;
+            return child;
+          });
+
+          return node;
+        };
+
+        const measuredRoots = (diagramModel.inheritanceRoots || [])
+          .map(buildTree)
+          .map(measureTree);
+
+        if (measuredRoots.length === 0) {
+          return { width: 420, height: 54, roots: [] };
+        }
+
+        const forestWidth =
+          measuredRoots.reduce((sum, root) => sum + root.subtreeWidth, 0) +
+          Math.max(0, measuredRoots.length - 1) * 40;
+        const width = Math.max(forestWidth, 420);
+
+        let cursorX = (width - forestWidth) / 2;
+        const roots = measuredRoots.map((rootLayout) => {
+          const placed = placeTree(rootLayout, cursorX, 0);
+          cursorX += rootLayout.subtreeWidth + 40;
+          return placed;
+        });
+
+        return {
+          width,
+          height:
+            Math.max(...measuredRoots.map((root) => root.depth)) * 96 +
+            UML_NODE_HEIGHT,
+          roots,
+        };
+      };
+
+      const UmlDiagram = ({ currentClass, diagramModel }) => {
+        const compositionLayout = buildCompositionLayout(diagramModel);
+        const inheritanceLayout = buildInheritanceLayout(diagramModel);
+        const width = Math.max(
+          compositionLayout.width,
+          inheritanceLayout.width,
+          420,
+        );
+        const compositionYOffset = 28;
+        const inheritanceYOffset =
+          compositionYOffset + compositionLayout.height + UML_SECTION_GAP;
+        const height =
+          inheritanceYOffset + inheritanceLayout.height + 42;
+
+        const renderInheritanceNode = (node) => {
+          const nodeCenterX = node.x + node.width / 2;
+          const childrenRowY = node.y + 96;
+          const busY = childrenRowY - 28;
+
+          return (
+            <g key={`${node.name}-${node.x}-${node.y}`}>
+              {node.children.length > 0 && (
+                <>
+                  <line
+                    x1={nodeCenterX}
+                    y1={node.y + UML_NODE_HEIGHT}
+                    x2={nodeCenterX}
+                    y2={busY}
+                    stroke="#94a3b8"
+                    strokeWidth="2"
+                    markerStart="url(#uml-generalization)"
+                  />
+                  {node.children.length > 1 && (
+                    <line
+                      x1={node.children[0].x + node.children[0].width / 2}
+                      y1={childrenRowY - 28}
+                      x2={
+                        node.children[node.children.length - 1].x +
+                        node.children[node.children.length - 1].width / 2
+                      }
+                      y2={childrenRowY - 28}
+                      stroke="#475569"
+                      strokeWidth="2"
+                    />
+                  )}
+                  {node.children.map((child) => (
+                    <line
+                      key={`${node.name}-${child.name}-link`}
+                      x1={child.x + child.width / 2}
+                      y1={childrenRowY - 28}
+                      x2={child.x + child.width / 2}
+                      y2={child.y}
+                      stroke="#475569"
+                      strokeWidth="2"
+                    />
+                  ))}
+                </>
+              )}
+              <UmlClassBox
+                x={node.x}
+                y={node.y}
+                width={node.width}
+                label={node.name}
+                active={isClassActiveInDiagram(
+                  diagramModel,
+                  currentClass,
+                  node.name,
+                )}
+              />
+              {node.children.map(renderInheritanceNode)}
+            </g>
+          );
+        };
+
+        if (!diagramModel.classes?.length) {
+          return (
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-600 bg-slate-900/40 p-6 text-center text-sm text-slate-400">
+              No class definitions found in the current editor yet.
+            </div>
+          );
+        }
+
+        return (
+          <svg
+            viewBox={`0 0 ${width} ${height}`}
+            className="w-full h-full"
+            role="img"
+            aria-label="Live UML class diagram"
+          >
+            <defs>
+              <marker
+                id="uml-generalization"
+                markerWidth="12"
+                markerHeight="12"
+                refX="10"
+                refY="6"
+                orient="auto-start-reverse"
+                markerUnits="strokeWidth"
+              >
+                <path
+                  d="M0,0 L12,6 L0,12 z"
+                  fill="#0f172a"
+                  stroke="#94a3b8"
+                  strokeWidth="1.2"
+                />
+              </marker>
+            </defs>
+
+            <text
+              x={width / 2}
+              y="16"
+              textAnchor="middle"
+              fontSize="11"
+              fill="#94a3b8"
+            >
+              Composition
+            </text>
+
+            {compositionLayout.groups.length > 0 ? (
+              compositionLayout.groups.map((group) => {
+                const ownerCenterX =
+                  (width - group.groupWidth) / 2 + group.x + group.width / 2;
+                const ownerY = compositionYOffset + group.y;
+                const busY = compositionYOffset + group.children[0].y - 28;
+                const childrenStartX = (width - group.groupWidth) / 2;
+
+                return (
+                  <g key={`composition-${group.owner}`}>
+                    <polygon
+                      points={`${ownerCenterX},${ownerY + 42} ${ownerCenterX + 8},${ownerY + 50} ${ownerCenterX},${ownerY + 58} ${ownerCenterX - 8},${ownerY + 50}`}
+                      fill="#94a3b8"
+                      stroke="#94a3b8"
+                      strokeWidth="1.5"
+                    />
+                    <line
+                      x1={ownerCenterX}
+                      y1={ownerY + 58}
+                      x2={ownerCenterX}
+                      y2={busY}
+                      stroke="#94a3b8"
+                      strokeWidth="2"
+                    />
+                    {group.children.length > 1 && (
+                      <line
+                        x1={
+                          childrenStartX +
+                          group.children[0].x +
+                          group.children[0].width / 2
+                        }
+                        y1={busY}
+                        x2={
+                          childrenStartX +
+                          group.children[group.children.length - 1].x +
+                          group.children[group.children.length - 1].width / 2
+                        }
+                        y2={busY}
+                        stroke="#475569"
+                        strokeWidth="2"
+                      />
+                    )}
+                    <UmlClassBox
+                      x={(width - group.groupWidth) / 2 + group.x}
+                      y={ownerY}
+                      width={group.width}
+                      label={group.owner}
+                      active={isClassActiveInDiagram(
+                        diagramModel,
+                        currentClass,
+                        group.owner,
+                      )}
+                    />
+                    {group.children.map((child) => (
+                      <g key={`${group.owner}-${child.attr}-${child.target}`}>
+                        <line
+                          x1={
+                            childrenStartX + child.x + child.width / 2
+                          }
+                          y1={busY}
+                          x2={
+                            childrenStartX + child.x + child.width / 2
+                          }
+                          y2={compositionYOffset + child.y}
+                          stroke="#475569"
+                          strokeWidth="2"
+                        />
+                        <UmlClassBox
+                          x={childrenStartX + child.x}
+                          y={compositionYOffset + child.y}
+                          width={child.width}
+                          label={child.target}
+                          active={isClassActiveInDiagram(
+                            diagramModel,
+                            currentClass,
+                            child.target,
+                          )}
+                        />
+                      </g>
+                    ))}
+                  </g>
+                );
+              })
+            ) : (
+              <text
+                x={width / 2}
+                y={58}
+                textAnchor="middle"
+                fontSize="12"
+                fill="#64748b"
+              >
+                No composition relationships inferred from the current code.
+              </text>
+            )}
+
+            <text
+              x={width / 2}
+              y={inheritanceYOffset - 18}
+              textAnchor="middle"
+              fontSize="11"
+              fill="#94a3b8"
+            >
+              Inheritance
+            </text>
+
+            <g transform={`translate(0 ${inheritanceYOffset})`}>
+              {inheritanceLayout.roots.map(renderInheritanceNode)}
+            </g>
+          </svg>
+        );
+      };
+
+      const getInspectorChildren = (node) => {
+        if (!node) return [];
+        if (node.kind === "object") return node.attrs || [];
+        if (node.kind === "scope" || node.kind === "mapping")
+          return node.entries || [];
+        if (node.kind === "sequence") return node.items || [];
+        return [];
+      };
+
+      const getInspectorNodeAtPath = (rootNode, path) => {
+        let currentNode = rootNode;
+        for (const segment of path) {
+          const children = getInspectorChildren(currentNode);
+          const nextChild = children[segment.index];
+          if (!nextChild) return currentNode;
+          currentNode = nextChild.value;
+        }
+        return currentNode;
+      };
+
+      const buildInspectorBreadcrumbs = (root, path) => {
+        if (!root || !root.node) return [];
+        const breadcrumbs = [{ label: root.label, path: [] }];
+        let currentNode = root.node;
+        path.forEach((segment, depth) => {
+          const children = getInspectorChildren(currentNode);
+          const child = children[segment.index];
+          if (!child) return;
+          const nextPath = path.slice(0, depth + 1);
+          breadcrumbs.push({
+            label: child.label,
+            path: nextPath,
+          });
+          currentNode = child.value;
+        });
+        return breadcrumbs;
+      };
+
+      const isInspectorCompound = (node) =>
+        !!node &&
+        ["object", "scope", "mapping", "sequence"].includes(node.kind);
+
+      const formatInspectorValue = (node) => {
+        if (!node) return "Unavailable";
+        if (node.kind === "primitive") return node.summary ?? String(node.value);
+        if (node.kind === "reference") return node.summary ?? node.type;
+        if (node.kind === "object")
+          return `${node.type} • ${node.attrs?.length ?? 0} attrs`;
+        if (node.kind === "sequence")
+          return `${node.type} • ${node.length ?? node.items?.length ?? 0} items`;
+        if (node.kind === "mapping")
+          return `dict • ${node.length ?? node.entries?.length ?? 0} entries`;
+        if (node.kind === "scope")
+          return `${node.type} scope • ${node.entries?.length ?? 0} values`;
+        return node.summary ?? node.type ?? "Value";
+      };
+
+      const formatInspectorPrimitive = (node) => {
+        if (!node) return "";
+        if (node.kind !== "primitive") return formatInspectorValue(node);
+        if (typeof node.value === "string") return node.value;
+        return node.summary ?? String(node.value);
+      };
+
+      const cleanCodeText = (text) =>
+        (text || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n")
+          .replace(/\u00A0/g, " ");
+
+      const App = () => {
+        const [codeText, setCodeText] = useState("");
+        const [codeStatus, setCodeStatus] = useState(
+          "No code loaded. Open a local Python file before running this interactive.",
+        );
+        const [codeLabel, setCodeLabel] = useState("Local file required");
+        const [codeFileName, setCodeFileName] = useState(DEFAULT_CODE_FILENAME);
+        const [isCodeBusy, setIsCodeBusy] = useState(false);
+        const [isEditorReady, setIsEditorReady] = useState(false);
+        const [hasOpenedLocalFile, setHasOpenedLocalFile] = useState(false);
+        const [showNotice, setShowNotice] = useState(true);
+        const [editorError, setEditorError] = useState("");
+        const [diagramModel, setDiagramModel] = useState(() =>
+          analyzePythonClasses(""),
+        );
+        const [currentLine, setCurrentLine] = useState(-1);
+        const [currentFunc, setCurrentFunc] = useState("");
+        const [currentClass, setCurrentClass] = useState("");
+        const [simState, setSimState] = useState(null);
+
+        const [isRunning, setIsRunning] = useState(false);
+        const [hasSab, setHasSab] = useState(false);
+        const [isCrossOriginIsolated, setIsCrossOriginIsolated] =
+          useState(false);
+        const [inputRequest, setInputRequest] = useState(null);
+        const [inputValue, setInputValue] = useState("");
+        const [outputLog, setOutputLog] = useState("");
+
+        // View Filters
+        const [showAnts, setShowAnts] = useState(true);
+        const [showFood, setShowFood] = useState(true);
+        const [showPheromones, setShowPheromones] = useState(true);
+        const [visualMode, setVisualMode] = useState("grid");
+        const [inspectorView, setInspectorView] = useState("attributes");
+        const [inspectorPath, setInspectorPath] = useState([]);
+        const [breakpoints, setBreakpoints] = useState(new Set());
+        const breakpointsRef = useRef(new Set());
+
+        const workerRef = useRef(null);
+        const sabRef = useRef(null);
+        const editorContainerRef = useRef(null);
+        const editorRef = useRef(null);
+        const monacoRef = useRef(null);
+        const editorDecorationsRef = useRef(null);
+        const breakpointDecorationsRef = useRef(null);
+        const applyingEditorValueRef = useRef(false);
+        const outputRef = useRef(null);
+        const inputRef = useRef(null);
+        const fileInputRef = useRef(null);
+        const deferredCodeText = useDeferredValue(codeText);
+        const hasCode = codeText.trim().length > 0;
+
+        // Resizable panel state (percentages)
+        const [leftWidth, setLeftWidth] = useState(41.67);
+        const [rightTopHeight, setRightTopHeight] = useState(50);
+        const [bottomLeftWidth, setBottomLeftWidth] = useState(42.86);
+
+        // Resize drag refs
+        const resizeDragRef = useRef(null);
+        const mainContainerRef = useRef(null);
+        const rightSideRef = useRef(null);
+        const bottomRowRef = useRef(null);
+
+        useEffect(() => {
+          const onMouseMove = (e) => {
+            if (!resizeDragRef.current) return;
+            if (resizeDragRef.current === 'col-main' && mainContainerRef.current) {
+              const rect = mainContainerRef.current.getBoundingClientRect();
+              const pct = ((e.clientX - rect.left) / rect.width) * 100;
+              setLeftWidth(Math.max(15, Math.min(75, pct)));
+            } else if (resizeDragRef.current === 'row-right' && rightSideRef.current) {
+              const rect = rightSideRef.current.getBoundingClientRect();
+              const pct = ((e.clientY - rect.top) / rect.height) * 100;
+              setRightTopHeight(Math.max(15, Math.min(85, pct)));
+            } else if (resizeDragRef.current === 'col-bottom' && bottomRowRef.current) {
+              const rect = bottomRowRef.current.getBoundingClientRect();
+              const pct = ((e.clientX - rect.left) / rect.width) * 100;
+              setBottomLeftWidth(Math.max(15, Math.min(85, pct)));
+            }
+          };
+          const onMouseUp = () => {
+            resizeDragRef.current = null;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+          };
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+          return () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+          };
+        }, []);
+        const inspectorRootKey = simState?.Inspector?.key || null;
+        const inspectorRoot = simState?.Inspector || null;
+        const inspectorViews = inspectorRoot?.views || {};
+        const availableInspectorViews = Object.entries(inspectorViews).filter(
+          ([, view]) => !!view?.node,
+        );
+        const activeInspectorView =
+          inspectorViews[inspectorView] || availableInspectorViews[0]?.[1] || null;
+        const activeInspectorViewKey =
+          (Object.entries(inspectorViews).find(
+            ([, view]) => view === activeInspectorView,
+          ) || [null])[0] || null;
+        const inspectorViewRoot = activeInspectorView
+          ? {
+              label: activeInspectorView.label,
+              node: activeInspectorView.node,
+            }
+          : null;
+        const activeInspectorNode = getInspectorNodeAtPath(
+          inspectorViewRoot?.node,
+          inspectorPath,
+        );
+        const inspectorChildren = getInspectorChildren(activeInspectorNode);
+        const inspectorBreadcrumbs = buildInspectorBreadcrumbs(
+          inspectorViewRoot,
+          inspectorPath,
+        );
+
+        useEffect(() => {
+          const sharedArrayBufferAvailable =
+            typeof SharedArrayBuffer !== "undefined";
+          const isolated = window.crossOriginIsolated === true;
+
+          setIsCrossOriginIsolated(isolated);
+          setHasSab(sharedArrayBufferAvailable && isolated);
+        }, []);
+
+        useEffect(() => {
+          startTransition(() => {
+            setDiagramModel(analyzePythonClasses(deferredCodeText));
+          });
+        }, [deferredCodeText]);
+
+        const loadCodeText = (text, label, fileName = DEFAULT_CODE_FILENAME) => {
+          const cleanCode = cleanCodeText(text);
+          breakpointsRef.current = new Set();
+          setBreakpoints(new Set());
+          setCodeText(cleanCode);
+          setCodeLabel(label);
+          setCodeFileName(fileName);
+          setCodeStatus(`${label} loaded.`);
+          setCurrentLine(-1);
+          setCurrentFunc("");
+          setCurrentClass("");
+          setSimState(null);
+          setInputRequest(null);
+          setInputValue("");
+          setOutputLog("");
+        };
+
+        useEffect(() => {
+          let disposed = false;
+          let contentSubscription = null;
+
+          loadMonacoEditor()
+            .then((monaco) => {
+              if (disposed || !editorContainerRef.current) return;
+
+              monacoRef.current = monaco;
+              if (!window.__antsMonacoThemeDefined) {
+                monaco.editor.defineTheme("ants-tracer", {
+                  base: "vs-dark",
+                  inherit: true,
+                  rules: [
+                    { token: "comment", foreground: "64748b" },
+                    { token: "keyword", foreground: "7dd3fc" },
+                    { token: "string", foreground: "86efac" },
+                    { token: "number", foreground: "fbbf24" },
+                  ],
+                  colors: {
+                    "editor.background": "#0f172a",
+                    "editorLineNumber.foreground": "#475569",
+                    "editorLineNumber.activeForeground": "#cbd5e1",
+                    "editorCursor.foreground": "#f8fafc",
+                    "editorIndentGuide.background1": "#1e293b",
+                    "editorIndentGuide.activeBackground1": "#334155",
+                    "editor.selectionBackground": "#1d4ed8",
+                    "editor.inactiveSelectionBackground": "#1e40af",
+                    "editorGutter.background": "#0f172a",
+                    "editorOverviewRuler.border": "#0f172a",
+                  },
+                });
+                window.__antsMonacoThemeDefined = true;
+              }
+
+              const editor = monaco.editor.create(editorContainerRef.current, {
+                value: codeText,
+                language: "python",
+                theme: "ants-tracer",
+                automaticLayout: true,
+                glyphMargin: true,
+                minimap: { enabled: false },
+                lineNumbersMinChars: 4,
+                scrollBeyondLastLine: false,
+                smoothScrolling: true,
+                tabSize: 4,
+                insertSpaces: true,
+                fontSize: 14,
+                fontLigatures: true,
+                padding: { top: 14, bottom: 18 },
+                renderLineHighlight: "none",
+                wordWrap: "off",
+                readOnly: isRunning || !hasOpenedLocalFile,
+              });
+
+              editorRef.current = editor;
+              editorDecorationsRef.current =
+                editor.createDecorationsCollection();
+              breakpointDecorationsRef.current =
+                editor.createDecorationsCollection();
+
+              editor.onMouseDown((e) => {
+                if (
+                  e.target.type ===
+                  monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                ) {
+                  const line = e.target.position?.lineNumber;
+                  if (!line) return;
+                  const next = new Set(breakpointsRef.current);
+                  if (next.has(line)) next.delete(line);
+                  else next.add(line);
+                  breakpointsRef.current = next;
+                  setBreakpoints(new Set(next));
+                }
+              });
+
+              contentSubscription = editor.onDidChangeModelContent(() => {
+                if (applyingEditorValueRef.current) return;
+                const nextValue = editor.getValue();
+                setCodeText(nextValue);
+                setCodeStatus(
+                  nextValue.trim().length > 0
+                    ? "Code edited in the browser."
+                    : "Editor is empty. Open a local Python file to continue.",
+                );
+              });
+
+              setEditorError("");
+              setIsEditorReady(true);
+            })
+            .catch((error) => {
+              if (disposed) return;
+              setEditorError(error.message || "Could not load Monaco editor.");
+            });
+
+          return () => {
+            disposed = true;
+            if (contentSubscription) contentSubscription.dispose();
+            if (editorDecorationsRef.current) {
+              editorDecorationsRef.current.clear();
+              editorDecorationsRef.current = null;
+            }
+            if (breakpointDecorationsRef.current) {
+              breakpointDecorationsRef.current.clear();
+              breakpointDecorationsRef.current = null;
+            }
+            if (editorRef.current) {
+              editorRef.current.dispose();
+              editorRef.current = null;
+            }
+          };
+        }, []);
+
+        useEffect(() => {
+          if (!editorRef.current) return;
+          editorRef.current.updateOptions({
+            readOnly: isRunning || !hasOpenedLocalFile,
+          });
+        }, [isRunning, hasOpenedLocalFile]);
+
+        useEffect(() => {
+          if (!editorRef.current) return;
+          const currentValue = editorRef.current.getValue();
+          if (currentValue === codeText) return;
+
+          applyingEditorValueRef.current = true;
+          editorRef.current.setValue(codeText);
+          if (codeText.trim().length > 0) {
+            editorRef.current.setPosition({ lineNumber: 1, column: 1 });
+            editorRef.current.revealLineNearTop(1);
+          }
+          applyingEditorValueRef.current = false;
+        }, [codeText]);
+
+        useEffect(() => {
+          if (
+            !editorRef.current ||
+            !editorDecorationsRef.current ||
+            !monacoRef.current
+          ) {
+            return;
+          }
+
+          if (currentLine > 0 && hasCode) {
+            editorDecorationsRef.current.set([
+              {
+                range: new monacoRef.current.Range(
+                  currentLine,
+                  1,
+                  currentLine,
+                  1,
+                ),
+                options: {
+                  isWholeLine: true,
+                  className: "monaco-trace-line",
+                  glyphMarginClassName: "monaco-trace-glyph",
+                  overviewRuler: {
+                    color: "#60a5fa",
+                    position:
+                      monacoRef.current.editor.OverviewRulerLane.Full,
+                  },
+                },
+              },
+            ]);
+            editorRef.current.revealLineInCenter(currentLine);
+          } else {
+            editorDecorationsRef.current.set([]);
+          }
+        }, [currentLine, hasCode]);
+
+        useEffect(() => {
+          if (
+            !editorRef.current ||
+            !monacoRef.current ||
+            !breakpointDecorationsRef.current
+          ) {
+            return;
+          }
+          breakpointDecorationsRef.current.set(
+            [...breakpoints].map((line) => ({
+              range: new monacoRef.current.Range(line, 1, line, 1),
+              options: {
+                isWholeLine: false,
+                glyphMarginClassName: "monaco-breakpoint-glyph",
+              },
+            })),
+          );
+        }, [breakpoints]);
+
+        useEffect(() => {
+          if (outputRef.current) {
+            outputRef.current.scrollTop = outputRef.current.scrollHeight;
+          }
+        }, [outputLog]);
+
+        useEffect(() => {
+          if (inputRequest !== null && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+          }
+        }, [inputRequest]);
+
+        useEffect(() => {
+          setInspectorPath([]);
+        }, [inspectorRootKey]);
+
+        useEffect(() => {
+          if (!inspectorViews[inspectorView] && availableInspectorViews.length > 0) {
+            setInspectorView(availableInspectorViews[0][0]);
+          }
+        }, [inspectorRootKey, inspectorView, availableInspectorViews.length]);
+
+        useEffect(() => {
+          setInspectorPath([]);
+        }, [activeInspectorViewKey]);
+
+        const handleLoadButtonClick = () => {
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+            fileInputRef.current.click();
+          }
+        };
+
+        const handleCodeFileChange = async (event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+
+          try {
+            const text = await file.text();
+            setHasOpenedLocalFile(true);
+            loadCodeText(
+              text,
+              file.name,
+              file.name || DEFAULT_CODE_FILENAME,
+            );
+          } catch (error) {
+            setCodeStatus("Failed to read the selected file.");
+          } finally {
+            event.target.value = "";
+          }
+        };
+
+        const handleSaveCode = () => {
+          if (!hasCode) return;
+          const blob = new Blob([codeText], {
+            type: "text/x-python;charset=utf-8",
+          });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = codeFileName || DEFAULT_CODE_FILENAME;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+          setCodeStatus(`Saved ${codeFileName || DEFAULT_CODE_FILENAME}.`);
+        };
+
+        const startSimulation = () => {
+          if (!hasSab || !hasCode || !hasOpenedLocalFile) return;
+
+          setIsRunning(true);
+          setCurrentLine(-1);
+          setCurrentFunc("");
+          setCurrentClass("");
+          setSimState(null);
+          setInputRequest(null);
+          setInputValue("");
+          setOutputLog("");
+
+          const sab = new SharedArrayBuffer(1024 * 4); // 4KB Buffer
+          sabRef.current = {
+            sab,
+            int32: new Int32Array(sab),
+            uint8: new Uint8Array(sab),
+          };
+
+          // Initialize Worker via Blob to keep it in a single file
+          const workerScript =
+            document.getElementById("worker-script").textContent;
+          const blob = new Blob([workerScript], {
+            type: "application/javascript",
+          });
+          const worker = new Worker(URL.createObjectURL(blob));
+          workerRef.current = worker;
+
+          worker.onmessage = (e) => {
+            const data = e.data;
+            if (data.type === "trace") {
+              setCurrentLine(data.line);
+              setCurrentFunc(data.func);
+              setCurrentClass(data.cls);
+              if (data.state && data.state !== "{}") {
+                try {
+                  setSimState(JSON.parse(data.state));
+                } catch (e) {}
+              }
+            } else if (data.type === "input") {
+              setInputValue("");
+              setInputRequest({
+                id: Date.now(),
+                prompt: data.prompt ?? "",
+              });
+            } else if (data.type === "print") {
+              setOutputLog((prev) => prev + data.text + "\n");
+            } else if (data.type === "error") {
+              setOutputLog((prev) => prev + "\n[ERROR] " + data.error + "\n");
+              setInputRequest(null);
+              setInputValue("");
+              setIsRunning(false);
+            } else if (data.type === "done") {
+              setOutputLog((prev) => prev + "\n[SIMULATION FINISHED]\n");
+              setInputRequest(null);
+              setInputValue("");
+              setIsRunning(false);
+              setCurrentLine(-1);
+            }
+          };
+
+          worker.postMessage({
+            type: "init",
+            sab: sabRef.current.sab,
+            code: codeText,
+          });
+        };
+
+        const sendTraceCommand = (cmd) => {
+          if (!sabRef.current) return;
+          const { int32 } = sabRef.current;
+
+          // Ensure Worker is actually waiting on line trace
+          if (Atomics.load(int32, 0) === 1) {
+            // Write current breakpoints into SAB[500..599] before releasing the worker
+            const bpArr = [...breakpointsRef.current];
+            int32[500] = bpArr.length;
+            bpArr.forEach((ln, i) => { if (i < 99) int32[501 + i] = ln; });
+            Atomics.store(int32, 1, cmd); // Write Command
+            Atomics.store(int32, 0, 0); // Release Wait Flag
+            Atomics.notify(int32, 0, 1); // Wake Thread
+          }
+        };
+
+        const handleInputSubmit = (submittedValue = inputValue) => {
+          if (!sabRef.current) return;
+          const { int32, uint8 } = sabRef.current;
+
+          // Ensure worker is waiting for input
+          if (Atomics.load(int32, 0) === 2) {
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode(submittedValue);
+            const maxInputBytes = uint8.length - 12;
+            const safeBytes = bytes.slice(0, maxInputBytes);
+            int32[2] = safeBytes.length; // Length of string
+            uint8.fill(0, 12);
+            uint8.set(safeBytes, 12); // Data starts at byte offset 12
+
+            Atomics.store(int32, 0, 0); // Release Wait Flag
+            Atomics.notify(int32, 0, 1); // Wake Thread
+            setInputRequest(null);
+            setInputValue("");
+          }
+        };
+
+        const forceStop = () => {
+          if (workerRef.current) {
+            workerRef.current.terminate();
+            workerRef.current = null;
+          }
+          setIsRunning(false);
+          setCurrentLine(-1);
+          setInputRequest(null);
+          setInputValue("");
+        };
+
+        return (
+          <div className="h-screen w-screen flex flex-col overflow-hidden text-sm">
+            {showNotice && (
+              <div className="flex-shrink-0 border-b border-amber-400/40 bg-amber-500/15 px-4 py-2 text-xs text-amber-100">
+                <div className="flex items-center justify-between gap-4">
+                  <span>
+                    The prelim code should be opened from a local file before running this interactive.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowNotice(false)}
+                    className="rounded border border-amber-300/40 px-2 py-0.5 font-semibold text-amber-100 transition-colors hover:border-amber-200 hover:bg-amber-400/10"
+                    aria-label="Dismiss notice"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* Header */}
+            <div className="bg-slate-800 border-b border-slate-700 flex justify-between items-center px-6 py-3 shadow-md z-10">
+              <div className="flex items-center gap-3">
+                <a href="/" className="text-slate-400 hover:text-white text-xs font-semibold border border-slate-600 rounded px-2 py-1 mr-1 hover:border-slate-400 transition-colors">← Home</a>
+                <svg
+                  className="w-8 h-8 text-blue-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+                  ></path>
+                </svg>
+                <h1 className="text-xl font-bold tracking-wider">
+                  AQA Ants Simulation Tracer
+                </h1>
+              </div>
+
+              <div className="flex gap-3">
+                {!isRunning ? (
+                  <button
+                    onClick={startSimulation}
+                    disabled={!hasSab || !hasCode || isCodeBusy || !hasOpenedLocalFile}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Start Trace Engine
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => sendTraceCommand(TRACE_CMD_STEP_INTO)}
+                      disabled={inputRequest !== null}
+                      className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                        ></path>
+                      </svg>
+                      Step Into
+                    </button>
+                    <button
+                      onClick={() => sendTraceCommand(TRACE_CMD_STEP_OVER)}
+                      disabled={inputRequest !== null}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                        ></path>
+                      </svg>
+                      Step Over
+                    </button>
+                    <button
+                      onClick={() =>
+                        sendTraceCommand(TRACE_CMD_STEP_OUT_BLOCK)
+                      }
+                      disabled={inputRequest !== null}
+                      className="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2 rounded font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Step Out Block
+                    </button>
+                    <button
+                      onClick={() => sendTraceCommand(TRACE_CMD_CONTINUE)}
+                      disabled={inputRequest !== null}
+                      className="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Continue
+                    </button>
+                    <button
+                      onClick={forceStop}
+                      className="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded font-semibold transition-colors"
+                    >
+                      Stop
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {!hasSab && (
+              <div className="bg-red-900/50 border border-red-500 p-4 m-4 rounded text-red-200">
+                <strong>Critical Warning:</strong> The tracer requires
+                Cross-Origin Isolation plus <code>SharedArrayBuffer</code>. In
+                this page, <code>window.crossOriginIsolated</code> is{" "}
+                <code>{String(isCrossOriginIsolated)}</code>. Run the repo with{" "}
+                <code>npm start</code> or <code>node server.mjs</code>, then
+                open <code>http://localhost:3000/</code>.
+              </div>
+            )}
+
+            {/* Input Bar — non-modal so the inspector remains usable */}
+            {inputRequest !== null && (
+              <div className="flex-shrink-0 bg-slate-800 border-b border-slate-600 border-l-4 border-l-amber-400 px-5 py-2.5 flex items-center gap-4 shadow-md z-10">
+                <span className="flex-shrink-0 text-xs font-bold uppercase tracking-widest text-amber-400">
+                  Input
+                </span>
+                <span className="flex-shrink-0 text-slate-300 text-sm truncate max-w-xs" title={inputRequest.prompt || ""}>
+                  {inputRequest.prompt || "Python is waiting for input..."}
+                </span>
+                <input
+                  key={inputRequest.id}
+                  ref={inputRef}
+                  type="text"
+                  value={inputValue}
+                  className="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-400 focus:border-amber-400"
+                  placeholder="Type your response..."
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleInputSubmit();
+                  }}
+                />
+                <button
+                  onClick={() => handleInputSubmit()}
+                  className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-semibold text-sm transition-colors"
+                >
+                  Submit
+                </button>
+                <button
+                  onClick={forceStop}
+                  className="flex-shrink-0 bg-slate-700 hover:bg-slate-600 text-red-400 hover:text-red-300 border border-slate-600 px-4 py-1.5 rounded font-semibold text-sm transition-colors"
+                >
+                  Cancel / Stop
+                </button>
+              </div>
+            )}
+
+            {/* Main Layout - Resizable Panels */}
+            <div ref={mainContainerRef} className="flex-1 flex overflow-hidden p-2">
+              {/* PANEL 1: Code Trace */}
+              <div className="bg-slate-800 rounded-lg shadow border border-slate-700 flex flex-col overflow-hidden flex-shrink-0" style={{ width: `calc(${leftWidth}% - 6px)` }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".py,.txt,text/x-python"
+                  className="hidden"
+                  onChange={handleCodeFileChange}
+                />
+                <div className="bg-slate-900 py-2 px-4 border-b border-slate-700 text-slate-400 text-xs">
+                  <div className="flex justify-between items-start gap-3">
+                    <div>
+                      <div className="font-bold uppercase tracking-wider">
+                        Code Trace ({codeFileName || DEFAULT_CODE_FILENAME})
+                      </div>
+                      <div className="mt-1 normal-case tracking-normal text-[11px] text-slate-500">
+                        {codeLabel} • {codeStatus}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        onClick={handleLoadButtonClick}
+                        disabled={isRunning || isCodeBusy}
+                        className="rounded border border-slate-600 px-2 py-1 text-[11px] font-semibold text-slate-200 hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={handleSaveCode}
+                        disabled={!hasCode || isCodeBusy}
+                        className="rounded border border-slate-600 px-2 py-1 text-[11px] font-semibold text-slate-200 hover:border-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Save
+                      </button>
+                      <span className="min-w-[72px] text-right font-bold uppercase tracking-wider">
+                        {currentLine > 0 ? `Line ${currentLine}` : hasCode ? "Ready" : "No code"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="relative flex-1 overflow-hidden bg-slate-950/70">
+                  <div
+                    ref={editorContainerRef}
+                    className="absolute inset-0"
+                  ></div>
+                  {!hasCode && isEditorReady && !editorError && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 text-center text-slate-500 italic leading-relaxed">
+                      Open the prelim code from a local Python file before
+                      running this interactive.
+                    </div>
+                  )}
+                  {!isEditorReady && !editorError && (
+                    <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+                      Loading Monaco editor...
+                    </div>
+                  )}
+                  {editorError && (
+                    <div className="absolute inset-0 flex items-center justify-center px-8 text-center text-red-300">
+                      Monaco editor could not be loaded.
+                      <br />
+                      {editorError}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Drag handle: left ↔ right */}
+              <div
+                className="resize-handle-col"
+                onMouseDown={(e) => { e.preventDefault(); resizeDragRef.current = 'col-main'; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }}
+              >
+                <div className="resize-bar" style={{ width: '3px', height: '48px' }} />
+              </div>
+
+              {/* Right side */}
+              <div ref={rightSideRef} className="flex flex-col flex-1 overflow-hidden">
+              {/* PANEL 2: Visualizer */}
+              <div className="bg-slate-800 rounded-lg shadow border border-slate-700 flex flex-col overflow-hidden flex-shrink-0" style={{ height: `calc(${rightTopHeight}% - 6px)` }}>
+                <div className="bg-slate-900 py-2 px-4 border-b border-slate-700 flex justify-between items-center gap-4">
+                  <div>
+                    <span className="font-bold uppercase tracking-wider text-slate-400 text-xs">
+                      {visualMode === "grid"
+                        ? "Live Simulation Visualizer"
+                        : "State Inspector"}
+                    </span>
+                    {visualMode === "attributes" && activeInspectorView && (
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        Focus: {activeInspectorView.label}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="flex rounded-md border border-slate-600 overflow-hidden text-[11px] font-bold">
+                      <button
+                        onClick={() => setVisualMode("grid")}
+                        className={`px-3 py-1 ${visualMode === "grid" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
+                      >
+                        Grid
+                      </button>
+                      <button
+                        onClick={() => setVisualMode("attributes")}
+                        className={`px-3 py-1 ${visualMode === "attributes" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
+                      >
+                        Inspector
+                      </button>
+                    </div>
+
+                    {visualMode === "attributes" &&
+                      availableInspectorViews.length > 0 && (
+                        <div className="flex rounded-md border border-slate-600 overflow-hidden text-[11px] font-bold">
+                          {availableInspectorViews.map(([viewKey, view]) => (
+                            <button
+                              key={viewKey}
+                              onClick={() => setInspectorView(viewKey)}
+                              className={`px-3 py-1 ${inspectorView === viewKey ? "bg-sky-600 text-white" : "bg-slate-800 text-slate-300"}`}
+                            >
+                              {viewKey === "attributes" ? "Attributes" : "Locals"}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                    {visualMode === "grid" && (
+                      <div className="flex gap-4 text-xs font-semibold">
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showAnts}
+                            onChange={(e) => setShowAnts(e.target.checked)}
+                          />{" "}
+                          🐜 Ants
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showFood}
+                            onChange={(e) => setShowFood(e.target.checked)}
+                          />{" "}
+                          🟢 Food
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showPheromones}
+                            onChange={(e) => setShowPheromones(e.target.checked)}
+                          />{" "}
+                          💨 Pheromones
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className={`flex-1 overflow-auto p-4 ${visualMode === "grid" ? "grid-bg flex items-center justify-center" : "bg-slate-800/60"}`}
+                >
+                  {visualMode === "grid" ? (
+                    simState && simState.Rows ? (
+                      <div
+                        className="inline-grid gap-1 border-2 border-slate-600 bg-slate-700 p-1 rounded"
+                        style={{
+                          gridTemplateColumns: `repeat(${simState.Cols}, minmax(40px, 1fr))`,
+                          gridTemplateRows: `repeat(${simState.Rows}, minmax(40px, 1fr))`,
+                        }}
+                      >
+                        {Array.from({
+                          length: simState.Rows * simState.Cols,
+                        }).map((_, idx) => {
+                          const r = Math.floor(idx / simState.Cols) + 1;
+                          const c = (idx % simState.Cols) + 1;
+
+                          const nest = simState.Nests.find(
+                            (n) => n.r === r && n.c === c,
+                          );
+                          const food = simState.Food.find(
+                            (f) => f.r === r && f.c === c,
+                          );
+                          const ants = simState.Ants.filter(
+                            (a) => a.r === r && a.c === c,
+                          );
+                          const phers = simState.Pheromones.filter(
+                            (p) => p.r === r && p.c === c,
+                          );
+
+                          let bgClass = "bg-slate-800";
+                          if (showFood && food && food.amt > 0)
+                            bgClass = "bg-green-900/40";
+                          else if (showPheromones && phers.length > 0)
+                            bgClass = "bg-blue-900/40";
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`w-10 h-10 ${bgClass} border border-slate-700 rounded relative flex items-center justify-center group cursor-pointer hover:border-slate-400`}
+                              title={`R:${r} C:${c}`}
+                            >
+                              {nest && (
+                                <span
+                                  className="absolute text-lg z-10"
+                                  style={{ bottom: "0px" }}
+                                >
+                                  🏠
+                                </span>
+                              )}
+                              {showFood && food && food.amt > 0 && !nest && (
+                                <span className="absolute text-green-400 text-xs font-bold top-0 right-0 p-0.5">
+                                  {food.amt}
+                                </span>
+                              )}
+                              {showPheromones && phers.length > 0 && !nest && (
+                                <span className="absolute w-2 h-2 rounded-full bg-blue-500/80 bottom-1 left-1 blur-[1px]"></span>
+                              )}
+
+                              {showAnts && ants.length > 0 && (
+                                <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                                  <span className="text-xl">🐜</span>
+                                  {ants.length > 1 && (
+                                    <span className="absolute -top-1 -right-1 bg-red-500 text-[9px] font-bold px-1 rounded-full">
+                                      {ants.length}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="hidden group-hover:block absolute z-50 top-full left-1/2 -translate-x-1/2 mt-1 w-48 bg-slate-900 text-xs p-2 rounded shadow-xl border border-slate-600 pointer-events-none">
+                                <div className="font-bold border-b border-slate-700 mb-1 pb-1">
+                                  Cell ({r}, {c})
+                                </div>
+                                {nest && <div>Nest: {nest.food} Food</div>}
+                                {food && <div>Food: {food.amt}</div>}
+                                {ants.length > 0 && (
+                                  <div>
+                                    Ants: {ants.length} (
+                                    {
+                                      ants.filter((a) => a.type === "queen")
+                                        .length
+                                    }
+                                    Q,{" "}
+                                    {
+                                      ants.filter((a) => a.type === "worker")
+                                        .length
+                                    }
+                                    W)
+                                  </div>
+                                )}
+                                {phers.length > 0 && (
+                                  <div>
+                                    Pheromones: {phers.length} (Max Str:{" "}
+                                    {Math.max(...phers.map((p) => p.s))})
+                                  </div>
+                                )}
+                                {!nest &&
+                                  !food &&
+                                  ants.length === 0 &&
+                                  phers.length === 0 && (
+                                    <div className="text-slate-500">Empty</div>
+                                  )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 italic">
+                        Grid visualization will appear when Simulation
+                        initializes.
+                      </div>
+                    )
+                  ) : inspectorViewRoot?.node ? (
+                    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        {inspectorBreadcrumbs.map((crumb, index) => (
+                          <React.Fragment key={`${crumb.label}-${index}`}>
+                            {index > 0 && (
+                              <span className="text-slate-500">/</span>
+                            )}
+                            <button
+                              onClick={() => setInspectorPath(crumb.path)}
+                              className={`px-2 py-1 rounded border ${index === inspectorBreadcrumbs.length - 1 ? "border-sky-500 bg-sky-900/40 text-sky-100" : "border-slate-600 bg-slate-900/60 text-slate-300 hover:border-sky-500"}`}
+                            >
+                              {crumb.label}
+                            </button>
+                          </React.Fragment>
+                        ))}
+                        {inspectorPath.length > 0 && (
+                          <button
+                            onClick={() => setInspectorPath([])}
+                            className="ml-auto px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-sky-500"
+                          >
+                            Reset Focus
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="rounded-lg border border-slate-600 bg-slate-900/80 p-4">
+                        <div className="text-[11px] uppercase tracking-wider text-slate-500">
+                          {activeInspectorView?.label || "Inspector"}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="text-lg font-bold text-white">
+                            {activeInspectorNode?.type || "Value"}
+                          </h3>
+                          {isInspectorCompound(activeInspectorNode) && (
+                            <span className="text-xs text-slate-400">
+                              {inspectorChildren.length} visible children
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-300">
+                          {formatInspectorValue(activeInspectorNode)}
+                        </p>
+                        {activeInspectorNode?.truncated && (
+                          <div className="mt-3 text-xs text-amber-300">
+                            Showing the first 120 entries in this collection.
+                          </div>
+                        )}
+                        {!isInspectorCompound(activeInspectorNode) && (
+                          <pre className="mt-3 whitespace-pre-wrap rounded bg-black/40 p-3 text-xs text-emerald-300">
+                            {formatInspectorPrimitive(activeInspectorNode)}
+                          </pre>
+                        )}
+                      </div>
+
+                      {isInspectorCompound(activeInspectorNode) ? (
+                        inspectorChildren.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {inspectorChildren.map((child, index) => {
+                              const childNode = child.value;
+                              const canOpen = isInspectorCompound(childNode);
+                              const cardClasses = `rounded-lg border p-3 text-left transition-colors ${canOpen ? "border-slate-600 bg-slate-900/70 hover:border-sky-500 cursor-pointer" : "border-slate-700 bg-slate-900/40"}`;
+
+                              if (canOpen) {
+                                return (
+                                  <button
+                                    key={`${child.label}-${index}`}
+                                    onClick={() =>
+                                      setInspectorPath([
+                                        ...inspectorPath,
+                                        { index, label: child.label },
+                                      ])
+                                    }
+                                    className={cardClasses}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="font-semibold text-slate-100 break-all">
+                                        {child.label}
+                                      </span>
+                                      <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                                        {childNode.type}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 text-xs text-slate-300">
+                                      {formatInspectorValue(childNode)}
+                                    </div>
+                                    <div className="mt-3 text-[11px] text-sky-300">
+                                      Open
+                                    </div>
+                                  </button>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  key={`${child.label}-${index}`}
+                                  className={cardClasses}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="font-semibold text-slate-100 break-all">
+                                      {child.label}
+                                    </span>
+                                    <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                                      {childNode?.type || "value"}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 text-xs text-emerald-300 break-all whitespace-pre-wrap">
+                                    {formatInspectorPrimitive(childNode)}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-slate-500 italic">
+                            No inspectable values are available at this scope.
+                          </div>
+                        )
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 italic">
+                      Attribute inspection becomes available once execution
+                      reaches a live scope or object instance.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Drag handle: top ↕ bottom (right side) */}
+              <div
+                className="resize-handle-row"
+                onMouseDown={(e) => { e.preventDefault(); resizeDragRef.current = 'row-right'; document.body.style.cursor = 'row-resize'; document.body.style.userSelect = 'none'; }}
+              >
+                <div className="resize-bar" style={{ height: '3px', width: '48px' }} />
+              </div>
+
+              {/* Bottom row */}
+              <div ref={bottomRowRef} className="flex flex-1 overflow-hidden">
+              {/* PANEL 3: Class Diagram */}
+              <div className="bg-slate-800 rounded-lg shadow border border-slate-700 flex flex-col overflow-hidden flex-shrink-0" style={{ width: `calc(${bottomLeftWidth}% - 6px)` }}>
+                <div className="bg-slate-900 py-2 px-4 border-b border-slate-700 text-slate-400 text-xs">
+                  <div className="font-bold uppercase tracking-wider">
+                    Class Diagram Context
+                  </div>
+                  <div className="mt-1 text-[11px] normal-case tracking-normal text-slate-500">
+                    Live from the current editor: {diagramModel.classes.length}{" "}
+                    classes detected
+                  </div>
+                </div>
+                <div className="flex-1 overflow-auto p-4">
+                  <div className="mx-auto min-h-[420px] min-w-[320px]">
+                    <UmlDiagram
+                      currentClass={currentClass}
+                      diagramModel={diagramModel}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Drag handle: Panel 3 ↔ Panel 4 */}
+              <div
+                className="resize-handle-col"
+                onMouseDown={(e) => { e.preventDefault(); resizeDragRef.current = 'col-bottom'; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }}
+              >
+                <div className="resize-bar" style={{ width: '3px', height: '48px' }} />
+              </div>
+
+              {/* PANEL 4: Explanation & Output */}
+              <div className="bg-slate-800 rounded-lg shadow border border-slate-700 flex flex-col overflow-hidden flex-1">
+                <div className="flex bg-slate-900 border-b border-slate-700">
+                  <div className="py-2 px-4 font-bold uppercase tracking-wider text-blue-400 text-xs border-r border-slate-700 w-1/2">
+                    Execution Insight
+                  </div>
+                  <div className="py-2 px-4 font-bold uppercase tracking-wider text-emerald-400 text-xs w-1/2">
+                    Console Output
+                  </div>
+                </div>
+
+                <div className="flex-1 flex overflow-hidden">
+                  {/* Context Box */}
+                  <div className="w-1/2 border-r border-slate-700 p-4 bg-slate-800/50 overflow-auto">
+                    <h3 className="text-sm font-bold text-white mb-2">
+                      {currentClass
+                        ? `${currentClass}.${currentFunc}()`
+                        : currentFunc
+                          ? `${currentFunc}()`
+                          : "Global Scope"}
+                    </h3>
+                    <p className="text-slate-300 leading-relaxed">
+                      {currentFunc
+                        ? getExplanation(currentFunc, currentClass)
+                        : "Waiting for simulation to step into a defined function..."}
+                    </p>
+                  </div>
+
+                  {/* Terminal Output */}
+                  <div
+                    className="w-1/2 p-2 bg-black font-mono text-[11px] text-green-400 overflow-auto"
+                    ref={outputRef}
+                  >
+                    <pre className="whitespace-pre-wrap">{outputLog}</pre>
+                    {!outputLog && (
+                      <span className="text-slate-600">No output yet...</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              </div>{/* end bottom row */}
+              </div>{/* end right side */}
+            </div>{/* end main container */}
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
