@@ -398,6 +398,20 @@
         );
       };
 
+      const InputCell = ({ id, label, value, onChange, disabled }) => (
+        <div className="flex items-center gap-2">
+          {label && <span className="font-mono text-slate-600">{label}</span>}
+          <input
+            type="number"
+            step="any"
+            className="w-24 p-2 border-2 border-slate-300 rounded text-center focus:border-blue-500 focus:outline-none font-mono transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            value={value || ""}
+            onChange={(e) => onChange(id, e.target.value)}
+            disabled={disabled}
+          />
+        </div>
+      );
+
       // --- MAIN APP ---
       function App() {
         const [q, setQ] = useState(null);
@@ -538,22 +552,6 @@
         const renderInputForm = () => {
           if (!q) return null;
 
-          const InputCell = ({ id, label }) => (
-            <div className="flex items-center gap-2">
-              {label && (
-                <span className="font-mono text-slate-600">{label}</span>
-              )}
-              <input
-                type="number"
-                step="any"
-                className="w-24 p-2 border-2 border-slate-300 rounded text-center focus:border-blue-500 focus:outline-none font-mono transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                value={inputs[id] || ""}
-                onChange={(e) => handleInputChange(id, e.target.value)}
-                disabled={feedback?.correct}
-              />
-            </div>
-          );
-
           if (q.type === 1) {
             if (q.toType === "visual") {
               return (
@@ -574,20 +572,61 @@
                 {q.toType === "list" && (
                   <>
                     {" "}
-                    [ <InputCell id="v0" /> , <InputCell id="v1" /> ]{" "}
+                    [
+                    <InputCell
+                      id="v0"
+                      value={inputs.v0}
+                      onChange={handleInputChange}
+                      disabled={feedback?.correct}
+                    />
+                    ,
+                    <InputCell
+                      id="v1"
+                      value={inputs.v1}
+                      onChange={handleInputChange}
+                      disabled={feedback?.correct}
+                    />
+                    ]{" "}
                   </>
                 )}
                 {q.toType === "dict" && (
                   <>
                     {" "}
-                    {"{"} <InputCell id="v0" label="0:" /> ,{" "}
-                    <InputCell id="v1" label="1:" /> {"}"}{" "}
+                    {"{"}
+                    <InputCell
+                      id="v0"
+                      label="0:"
+                      value={inputs.v0}
+                      onChange={handleInputChange}
+                      disabled={feedback?.correct}
+                    />
+                    ,
+                    <InputCell
+                      id="v1"
+                      label="1:"
+                      value={inputs.v1}
+                      onChange={handleInputChange}
+                      disabled={feedback?.correct}
+                    />
+                    {"}"}{" "}
                   </>
                 )}
                 {q.toType === "func" && (
                   <div className="flex flex-col gap-2">
-                    <InputCell id="v0" label="0 ↦" />
-                    <InputCell id="v1" label="1 ↦" />
+                    <InputCell
+                      id="v0"
+                      label="0 ↦"
+                      value={inputs.v0}
+                      onChange={handleInputChange}
+                      disabled={feedback?.correct}
+                    />
+                    <InputCell
+                      id="v1"
+                      label="1 ↦"
+                      value={inputs.v1}
+                      onChange={handleInputChange}
+                      disabled={feedback?.correct}
+                    />
                   </div>
                 )}
               </div>
@@ -600,7 +639,12 @@
                 [
                 {Array.from({ length: q.dim }).map((_, i) => (
                   <React.Fragment key={i}>
-                    <InputCell id={`v${i}`} />
+                    <InputCell
+                      id={`v${i}`}
+                      value={inputs[`v${i}`]}
+                      onChange={handleInputChange}
+                      disabled={feedback?.correct}
+                    />
                     {i < q.dim - 1 && <span className="text-slate-400">,</span>}
                   </React.Fragment>
                 ))}
@@ -612,8 +656,20 @@
           if (q.type === 3 && q.subType === "convex_ratio") {
             return (
               <div className="flex flex-wrap items-center gap-6 text-lg font-mono">
-                <InputCell id="alpha" label="α =" />
-                <InputCell id="beta" label="β =" />
+                <InputCell
+                  id="alpha"
+                  label="α ="
+                  value={inputs.alpha}
+                  onChange={handleInputChange}
+                  disabled={feedback?.correct}
+                />
+                <InputCell
+                  id="beta"
+                  label="β ="
+                  value={inputs.beta}
+                  onChange={handleInputChange}
+                  disabled={feedback?.correct}
+                />
               </div>
             );
           }
@@ -622,7 +678,12 @@
             return (
               <div className="flex items-center gap-2 text-lg">
                 <span className="italic font-serif">θ = </span>
-                <InputCell id="angle" />
+                <InputCell
+                  id="angle"
+                  value={inputs.angle}
+                  onChange={handleInputChange}
+                  disabled={feedback?.correct}
+                />
                 <span className="text-slate-500 font-bold">°</span>
               </div>
             );
