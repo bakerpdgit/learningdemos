@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AQA A-Level CS: Programming Basics</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel for in-browser JSX transpilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- Utility Functions ---
+        const shuffle = (array) => {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        };
+
+        // --- Icons ---
+        const FilterIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+        );
+        const CheckIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        );
+        const XIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        );
+
+        // --- Question Generator ---
+        const generateQuestions = (topics) => {
+            let q = [];
+
+            if (topics.datatypes) {
+                q.push({
+                    id: 'dt1', type: 'fill_blank', topic: 'Datatypes',
+                    text: 'Variables declared as a ________ data type are used as stores for memory addresses of objects created dynamically at runtime.',
+                    hint: 'p...',
+                    answer: ['pointer', 'reference', 'pointers', 'references']
+                });
+                q.push({
+                    id: 'dt2', type: 'fill_blank', topic: 'Datatypes',
+                    text: 'A user-defined data type that groups related variables (fields) under a single identifier is called a ________.',
+                    hint: 'r...',
+                    answer: ['record', 'records']
+                });
+                q.push({
+                    id: 'dt3', type: 'match', topic: 'Datatypes',
+                    text: 'Click an AQA data type on the left, then click its corresponding example value on the right.',
+                    pairs: [
+                        { left: 'Integer', right: '-42' },
+                        { left: 'Real / Float', right: '3.1415' },
+                        { left: 'Boolean', right: 'TRUE' },
+                        { left: 'String', right: '"ALevel"' },
+                        { left: 'Character', right: "'C'" }
+                    ]
+                });
+                q.push({
+                    id: 'dt4', type: 'mcq', topic: 'Datatypes',
+                    text: 'Which of the following best defines an Array data structure?',
+                    options: shuffle([
+                        'A finite, ordered set of elements of the same data type.',
+                        'A dynamic collection of elements of different data types.',
+                        'A data structure that stores memory addresses dynamically.',
+                        'A user-defined type grouping related variables under one identifier.'
+                    ]),
+                    answer: 'A finite, ordered set of elements of the same data type.'
+                });
+                
+                const arr = Array.from({length: 5}, () => Math.floor(Math.random() * 50) + 10);
+                const idx = Math.floor(Math.random() * arr.length);
+                q.push({
+                    id: `dt5_${idx}`, type: 'fill_blank', topic: 'Datatypes',
+                    text: `Assuming 0-based indexing, what is the value of scores[${idx}] after this assignment?\nscores = [${arr.join(', ')}]`,
+                    hint: 'integer...',
+                    answer: [arr[idx].toString()]
+                });
+            }
+
+            if (topics.principles) {
+                q.push({
+                    id: 'pr1', type: 'mcq', topic: 'Programming Principles',
+                    text: 'Which of the following best describes a key advantage of using a named constant instead of a hard-coded literal?',
+                    options: shuffle([
+                        'It prevents the program from using too much RAM.',
+                        'It makes the code easier to update and increases readability.',
+                        'It allows the value to be dynamically changed by the user at runtime.',
+                        'It automatically converts the data type if needed.'
+                    ]),
+                    answer: 'It makes the code easier to update and increases readability.'
+                });
+
+                const principles = ['Sequence', 'Selection', 'Iteration'];
+                const missingIndex = Math.floor(Math.random() * 3);
+                const missing = principles[missingIndex];
+                const present = principles.filter((_, i) => i !== missingIndex);
+                
+                q.push({
+                    id: `pr2_${missing}`, type: 'fill_blank', topic: 'Programming Principles',
+                    text: `The three basic combining principles of imperative programming are ${present[0]}, ${present[1]}, and ________.`,
+                    hint: `${missing.charAt(0).toLowerCase()}...`,
+                    answer: missing === 'Iteration' ? ['iteration', 'repetition'] : [missing.toLowerCase()]
+                });
+
+                q.push({
+                    id: 'pr3', type: 'mcq', topic: 'Programming Principles',
+                    text: 'What is the main difference between declaring and initialising a variable?',
+                    options: shuffle([
+                        'Declaring allocates memory and assigns an identifier; initialising assigns its first value.',
+                        'Initialising allocates memory and assigns an identifier; declaring assigns its first value.',
+                        'Declaring is only used for constants, whereas initialising is used for variables.',
+                        'There is no difference; they are two terms for the exact same process.'
+                    ]),
+                    answer: 'Declaring allocates memory and assigns an identifier; initialising assigns its first value.'
+                });
+            }
+
+            if (topics.iteration) {
+                q.push({
+                    id: 'it1', type: 'mcq', topic: 'Iteration',
+                    text: 'An indefinite loop that evaluates its condition at the end of the structure (e.g., REPEAT...UNTIL) is guaranteed to execute its loop body at least how many times?',
+                    options: shuffle(['0 times', '1 time', '2 times', 'Infinite times']),
+                    answer: '1 time'
+                });
+                q.push({
+                    id: 'it2', type: 'mcq', topic: 'Iteration',
+                    text: 'A standard FOR loop (e.g., FOR i = 1 TO 10) is an example of what type of iteration?',
+                    options: shuffle(['Definite iteration', 'Indefinite iteration', 'Infinite iteration', 'Recursive iteration']),
+                    answer: 'Definite iteration'
+                });
+                q.push({
+                    id: 'it3', type: 'mcq', topic: 'Iteration',
+                    text: 'A WHILE...ENDWHILE loop is an example of a "top-test" (pre-condition) indefinite loop. What does this imply about its execution?',
+                    options: shuffle([
+                        'Its loop body might execute 0 times if the condition is false initially.',
+                        'Its loop body will always execute at least 1 time.',
+                        'It will execute a specific, predefined number of times.',
+                        'The condition is only evaluated after the loop body has run.'
+                    ]),
+                    answer: 'Its loop body might execute 0 times if the condition is false initially.'
+                });
+            }
+
+            if (topics.math) {
+                // Dynamic math generation
+                const a = Math.floor(Math.random() * 10) + 10; // 10 to 19
+                const b = Math.floor(Math.random() * 5) + 3;   // 3 to 7
+                q.push({
+                    id: `ma1_${a}_${b}`, type: 'fill_blank', topic: 'Mathematical Operators',
+                    text: `Evaluate the integer division (give your answer as an integer): ${a} DIV ${b}`,
+                    hint: 'integer...',
+                    answer: [Math.floor(a / b).toString()]
+                });
+                q.push({
+                    id: `ma2_${a}_${b}`, type: 'fill_blank', topic: 'Mathematical Operators',
+                    text: `Evaluate the modulo operation (give your answer as an integer): ${a} MOD ${b}`,
+                    hint: 'remainder...',
+                    answer: [(a % b).toString()]
+                });
+                q.push({
+                    id: 'ma3', type: 'mcq', topic: 'Mathematical Operators',
+                    text: 'What is the conceptual difference between rounding and truncation?',
+                    options: shuffle([
+                        'Rounding evaluates the fractional part to find the closest integer, whereas truncation simply discards the fractional part entirely.',
+                        'Truncation evaluates the fractional part to find the closest integer, whereas rounding simply discards the fractional part entirely.',
+                        'Rounding only works on positive numbers, while truncation works on both positive and negative numbers.',
+                        'Truncation always results in a larger number than rounding.'
+                    ]),
+                    answer: 'Rounding evaluates the fractional part to find the closest integer, whereas truncation simply discards the fractional part entirely.'
+                });
+            }
+
+            if (topics.boolean) {
+                // Dynamic XOR generation
+                const leftBool = Math.random() > 0.5;
+                const rightBool = Math.random() > 0.5;
+                const leftStr = leftBool ? 'TRUE' : 'FALSE';
+                const rightStr = rightBool ? 'TRUE' : 'FALSE';
+                const ansXor = (leftBool !== rightBool) ? 'TRUE' : 'FALSE';
+
+                q.push({
+                    id: `bo1_${leftStr}_${rightStr}`, type: 'mcq', topic: 'Boolean Operators',
+                    text: `Evaluate the logic expression: ${leftStr} XOR ${rightStr}`,
+                    options: shuffle(['TRUE', 'FALSE', 'NULL', 'Syntax Error']),
+                    answer: ansXor
+                });
+
+                // Dynamic Relational and Logic generation
+                const ops = ['>=', '<=', '>', '<', '==', '!='];
+                const valA = Math.floor(Math.random() * 10);
+                const valB = Math.floor(Math.random() * 10);
+                const valC = Math.floor(Math.random() * 10) + 10;
+                const valD = Math.floor(Math.random() * 10) + 10;
+                const op1 = ops[Math.floor(Math.random() * ops.length)];
+                const op2 = ops[Math.floor(Math.random() * ops.length)];
+                const logicOp = Math.random() > 0.5 ? 'AND' : 'OR';
+
+                const evalOp = (x, op, y) => {
+                    if(op === '>=') return x >= y; if(op === '<=') return x <= y;
+                    if(op === '>') return x > y; if(op === '<') return x < y;
+                    if(op === '==') return x === y; if(op === '!=') return x !== y;
+                };
+
+                const part1 = !evalOp(valA, op1, valB);
+                const part2 = evalOp(valC, op2, valD);
+                const ansLogic = logicOp === 'AND' ? (part1 && part2) : (part1 || part2);
+
+                q.push({
+                    id: `bo2_${valA}${op1}${valB}_${logicOp}_${valC}${op2}${valD}`, type: 'fill_blank', topic: 'Boolean Operators',
+                    text: `Evaluate: NOT(${valA} ${op1} ${valB}) ${logicOp} (${valC} ${op2} ${valD})`,
+                    hint: 'true or false',
+                    answer: [ansLogic ? 'true' : 'false']
+                });
+
+                // Dynamic bitwise generation
+                const binA = ['1010', '1100', '1111', '0101'][Math.floor(Math.random()*4)];
+                const binB = ['0110', '1001', '0011', '1010'][Math.floor(Math.random()*4)];
+                let ansBin = '';
+                for(let i=0; i<4; i++) {
+                    ansBin += (binA[i]==='1' && binB[i]==='1') ? '1' : '0';
+                }
+                
+                q.push({
+                    id: `bo3_${binA}_${binB}`, type: 'fill_blank', topic: 'Boolean Operators',
+                    text: `Evaluate the bitwise AND operation: ${binA} AND ${binB}`,
+                    hint: '4-bit binary...',
+                    answer: [ansBin]
+                });
+            }
+
+            if (topics.strings) {
+                // Dynamic string generation
+                const words = ["COMPUTER", "NETWORK", "ALGORITHM", "DATABASE", "VARIABLE"];
+                const word = words[Math.floor(Math.random() * words.length)];
+                
+                // Using start and end indices specifically per feedback
+                const start = Math.floor(Math.random() * 3); // 0, 1, or 2
+                const end = start + Math.floor(Math.random() * 3) + 2; // ensuring length is 3-5
+                const ansStr = word.substring(start, end + 1); // JS substring includes start, up to but not including end index. Adding +1 to make 'end' inclusive.
+                
+                q.push({
+                    id: `st1_${word}_${start}_${end}`, type: 'fill_blank', topic: 'String Handling',
+                    text: `Assuming 0-based indexing where SUBSTRING uses (startIndex, endIndex, string), evaluate: SUBSTRING(${start}, ${end}, "${word}")`,
+                    hint: `${end - start + 1} letters...`,
+                    caseSensitive: true,
+                    answer: [ansStr, `"${ansStr}"`, `'${ansStr}'`] // Accept raw or with quotes
+                });
+
+                // Dynamic char conversion
+                const refCode = Math.floor(Math.random() * 26) + 65;
+                const refChar = String.fromCharCode(refCode);
+                let qCode = Math.floor(Math.random() * 26) + 65;
+                while(qCode === refCode) qCode = Math.floor(Math.random() * 26) + 65;
+                const qChar = String.fromCharCode(qCode);
+
+                q.push({
+                    id: `st2_${refCode}_${qCode}`, type: 'fill_blank', topic: 'String Handling',
+                    text: `If CHAR_TO_CODE("${refChar}") evaluates to ${refCode}, what is the result of CODE_TO_CHAR(${qCode})?`,
+                    hint: `Remember string markers e.g. "X" or 'X'`,
+                    caseSensitive: true,
+                    answer: [`"${qChar}"`, `'${qChar}'`]
+                });
+
+                q.push({
+                    id: 'st3', type: 'mcq', topic: 'String Handling',
+                    text: 'Which function correctly converts the integer 2024 into the string "2024"?',
+                    options: shuffle(['INT_TO_STRING()', 'STRING_TO_INT()', 'CHAR_TO_CODE()', 'CODE_TO_CHAR()']),
+                    answer: 'INT_TO_STRING()'
+                });
+
+                // Dynamic POSITION evaluation
+                const posWord = words[Math.floor(Math.random() * words.length)];
+                const subStart = Math.floor(Math.random() * (posWord.length - 3));
+                const subWord = posWord.substring(subStart, subStart + 3);
+                q.push({
+                    id: `st4_${posWord}_${subWord}`, type: 'fill_blank', topic: 'String Handling',
+                    text: `Assuming 0-based indexing, what integer is returned by POSITION("${posWord}", "${subWord}")?`,
+                    hint: 'integer index...',
+                    answer: [subStart.toString()]
+                });
+
+                q.push({
+                    id: 'st5', type: 'mcq', topic: 'String Handling',
+                    text: 'Which string conversion operation would typically be used to prepare a user-entered date text (e.g. "2024-05-12") for storing in a dedicated Date variable?',
+                    options: shuffle([
+                        'STRING_TO_DATE()',
+                        'DATE_TO_STRING()',
+                        'CAST_DATE()',
+                        'FORMAT_DATE()'
+                    ]),
+                    answer: 'STRING_TO_DATE()'
+                });
+            }
+
+            return q;
+        };
+
+        // --- Interactive Match Component ---
+        const MatchInteractive = ({ pairs, onComplete }) => {
+            const [leftCol, setLeftCol] = useState([]);
+            const [rightCol, setRightCol] = useState([]);
+            const [selectedLeft, setSelectedLeft] = useState(null);
+            const [selectedRight, setSelectedRight] = useState(null);
+            const [matchedIds, setMatchedIds] = useState([]);
+            const [errorFlash, setErrorFlash] = useState(false);
+
+            useEffect(() => {
+                const lefts = pairs.map((p, i) => ({ id: i, text: p.left }));
+                const rights = pairs.map((p, i) => ({ id: i, text: p.right }));
+                setLeftCol(shuffle(lefts));
+                setRightCol(shuffle(rights));
+            }, [pairs]);
+
+            useEffect(() => {
+                if (selectedLeft !== null && selectedRight !== null) {
+                    if (selectedLeft === selectedRight) {
+                        // Match successful
+                        const newMatched = [...matchedIds, selectedLeft];
+                        setMatchedIds(newMatched);
+                        setSelectedLeft(null);
+                        setSelectedRight(null);
+                        if (newMatched.length === pairs.length) {
+                            onComplete();
+                        }
+                    } else {
+                        // Match failed
+                        setErrorFlash(true);
+                        setTimeout(() => {
+                            setSelectedLeft(null);
+                            setSelectedRight(null);
+                            setErrorFlash(false);
+                        }, 600);
+                    }
+                }
+            }, [selectedLeft, selectedRight, matchedIds, pairs.length, onComplete]);
+
+            return (
+                <div className={`mt-4 mb-4 grid grid-cols-2 gap-4 ${errorFlash ? 'animate-pulse' : ''}`}>
+                    <div className="flex flex-col gap-2">
+                        {leftCol.map(item => (
+                            <button 
+                                key={`l_${item.id}`}
+                                disabled={matchedIds.includes(item.id)}
+                                onClick={() => setSelectedLeft(item.id)}
+                                className={`p-3 text-sm font-medium rounded-lg border-2 transition-all text-left ${
+                                    matchedIds.includes(item.id) ? 'bg-green-100 border-green-500 text-green-800 opacity-50 cursor-not-allowed' :
+                                    selectedLeft === item.id ? 'bg-blue-100 border-blue-500 text-blue-800' :
+                                    'bg-white border-slate-200 hover:border-blue-300 text-slate-700'
+                                }`}
+                            >
+                                {item.text}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        {rightCol.map(item => (
+                            <button 
+                                key={`r_${item.id}`}
+                                disabled={matchedIds.includes(item.id)}
+                                onClick={() => setSelectedRight(item.id)}
+                                className={`p-3 text-sm font-medium rounded-lg border-2 transition-all text-left ${
+                                    matchedIds.includes(item.id) ? 'bg-green-100 border-green-500 text-green-800 opacity-50 cursor-not-allowed' :
+                                    selectedRight === item.id ? 'bg-purple-100 border-purple-500 text-purple-800' :
+                                    'bg-white border-slate-200 hover:border-purple-300 text-slate-700'
+                                }`}
+                            >
+                                {item.text}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+        const App = () => {
+            const [topics, setTopics] = useState({
+                datatypes: true,
+                principles: true,
+                iteration: true,
+                math: true,
+                boolean: true,
+                strings: true
+            });
+            const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+            
+            const [queue, setQueue] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            
+            const [userAnswer, setUserAnswer] = useState('');
+            const [status, setStatus] = useState('answering'); // answering, correct, incorrect, showing_solution
+            
+            const dropdownRef = useRef(null);
+
+            const initializeQueue = (activeTopics) => {
+                const qs = shuffle(generateQuestions(activeTopics));
+                setQueue(qs);
+                setCurrentIndex(0);
+                resetTurn();
+            };
+
+            // First load
+            useEffect(() => {
+                initializeQueue(topics);
+            }, []);
+
+            // Handle clicking outside dropdown
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                        setIsDropdownOpen(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            const resetTurn = () => {
+                setUserAnswer('');
+                setStatus('answering');
+            };
+
+            const applyFilters = () => {
+                // Ensure at least one topic is selected
+                if (!Object.values(topics).includes(true)) {
+                    alert("Please select at least one subtopic.");
+                    return;
+                }
+                setIsDropdownOpen(false);
+                initializeQueue(topics);
+            };
+
+            const toggleTopic = (key) => {
+                setTopics(prev => ({ ...prev, [key]: !prev[key] }));
+            };
+
+            const handleNext = () => {
+                if (currentIndex + 1 >= queue.length) {
+                    initializeQueue(topics); // Loop restarts
+                } else {
+                    setCurrentIndex(currentIndex + 1);
+                    resetTurn();
+                }
+            };
+
+            const checkAnswer = () => {
+                const q = queue[currentIndex];
+                if (!q) return;
+
+                let isCorrect = false;
+
+                if (q.type === 'mcq') {
+                    isCorrect = (userAnswer === q.answer);
+                } else if (q.type === 'fill_blank') {
+                    const cleanedInput = q.caseSensitive ? userAnswer.trim() : userAnswer.trim().toLowerCase();
+                    
+                    isCorrect = q.answer.some(ans => {
+                        const target = q.caseSensitive ? ans : ans.toLowerCase();
+                        return cleanedInput === target;
+                    });
+                }
+
+                if (isCorrect) {
+                    setStatus('correct');
+                } else {
+                    setStatus('incorrect');
+                }
+            };
+
+            const q = queue[currentIndex];
+
+            if (!q) return <div className="p-8 text-center text-slate-500">Loading questions...</div>;
+
+            return (
+                <div className="min-h-screen flex flex-col items-center py-10 px-4">
+                    
+                    {/* Top Bar */}
+                    <div className="w-full max-w-3xl flex justify-between items-center mb-6">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-800">AQA A-Level CS</h1>
+                            <p className="text-slate-500 text-sm font-medium">4.1.1 Programming Basics</p>
+                        </div>
+                        
+                        {/* Dropdown Menu */}
+                        <div className="relative" ref={dropdownRef}>
+                            <button 
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                className="flex items-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition"
+                            >
+                                <FilterIcon /> Subtopics
+                            </button>
+                            
+                            {isDropdownOpen && (
+                                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden fade-in">
+                                    <div className="p-3 border-b border-slate-100 bg-slate-50">
+                                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Filter Topics</h3>
+                                    </div>
+                                    <div className="p-2">
+                                        {[
+                                            { key: 'datatypes', label: 'Data Types & Variables' },
+                                            { key: 'principles', label: 'Programming Principles' },
+                                            { key: 'iteration', label: 'Types of Iteration' },
+                                            { key: 'math', label: 'Mathematical Operators' },
+                                            { key: 'boolean', label: 'Boolean & Relational' },
+                                            { key: 'strings', label: 'String Handling' }
+                                        ].map(t => (
+                                            <label key={t.key} className="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer transition">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={topics[t.key]} 
+                                                    onChange={() => toggleTopic(t.key)}
+                                                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                                                />
+                                                <span className="ml-3 text-sm text-slate-700">{t.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <div className="p-3 bg-slate-50 border-t border-slate-100">
+                                        <button 
+                                            onClick={applyFilters}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg text-sm transition"
+                                        >
+                                            Apply & Restart
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Question Card */}
+                    <div className="w-full max-w-3xl bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                        
+                        <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {q.topic}
+                            </span>
+                            <span className="text-sm font-medium text-slate-500">
+                                Question {currentIndex + 1} of {queue.length}
+                            </span>
+                        </div>
+
+                        <div className="p-6 md:p-8">
+                            <h2 className="text-lg md:text-xl font-medium text-slate-800 mb-6 leading-relaxed whitespace-pre-wrap">
+                                {q.text}
+                            </h2>
+
+                            {/* Question Inputs based on Type */}
+                            <div className="mb-8">
+                                {q.type === 'mcq' && (
+                                    <div className="flex flex-col gap-3">
+                                        {q.options.map((opt, idx) => (
+                                            <button 
+                                                key={idx}
+                                                disabled={status !== 'answering' && status !== 'incorrect'}
+                                                onClick={() => setUserAnswer(opt)}
+                                                className={`p-4 text-left rounded-xl border-2 transition-all ${
+                                                    userAnswer === opt 
+                                                    ? 'border-blue-500 bg-blue-50 text-blue-900' 
+                                                    : 'border-slate-200 hover:border-blue-300 bg-white text-slate-700'
+                                                } ${status === 'showing_solution' && opt === q.answer ? 'border-green-500 bg-green-50' : ''}`}
+                                            >
+                                                {opt}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {q.type === 'fill_blank' && (
+                                    <div className="flex flex-col">
+                                        <input 
+                                            type="text" 
+                                            value={userAnswer}
+                                            onChange={(e) => setUserAnswer(e.target.value)}
+                                            disabled={status === 'correct' || status === 'showing_solution'}
+                                            placeholder={`Hint: ${q.hint}`}
+                                            className="w-full p-4 text-lg border-2 border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && userAnswer.trim() !== '') {
+                                                    checkAnswer();
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                )}
+
+                                {q.type === 'match' && (
+                                    <MatchInteractive 
+                                        pairs={q.pairs} 
+                                        onComplete={() => setStatus('correct')}
+                                    />
+                                )}
+                            </div>
+
+                            {/* Actions and Feedback Area */}
+                            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                                
+                                {/* Feedback Display */}
+                                <div className="flex-1 w-full">
+                                    {status === 'correct' && (
+                                        <div className="flex items-center text-green-700 bg-green-50 p-4 rounded-xl border border-green-200 fade-in">
+                                            <CheckIcon />
+                                            <span className="ml-2 font-medium">Correct! Well done.</span>
+                                        </div>
+                                    )}
+                                    {status === 'incorrect' && (
+                                        <div className="flex items-center text-red-700 bg-red-50 p-4 rounded-xl border border-red-200 fade-in">
+                                            <XIcon />
+                                            <span className="ml-2 font-medium">Incorrect. Try again or view the solution.</span>
+                                        </div>
+                                    )}
+                                    {status === 'showing_solution' && (
+                                        <div className="text-blue-800 bg-blue-50 p-4 rounded-xl border border-blue-200 fade-in">
+                                            <span className="font-semibold block mb-1">Solution:</span>
+                                            {q.type === 'mcq' || q.type === 'fill_blank' ? (
+                                                <span className="font-mono bg-white px-2 py-1 rounded border border-blue-100">{q.type === 'mcq' ? q.answer : q.answer[0]}</span>
+                                            ) : null}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Buttons */}
+                                <div className="flex gap-3 w-full sm:w-auto">
+                                    {status === 'answering' || status === 'incorrect' ? (
+                                        <>
+                                            {status === 'incorrect' && (
+                                                <button 
+                                                    onClick={() => setStatus('showing_solution')}
+                                                    className="flex-1 sm:flex-none px-6 py-3 font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                                                >
+                                                    Show Solution
+                                                </button>
+                                            )}
+                                            {q.type !== 'match' && (
+                                                <button 
+                                                    onClick={checkAnswer}
+                                                    disabled={userAnswer.trim() === ''}
+                                                    className="flex-1 sm:flex-none px-6 py-3 font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition"
+                                                >
+                                                    Check Answer
+                                                </button>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <button 
+                                            onClick={handleNext}
+                                            className="w-full sm:w-auto px-8 py-3 font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-xl shadow-sm transition fade-in"
+                                        >
+                                            Next Question
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div className="mt-8 text-center text-xs text-slate-400 max-w-lg">
+                        This interactive assumes standard AQA A-Level Pseudocode conventions (e.g. 0-based indexing for strings unless stated otherwise).
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
