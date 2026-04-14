@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: Logic & Problem Solving (3.4.1.1)</title>
+
+    <!-- React & ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+      }
+      .logic-cell {
+        width: 50px;
+        height: 50px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .logic-cell:hover {
+        background-color: #e2e8f0;
+      }
+      .logic-tick {
+        color: #16a34a;
+        font-weight: bold;
+        font-size: 1.5rem;
+        text-align: center;
+        line-height: 50px;
+      }
+      .logic-cross {
+        color: #dc2626;
+        font-weight: bold;
+        font-size: 1.5rem;
+        text-align: center;
+        line-height: 50px;
+      }
+      .fade-in {
+        animation: fadeIn 0.4s ease-in;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo } = React;
+
+      // --- Data: Topics & Questions ---
+      const TOPICS = [
+        "Problem Reduction",
+        "Divide and Conquer",
+        "Logic Grid Puzzles",
+        "Logical Deductions",
+      ];
+
+      const QUESTIONS = [
+        {
+          id: "q1",
+          topic: "Problem Reduction",
+          teaching:
+            "Problem reduction means taking a complex, real-world problem and transforming it into a standard, known problem type. For example, finding the shortest route between towns can be reduced to a Graph problem, where towns are nodes and roads are edges. This allows us to use standard algorithms like Dijkstra's.",
+          type: "fill-blank",
+          question:
+            "When solving a dependency scheduling problem (e.g., Task B must happen after Task A), the problem is typically reduced to a directed G___.",
+          firstLetter: "G",
+          answer: "GRAPH",
+          solutionText:
+            "A directed graph represents dependencies perfectly, where nodes are tasks and directed edges represent the prerequisite rules.",
+        },
+        {
+          id: "q2",
+          topic: "Divide and Conquer",
+          teaching:
+            "Divide and conquer involves breaking a problem down into smaller, similar sub-problems, solving them recursively, and combining their results. Binary search is a classic example: it repeatedly halves the search space until the item is found.",
+          type: "numeric",
+          question:
+            "In binary search, each step halves the remaining items. What is the maximum number of items checked to find a value in a sorted list of 100 items?",
+          answer: "7",
+          solutionText:
+            "You keep halving the list: 100 -> 50 -> 25 -> 12 -> 6 -> 3 -> 1. This takes a maximum of 7 checks. Mathematically, it's the next whole number above log₂(100).",
+        },
+        {
+          id: "q3",
+          topic: "Logic Grid Puzzles",
+          teaching:
+            "Logic grid puzzles involve using clues to deduce the single unique matching for a set of properties. If a property is matched (a 'Tick' ✔), all other options in that row and column must be ruled out (a 'Cross' ✘). Try clicking the grid below!",
+          type: "logic-grid",
+          question:
+            "Use the clues to find out who drives which car color.\n1. Bob hates Red.\n2. Charlie drives the Green car.",
+          rows: ["Alice", "Bob", "Charlie"],
+          cols: ["Red", "Green", "Blue"],
+          solution: [
+            [1, 2, 2], // Alice: Red
+            [2, 2, 1], // Bob: Blue
+            [2, 1, 2], // Charlie: Green
+          ],
+          solutionText:
+            "Charlie is Green. Bob isn't Red, and can't be Green (because Charlie has it), so Bob must be Blue. That leaves Red for Alice.",
+        },
+        {
+          id: "q4",
+          topic: "Logical Deductions",
+          teaching:
+            "In logical deduction (syllogisms), you must strictly follow the rules given, without introducing outside assumptions. A conclusion is only logically valid if it MUST be true in all scenarios where the premises are true.",
+          type: "mcq",
+          question:
+            "Given the premises:\n1. 'All blergs are flarps.'\n2. 'Some flarps are gloops.'\n\nDoes it logically follow that 'Some blergs are gloops'?",
+          options: [
+            "Yes, absolutely",
+            "No, it does not strictly follow",
+            "Only if gloops are blergs",
+          ],
+          answer: "No, it does not strictly follow",
+          solutionText:
+            "Imagine Blergs = Cats, Flarps = Animals, Gloops = Dogs. All Cats are Animals. Some Animals are Dogs. It does NOT logically follow that some Cats are Dogs. The logical overlap is not guaranteed.",
+        },
+        {
+          id: "q5",
+          topic: "Logical Deductions",
+          teaching:
+            "Knights and Knaves logic problems require you to find contradictions. A Knight always tells the truth, and a Knave always lies. If someone says 'I am a Knave', it's a paradox (if true, they are a knave, so they lied, making it false).",
+          type: "mcq",
+          question:
+            "Person A says: 'B is a Knave.'\nPerson B says: 'We are both Knaves.'\n\nWhat are Person A and Person B?",
+          options: [
+            "A is a Knight, B is a Knave",
+            "A is a Knave, B is a Knight",
+            "Both are Knights",
+            "Both are Knaves",
+          ],
+          answer: "A is a Knight, B is a Knave",
+          solutionText:
+            "If B were a Knight, B's statement 'We are both Knaves' would be true, which is a contradiction since B is a Knight. So B MUST be a Knave. Since B is a Knave, B's statement is false (meaning at least one is a Knight). Since B is the Knave, A must be the Knight. This makes A's statement 'B is a Knave' true, perfectly fitting the Knight persona.",
+        },
+        {
+          id: "q6",
+          topic: "Problem Reduction",
+          teaching:
+            "When applying problem reduction, you should consider the abstract concepts or computational models you have previously studied to see which best fits the characteristics of the problem. If it maps well, you can use established techniques for that model.",
+          type: "mcq",
+          question:
+            "If you need to write an algorithm to validate whether a string of characters strictly matches the format of a UK postcode, which standard model is this problem best reduced to?",
+          options: [
+            "Finite State Machine (FSM)",
+            "Binary Search Tree",
+            "Shortest Path Graph",
+            "Divide and Conquer",
+          ],
+          answer: "Finite State Machine (FSM)",
+          solutionText:
+            "Pattern matching and string validation are standardly reduced to Regular Expressions, which are equivalent to Finite State Machines (FSMs). The FSM processes the string character by character to reach an accept or reject state.",
+        },
+      ];
+
+      // --- Helper Functions ---
+      const shuffleArray = (array) => {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+
+      // --- Main App Component ---
+      const App = () => {
+        // Filter State
+        const [selectedTopics, setSelectedTopics] = useState([...TOPICS]);
+        const [tempSelectedTopics, setTempSelectedTopics] = useState([
+          ...TOPICS,
+        ]);
+        const [filterOpen, setFilterOpen] = useState(false);
+
+        // Loop & Flow State
+        const [loop, setLoop] = useState([]);
+        const [currentIndex, setCurrentIndex] = useState(0);
+        const [phase, setPhase] = useState("teaching"); // 'teaching' | 'question' | 'feedback'
+        const [answerStatus, setAnswerStatus] = useState(null); // 'correct' | 'incorrect'
+        const [showSolution, setShowSolution] = useState(false);
+
+        // Question-specific State
+        const [gridState, setGridState] = useState([]);
+        const [popupCell, setPopupCell] = useState(null);
+        const [textInput, setTextInput] = useState("");
+        const [mcqOptions, setMcqOptions] = useState([]);
+        const [mcqSelection, setMcqSelection] = useState("");
+
+        // Initialize Loop
+        useEffect(() => {
+          generateNewLoop(selectedTopics);
+        }, []);
+
+        const generateNewLoop = (topics) => {
+          const filteredQuestions = QUESTIONS.filter((q) =>
+            topics.includes(q.topic),
+          );
+          if (filteredQuestions.length === 0) {
+            setLoop([]);
+            return;
+          }
+          const shuffled = shuffleArray(filteredQuestions);
+          setLoop(shuffled);
+          setCurrentIndex(0);
+          resetQuestionState(shuffled[0]);
+        };
+
+        const resetQuestionState = (question) => {
+          setPhase("teaching");
+          setAnswerStatus(null);
+          setShowSolution(false);
+          setTextInput("");
+          setMcqSelection("");
+          setPopupCell(null);
+
+          if (!question) return;
+
+          if (question.type === "logic-grid") {
+            // Initialize empty grid (0: empty, 1: tick, 2: cross)
+            const emptyGrid = Array(question.rows.length)
+              .fill(0)
+              .map(() => Array(question.cols.length).fill(0));
+            setGridState(emptyGrid);
+          } else if (question.type === "mcq") {
+            setMcqOptions(shuffleArray(question.options));
+          }
+        };
+
+        // Handlers
+        const handleApplyFilters = () => {
+          setSelectedTopics(tempSelectedTopics);
+          setFilterOpen(false);
+          generateNewLoop(tempSelectedTopics);
+        };
+
+        const toggleTopic = (topic) => {
+          if (tempSelectedTopics.includes(topic)) {
+            setTempSelectedTopics(
+              tempSelectedTopics.filter((t) => t !== topic),
+            );
+          } else {
+            setTempSelectedTopics([...tempSelectedTopics, topic]);
+          }
+        };
+
+        const handleNext = () => {
+          if (currentIndex + 1 < loop.length) {
+            setCurrentIndex(currentIndex + 1);
+            resetQuestionState(loop[currentIndex + 1]);
+          } else {
+            // Loop finished, regenerate
+            generateNewLoop(selectedTopics);
+          }
+        };
+
+        const checkAnswer = () => {
+          const q = loop[currentIndex];
+          let isCorrect = false;
+
+          if (q.type === "mcq") {
+            isCorrect = mcqSelection === q.answer;
+          } else if (q.type === "numeric") {
+            isCorrect = textInput.trim() === q.answer;
+          } else if (q.type === "fill-blank") {
+            const ans = textInput.trim().toUpperCase();
+            const expected = q.answer.toUpperCase();
+            // Accept if they typed the whole word, or just the remainder after the first letter
+            isCorrect =
+              ans === expected ||
+              q.firstLetter.toUpperCase() + ans === expected;
+          } else if (q.type === "logic-grid") {
+            isCorrect = true;
+            // Check if all ticks match the solution.
+            for (let r = 0; r < q.rows.length; r++) {
+              for (let c = 0; c < q.cols.length; c++) {
+                // Solution uses 1 for tick, 2 for cross.
+                // To be correct, user must have placed the correct ticks (1s).
+                if (q.solution[r][c] === 1 && gridState[r][c] !== 1) {
+                  isCorrect = false;
+                }
+              }
+            }
+          }
+
+          setAnswerStatus(isCorrect ? "correct" : "incorrect");
+          setPhase("feedback");
+        };
+
+        // Logic Grid Interaction
+        const handleCellClick = (r, c) => {
+          if (phase !== "question") return;
+
+          if (gridState[r][c] !== 0) {
+            // Clear cell
+            const newGrid = JSON.parse(JSON.stringify(gridState));
+            newGrid[r][c] = 0;
+            setGridState(newGrid);
+            setPopupCell(null);
+          } else {
+            // Toggle popup menu
+            if (popupCell && popupCell.r === r && popupCell.c === c) {
+              setPopupCell(null);
+            } else {
+              setPopupCell({ r, c });
+            }
+          }
+        };
+
+        const setGridValue = (r, c, val) => {
+          const newGrid = JSON.parse(JSON.stringify(gridState));
+          newGrid[r][c] = val;
+
+          if (val === 1) {
+            // Auto-fill crosses for row and column when placing a Tick
+            for (let i = 0; i < newGrid.length; i++) {
+              if (i !== r && newGrid[i][c] === 0) newGrid[i][c] = 2;
+            }
+            for (let j = 0; j < newGrid[0].length; j++) {
+              if (j !== c && newGrid[r][j] === 0) newGrid[r][j] = 2;
+            }
+          }
+
+          setGridState(newGrid);
+          setPopupCell(null);
+        };
+
+        // --- Renderers ---
+        const renderFilterDropdown = () => (
+          <div className="relative">
+            <button
+              onClick={() => setFilterOpen(!filterOpen)}
+              className="bg-slate-800 text-white px-4 py-2 rounded-md shadow hover:bg-slate-700 flex items-center space-x-2 transition-colors"
+            >
+              <span>Topics</span>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M19 9l-7 7-7-7"
+                ></path>
+              </svg>
+            </button>
+
+            {filterOpen && (
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-xl z-50 border border-slate-200 p-4">
+                <h3 className="font-semibold text-slate-800 mb-3 text-sm uppercase tracking-wider">
+                  Select Sub-topics
+                </h3>
+                <div className="space-y-2 mb-4">
+                  {TOPICS.map((topic) => (
+                    <label
+                      key={topic}
+                      className="flex items-center space-x-2 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={tempSelectedTopics.includes(topic)}
+                        onChange={() => toggleTopic(topic)}
+                        className="rounded text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-slate-700">{topic}</span>
+                    </label>
+                  ))}
+                </div>
+                <button
+                  onClick={handleApplyFilters}
+                  className="w-full bg-blue-600 text-white py-2 rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            )}
+          </div>
+        );
+
+        const renderQuestionContent = () => {
+          const q = loop[currentIndex];
+
+          if (q.type === "logic-grid") {
+            return (
+              <div className="mt-6 overflow-x-auto">
+                <table className="border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
+                  <thead>
+                    <tr>
+                      <th className="p-3 border-b border-r bg-slate-50"></th>
+                      {q.cols.map((col) => (
+                        <th
+                          key={col}
+                          className="p-3 border-b bg-slate-50 text-slate-700 font-semibold text-center min-w-[60px]"
+                        >
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {q.rows.map((row, r) => (
+                      <tr key={row}>
+                        <th className="p-3 border-r bg-slate-50 text-slate-700 font-semibold text-right">
+                          {row}
+                        </th>
+                        {q.cols.map((col, c) => (
+                          <td
+                            key={c}
+                            onClick={() => handleCellClick(r, c)}
+                            className="border logic-cell select-none relative"
+                          >
+                            {gridState[r] && gridState[r][c] === 1 && (
+                              <div className="logic-tick">✔</div>
+                            )}
+                            {gridState[r] && gridState[r][c] === 2 && (
+                              <div className="logic-cross">✘</div>
+                            )}
+                            {popupCell?.r === r &&
+                              popupCell?.c === c &&
+                              gridState[r] &&
+                              gridState[r][c] === 0 && (
+                                <div
+                                  className="absolute inset-0 flex items-center justify-center bg-white space-x-2 z-10"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setGridValue(r, c, 1);
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-700 rounded-full text-sm font-bold shadow-sm"
+                                    title="Tick"
+                                  >
+                                    ✔
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setGridValue(r, c, 2);
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-700 rounded-full text-sm font-bold shadow-sm"
+                                    title="Cross"
+                                  >
+                                    ✘
+                                  </button>
+                                </div>
+                              )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-sm text-slate-500 mt-3 italic">
+                  Hint: Clicking an empty box lets you choose to place a Tick
+                  (✔) or a Cross (✘). Placing a Tick automatically places
+                  Crosses in the rest of the row and column. Click a filled box
+                  again to clear it.
+                </p>
+              </div>
+            );
+          }
+
+          if (q.type === "mcq") {
+            return (
+              <div className="mt-6 space-y-3">
+                {mcqOptions.map((opt, idx) => (
+                  <label
+                    key={idx}
+                    className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${mcqSelection === opt ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="mcq"
+                      value={opt}
+                      checked={mcqSelection === opt}
+                      onChange={() => setMcqSelection(opt)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                      disabled={phase === "feedback"}
+                    />
+                    <span className="ml-3 text-slate-700">{opt}</span>
+                  </label>
+                ))}
+              </div>
+            );
+          }
+
+          if (q.type === "numeric") {
+            return (
+              <div className="mt-6 flex items-center space-x-2">
+                <input
+                  type="number"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  placeholder="Enter number..."
+                  disabled={phase === "feedback"}
+                  className="border-2 border-slate-300 focus:border-blue-500 rounded-md outline-none px-4 py-2 text-lg w-48 text-slate-800 bg-white"
+                />
+              </div>
+            );
+          }
+        };
+
+        // Render Error if no questions
+        if (loop.length === 0) {
+          return (
+            <div className="min-h-screen p-8 bg-slate-100 flex flex-col items-center">
+              <div className="w-full max-w-4xl flex justify-end mb-4">
+                {renderFilterDropdown()}
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-4xl text-center">
+                <h2 className="text-2xl font-bold text-slate-800 mb-4">
+                  No Questions Available
+                </h2>
+                <p className="text-slate-600">
+                  Please select at least one sub-topic from the filter menu in
+                  the top right to begin.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        const currentQ = loop[currentIndex];
+
+        return (
+          <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
+            {/* Header Area */}
+            <div className="w-full max-w-4xl flex justify-between items-end mb-6">
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900">
+                  AQA Problem Solving
+                </h1>
+                <p className="text-sm font-medium text-slate-500 mt-1 uppercase tracking-wide">
+                  Logic & Algorithms (3.4.1.1) • Question {currentIndex + 1} of{" "}
+                  {loop.length} in loop
+                </p>
+              </div>
+              {renderFilterDropdown()}
+            </div>
+
+            {/* Main Content Card */}
+            <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl overflow-hidden fade-in">
+              {/* Topic Header */}
+              <div className="bg-blue-600 px-6 py-4">
+                <span className="inline-block bg-blue-500 text-white text-xs px-2 py-1 rounded font-bold uppercase tracking-wider mb-1">
+                  {currentQ.topic}
+                </span>
+              </div>
+
+              <div className="p-6 md:p-8">
+                {/* Concept Refresher (Always Visible) */}
+                <div
+                  className={`transition-all duration-300 ${phase === "teaching" ? "mb-6 fade-in" : "mb-6 pb-6 border-b border-slate-100 bg-slate-50 p-4 rounded-lg"}`}
+                >
+                  <div className="flex items-start space-x-4">
+                    <div
+                      className={`flex-shrink-0 bg-blue-100 text-blue-600 rounded-full ${phase === "teaching" ? "p-3" : "p-2 mt-1"}`}
+                    >
+                      <svg
+                        className={phase === "teaching" ? "w-6 h-6" : "w-4 h-4"}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                        ></path>
+                      </svg>
+                    </div>
+                    <div>
+                      <h2
+                        className={`font-bold text-slate-800 ${phase === "teaching" ? "text-xl mb-2" : "text-sm uppercase tracking-wider text-blue-800 mb-1"}`}
+                      >
+                        Concept Refresher
+                      </h2>
+                      <p
+                        className={`text-slate-600 leading-relaxed ${phase === "teaching" ? "text-lg" : "text-sm"}`}
+                      >
+                        {currentQ.teaching}
+                      </p>
+                    </div>
+                  </div>
+                  {phase === "teaching" && (
+                    <div className="pt-4 mt-4 border-t border-slate-100 flex justify-end">
+                      <button
+                        onClick={() => setPhase("question")}
+                        className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md flex items-center space-x-2"
+                      >
+                        <span>Ready for Question</span>
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M9 5l7 7-7 7"
+                          ></path>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Phase 2/3: Question & Feedback */}
+                {(phase === "question" || phase === "feedback") && (
+                  <div className="space-y-6 fade-in">
+                    <div className="bg-slate-50 border border-slate-200 p-5 rounded-lg">
+                      <h3 className="text-lg font-semibold text-slate-800 whitespace-pre-line">
+                        {currentQ.question}
+                      </h3>
+                      {renderQuestionContent()}
+                    </div>
+
+                    {/* Feedback Area */}
+                    {phase === "feedback" && (
+                      <div
+                        className={`p-4 rounded-lg flex items-start space-x-3 fade-in ${answerStatus === "correct" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
+                      >
+                        <div
+                          className={`mt-0.5 flex-shrink-0 ${answerStatus === "correct" ? "text-green-600" : "text-red-600"}`}
+                        >
+                          {answerStatus === "correct" ? (
+                            <svg
+                              className="w-6 h-6"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M5 13l4 4L19 7"
+                              ></path>
+                            </svg>
+                          ) : (
+                            <svg
+                              className="w-6 h-6"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M6 18L18 6M6 6l12 12"
+                              ></path>
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-grow">
+                          <h4
+                            className={`font-bold text-lg ${answerStatus === "correct" ? "text-green-800" : "text-red-800"}`}
+                          >
+                            {answerStatus === "correct"
+                              ? "Correct!"
+                              : "Not quite right."}
+                          </h4>
+                          {answerStatus === "incorrect" && (
+                            <p className="text-red-700 mt-1">
+                              You can modify your answer and try again, or view
+                              the solution.
+                            </p>
+                          )}
+
+                          {showSolution && (
+                            <div className="mt-4 p-4 bg-white rounded border border-slate-200 text-slate-700 fade-in">
+                              <span className="font-bold uppercase text-xs text-slate-500 tracking-wider block mb-1">
+                                Solution / Explanation
+                              </span>
+                              {currentQ.solutionText}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-3 justify-end items-center">
+                      {phase === "question" && (
+                        <button
+                          onClick={checkAnswer}
+                          className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors shadow"
+                        >
+                          Check Answer
+                        </button>
+                      )}
+
+                      {phase === "feedback" &&
+                        answerStatus === "incorrect" &&
+                        !showSolution && (
+                          <>
+                            <button
+                              onClick={() => setPhase("question")}
+                              className="bg-slate-200 text-slate-800 px-6 py-2.5 rounded-lg font-semibold hover:bg-slate-300 transition-colors"
+                            >
+                              Try Again
+                            </button>
+                            <button
+                              onClick={() => setShowSolution(true)}
+                              className="bg-amber-500 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-amber-600 transition-colors shadow"
+                            >
+                              Show Solution
+                            </button>
+                          </>
+                        )}
+
+                      {phase === "feedback" &&
+                        (answerStatus === "correct" || showSolution) && (
+                          <button
+                            onClick={handleNext}
+                            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow flex items-center space-x-2"
+                          >
+                            <span>
+                              {currentIndex + 1 < loop.length
+                                ? "Next Question"
+                                : "Restart Loop"}
+                            </span>
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M9 5l7 7-7 7"
+                              ></path>
+                            </svg>
+                          </button>
+                        )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
