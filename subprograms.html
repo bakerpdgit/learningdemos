@@ -4,9 +4,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AQA A Level CS: Subprograms</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
     
     <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
@@ -26,23 +50,22 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
-    <style id="global-home-link-style">
-        .global-home-link {
-            display: inline-block;
-            margin: 0.75rem 0 0 0.75rem;
-            font-size: 0.85rem;
-            color: inherit;
-            opacity: 0.8;
-            text-decoration: none;
-        }
-        .global-home-link:hover {
-            opacity: 1;
-            text-decoration: underline;
-        }
-    </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
 </head>
 <body>
-    <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -53,6 +76,8 @@
         const Check = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
         const X = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
         const Lightbulb = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>;
+        const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
+        const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
 
         // --- Data Bank ---
         const SUBTOPICS = [
@@ -236,6 +261,17 @@
 
         // --- Main Component ---
         const App = () => {
+            const [theme, setTheme] = useState(() => {
+                const saved = localStorage.getItem("uimode");
+                if (saved) return saved;
+                return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            });
+            useEffect(() => {
+                document.documentElement.classList.toggle("dark", theme === "dark");
+                localStorage.setItem("uimode", theme);
+            }, [theme]);
+            const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
+
             const [selectedTopics, setSelectedTopics] = useState([...SUBTOPICS]);
             const [tempSelectedTopics, setTempSelectedTopics] = useState([...SUBTOPICS]);
             const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -364,30 +400,30 @@
             // Render Functions
             const renderFilters = () => (
                 <div className="relative z-10">
-                    <button 
+                    <button
                         onClick={() => setIsFilterOpen(!isFilterOpen)}
-                        className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition"
+                        className="flex items-center gap-2 bg-white dark:bg-slate-700 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 transition text-slate-700 dark:text-slate-200"
                     >
                         Filter Subtopics <ChevronDown />
                     </button>
-                    
+
                     {isFilterOpen && (
-                        <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-4">
-                            <h3 className="font-semibold text-slate-700 mb-3 border-b pb-2">Select Subtopics</h3>
+                        <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50">
+                            <h3 className="font-semibold text-slate-700 dark:text-slate-200 mb-3 border-b dark:border-slate-600 pb-2">Select Subtopics</h3>
                             <div className="flex flex-col gap-2 mb-4 max-h-60 overflow-y-auto">
                                 {SUBTOPICS.map(topic => (
-                                    <label key={topic} className="flex items-start gap-2 cursor-pointer p-1 hover:bg-slate-50 rounded">
-                                        <input 
-                                            type="checkbox" 
+                                    <label key={topic} className="flex items-start gap-2 cursor-pointer p-1 hover:bg-slate-50 dark:hover:bg-slate-700 rounded">
+                                        <input
+                                            type="checkbox"
                                             className="mt-1 w-4 h-4 text-blue-600 rounded"
                                             checked={tempSelectedTopics.includes(topic)}
                                             onChange={() => toggleTopic(topic)}
                                         />
-                                        <span className="text-sm text-slate-700 leading-tight">{topic}</span>
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 leading-tight">{topic}</span>
                                     </label>
                                 ))}
                             </div>
-                            <button 
+                            <button
                                 onClick={handleApplyFilters}
                                 className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition"
                             >
@@ -466,7 +502,7 @@
             );
 
             const renderFIB = () => (
-                <div className="mt-6 p-6 bg-blue-50/50 rounded-xl border border-blue-100 text-lg">
+                <div className="mt-6 p-6 bg-blue-50/50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900 text-lg">
                     <span>{currentQuestion.text}</span>
                     <span className="font-bold text-blue-700 ml-1">{currentQuestion.firstLetter}</span>
                     <input
@@ -534,8 +570,8 @@
                 return (
                     <div className="mt-6 flex flex-col gap-6">
                         {/* Label Bank */}
-                        <div className="p-4 bg-slate-100 rounded-xl border border-slate-200 min-h-[80px]">
-                            <p className="text-sm text-slate-500 mb-3 font-medium uppercase tracking-wider">Label Bank</p>
+                        <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600 min-h-[80px]">
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-3 font-medium uppercase tracking-wider">Label Bank</p>
                             <div className="flex flex-wrap gap-2">
                                 {availableLabels.map((lbl) => (
                                     <button
@@ -603,50 +639,103 @@
 
             if (!currentQuestion) {
                 return (
-                    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
-                        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full">
-                            <h2 className="text-2xl font-bold text-slate-800 mb-4">No Questions Found</h2>
-                            <p className="text-slate-600 mb-6">You have filtered out all available questions. Please select at least one subtopic to continue learning.</p>
-                            {renderFilters()}
+                    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+                        {/* CS Learning Header */}
+                        <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+                          <a
+                            href="index.html"
+                            className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+                          >
+                            <span className="text-slate-500">&lt;</span>CS
+                            <span className="text-slate-500">&gt;</span>&nbsp;Learning
+                          </a>
+                          <nav className="flex items-center gap-6">
+                            <a
+                              href="index.html"
+                              className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                            >
+                              Home
+                            </a>
+                            <button
+                              onClick={toggleTheme}
+                              className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                              aria-label="Toggle Dark Mode"
+                            >
+                              {theme === "dark" ? (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                              ) : (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                                </svg>
+                              )}
+                            </button>
+                          </nav>
+                        </header>
+                        <div className="flex-1 flex items-center justify-center p-6 text-center">
+                            <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-lg max-w-md w-full">
+                                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">No Questions Found</h2>
+                                <p className="text-slate-600 dark:text-slate-400 mb-6">You have filtered out all available questions. Please select at least one subtopic to continue learning.</p>
+                                {renderFilters()}
+                            </div>
                         </div>
                     </div>
                 );
             }
 
             return (
-                <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+                <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                    {/* CS Learning Header */}
+                    <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+                      <a href="index.html" className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+                        <span className="text-slate-500">&lt;</span>CS<span className="text-slate-500">&gt;</span>&nbsp;Learning
+                      </a>
+                      <nav className="flex items-center gap-6">
+                        <a href="index.html" className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors">Home</a>
+                        <button onClick={toggleTheme} className="text-slate-400 hover:text-headerAccent transition-colors p-1" aria-label="Toggle Dark Mode">
+                          {theme === "dark" ? (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                          ) : (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                          )}
+                        </button>
+                      </nav>
+                    </header>
+
+                    <div className="flex-1 p-4 md:p-8">
                     <div className="max-w-4xl mx-auto">
-                        
-                        {/* Header */}
-                        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+
+                        {/* Page title row */}
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                             <div>
-                                <h1 className="text-2xl font-extrabold text-slate-900">AQA CS: Subprograms</h1>
-                                <p className="text-slate-500 font-medium mt-1">Section 4.1.1.10 - 4.1.1.14</p>
+                                <h1 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">AQA CS: Subprograms</h1>
+                                <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Section 4.1.1.10 - 4.1.1.14</p>
                             </div>
                             {renderFilters()}
-                        </header>
+                        </div>
 
                         {/* Progress Bar */}
                         <div className="mb-6 flex items-center justify-between">
-                            <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">
+                            <span className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                                 Question {currentIndex} of {totalInLoop} in loop
                             </span>
-                            <span className="text-sm font-semibold px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
+                            <span className="text-sm font-semibold px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
                                 {currentQuestion.subtopic}
                             </span>
                         </div>
-                        <div className="w-full bg-slate-200 h-2 rounded-full mb-8 overflow-hidden">
-                            <div 
-                                className="bg-blue-600 h-full transition-all duration-500 ease-out"
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full mb-8 overflow-hidden">
+                            <div
+                                className="bg-blue-600 dark:bg-sky-500 h-full transition-all duration-500 ease-out"
                                 style={{ width: `${(currentIndex / totalInLoop) * 100}%` }}
                             ></div>
                         </div>
 
                         {/* Question Card */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div className="p-6 md:p-8">
-                                <h2 className="text-xl font-bold text-slate-800 mb-4">{currentQuestion.text}</h2>
-                                
+                                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">{currentQuestion.text}</h2>
+
                                 {currentQuestion.code && (
                                     <pre className="bg-slate-800 text-slate-100 p-4 rounded-lg overflow-x-auto code-font mb-6 shadow-inner">
                                         <code>{currentQuestion.code}</code>
@@ -661,18 +750,18 @@
                             </div>
 
                             {/* Footer / Actions */}
-                            <div className="bg-slate-50 p-6 md:p-8 border-t border-slate-100 flex flex-col gap-4">
-                                
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 md:p-8 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-4">
+
                                 {/* Feedback Area */}
                                 {isCorrect !== null && (
-                                    <div className={`p-4 rounded-xl flex items-start gap-3 ${isCorrect ? 'bg-green-100 text-green-900 border border-green-200' : 'bg-red-50 text-red-900 border border-red-200'}`}>
+                                    <div className={`p-4 rounded-xl flex items-start gap-3 ${isCorrect ? 'bg-green-100 dark:bg-green-900/20 text-green-900 dark:text-green-100 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100 border border-red-200 dark:border-red-800'}`}>
                                         <div className="mt-0.5">
                                             {isCorrect ? <Check /> : <X />}
                                         </div>
                                         <div className="flex-1">
                                             <p className="font-bold">{isCorrect ? 'Correct!' : 'Incorrect. Try again or view the solution.'}</p>
                                             {showSolution && (
-                                                <div className="mt-3 pt-3 border-t border-black/10 flex gap-2">
+                                                <div className="mt-3 pt-3 border-t border-black/10 dark:border-white/10 flex gap-2">
                                                     <Lightbulb className="shrink-0 mt-0.5" />
                                                     <p className="text-sm font-medium">{currentQuestion.explanation}</p>
                                                 </div>
@@ -685,25 +774,25 @@
                                 <div className="flex flex-wrap gap-3 mt-2">
                                     {!showSolution ? (
                                         <>
-                                            <button 
+                                            <button
                                                 onClick={checkAnswer}
                                                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-sm"
                                             >
                                                 Check Answer
                                             </button>
                                             {isCorrect === false && (
-                                                <button 
+                                                <button
                                                     onClick={() => setShowSolution(true)}
-                                                    className="bg-white hover:bg-slate-100 text-slate-700 font-bold py-3 px-6 rounded-xl border border-slate-300 transition"
+                                                    className="bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-3 px-6 rounded-xl border border-slate-300 dark:border-slate-600 transition"
                                                 >
                                                     Show Solution
                                                 </button>
                                             )}
                                         </>
                                     ) : (
-                                        <button 
+                                        <button
                                             onClick={handleNextQuestion}
-                                            className="bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-6 rounded-xl transition shadow-sm w-full md:w-auto"
+                                            className="bg-slate-800 dark:bg-slate-600 hover:bg-slate-900 dark:hover:bg-slate-500 text-white font-bold py-3 px-6 rounded-xl transition shadow-sm w-full md:w-auto"
                                         >
                                             {currentIndex === totalInLoop ? 'Restart Loop / Next Topic' : 'Next Question'}
                                         </button>
@@ -712,6 +801,7 @@
                             </div>
                         </div>
 
+                    </div>
                     </div>
                 </div>
             );

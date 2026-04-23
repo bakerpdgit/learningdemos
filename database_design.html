@@ -4,394 +4,170 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A-Level CS: Database Interactive Revision</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script
-      crossorigin
-      src="https://unpkg.com/react@18/umd/react.production.min.js"
-    ></script>
-    <script
-      crossorigin
-      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
-    ></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-      body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f3f4f6;
-      }
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
+      body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
       .canvas-bg {
         background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
         background-size: 20px 20px;
       }
+      .dark .canvas-bg {
+        background-image: radial-gradient(#475569 1px, transparent 1px);
+      }
     </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
     <div id="root"></div>
 
     <script type="text/babel">
       const { useState, useEffect, useRef } = React;
 
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07-.707.707M6.343 17.657l-.707.707m12.728 0-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14A7 7 0 0012 5z" />
+        </svg>
+      );
+
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+        </svg>
+      );
+
       // --- QUESTION DATA ---
 
       const dbQuestions = [
-        {
-          id: 1,
-          text: "Construct a link table for a student's enrollment in a course. Use 'Enrollment' as the Table name, and 'StudentID', 'CourseID', and 'EnrollmentDate' as field names.",
-          expectedTable: "Enrollment",
-          expectedPks: ["StudentID", "CourseID"],
-          expectedFields: ["StudentID", "CourseID", "EnrollmentDate"],
-        },
-        {
-          id: 2,
-          text: "Construct an order line entity for linking an order to a product. Use 'OrderLine' as the Table name, and 'OrderID', 'ProductID', and 'Quantity' as field names.",
-          expectedTable: "OrderLine",
-          expectedPks: ["OrderID", "ProductID"],
-          expectedFields: ["OrderID", "ProductID", "Quantity"],
-        },
-        {
-          id: 3,
-          text: "Construct a table for a Doctor's appointment booking system. Use 'Appointment' as the Table name, and 'DoctorID', 'PatientID', and 'DateTime' as field names.",
-          expectedTable: "Appointment",
-          expectedPks: ["DoctorID", "PatientID", "DateTime"],
-          expectedFields: ["DoctorID", "PatientID", "DateTime"],
-        },
-        {
-          id: 4,
-          text: "Construct a table for a standard employee. Use 'Employee' as the Table name, and 'EmployeeNo', 'Surname', and 'Salary' as field names.",
-          expectedTable: "Employee",
-          expectedPks: ["EmployeeNo"],
-          expectedFields: ["EmployeeNo", "Surname", "Salary"],
-        },
-        {
-          id: 5,
-          text: "Construct a table for library book loans. Use 'Loan' as the Table name, and 'BookID', 'MemberID', and 'LoanDate' as field names.",
-          expectedTable: "Loan",
-          expectedPks: ["BookID", "MemberID", "LoanDate"],
-          expectedFields: ["BookID", "MemberID", "LoanDate"],
-        },
-        {
-          id: 6,
-          text: "Construct a flight booking table. Use 'FlightBooking' as the Table name, and 'FlightID', 'PassengerID', and 'SeatNumber' as field names.",
-          expectedTable: "FlightBooking",
-          expectedPks: ["FlightID", "PassengerID"],
-          expectedFields: ["FlightID", "PassengerID", "SeatNumber"],
-        },
-        {
-          id: 7,
-          text: "Construct a car rental record. Use 'CarRental' as the Table name, and 'CarReg', 'CustomerID', and 'StartDate' as field names.",
-          expectedTable: "CarRental",
-          expectedPks: ["CarReg", "CustomerID", "StartDate"],
-          expectedFields: ["CarReg", "CustomerID", "StartDate"],
-        },
-        {
-          id: 8,
-          text: "Construct a standard product table. Use 'Product' as the Table name, and 'ProductCode', 'Description', and 'Price' as field names.",
-          expectedTable: "Product",
-          expectedPks: ["ProductCode"],
-          expectedFields: ["ProductCode", "Description", "Price"],
-        },
-        {
-          id: 9,
-          text: "Construct a table recording a player's participation in a match. Use 'PlayerMatch' as the Table name, and 'PlayerID', 'MatchID', and 'GoalsScored' as field names.",
-          expectedTable: "PlayerMatch",
-          expectedPks: ["PlayerID", "MatchID"],
-          expectedFields: ["PlayerID", "MatchID", "GoalsScored"],
-        },
-        {
-          id: 10,
-          text: "Construct a cinema ticket booking entity. Use 'Ticket' as the Table name, and 'ScreeningID' and 'SeatNumber' as field names.",
-          expectedTable: "Ticket",
-          expectedPks: ["ScreeningID", "SeatNumber"],
-          expectedFields: ["ScreeningID", "SeatNumber"],
-        },
+        { id: 1, text: "Construct a link table for a student's enrollment in a course. Use 'Enrollment' as the Table name, and 'StudentID', 'CourseID', and 'EnrollmentDate' as field names.", expectedTable: "Enrollment", expectedPks: ["StudentID", "CourseID"], expectedFields: ["StudentID", "CourseID", "EnrollmentDate"] },
+        { id: 2, text: "Construct an order line entity for linking an order to a product. Use 'OrderLine' as the Table name, and 'OrderID', 'ProductID', and 'Quantity' as field names.", expectedTable: "OrderLine", expectedPks: ["OrderID", "ProductID"], expectedFields: ["OrderID", "ProductID", "Quantity"] },
+        { id: 3, text: "Construct a table for a Doctor's appointment booking system. Use 'Appointment' as the Table name, and 'DoctorID', 'PatientID', and 'DateTime' as field names.", expectedTable: "Appointment", expectedPks: ["DoctorID", "PatientID", "DateTime"], expectedFields: ["DoctorID", "PatientID", "DateTime"] },
+        { id: 4, text: "Construct a table for a standard employee. Use 'Employee' as the Table name, and 'EmployeeNo', 'Surname', and 'Salary' as field names.", expectedTable: "Employee", expectedPks: ["EmployeeNo"], expectedFields: ["EmployeeNo", "Surname", "Salary"] },
+        { id: 5, text: "Construct a table for library book loans. Use 'Loan' as the Table name, and 'BookID', 'MemberID', and 'LoanDate' as field names.", expectedTable: "Loan", expectedPks: ["BookID", "MemberID", "LoanDate"], expectedFields: ["BookID", "MemberID", "LoanDate"] },
+        { id: 6, text: "Construct a flight booking table. Use 'FlightBooking' as the Table name, and 'FlightID', 'PassengerID', and 'SeatNumber' as field names.", expectedTable: "FlightBooking", expectedPks: ["FlightID", "PassengerID"], expectedFields: ["FlightID", "PassengerID", "SeatNumber"] },
+        { id: 7, text: "Construct a car rental record. Use 'CarRental' as the Table name, and 'CarReg', 'CustomerID', and 'StartDate' as field names.", expectedTable: "CarRental", expectedPks: ["CarReg", "CustomerID", "StartDate"], expectedFields: ["CarReg", "CustomerID", "StartDate"] },
+        { id: 8, text: "Construct a standard product table. Use 'Product' as the Table name, and 'ProductCode', 'Description', and 'Price' as field names.", expectedTable: "Product", expectedPks: ["ProductCode"], expectedFields: ["ProductCode", "Description", "Price"] },
+        { id: 9, text: "Construct a table recording a player's participation in a match. Use 'PlayerMatch' as the Table name, and 'PlayerID', 'MatchID', and 'GoalsScored' as field names.", expectedTable: "PlayerMatch", expectedPks: ["PlayerID", "MatchID"], expectedFields: ["PlayerID", "MatchID", "GoalsScored"] },
+        { id: 10, text: "Construct a cinema ticket booking entity. Use 'Ticket' as the Table name, and 'ScreeningID' and 'SeatNumber' as field names.", expectedTable: "Ticket", expectedPks: ["ScreeningID", "SeatNumber"], expectedFields: ["ScreeningID", "SeatNumber"] },
       ];
 
       const erQuestions = [
-        {
-          id: 1,
-          text: "A school has many Teachers, but each Teacher belongs to only one Department. Construct the ER diagram.",
-          entities: ["Department", "Teacher"],
-          rels: [{ e1: "Department", e2: "Teacher", type: "1:M" }],
-        },
-        {
-          id: 2,
-          text: "Resolve a Many-to-Many between Student and Course using an 'Enrollment' linking entity.",
-          entities: ["Student", "Enrollment", "Course"],
-          rels: [
-            { e1: "Student", e2: "Enrollment", type: "1:M" },
-            { e1: "Course", e2: "Enrollment", type: "1:M" },
-          ],
-        },
-        {
-          id: 3,
-          text: "A Doctor sees many Patients, and a Patient sees many Doctors. Resolve using a 'Consultation' entity.",
-          entities: ["Doctor", "Consultation", "Patient"],
-          rels: [
-            { e1: "Doctor", e2: "Consultation", type: "1:M" },
-            { e1: "Patient", e2: "Consultation", type: "1:M" },
-          ],
-        },
-        {
-          id: 4,
-          text: "An Author writes many Books, and a Book can be written by many Authors. Resolve using an 'AuthorBook' link.",
-          entities: ["Author", "AuthorBook", "Book"],
-          rels: [
-            { e1: "Author", e2: "AuthorBook", type: "1:M" },
-            { e1: "Book", e2: "AuthorBook", type: "1:M" },
-          ],
-        },
-        {
-          id: 5,
-          text: "A Customer places many Orders, each Order has many Products. Resolve the Orders-Products M:M with an 'OrderLine' entity.",
-          entities: ["Customer", "Order", "OrderLine", "Product"],
-          rels: [
-            { e1: "Customer", e2: "Order", type: "1:M" },
-            { e1: "Order", e2: "OrderLine", type: "1:M" },
-            { e1: "Product", e2: "OrderLine", type: "1:M" },
-          ],
-        },
-        {
-          id: 6,
-          text: "A Library Branch holds many Books, but each Book copy belongs to one Branch.",
-          entities: ["Branch", "Book"],
-          rels: [{ e1: "Branch", e2: "Book", type: "1:M" }],
-        },
-        {
-          id: 7,
-          text: "A Project is worked on by many Employees, and an Employee works on many Projects. Resolve using 'ProjectAssignment'.",
-          entities: ["Employee", "ProjectAssignment", "Project"],
-          rels: [
-            { e1: "Employee", e2: "ProjectAssignment", type: "1:M" },
-            { e1: "Project", e2: "ProjectAssignment", type: "1:M" },
-          ],
-        },
-        {
-          id: 8,
-          text: "A Manager manages exactly one Department, and a Department has one Manager.",
-          entities: ["Manager", "Department"],
-          rels: [{ e1: "Manager", e2: "Department", type: "1:1" }],
-        },
-        {
-          id: 9,
-          text: "A Flight has many Passengers, and a Passenger books many Flights. Resolve using 'FlightBooking'.",
-          entities: ["Flight", "FlightBooking", "Passenger"],
-          rels: [
-            { e1: "Flight", e2: "FlightBooking", type: "1:M" },
-            { e1: "Passenger", e2: "FlightBooking", type: "1:M" },
-          ],
-        },
-        {
-          id: 10,
-          text: "A Team consists of many Players, and a Player plays for one Team.",
-          entities: ["Team", "Player"],
-          rels: [{ e1: "Team", e2: "Player", type: "1:M" }],
-        },
+        { id: 1, text: "A school has many Teachers, but each Teacher belongs to only one Department. Construct the ER diagram.", entities: ["Department", "Teacher"], rels: [{ e1: "Department", e2: "Teacher", type: "1:M" }] },
+        { id: 2, text: "Resolve a Many-to-Many between Student and Course using an 'Enrollment' linking entity.", entities: ["Student", "Enrollment", "Course"], rels: [{ e1: "Student", e2: "Enrollment", type: "1:M" }, { e1: "Course", e2: "Enrollment", type: "1:M" }] },
+        { id: 3, text: "A Doctor sees many Patients, and a Patient sees many Doctors. Resolve using a 'Consultation' entity.", entities: ["Doctor", "Consultation", "Patient"], rels: [{ e1: "Doctor", e2: "Consultation", type: "1:M" }, { e1: "Patient", e2: "Consultation", type: "1:M" }] },
+        { id: 4, text: "An Author writes many Books, and a Book can be written by many Authors. Resolve using an 'AuthorBook' link.", entities: ["Author", "AuthorBook", "Book"], rels: [{ e1: "Author", e2: "AuthorBook", type: "1:M" }, { e1: "Book", e2: "AuthorBook", type: "1:M" }] },
+        { id: 5, text: "A Customer places many Orders, each Order has many Products. Resolve the Orders-Products M:M with an 'OrderLine' entity.", entities: ["Customer", "Order", "OrderLine", "Product"], rels: [{ e1: "Customer", e2: "Order", type: "1:M" }, { e1: "Order", e2: "OrderLine", type: "1:M" }, { e1: "Product", e2: "OrderLine", type: "1:M" }] },
+        { id: 6, text: "A Library Branch holds many Books, but each Book copy belongs to one Branch.", entities: ["Branch", "Book"], rels: [{ e1: "Branch", e2: "Book", type: "1:M" }] },
+        { id: 7, text: "A Project is worked on by many Employees, and an Employee works on many Projects. Resolve using 'ProjectAssignment'.", entities: ["Employee", "ProjectAssignment", "Project"], rels: [{ e1: "Employee", e2: "ProjectAssignment", type: "1:M" }, { e1: "Project", e2: "ProjectAssignment", type: "1:M" }] },
+        { id: 8, text: "A Manager manages exactly one Department, and a Department has one Manager.", entities: ["Manager", "Department"], rels: [{ e1: "Manager", e2: "Department", type: "1:1" }] },
+        { id: 9, text: "A Flight has many Passengers, and a Passenger books many Flights. Resolve using 'FlightBooking'.", entities: ["Flight", "FlightBooking", "Passenger"], rels: [{ e1: "Flight", e2: "FlightBooking", type: "1:M" }, { e1: "Passenger", e2: "FlightBooking", type: "1:M" }] },
+        { id: 10, text: "A Team consists of many Players, and a Player plays for one Team.", entities: ["Team", "Player"], rels: [{ e1: "Team", e2: "Player", type: "1:M" }] },
       ];
 
       const normQuestions = [
-        {
-          id: 1,
-          text: "What normal form requires all attributes to be atomic (indivisible)?",
-          type: "mcq",
-          options: [
-            "First Normal Form (1NF)",
-            "Second Normal Form (2NF)",
-            "Third Normal Form (3NF)",
-            "Boyce-Codd Normal Form",
-          ],
-          answer: "First Normal Form (1NF)",
-        },
-        {
-          id: 2,
-          text: "What issue is caused when multiple users try to update the same record simultaneously without control?",
-          type: "mcq",
-          options: [
-            "Data Redundancy",
-            "Lost Update",
-            "Deadlock",
-            "Transitive Dependency",
-          ],
-          answer: "Lost Update",
-        },
-        {
-          id: 3,
-          text: "Which concurrency control method locks a record so no other user can edit it until the transaction finishes?",
-          type: "text",
-          answer: "Record Locking",
-        },
-        {
-          id: 4,
-          text: "In which normal form are partial key dependencies removed?",
-          type: "mcq",
-          options: ["1NF", "2NF", "3NF", "Unnormalised"],
-          answer: "2NF",
-        },
-        {
-          id: 5,
-          text: "What concurrency technique assigns every transaction a unique read/write time to resolve conflicts automatically?",
-          type: "text",
-          answer: "Timestamp Ordering",
-        },
-        {
-          id: 6,
-          text: "What do we call a situation where two transactions hold locks and wait for each other to release them, causing both to freeze indefinitely?",
-          type: "text",
-          answer: "Deadlock",
-        },
-        {
-          id: 7,
-          text: "What normal form requires the removal of non-key dependencies (transitive dependencies)?",
-          type: "mcq",
-          options: ["1NF", "2NF", "3NF", "BCNF"],
-          answer: "3NF",
-        },
-        {
-          id: 8,
-          text: "If Table A and Table B have a Many-to-Many relationship, what must be created to resolve it?",
-          type: "text",
-          answer: "Link Table",
-        },
-        {
-          id: 9,
-          text: "A table has a composite primary key (CourseID, StudentID) and an attribute 'CourseName'. CourseName depends only on CourseID. Which normal form is violated?",
-          type: "mcq",
-          options: ["1NF", "2NF", "3NF"],
-          answer: "2NF",
-        },
-        {
-          id: 10,
-          text: "What is the term for ensuring data remains consistent across relationships (e.g. preventing the deletion of a parent record if child records exist)?",
-          type: "text",
-          answer: "Referential Integrity",
-        },
+        { id: 1, text: "What normal form requires all attributes to be atomic (indivisible)?", type: "mcq", options: ["First Normal Form (1NF)", "Second Normal Form (2NF)", "Third Normal Form (3NF)", "Boyce-Codd Normal Form"], answer: "First Normal Form (1NF)" },
+        { id: 2, text: "What issue is caused when multiple users try to update the same record simultaneously without control?", type: "mcq", options: ["Data Redundancy", "Lost Update", "Deadlock", "Transitive Dependency"], answer: "Lost Update" },
+        { id: 3, text: "Which concurrency control method locks a record so no other user can edit it until the transaction finishes?", type: "text", answer: "Record Locking" },
+        { id: 4, text: "In which normal form are partial key dependencies removed?", type: "mcq", options: ["1NF", "2NF", "3NF", "Unnormalised"], answer: "2NF" },
+        { id: 5, text: "What concurrency technique assigns every transaction a unique read/write time to resolve conflicts automatically?", type: "text", answer: "Timestamp Ordering" },
+        { id: 6, text: "What do we call a situation where two transactions hold locks and wait for each other to release them, causing both to freeze indefinitely?", type: "text", answer: "Deadlock" },
+        { id: 7, text: "What normal form requires the removal of non-key dependencies (transitive dependencies)?", type: "mcq", options: ["1NF", "2NF", "3NF", "BCNF"], answer: "3NF" },
+        { id: 8, text: "If Table A and Table B have a Many-to-Many relationship, what must be created to resolve it?", type: "text", answer: "Link Table" },
+        { id: 9, text: "A table has a composite primary key (CourseID, StudentID) and an attribute 'CourseName'. CourseName depends only on CourseID. Which normal form is violated?", type: "mcq", options: ["1NF", "2NF", "3NF"], answer: "2NF" },
+        { id: 10, text: "What is the term for ensuring data remains consistent across relationships (e.g. preventing the deletion of a parent record if child records exist)?", type: "text", answer: "Referential Integrity" },
       ];
 
       // --- COMPONENTS ---
 
-      const QuestionWrapper = ({
-        index,
-        total,
-        setIndex,
-        questionText,
-        onCheck,
-        checkStatus,
-        showSolutionBtn,
-        setShowSolutionBtn,
-        solutionData,
-        children,
-      }) => {
+      const QuestionWrapper = ({ index, total, setIndex, questionText, onCheck, checkStatus, showSolutionBtn, setShowSolutionBtn, solutionData, children }) => {
         const [solVisible, setSolVisible] = useState(false);
 
-        useEffect(() => {
-          setSolVisible(false);
-        }, [index]);
+        useEffect(() => { setSolVisible(false); }, [index]);
 
-        const handleNext = () => {
-          if (index < total - 1) {
-            setIndex(index + 1);
-          }
-        };
+        const handleNext = () => { if (index < total - 1) setIndex(index + 1); };
 
         return (
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <div className="flex justify-between items-center mb-4 pb-4 border-b">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-slate-700">
+            <div className="flex justify-between items-center mb-4 pb-4 border-b dark:border-slate-600">
               <div className="flex items-center gap-4">
-                <h2 className="text-xl font-bold text-gray-800">
-                  Question {index + 1}
-                </h2>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-slate-100">Question {index + 1}</h2>
                 <select
-                  className="border rounded p-2 bg-gray-50 text-gray-700 font-medium cursor-pointer"
+                  className="border dark:border-slate-600 rounded p-2 bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-slate-200 font-medium cursor-pointer"
                   value={index}
                   onChange={(e) => setIndex(parseInt(e.target.value))}
                 >
                   {[...Array(total)].map((_, i) => (
-                    <option key={i} value={i}>
-                      Question {i + 1}
-                    </option>
+                    <option key={i} value={i}>Question {i + 1}</option>
                   ))}
                 </select>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setIndex(Math.max(0, index - 1))}
-                  disabled={index === 0}
-                  className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 font-medium transition cursor-pointer"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() => setIndex(Math.min(total - 1, index + 1))}
-                  disabled={index === total - 1}
-                  className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 font-medium transition cursor-pointer"
-                >
-                  Next
-                </button>
+                <button onClick={() => setIndex(Math.max(0, index - 1))} disabled={index === 0} className="px-4 py-2 bg-gray-200 dark:bg-slate-700 dark:text-slate-200 rounded disabled:opacity-50 hover:bg-gray-300 dark:hover:bg-slate-600 font-medium transition cursor-pointer">Prev</button>
+                <button onClick={() => setIndex(Math.min(total - 1, index + 1))} disabled={index === total - 1} className="px-4 py-2 bg-gray-200 dark:bg-slate-700 dark:text-slate-200 rounded disabled:opacity-50 hover:bg-gray-300 dark:hover:bg-slate-600 font-medium transition cursor-pointer">Next</button>
               </div>
             </div>
 
-            <p className="text-lg mb-6 font-medium text-blue-900 leading-relaxed">
-              {questionText}
-            </p>
+            <p className="text-lg mb-6 font-medium text-blue-900 dark:text-blue-300 leading-relaxed">{questionText}</p>
 
             <div className="mb-6">{children}</div>
 
-            <div className="flex items-center gap-4 border-t pt-6">
+            <div className="flex items-center gap-4 border-t dark:border-slate-600 pt-6">
               {checkStatus === "correct" && index < total - 1 ? (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-2 bg-green-600 text-white font-bold rounded hover:bg-green-700 transition cursor-pointer shadow-sm flex items-center gap-2"
-                >
-                  Next Question ➔
-                </button>
+                <button onClick={handleNext} className="px-6 py-2 bg-green-600 text-white font-bold rounded hover:bg-green-700 transition cursor-pointer shadow-sm flex items-center gap-2">Next Question ➔</button>
               ) : (
-                <button
-                  onClick={onCheck}
-                  className="px-6 py-2 bg-blue-600 text-white font-semibold rounded hover:bg-blue-700 transition cursor-pointer shadow-sm"
-                >
-                  Check Answer
-                </button>
+                <button onClick={onCheck} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded hover:bg-blue-700 transition cursor-pointer shadow-sm">Check Answer</button>
               )}
-
-              {checkStatus === "correct" && (
-                <span className="text-green-600 font-bold flex items-center gap-1 bg-green-50 px-3 py-1 rounded">
-                  ✅ Correct! Great job.
-                </span>
-              )}
-              {checkStatus === "incorrect" && (
-                <span className="text-red-600 font-bold flex items-center gap-1 bg-red-50 px-3 py-1 rounded">
-                  ❌ Incorrect. Try again.
-                </span>
-              )}
-
+              {checkStatus === "correct" && <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded">✅ Correct! Great job.</span>}
+              {checkStatus === "incorrect" && <span className="text-red-600 dark:text-red-400 font-bold flex items-center gap-1 bg-red-50 dark:bg-red-900/30 px-3 py-1 rounded">❌ Incorrect. Try again.</span>}
               {showSolutionBtn && (
-                <button
-                  onClick={() => setSolVisible(!solVisible)}
-                  className="px-4 py-2 bg-yellow-500 text-white font-semibold rounded hover:bg-yellow-600 transition ml-auto cursor-pointer shadow-sm"
-                >
+                <button onClick={() => setSolVisible(!solVisible)} className="px-4 py-2 bg-yellow-500 text-white font-semibold rounded hover:bg-yellow-600 transition ml-auto cursor-pointer shadow-sm">
                   {solVisible ? "Hide Solution" : "See Solution"}
                 </button>
               )}
             </div>
 
             {solVisible && (
-              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-gray-800 whitespace-pre-line font-mono text-sm shadow-inner">
-                <strong>Solution:</strong>
-                <br />
+              <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg text-gray-800 dark:text-slate-200 whitespace-pre-line font-mono text-sm shadow-inner">
+                <strong>Solution:</strong><br />
                 <div dangerouslySetInnerHTML={{ __html: solutionData }}></div>
               </div>
             )}
@@ -400,168 +176,80 @@
       };
 
       // --- DB DESIGN BUILDER ---
-      const DBDesignInteract = ({
-        index,
-        setIndex,
-        checkStatus,
-        setCheckStatus,
-        setShowSolutionBtn,
-        showSolutionBtn,
-      }) => {
+      const DBDesignInteract = ({ index, setIndex, checkStatus, setCheckStatus, setShowSolutionBtn, showSolutionBtn }) => {
         const question = dbQuestions[index];
         const [tableName, setTableName] = useState("");
         const [fieldsStr, setFieldsStr] = useState("");
         const [pks, setPks] = useState([]);
 
         useEffect(() => {
-          setTableName("");
-          setFieldsStr("");
-          setPks([]);
-          setCheckStatus("idle");
-          setShowSolutionBtn(false);
+          setTableName(""); setFieldsStr(""); setPks([]); setCheckStatus("idle"); setShowSolutionBtn(false);
         }, [index]);
 
-        // Safely filter out blanks and trim
-        const fields = fieldsStr
-          .split(",")
-          .map((f) => f.trim())
-          .filter((f) => f !== "");
+        const fields = fieldsStr.split(",").map((f) => f.trim()).filter((f) => f !== "");
 
         const checkAnswer = () => {
-          // Table verification
           const actTableName = tableName.trim().toLowerCase();
           const expTableName = question.expectedTable.trim().toLowerCase();
           const tNameMatch = actTableName === expTableName;
-
-          // Fields verification
-          const expF = question.expectedFields
-            .map((f) => f.trim().toLowerCase())
-            .sort();
+          const expF = question.expectedFields.map((f) => f.trim().toLowerCase()).sort();
           const actF = fields.map((f) => f.trim().toLowerCase()).sort();
           const fieldsMatch = JSON.stringify(expF) === JSON.stringify(actF);
-
-          // Primary Key Verification
-          const expPk = question.expectedPks
-            .map((k) => k.trim().toLowerCase())
-            .sort();
+          const expPk = question.expectedPks.map((k) => k.trim().toLowerCase()).sort();
           const actPk = pks.map((k) => k.trim().toLowerCase()).sort();
           const pkMatch = JSON.stringify(expPk) === JSON.stringify(actPk);
 
           if (tNameMatch && pkMatch && fieldsMatch) {
-            setCheckStatus("correct");
-            setShowSolutionBtn(false);
+            setCheckStatus("correct"); setShowSolutionBtn(false);
           } else {
-            setCheckStatus("incorrect");
-            setShowSolutionBtn(true);
+            setCheckStatus("incorrect"); setShowSolutionBtn(true);
           }
         };
 
-        const nonPkFields = question.expectedFields.filter(
-          (f) => !question.expectedPks.includes(f),
-        );
-        const pkHtml = question.expectedPks
-          .map((pk) => `<u>${pk}</u>`)
-          .join(", ");
-        const nonPkHtml =
-          nonPkFields.length > 0 ? `, ${nonPkFields.join(", ")}` : "";
+        const nonPkFields = question.expectedFields.filter((f) => !question.expectedPks.includes(f));
+        const pkHtml = question.expectedPks.map((pk) => `<u>${pk}</u>`).join(", ");
+        const nonPkHtml = nonPkFields.length > 0 ? `, ${nonPkFields.join(", ")}` : "";
         const solHtml = `${question.expectedTable} (${pkHtml}${nonPkHtml})`;
 
         return (
-          <QuestionWrapper
-            index={index}
-            total={dbQuestions.length}
-            setIndex={setIndex}
-            questionText={question.text}
-            onCheck={checkAnswer}
-            checkStatus={checkStatus}
-            showSolutionBtn={showSolutionBtn}
-            setShowSolutionBtn={setShowSolutionBtn}
-            solutionData={solHtml}
-          >
-            <div className="bg-indigo-50 p-6 rounded-lg border border-indigo-100">
-              <p className="text-sm text-indigo-800 mb-5 font-medium">
-                Complete the standard AQA design notation. Enter the exact table
-                name and fields requested, and tick all fields that make up the
-                Primary Key.
+          <QuestionWrapper index={index} total={dbQuestions.length} setIndex={setIndex} questionText={question.text} onCheck={checkAnswer} checkStatus={checkStatus} showSolutionBtn={showSolutionBtn} setShowSolutionBtn={setShowSolutionBtn} solutionData={solHtml}>
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-lg border border-indigo-100 dark:border-indigo-900">
+              <p className="text-sm text-indigo-800 dark:text-indigo-300 mb-5 font-medium">
+                Complete the standard AQA design notation. Enter the exact table name and fields requested, and tick all fields that make up the Primary Key.
               </p>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Table Name
-                  </label>
-                  <input
-                    type="text"
-                    value={tableName}
-                    onChange={(e) => setTableName(e.target.value)}
-                    className="w-full border-gray-300 border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 outline-none"
-                    placeholder="e.g. Enrollment"
-                  />
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Table Name</label>
+                  <input type="text" value={tableName} onChange={(e) => setTableName(e.target.value)} className="w-full border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="e.g. Enrollment" />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Fields (Comma Separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={fieldsStr}
-                    onChange={(e) => {
-                      setFieldsStr(e.target.value);
-                      const newFields = e.target.value
-                        .split(",")
-                        .map((f) => f.trim());
-                      setPks(pks.filter((p) => newFields.includes(p)));
-                    }}
-                    className="w-full border-gray-300 border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 outline-none"
-                    placeholder="e.g. StudentID, CourseID, Date"
-                  />
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Fields (Comma Separated)</label>
+                  <input type="text" value={fieldsStr} onChange={(e) => { setFieldsStr(e.target.value); const newFields = e.target.value.split(",").map((f) => f.trim()); setPks(pks.filter((p) => newFields.includes(p))); }} className="w-full border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="e.g. StudentID, CourseID, Date" />
                 </div>
               </div>
 
               {fields.length > 0 && (
                 <div className="mt-6">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Select Primary Key(s)
-                  </label>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Select Primary Key(s)</label>
                   <div className="flex flex-wrap gap-3">
                     {fields.map((f) => (
-                      <label
-                        key={f}
-                        className="flex items-center space-x-2 cursor-pointer bg-white px-3 py-2 rounded border border-gray-300 shadow-sm hover:bg-gray-50 transition"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={pks.includes(f)}
-                          onChange={(e) => {
-                            if (e.target.checked) setPks([...pks, f]);
-                            else setPks(pks.filter((p) => p !== f));
-                          }}
-                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
-                        />
-                        <span className="font-medium text-gray-800">{f}</span>
+                      <label key={f} className="flex items-center space-x-2 cursor-pointer bg-white dark:bg-slate-700 px-3 py-2 rounded border border-gray-300 dark:border-slate-600 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-600 transition">
+                        <input type="checkbox" checked={pks.includes(f)} onChange={(e) => { if (e.target.checked) setPks([...pks, f]); else setPks(pks.filter((p) => p !== f)); }} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer" />
+                        <span className="font-medium text-gray-800 dark:text-slate-200">{f}</span>
                       </label>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div className="mt-8 p-5 bg-white border-2 border-indigo-200 rounded shadow-inner text-center text-lg font-mono tracking-wide overflow-x-auto">
-                <span className="font-bold text-blue-800">
-                  {tableName || "<TableName>"}
-                </span>{" "}
-                (
+              <div className="mt-8 p-5 bg-white dark:bg-slate-700 border-2 border-indigo-200 dark:border-indigo-800 rounded shadow-inner text-center text-lg font-mono tracking-wide overflow-x-auto">
+                <span className="font-bold text-blue-800 dark:text-blue-300">{tableName || "<TableName>"}</span>{" "}(
                 {fields.length === 0 ? (
-                  <span className="text-gray-400 italic">fields...</span>
+                  <span className="text-gray-400 dark:text-slate-500 italic">fields...</span>
                 ) : (
                   fields.map((f, i) => (
                     <span key={i}>
-                      {pks.includes(f) ? (
-                        <u className="font-bold decoration-2 underline-offset-4">
-                          {f}
-                        </u>
-                      ) : (
-                        f
-                      )}
+                      {pks.includes(f) ? <u className="font-bold decoration-2 underline-offset-4">{f}</u> : f}
                       {i < fields.length - 1 ? ", " : ""}
                     </span>
                   ))
@@ -574,14 +262,7 @@
       };
 
       // --- ER DIAGRAM BUILDER ---
-      const ERDiagramInteract = ({
-        index,
-        setIndex,
-        checkStatus,
-        setCheckStatus,
-        setShowSolutionBtn,
-        showSolutionBtn,
-      }) => {
+      const ERDiagramInteract = ({ index, setIndex, checkStatus, setCheckStatus, setShowSolutionBtn, showSolutionBtn, theme }) => {
         const question = erQuestions[index];
         const [entities, setEntities] = useState([]);
         const [rels, setRels] = useState([]);
@@ -593,56 +274,30 @@
         const svgRef = useRef(null);
 
         useEffect(() => {
-          setEntities([]);
-          setRels([]);
-          setCheckStatus("idle");
-          setShowSolutionBtn(false);
+          setEntities([]); setRels([]); setCheckStatus("idle"); setShowSolutionBtn(false);
         }, [index]);
 
         const addEntity = () => {
-          if (
-            newEntityName.trim() &&
-            !entities.find(
-              (e) =>
-                e.name.toLowerCase() === newEntityName.trim().toLowerCase(),
-            )
-          ) {
-            setEntities([
-              ...entities,
-              {
-                name: newEntityName.trim(),
-                x: 50 + entities.length * 150,
-                y: 100,
-              },
-            ]);
+          if (newEntityName.trim() && !entities.find((e) => e.name.toLowerCase() === newEntityName.trim().toLowerCase())) {
+            setEntities([...entities, { name: newEntityName.trim(), x: 50 + entities.length * 150, y: 100 }]);
             setNewEntityName("");
           }
         };
 
         const addRel = () => {
           if (relE1 && relE2 && relE1 !== relE2) {
-            const exists = rels.find(
-              (r) =>
-                (r.e1 === relE1 && r.e2 === relE2) ||
-                (r.e1 === relE2 && r.e2 === relE1),
-            );
-            if (!exists)
-              setRels([...rels, { e1: relE1, e2: relE2, type: relType }]);
+            const exists = rels.find((r) => (r.e1 === relE1 && r.e2 === relE2) || (r.e1 === relE2 && r.e2 === relE1));
+            if (!exists) setRels([...rels, { e1: relE1, e2: relE2, type: relType }]);
           }
         };
 
-        const handlePointerDown = (e, idx) => {
-          setDraggedIdx(idx);
-          e.target.setPointerCapture(e.pointerId);
-        };
+        const handlePointerDown = (e, idx) => { setDraggedIdx(idx); e.target.setPointerCapture(e.pointerId); };
         const handlePointerMove = (e) => {
           if (draggedIdx !== null && svgRef.current) {
             const rect = svgRef.current.getBoundingClientRect();
             const newEntities = [...entities];
-            let newX = e.clientX - rect.left - 48; // offset for half width
-            let newY = e.clientY - rect.top - 20; // offset for half height
-            newX = Math.max(0, Math.min(newX, rect.width - 96));
-            newY = Math.max(0, Math.min(newY, rect.height - 40));
+            let newX = Math.max(0, Math.min(e.clientX - rect.left - 48, rect.width - 96));
+            let newY = Math.max(0, Math.min(e.clientY - rect.top - 20, rect.height - 40));
             newEntities[draggedIdx].x = newX;
             newEntities[draggedIdx].y = newY;
             setEntities(newEntities);
@@ -653,258 +308,103 @@
         const checkAnswer = () => {
           const expEnts = question.entities.map((e) => e.toLowerCase());
           const actEnts = entities.map((e) => e.name.toLowerCase());
-
-          const hasAllEnts =
-            expEnts.every((e) => actEnts.includes(e)) &&
-            actEnts.every((e) => expEnts.includes(e));
-
-          if (!hasAllEnts || expEnts.length !== actEnts.length) {
-            setCheckStatus("incorrect");
-            setShowSolutionBtn(true);
-            return;
-          }
-
-          let relsMatch = true;
-          if (question.rels.length !== rels.length) relsMatch = false;
-
+          const hasAllEnts = expEnts.every((e) => actEnts.includes(e)) && actEnts.every((e) => expEnts.includes(e));
+          if (!hasAllEnts || expEnts.length !== actEnts.length) { setCheckStatus("incorrect"); setShowSolutionBtn(true); return; }
+          let relsMatch = question.rels.length === rels.length;
           question.rels.forEach((expR) => {
-            const match = rels.find(
-              (r) =>
-                (r.e1.toLowerCase() === expR.e1.toLowerCase() &&
-                  r.e2.toLowerCase() === expR.e2.toLowerCase() &&
-                  r.type === expR.type) ||
-                (r.e1.toLowerCase() === expR.e2.toLowerCase() &&
-                  r.e2.toLowerCase() === expR.e1.toLowerCase() &&
-                  ((expR.type === "1:1" && r.type === "1:1") ||
-                    (expR.type === "1:M" && r.type === "M:1") ||
-                    (expR.type === "M:1" && r.type === "1:M"))),
+            const match = rels.find((r) =>
+              (r.e1.toLowerCase() === expR.e1.toLowerCase() && r.e2.toLowerCase() === expR.e2.toLowerCase() && r.type === expR.type) ||
+              (r.e1.toLowerCase() === expR.e2.toLowerCase() && r.e2.toLowerCase() === expR.e1.toLowerCase() && ((expR.type === "1:1" && r.type === "1:1") || (expR.type === "1:M" && r.type === "M:1") || (expR.type === "M:1" && r.type === "1:M")))
             );
             if (!match) relsMatch = false;
           });
-
-          if (relsMatch) {
-            setCheckStatus("correct");
-            setShowSolutionBtn(false);
-          } else {
-            setCheckStatus("incorrect");
-            setShowSolutionBtn(true);
-          }
+          if (relsMatch) { setCheckStatus("correct"); setShowSolutionBtn(false); }
+          else { setCheckStatus("incorrect"); setShowSolutionBtn(true); }
         };
 
-        const solText =
-          `Entities required: ${question.entities.join(", ")}\nRelationships: \n` +
-          question.rels
-            .map(
-              (r) =>
-                `- ${r.e1} (${r.type.split(":")[0]}) connects to ${r.e2} (${r.type.split(":")[1]})`,
-            )
-            .join("\n");
+        const solText = `Entities required: ${question.entities.join(", ")}\nRelationships: \n` +
+          question.rels.map((r) => `- ${r.e1} (${r.type.split(":")[0]}) connects to ${r.e2} (${r.type.split(":")[1]})`).join("\n");
 
-        // Helper to compute intersection point of line with a rectangle bounding box
+        const lineColor = theme === "dark" ? "#94a3b8" : "#1F2937";
+
         const getEdgePoint = (cx1, cy1, w, h, cx2, cy2) => {
-          const dx = cx2 - cx1;
-          const dy = cy2 - cy1;
+          const dx = cx2 - cx1; const dy = cy2 - cy1;
           if (dx === 0 && dy === 0) return { x: cx1, y: cy1 };
           const angle = Math.atan2(dy, dx);
-          const dist = Math.min(
-            Math.abs(w / 2 / Math.cos(angle)),
-            Math.abs(h / 2 / Math.sin(angle)),
-          );
-          return {
-            x: cx1 + dist * Math.cos(angle),
-            y: cy1 + dist * Math.sin(angle),
-          };
+          const dist = Math.min(Math.abs(w / 2 / Math.cos(angle)), Math.abs(h / 2 / Math.sin(angle)));
+          return { x: cx1 + dist * Math.cos(angle), y: cy1 + dist * Math.sin(angle) };
         };
 
         const drawCrowsFoot = (tipX, tipY, fromX, fromY) => {
-          // Angle pointing from the box's edge to the distant box
           const angle = Math.atan2(fromY - tipY, fromX - tipX);
-
-          // Point on the main line where the prongs join together
           const joinX = tipX + 18 * Math.cos(angle);
           const joinY = tipY + 18 * Math.sin(angle);
-
-          // Spread points slanting back from the box edge
           const perp = angle + Math.PI / 2;
-          const spread1X = tipX + 12 * Math.cos(perp);
-          const spread1Y = tipY + 12 * Math.sin(perp);
-          const spread2X = tipX - 12 * Math.cos(perp);
-          const spread2Y = tipY - 12 * Math.sin(perp);
-
+          const spread1X = tipX + 12 * Math.cos(perp); const spread1Y = tipY + 12 * Math.sin(perp);
+          const spread2X = tipX - 12 * Math.cos(perp); const spread2Y = tipY - 12 * Math.sin(perp);
           return (
             <g>
-              {/* Slanted lines originating from the edge of the box back onto the main line */}
-              <line
-                x1={spread1X}
-                y1={spread1Y}
-                x2={joinX}
-                y2={joinY}
-                stroke="#1F2937"
-                strokeWidth="2.5"
-              />
-              <line
-                x1={spread2X}
-                y1={spread2Y}
-                x2={joinX}
-                y2={joinY}
-                stroke="#1F2937"
-                strokeWidth="2.5"
-              />
+              <line x1={spread1X} y1={spread1Y} x2={joinX} y2={joinY} stroke={lineColor} strokeWidth="2.5" />
+              <line x1={spread2X} y1={spread2Y} x2={joinX} y2={joinY} stroke={lineColor} strokeWidth="2.5" />
             </g>
           );
         };
 
         return (
-          <QuestionWrapper
-            index={index}
-            total={erQuestions.length}
-            setIndex={setIndex}
-            questionText={question.text}
-            onCheck={checkAnswer}
-            checkStatus={checkStatus}
-            showSolutionBtn={showSolutionBtn}
-            setShowSolutionBtn={setShowSolutionBtn}
-            solutionData={solText}
-          >
-            <div className="flex flex-col gap-3 mb-4 bg-gray-50 p-4 rounded-lg border items-start w-full">
+          <QuestionWrapper index={index} total={erQuestions.length} setIndex={setIndex} questionText={question.text} onCheck={checkAnswer} checkStatus={checkStatus} showSolutionBtn={showSolutionBtn} setShowSolutionBtn={setShowSolutionBtn} solutionData={solText}>
+            <div className="flex flex-col gap-3 mb-4 bg-gray-50 dark:bg-slate-700 p-4 rounded-lg border dark:border-slate-600 items-start w-full">
               <div className="flex gap-2 items-center w-full">
-                <input
-                  type="text"
-                  placeholder="Entity Name"
-                  value={newEntityName}
-                  onChange={(e) => setNewEntityName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addEntity()}
-                  className="border p-2 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none"
-                />
-                <button
-                  onClick={addEntity}
-                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition cursor-pointer font-medium"
-                >
-                  + Add Entity
-                </button>
+                <input type="text" placeholder="Entity Name" value={newEntityName} onChange={(e) => setNewEntityName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addEntity()} className="border dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 p-2 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none" />
+                <button onClick={addEntity} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition cursor-pointer font-medium">+ Add Entity</button>
               </div>
-
-              <div className="w-full h-px bg-gray-200 my-1"></div>
-
+              <div className="w-full h-px bg-gray-200 dark:bg-slate-600 my-1"></div>
               <div className="flex gap-2 items-center flex-wrap w-full">
-                <select
-                  value={relE1}
-                  onChange={(e) => setRelE1(e.target.value)}
-                  className="border p-2 rounded flex-1 min-w-[100px] cursor-pointer"
-                >
+                <select value={relE1} onChange={(e) => setRelE1(e.target.value)} className="border dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 p-2 rounded flex-1 min-w-[100px] cursor-pointer">
                   <option value="">Entity 1...</option>
-                  {entities.map((e) => (
-                    <option key={e.name} value={e.name}>
-                      {e.name}
-                    </option>
-                  ))}
+                  {entities.map((e) => <option key={e.name} value={e.name}>{e.name}</option>)}
                 </select>
-                <select
-                  value={relType}
-                  onChange={(e) => setRelType(e.target.value)}
-                  className="border p-2 rounded bg-white font-bold cursor-pointer shadow-sm"
-                >
+                <select value={relType} onChange={(e) => setRelType(e.target.value)} className="border dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 p-2 rounded font-bold cursor-pointer shadow-sm">
                   <option value="1:1">1 to 1</option>
                   <option value="1:M">1 to Many</option>
                   <option value="M:1">Many to 1</option>
                 </select>
-                <select
-                  value={relE2}
-                  onChange={(e) => setRelE2(e.target.value)}
-                  className="border p-2 rounded flex-1 min-w-[100px] cursor-pointer"
-                >
+                <select value={relE2} onChange={(e) => setRelE2(e.target.value)} className="border dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 p-2 rounded flex-1 min-w-[100px] cursor-pointer">
                   <option value="">Entity 2...</option>
-                  {entities.map((e) => (
-                    <option key={e.name} value={e.name}>
-                      {e.name}
-                    </option>
-                  ))}
+                  {entities.map((e) => <option key={e.name} value={e.name}>{e.name}</option>)}
                 </select>
-                <button
-                  onClick={addRel}
-                  className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition cursor-pointer font-medium"
-                >
-                  Link
-                </button>
+                <button onClick={addRel} className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition cursor-pointer font-medium">Link</button>
               </div>
-
               <div className="w-full flex justify-end mt-1">
-                <button
-                  onClick={() => {
-                    setEntities([]);
-                    setRels([]);
-                  }}
-                  className="text-red-500 text-sm font-medium hover:underline cursor-pointer"
-                >
-                  Clear Surface
-                </button>
+                <button onClick={() => { setEntities([]); setRels([]); }} className="text-red-500 text-sm font-medium hover:underline cursor-pointer">Clear Surface</button>
               </div>
             </div>
 
-            <div
-              className="border-2 border-gray-300 rounded-lg canvas-bg relative h-72 overflow-hidden touch-none shadow-inner"
-              ref={svgRef}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-            >
+            <div className="border-2 border-gray-300 dark:border-slate-600 rounded-lg canvas-bg relative h-72 overflow-hidden touch-none shadow-inner" ref={svgRef} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp}>
               <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
                 {rels.map((r, i) => {
                   const e1 = entities.find((e) => e.name === r.e1);
                   const e2 = entities.find((e) => e.name === r.e2);
                   if (!e1 || !e2) return null;
-
-                  const cx1 = e1.x + 48;
-                  const cy1 = e1.y + 20;
-                  const cx2 = e2.x + 48;
-                  const cy2 = e2.y + 20;
-
+                  const cx1 = e1.x + 48; const cy1 = e1.y + 20;
+                  const cx2 = e2.x + 48; const cy2 = e2.y + 20;
                   const startEdge = getEdgePoint(cx1, cy1, 96, 40, cx2, cy2);
                   const endEdge = getEdgePoint(cx2, cy2, 96, 40, cx1, cy1);
-
                   return (
                     <g key={i}>
-                      {/* Main Connecting Line */}
-                      <line
-                        x1={startEdge.x}
-                        y1={startEdge.y}
-                        x2={endEdge.x}
-                        y2={endEdge.y}
-                        stroke="#1F2937"
-                        strokeWidth="2.5"
-                      />
-
-                      {/* Crow's feet notations attached to the specific boxes */}
-                      {r.type === "1:M" &&
-                        drawCrowsFoot(
-                          endEdge.x,
-                          endEdge.y,
-                          startEdge.x,
-                          startEdge.y,
-                        )}
-                      {r.type === "M:1" &&
-                        drawCrowsFoot(
-                          startEdge.x,
-                          startEdge.y,
-                          endEdge.x,
-                          endEdge.y,
-                        )}
+                      <line x1={startEdge.x} y1={startEdge.y} x2={endEdge.x} y2={endEdge.y} stroke={lineColor} strokeWidth="2.5" />
+                      {r.type === "1:M" && drawCrowsFoot(endEdge.x, endEdge.y, startEdge.x, startEdge.y)}
+                      {r.type === "M:1" && drawCrowsFoot(startEdge.x, startEdge.y, endEdge.x, endEdge.y)}
                     </g>
                   );
                 })}
               </svg>
               {entities.map((ent, i) => (
-                <div
-                  key={ent.name}
-                  onPointerDown={(e) => handlePointerDown(e, i)}
-                  style={{ left: ent.x, top: ent.y, position: "absolute" }}
-                  className="w-24 h-10 bg-white border-2 border-blue-600 rounded flex items-center justify-center shadow-lg cursor-grab active:cursor-grabbing select-none text-sm font-bold text-blue-900 truncate px-1 transition-transform hover:scale-105 z-10"
-                >
+                <div key={ent.name} onPointerDown={(e) => handlePointerDown(e, i)} style={{ left: ent.x, top: ent.y, position: "absolute" }} className="w-24 h-10 bg-white dark:bg-slate-700 border-2 border-blue-600 rounded flex items-center justify-center shadow-lg cursor-grab active:cursor-grabbing select-none text-sm font-bold text-blue-900 dark:text-blue-300 truncate px-1 transition-transform hover:scale-105 z-10">
                   {ent.name}
                 </div>
               ))}
               {entities.length === 0 && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-gray-500 font-medium pointer-events-none text-center">
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-400 font-medium pointer-events-none text-center">
                   Drag rectangles by adding entities above.
                 </div>
               )}
@@ -913,88 +413,44 @@
         );
       };
 
-      // --- DATABASE QUESTIONS (NORM & PK & CONCURRENCY) ---
-      const NormInteract = ({
-        index,
-        setIndex,
-        checkStatus,
-        setCheckStatus,
-        setShowSolutionBtn,
-        showSolutionBtn,
-      }) => {
+      // --- DATABASE QUESTIONS ---
+      const NormInteract = ({ index, setIndex, checkStatus, setCheckStatus, setShowSolutionBtn, showSolutionBtn }) => {
         const question = normQuestions[index];
         const isMcq = question.type === "mcq";
         const words = !isMcq ? question.answer.split(" ") : [];
-
         const [answer, setAnswer] = useState("");
         const [textAnswers, setTextAnswers] = useState([]);
 
         useEffect(() => {
           setAnswer("");
           setTextAnswers(isMcq ? [] : Array(words.length).fill(""));
-          setCheckStatus("idle");
-          setShowSolutionBtn(false);
+          setCheckStatus("idle"); setShowSolutionBtn(false);
         }, [index]);
 
         const checkAnswer = () => {
           if (isMcq) {
-            if (
-              answer.toLowerCase().trim() ===
-              question.answer.toLowerCase().trim()
-            ) {
-              setCheckStatus("correct");
-              setShowSolutionBtn(false);
-            } else {
-              setCheckStatus("incorrect");
-              setShowSolutionBtn(true);
-            }
+            if (answer.toLowerCase().trim() === question.answer.toLowerCase().trim()) { setCheckStatus("correct"); setShowSolutionBtn(false); }
+            else { setCheckStatus("incorrect"); setShowSolutionBtn(true); }
           } else {
-            // Check against individual text box inputs (allowing for full word or truncated word entries)
             const isCorrect = words.every((word, i) => {
               const act = (textAnswers[i] || "").trim().toLowerCase();
               const expFull = word.toLowerCase();
               const expRest = word.substring(1).toLowerCase();
               return act === expFull || act === expRest;
             });
-
-            if (isCorrect) {
-              setCheckStatus("correct");
-              setShowSolutionBtn(false);
-            } else {
-              setCheckStatus("incorrect");
-              setShowSolutionBtn(true);
-            }
+            if (isCorrect) { setCheckStatus("correct"); setShowSolutionBtn(false); }
+            else { setCheckStatus("incorrect"); setShowSolutionBtn(true); }
           }
         };
 
         return (
-          <QuestionWrapper
-            index={index}
-            total={normQuestions.length}
-            setIndex={setIndex}
-            questionText={question.text}
-            onCheck={checkAnswer}
-            checkStatus={checkStatus}
-            showSolutionBtn={showSolutionBtn}
-            setShowSolutionBtn={setShowSolutionBtn}
-            solutionData={`Correct Answer: ${question.answer}`}
-          >
+          <QuestionWrapper index={index} total={normQuestions.length} setIndex={setIndex} questionText={question.text} onCheck={checkAnswer} checkStatus={checkStatus} showSolutionBtn={showSolutionBtn} setShowSolutionBtn={setShowSolutionBtn} solutionData={`Correct Answer: ${question.answer}`}>
             {isMcq ? (
               <div className="space-y-3">
                 {question.options.map((opt, i) => (
-                  <label
-                    key={i}
-                    className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${answer === opt ? "bg-blue-50 border-blue-500 shadow-sm" : "bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300"}`}
-                  >
-                    <input
-                      type="radio"
-                      name="normQ"
-                      value={opt}
-                      checked={answer === opt}
-                      onChange={(e) => setAnswer(e.target.value)}
-                      className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer mr-3"
-                    />
-                    <span className="text-gray-800 font-medium">{opt}</span>
+                  <label key={i} className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${answer === opt ? "bg-blue-50 dark:bg-blue-900/30 border-blue-500 shadow-sm" : "bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600 hover:border-gray-300"}`}>
+                    <input type="radio" name="normQ" value={opt} checked={answer === opt} onChange={(e) => setAnswer(e.target.value)} className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer mr-3" />
+                    <span className="text-gray-800 dark:text-slate-200 font-medium">{opt}</span>
                   </label>
                 ))}
               </div>
@@ -1002,21 +458,10 @@
               <div className="flex flex-wrap gap-4 items-center mt-2">
                 {words.map((w, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-12 h-12 bg-blue-100 text-blue-800 font-extrabold text-2xl rounded shadow-sm border border-blue-300">
+                    <div className="flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 font-extrabold text-2xl rounded shadow-sm border border-blue-300 dark:border-blue-800">
                       {w[0].toUpperCase()}
                     </div>
-                    <input
-                      type="text"
-                      value={textAnswers[i] || ""}
-                      onChange={(e) => {
-                        const newAns = [...textAnswers];
-                        newAns[i] = e.target.value;
-                        setTextAnswers(newAns);
-                      }}
-                      onKeyDown={(e) => e.key === "Enter" && checkAnswer()}
-                      placeholder="..."
-                      className="border-2 border-gray-300 p-3 rounded-lg text-lg focus:border-blue-500 outline-none shadow-sm transition w-40"
-                    />
+                    <input type="text" value={textAnswers[i] || ""} onChange={(e) => { const newAns = [...textAnswers]; newAns[i] = e.target.value; setTextAnswers(newAns); }} onKeyDown={(e) => e.key === "Enter" && checkAnswer()} placeholder="..." className="border-2 border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 p-3 rounded-lg text-lg focus:border-blue-500 outline-none shadow-sm transition w-40" />
                   </div>
                 ))}
               </div>
@@ -1027,87 +472,80 @@
 
       // --- MAIN APP ---
       const App = () => {
+        const [theme, setTheme] = useState(() => {
+          try { return localStorage.getItem("uimode") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
+          catch { return "light"; }
+        });
+
+        useEffect(() => {
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          try { localStorage.setItem("uimode", theme); } catch {}
+        }, [theme]);
+
+        const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+
         const [tab, setTab] = useState("db");
         const [qIndex, setQIndex] = useState({ db: 0, er: 0, norm: 0 });
         const [checkStatus, setCheckStatus] = useState("idle");
         const [showSolutionBtn, setShowSolutionBtn] = useState(false);
 
-        const handleTabChange = (newTab) => {
-          setTab(newTab);
-          setCheckStatus("idle");
-          setShowSolutionBtn(false);
-        };
-
-        const setSpecificIndex = (newIndex) => {
-          setQIndex((prev) => ({ ...prev, [tab]: newIndex }));
-          setCheckStatus("idle");
-          setShowSolutionBtn(false);
-        };
+        const handleTabChange = (newTab) => { setTab(newTab); setCheckStatus("idle"); setShowSolutionBtn(false); };
+        const setSpecificIndex = (newIndex) => { setQIndex((prev) => ({ ...prev, [tab]: newIndex })); setCheckStatus("idle"); setShowSolutionBtn(false); };
 
         return (
-          <div className="max-w-4xl mx-auto py-8 px-4 md:px-8">
-            <header className="mb-8 text-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <h1 className="text-3xl font-extrabold text-blue-900 mb-2">
-                AQA A-Level Computer Science
-              </h1>
-              <p className="text-gray-600 text-lg font-medium">
-                Databases: Design, ER-Diagrams & Concurrency
-              </p>
+          <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex flex-col">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
             </header>
 
-            <div className="flex border-b-2 border-gray-200 mb-6 rounded-t-lg overflow-hidden shadow-sm">
-              <button
-                onClick={() => handleTabChange("db")}
-                className={`flex-1 py-4 text-center font-bold transition-colors cursor-pointer ${tab === "db" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-              >
-                Database Design
-              </button>
-              <button
-                onClick={() => handleTabChange("er")}
-                className={`flex-1 py-4 text-center font-bold transition-colors border-l border-r border-gray-200 cursor-pointer ${tab === "er" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-              >
-                ER Diagrams
-              </button>
-              <button
-                onClick={() => handleTabChange("norm")}
-                className={`flex-1 py-4 text-center font-bold transition-colors cursor-pointer ${tab === "norm" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-              >
-                Database Questions
-              </button>
-            </div>
+            <div className="max-w-4xl mx-auto py-8 px-4 md:px-8 w-full">
+              <header className="mb-8 text-center bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+                <h1 className="text-3xl font-extrabold text-blue-900 dark:text-blue-300 mb-2">AQA A-Level Computer Science</h1>
+                <p className="text-gray-600 dark:text-slate-400 text-lg font-medium">Databases: Design, ER-Diagrams & Concurrency</p>
+              </header>
 
-            <main>
-              {tab === "db" && (
-                <DBDesignInteract
-                  index={qIndex.db}
-                  setIndex={setSpecificIndex}
-                  checkStatus={checkStatus}
-                  setCheckStatus={setCheckStatus}
-                  showSolutionBtn={showSolutionBtn}
-                  setShowSolutionBtn={setShowSolutionBtn}
-                />
-              )}
-              {tab === "er" && (
-                <ERDiagramInteract
-                  index={qIndex.er}
-                  setIndex={setSpecificIndex}
-                  checkStatus={checkStatus}
-                  setCheckStatus={setCheckStatus}
-                  showSolutionBtn={showSolutionBtn}
-                  setShowSolutionBtn={setShowSolutionBtn}
-                />
-              )}
-              {tab === "norm" && (
-                <NormInteract
-                  index={qIndex.norm}
-                  setIndex={setSpecificIndex}
-                  checkStatus={checkStatus}
-                  setCheckStatus={setCheckStatus}
-                  showSolutionBtn={showSolutionBtn}
-                  setShowSolutionBtn={setShowSolutionBtn}
-                />
-              )}
-            </main>
+              <div className="flex border-b-2 border-gray-200 dark:border-slate-700 mb-6 rounded-t-lg overflow-hidden shadow-sm">
+                <button onClick={() => handleTabChange("db")} className={`flex-1 py-4 text-center font-bold transition-colors cursor-pointer ${tab === "db" ? "bg-blue-600 text-white" : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"}`}>Database Design</button>
+                <button onClick={() => handleTabChange("er")} className={`flex-1 py-4 text-center font-bold transition-colors border-l border-r border-gray-200 dark:border-slate-700 cursor-pointer ${tab === "er" ? "bg-blue-600 text-white" : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"}`}>ER Diagrams</button>
+                <button onClick={() => handleTabChange("norm")} className={`flex-1 py-4 text-center font-bold transition-colors cursor-pointer ${tab === "norm" ? "bg-blue-600 text-white" : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"}`}>Database Questions</button>
+              </div>
+
+              <main>
+                {tab === "db" && <DBDesignInteract index={qIndex.db} setIndex={setSpecificIndex} checkStatus={checkStatus} setCheckStatus={setCheckStatus} showSolutionBtn={showSolutionBtn} setShowSolutionBtn={setShowSolutionBtn} />}
+                {tab === "er" && <ERDiagramInteract index={qIndex.er} setIndex={setSpecificIndex} checkStatus={checkStatus} setCheckStatus={setCheckStatus} showSolutionBtn={showSolutionBtn} setShowSolutionBtn={setShowSolutionBtn} theme={theme} />}
+                {tab === "norm" && <NormInteract index={qIndex.norm} setIndex={setSpecificIndex} checkStatus={checkStatus} setCheckStatus={setCheckStatus} showSolutionBtn={showSolutionBtn} setShowSolutionBtn={setShowSolutionBtn} />}
+              </main>
+            </div>
           </div>
         );
       };

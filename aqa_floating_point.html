@@ -4,6 +4,17 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AQA Floating Point Practice</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
   <style>
     :root {
       --primary: #1565c0;
@@ -18,11 +29,16 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: #1a1a2e; min-height: 100vh; }
-    header { background: var(--primary); color: white; padding: 1rem 2rem; text-align: center; }
-    header h1 { font-size: 1.55rem; margin-bottom: 0.2rem; }
-    header p { font-size: 0.88rem; opacity: 0.85; }
-    .home-link { display: inline-block; margin-top: 0.4rem; color: rgba(255,255,255,0.75); text-decoration: none; font-size: 0.82rem; }
-    .home-link:hover { color: white; }
+    header {
+      background: #0f172a; height: 58px; display: flex;
+      align-items: center; padding: 0 1.5rem; gap: 0.75rem; flex-shrink: 0;
+    }
+    .header-brand { color: #38bdf8; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em; }
+    #theme-toggle {
+      margin-left: auto; background: none; border: none; cursor: pointer;
+      padding: 6px; border-radius: 6px; color: #94a3b8; display: flex; align-items: center;
+    }
+    #theme-toggle:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; }
     main { max-width: 900px; margin: 1.75rem auto; padding: 0 1rem 3rem; }
 
     /* ── Cards ── */
@@ -158,14 +174,76 @@
       .bit-cell { width: 34px; height: 38px; font-size: 1rem; }
       .row-label { min-width: 80px; font-size: 0.72rem; }
     }
+
+    /* Dark mode overrides */
+    html.dark { --primary: #38bdf8; --primary-light: #7dd3fc; --bg: #0f172a; --card: #1e293b; --border: #334155; --muted: #94a3b8; }
+    html.dark body { color: #f1f5f9; }
+    html.dark .score-item strong { color: #f1f5f9; }
+    html.dark .q-box { background: #1e3a5f; }
+    html.dark .bit-cell { background: #283548; color: #d1d5db; border-color: #475569; }
+    html.dark .bit-cell.editable { background: #1e293b; border-color: #38bdf8; }
+    html.dark .bit-cell.editable:hover { background: #1e3a5f; }
+    html.dark .bit-cell[data-v="1"] { color: var(--primary); }
+    html.dark .bit-cell.ok { border-color: #34d399; background: #052e16; color: #86efac; }
+    html.dark .bit-cell.err { border-color: #f87171; background: #450a0a; color: #fca5a5; }
+    html.dark .text-ans { background: #1e293b; color: #f1f5f9; border-color: #38bdf8; }
+    html.dark .text-ans.ok { background: #052e16; border-color: #34d399; color: #86efac; }
+    html.dark .text-ans.err { background: #450a0a; border-color: #f87171; color: #fca5a5; }
+    html.dark .sol { background: #1e293b; border-color: #334155; color: #f1f5f9; }
+    html.dark .sol code { background: #0f172a; color: #bfdbfe; }
+    html.dark .fb.ok { background: #052e16; border-color: #166534; color: #86efac; }
+    html.dark .fb.err { background: #450a0a; border-color: #991b1b; color: #fca5a5; }
+    html.dark .btn-outline { color: var(--primary); border-color: var(--primary); }
+    html.dark .btn-outline:hover { background: #1e3a5f; }
+    html.dark .btn-new { background: #334155; }
   </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
 <body>
 
-<header>
-  <h1>AQA Floating Point Practice</h1>
-  <p>Two's complement floating point — A Level Computer Science</p>
-  <a class="home-link" href="index.html">&#8592; Back to Learning Demos</a>
+<header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
 </header>
 
 <main>
@@ -1189,6 +1267,26 @@ document.getElementById('calcExpr').addEventListener('keydown', e => {
 
 // ── Start ──
 newQuestion();
+
+function applyTheme(mode) {
+  const html = document.documentElement;
+  const sun = document.getElementById('icon-sun');
+  const moon = document.getElementById('icon-moon');
+  if (mode === 'dark') {
+    html.classList.add('dark');
+    if (sun) sun.style.display = 'block';
+    if (moon) moon.style.display = 'none';
+  } else {
+    html.classList.remove('dark');
+    if (sun) sun.style.display = 'none';
+    if (moon) moon.style.display = 'block';
+  }
+  try { localStorage.setItem('uimode', mode); } catch(e) {}
+}
+(function() {
+  const m = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  applyTheme(m);
+})();
 </script>
 </body>
 </html>

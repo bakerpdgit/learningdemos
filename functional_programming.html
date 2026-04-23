@@ -4,25 +4,103 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AQA Functional Programming</title>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag("js", new Date());
+    gtag("config", "G-DYQESQXT38");
+  </script>
+  <!-- Prevent FOUC: apply dark class before render -->
+  <script>
+    (function () {
+      try {
+        var mode = localStorage.getItem("uimode");
+        if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    })();
+  </script>
   <style>
     :root {
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --accent: #16a34a;
+      --error: #dc2626;
+      --warn: #d97706;
+      --border: #e2e8f0;
+      --ctrl-bg: #f8fafc;
+      --ctrl-hover-border: #94a3b8;
+      --dialog-bg: #ffffff;
+      --header-bg: #0f172a;
+      --header-accent: #38bdf8;
+    }
+    html.dark {
       --bg: #0f172a;
-      --panel: #111827;
-      --muted: #94a3b8;
+      --panel: rgba(2, 6, 23, 0.6);
       --text: #e2e8f0;
+      --muted: #94a3b8;
       --accent: #22c55e;
       --error: #ef4444;
       --warn: #f59e0b;
       --border: #334155;
+      --ctrl-bg: #0b1220;
+      --ctrl-hover-border: #64748b;
+      --dialog-bg: #0b1220;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: linear-gradient(180deg, #020617, #0f172a 30%, #111827);
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
+      transition: background 0.2s, color 0.2s;
     }
+    html.dark body {
+      background: linear-gradient(180deg, #020617, #0f172a 30%, #111827);
+    }
+    /* CS Learning Header */
+    .cs-header {
+      width: 100%;
+      background-color: var(--header-bg);
+      padding: 0 1.5rem;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .cs-header-brand {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--header-accent);
+      text-decoration: none;
+    }
+    .cs-header-nav { display: flex; align-items: center; gap: 1.25rem; }
+    .cs-header-nav a {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.15s;
+    }
+    .cs-header-nav a:hover { color: #f1f5f9; }
+    #theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    #theme-toggle:hover { color: #f1f5f9; }
+
     .wrap {
       max-width: 1300px;
       margin: 0 auto;
@@ -38,36 +116,36 @@
       align-items: center;
     }
     select, button {
-      background: #0b1220;
+      background: var(--ctrl-bg);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 0.55rem 0.7rem;
       font-size: 0.95rem;
       cursor: pointer;
+      transition: border-color 0.15s;
     }
-    button:hover, select:hover { border-color: #64748b; }
+    button:hover, select:hover { border-color: var(--ctrl-hover-border); }
     .grid {
       display: grid;
       grid-template-columns: 1.1fr 0.9fr;
       gap: 1rem;
     }
-    @media (max-width: 900px) {
-      .grid { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
     .card {
       border: 1px solid var(--border);
       border-radius: 12px;
-      background: rgba(2, 6, 23, 0.6);
+      background: var(--panel);
       padding: 0.9rem;
     }
     .title { margin-top: 0; }
     #taskBody {
-      color: #cbd5e1;
+      color: var(--muted);
       white-space: pre-line;
       line-height: 1.4;
       margin: 0.3rem 0 0.8rem;
     }
+    /* Code editor and console stay dark — terminal aesthetic */
     textarea {
       width: 100%;
       min-height: 420px;
@@ -102,9 +180,7 @@
       opacity: 0;
       transform: scale(0.6);
     }
-    .success-burst.play {
-      animation: pop 900ms ease;
-    }
+    .success-burst.play { animation: pop 900ms ease; }
     @keyframes pop {
       0% { opacity: 0; transform: scale(0.6); }
       40% { opacity: 1; transform: scale(1.2); }
@@ -114,553 +190,409 @@
       max-width: 700px;
       border: 1px solid var(--border);
       border-radius: 12px;
-      background: #0b1220;
+      background: var(--dialog-bg);
       color: var(--text);
       padding: 1rem;
     }
     dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
     code { color: #bfdbfe; }
   </style>
-
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
 <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
 
-  <div class="wrap">
-    <h1>AQA-Lite Pure Functional Programming Sandbox</h1>
-    <p class="sub">Write AQA-style functional programming pseudocode and test yourself with these challenges.</p>
+<header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
-    <div class="toolbar">
-      <label for="taskSelect">Task:</label>
-      <select id="taskSelect"></select>
-      <button id="loadTaskBtn">Load Task Starter</button>
-      <button id="guideBtn">Guide</button>
-      <button id="solutionBtn">View Solution</button>
-      <button id="runBtn">Run</button>
-      <button id="submitBtn">Submit</button>
-      <span id="successBurst" class="success-burst">✅ Success!</span>
-    </div>
+<div class="wrap">
+  <h1>AQA-Lite Pure Functional Programming Sandbox</h1>
+  <p class="sub">Write AQA-style functional programming pseudocode and test yourself with these challenges.</p>
 
-    <div class="grid">
-      <section class="card">
-        <h2 class="title" id="taskTitle">Task</h2>
-        <p id="taskBody"></p>
-        <textarea id="editor" spellcheck="false"></textarea>
-      </section>
-
-      <section class="card">
-        <h2 class="title">Output</h2>
-        <div id="console" class="console muted">Click Run to evaluate your code.</div>
-        <h3>Submit Result</h3>
-        <div id="submitResult" class="console muted">Submit checks whether your final output equals the expected value.</div>
-      </section>
-    </div>
+  <div class="toolbar">
+    <label for="taskSelect">Task:</label>
+    <select id="taskSelect"></select>
+    <button id="loadTaskBtn">Load Task Starter</button>
+    <button id="guideBtn">Guide</button>
+    <button id="solutionBtn">View Solution</button>
+    <button id="runBtn">Run</button>
+    <button id="submitBtn">Submit</button>
+    <span id="successBurst" class="success-burst">✅ Success!</span>
   </div>
 
-  <dialog id="guideDialog">
-    <h2>Language Guide (AQA-Lite)</h2>
-    <ul>
-      <li>Binding: <code>nums = [1,2,3]</code></li>
-      <li>Function: <code>add x y = x + y</code> (all functions are curried)</li>
-      <li>Partial app: <code>addFive = add 5</code></li>
-      <li>Pattern matching: <code>f [] = 0</code>, <code>f (x:xs) = ...</code></li>
-      <li>Cons operator: <code>x : xs</code></li>
-      <li>Operator literals as functions: <code>(+)</code>, <code>(*)</code>, <code>(==)</code>, etc.</li>
-      <li>Operator sections: <code>(/2)</code> means <code>\x -> x / 2</code>, <code>(2/)</code> means <code>\x -> 2 / x</code>.</li>
-      <li>Built-ins: <code>map</code>, <code>filter</code>, <code>fold</code> where fold is <code>fold op start list</code></li>
-      <li>Last non-empty line is evaluated as the output expression.</li>
-    </ul>
-    <p>Examples:</p>
-    <pre><code>square x = x * x
+  <div class="grid">
+    <section class="card">
+      <h2 class="title" id="taskTitle">Task</h2>
+      <p id="taskBody"></p>
+      <textarea id="editor" spellcheck="false"></textarea>
+    </section>
+    <section class="card">
+      <h2 class="title">Output</h2>
+      <div id="console" class="console muted">Click Run to evaluate your code.</div>
+      <h3>Submit Result</h3>
+      <div id="submitResult" class="console muted">Submit checks whether your final output equals the expected value.</div>
+    </section>
+  </div>
+</div>
+
+<dialog id="guideDialog">
+  <h2>Language Guide (AQA-Lite)</h2>
+  <ul>
+    <li>Binding: <code>nums = [1,2,3]</code></li>
+    <li>Function: <code>add x y = x + y</code> (all functions are curried)</li>
+    <li>Partial app: <code>addFive = add 5</code></li>
+    <li>Pattern matching: <code>f [] = 0</code>, <code>f (x:xs) = ...</code></li>
+    <li>Cons operator: <code>x : xs</code></li>
+    <li>Operator literals as functions: <code>(+)</code>, <code>(*)</code>, <code>(==)</code>, etc.</li>
+    <li>Operator sections: <code>(/2)</code> means <code>\x -> x / 2</code>, <code>(2/)</code> means <code>\x -> 2 / x</code>.</li>
+    <li>Built-ins: <code>map</code>, <code>filter</code>, <code>fold</code> where fold is <code>fold op start list</code></li>
+    <li>Last non-empty line is evaluated as the output expression.</li>
+  </ul>
+  <p>Examples:</p>
+  <pre><code>square x = x * x
 nums = [1,2,3]
 map square nums</code></pre>
-    <button id="closeGuideBtn">Close</button>
-  </dialog>
-  <dialog id="solutionDialog">
-    <h2>Task Solution</h2>
-    <pre><code id="solutionCode"></code></pre>
-    <button id="closeSolutionBtn">Close</button>
-  </dialog>
+  <button id="closeGuideBtn">Close</button>
+</dialog>
+<dialog id="solutionDialog">
+  <h2>Task Solution</h2>
+  <pre><code id="solutionCode"></code></pre>
+  <button id="closeSolutionBtn">Close</button>
+</dialog>
 
-  <script>
-    const tasks = [
-      { id: 1, name: "Convert", description: "Write toC f where C = (F-32) * 5/9", data: "", starter: "toC f =\ntoC 77", solution: "toC f = (f - 32) * 5 / 9\ntoC 77", hidden: "toC 77", expected: 25 },
-      { id: 2, name: "Square Map", description: "Use map and square to square all the nums in the list", data: "nums = [1,2,3]", starter: "nums = [1,2,3]\nsquare x = _______\nmap square _______", solution: "nums = [1,2,3]\nsquare x = x * x\nmap square nums", hidden: "map square nums", expected: [1,4,9] },
-      { id: 3, name: "Filter High", description: "Keep values > 100 in prices", data: "prices = [5, 120, 80, 200]", starter: "prices = [5,120,80,200]\nhigh x = ____\nfilter _______ _______", solution: "prices = [5,120,80,200]\nhigh x = x > 100\nfilter high prices", hidden: "filter high prices", expected: [120,200] },
-      { id: 4, name: "Recursive Len", description: "Define len [] = 0 and len (x:xs) recursively", data: "", starter: "nums = [2,3,5,7,11]\nlen [] = _______\nlen (x:xs) = _______\nlen nums", solution: "nums = [2,3,5,7,11]\nlen [] = 0\nlen (x:xs) = 1 + len xs\nlen nums", hidden: "len nums", expected: 5 },
-      { id: 5, name: "Total Sum", description: "Use fold to sum vals", data: "vals = [10,20,30]", starter: "vals = [10,20,30]\nfold (____) ____  ____", solution: "vals = [10,20,30]\nfold (+) 0 vals", hidden: "fold (+) 0 vals", expected: 60 },
-      { id: 6, name: "Partial Add", description: "Create addFive by partially applying add", data: "", starter: "add x y = ____\naddFive = ____ ____\naddFive 10", solution: "add x y = x + y\naddFive = add 5\naddFive 10", hidden: "addFive 10", expected: 15 },
-      { id: 7, name: "Discount", description: "Use map with discount which uses partial to multiply by 0.8", data: "items = [10,20]", starter: "items = [10,20]\nmultiply x y = ____\ndiscount = ______\nmap ____ ____", solution: "items = [10,20]\nmultiply x y = x * y\ndiscount = multiply 0.8\nmap discount items", hidden: "map discount items", expected: [8,16] },
-      { id: 8, name: "Head/Tail", description: "Write getFirst to get the head of the list", data: "myList = [9,8,7]", starter: "myList = [9,8,7]\ngetFirst (____) = ____\ngetFirst ____", solution: "myList = [9,8,7]\ngetFirst (x:xs) = x\ngetFirst myList", hidden: "getFirst myList", expected: 9 },
-      { id: 9, name: "Logic Check", description: "Write isEven which uses an n % 2 == 0 check to filter nums", data: "nums = [1,2,3,4]", starter: "nums = [1,2,3,4]\nisEven n = ____\nfilter ____ ____", solution: "nums = [1,2,3,4]\nisEven n = n % 2 == 0\nfilter isEven nums", hidden: "filter isEven nums", expected: [2,4] },
-      { id: 10, name: "Product", description: "Write a recursive function to multiply all list elements then try replacing this with a fold approach", data: "factors = [2,3,4]", starter: "factors = [2,3,4]\nproduct [] = ____\nproduct (x:xs) = ____\nproduct factors", solution: "factors = [2,3,4]\nproduct [] = 1\nproduct (x:xs) = x * product xs\nproduct factors", hidden: "result", expected: 24 },
-      { id: 11, name: "Contains", description: "Recursive function to check if x is in list using || for boolean or", data: "", starter: "contains x [] = ____\ncontains x (____) = (____) || ____\ncontains 3 [1,2,3]", solution: "contains x [] = False\ncontains x (y:ys) = (x == y) || contains x ys\ncontains 3 [1,2,3]", hidden: "contains 3 [1,2,3]", expected: true },
-      { id: 12, name: "Pipeline", description: "Filter for > 5, then map double onto the remaining list items", data: "raw = [2,6,3,8]", starter: "raw = [2,6,3,8]\nmoreThanFive x = ____\ndouble x = ____\nmap ____ (filter ____ ____)", solution: "raw = [2,6,3,8]\nmoreThanFive x = x > 5\ndouble x = x * 2\nmap double (filter moreThanFive raw)", hidden: "map double (filter moreThanFive raw)", expected: [12,16] }
-    ];
+<script>
+  function applyTheme(mode) {
+    if (mode === "dark") document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+    try { localStorage.setItem("uimode", mode); } catch(e) {}
+    document.getElementById("icon-moon").style.display = mode === "dark" ? "none" : "";
+    document.getElementById("icon-sun").style.display  = mode === "dark" ? "" : "none";
+  }
 
-    class LangError extends Error {
-      constructor(kind, message, line = null) {
-        super(message);
-        this.kind = kind;
-        this.line = line;
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    applyTheme(document.documentElement.classList.contains("dark") ? "light" : "dark");
+  });
+
+  (function() {
+    const isDark = document.documentElement.classList.contains("dark");
+    document.getElementById("icon-moon").style.display = isDark ? "none" : "";
+    document.getElementById("icon-sun").style.display  = isDark ? "" : "none";
+  })();
+
+  const tasks = [
+    { id: 1, name: "Convert", description: "Write toC f where C = (F-32) * 5/9", data: "", starter: "toC f =\ntoC 77", solution: "toC f = (f - 32) * 5 / 9\ntoC 77", hidden: "toC 77", expected: 25 },
+    { id: 2, name: "Square Map", description: "Use map and square to square all the nums in the list", data: "nums = [1,2,3]", starter: "nums = [1,2,3]\nsquare x = _______\nmap square _______", solution: "nums = [1,2,3]\nsquare x = x * x\nmap square nums", hidden: "map square nums", expected: [1,4,9] },
+    { id: 3, name: "Filter High", description: "Keep values > 100 in prices", data: "prices = [5, 120, 80, 200]", starter: "prices = [5,120,80,200]\nhigh x = ____\nfilter _______ _______", solution: "prices = [5,120,80,200]\nhigh x = x > 100\nfilter high prices", hidden: "filter high prices", expected: [120,200] },
+    { id: 4, name: "Recursive Len", description: "Define len [] = 0 and len (x:xs) recursively", data: "", starter: "nums = [2,3,5,7,11]\nlen [] = _______\nlen (x:xs) = _______\nlen nums", solution: "nums = [2,3,5,7,11]\nlen [] = 0\nlen (x:xs) = 1 + len xs\nlen nums", hidden: "len nums", expected: 5 },
+    { id: 5, name: "Total Sum", description: "Use fold to sum vals", data: "vals = [10,20,30]", starter: "vals = [10,20,30]\nfold (____) ____  ____", solution: "vals = [10,20,30]\nfold (+) 0 vals", hidden: "fold (+) 0 vals", expected: 60 },
+    { id: 6, name: "Partial Add", description: "Create addFive by partially applying add", data: "", starter: "add x y = ____\naddFive = ____ ____\naddFive 10", solution: "add x y = x + y\naddFive = add 5\naddFive 10", hidden: "addFive 10", expected: 15 },
+    { id: 7, name: "Discount", description: "Use map with discount which uses partial to multiply by 0.8", data: "items = [10,20]", starter: "items = [10,20]\nmultiply x y = ____\ndiscount = ______\nmap ____ ____", solution: "items = [10,20]\nmultiply x y = x * y\ndiscount = multiply 0.8\nmap discount items", hidden: "map discount items", expected: [8,16] },
+    { id: 8, name: "Head/Tail", description: "Write getFirst to get the head of the list", data: "myList = [9,8,7]", starter: "myList = [9,8,7]\ngetFirst (____) = ____\ngetFirst ____", solution: "myList = [9,8,7]\ngetFirst (x:xs) = x\ngetFirst myList", hidden: "getFirst myList", expected: 9 },
+    { id: 9, name: "Logic Check", description: "Write isEven which uses an n % 2 == 0 check to filter nums", data: "nums = [1,2,3,4]", starter: "nums = [1,2,3,4]\nisEven n = ____\nfilter ____ ____", solution: "nums = [1,2,3,4]\nisEven n = n % 2 == 0\nfilter isEven nums", hidden: "filter isEven nums", expected: [2,4] },
+    { id: 10, name: "Product", description: "Write a recursive function to multiply all list elements then try replacing this with a fold approach", data: "factors = [2,3,4]", starter: "factors = [2,3,4]\nproduct [] = ____\nproduct (x:xs) = ____\nproduct factors", solution: "factors = [2,3,4]\nproduct [] = 1\nproduct (x:xs) = x * product xs\nproduct factors", hidden: "result", expected: 24 },
+    { id: 11, name: "Contains", description: "Recursive function to check if x is in list using || for boolean or", data: "", starter: "contains x [] = ____\ncontains x (____) = (____) || ____\ncontains 3 [1,2,3]", solution: "contains x [] = False\ncontains x (y:ys) = (x == y) || contains x ys\ncontains 3 [1,2,3]", hidden: "contains 3 [1,2,3]", expected: true },
+    { id: 12, name: "Pipeline", description: "Filter for > 5, then map double onto the remaining list items", data: "raw = [2,6,3,8]", starter: "raw = [2,6,3,8]\nmoreThanFive x = ____\ndouble x = ____\nmap ____ (filter ____ ____)", solution: "raw = [2,6,3,8]\nmoreThanFive x = x > 5\ndouble x = x * 2\nmap double (filter moreThanFive raw)", hidden: "map double (filter moreThanFive raw)", expected: [12,16] }
+  ];
+
+  class LangError extends Error {
+    constructor(kind, message, line = null) { super(message); this.kind = kind; this.line = line; }
+  }
+
+  const tokenizer = (input) => {
+    const tokens = [];
+    let i = 0;
+    const two = ["==", "!=", ">=", "<=", "&&", "||"];
+    const one = "()+-*/%=,:[]><";
+    while (i < input.length) {
+      const c = input[i];
+      if (/\s/.test(c)) { i += 1; continue; }
+      const pair = input.slice(i, i + 2);
+      if (two.includes(pair)) { tokens.push({ t: pair }); i += 2; continue; }
+      if (one.includes(c)) { tokens.push({ t: c }); i += 1; continue; }
+      if (/\d/.test(c) || (c === "." && /\d/.test(input[i + 1]))) {
+        let j = i + 1;
+        while (j < input.length && /[\d.]/.test(input[j])) j += 1;
+        tokens.push({ t: "NUMBER", v: Number(input.slice(i, j)) }); i = j; continue;
+      }
+      if (/[A-Za-z_]/.test(c)) {
+        let j = i + 1;
+        while (j < input.length && /[A-Za-z0-9_]/.test(input[j])) j += 1;
+        tokens.push({ t: "IDENT", v: input.slice(i, j) }); i = j; continue;
+      }
+      throw new LangError("Syntax", `I don't recognize the symbol '${c}'.`, null);
+    }
+    return tokens;
+  };
+
+  const parseExpression = (line, lineNo) => {
+    const tokens = tokenizer(line);
+    let p = 0;
+    const peek = () => tokens[p];
+    const eat = (t) => { const tk = tokens[p]; if (!tk || tk.t !== t) throw new LangError("Syntax", `Expected '${t}' on line ${lineNo}.`, lineNo); p += 1; return tk; };
+    const match = (t) => (tokens[p] && tokens[p].t === t ? (p += 1, true) : false);
+    const isAtomStart = (tk) => tk && ["NUMBER", "IDENT", "(", "["].includes(tk.t);
+    const operators = Object.keys({ "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, "<": 4, ">=": 4, "<=": 4, ":": 5, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7 });
+    const atom = () => {
+      const tk = peek();
+      if (!tk) throw new LangError("Syntax", `Unexpected end of expression on line ${lineNo}.`, lineNo);
+      if (match("NUMBER")) return { k: "num", v: tk.v, line: lineNo };
+      if (match("IDENT")) {
+        if (tk.v === "True" || tk.v === "False") return { k: "bool", v: tk.v === "True", line: lineNo };
+        return { k: "var", n: tk.v, line: lineNo };
+      }
+      if (match("(")) {
+        if (peek() && operators.includes(peek().t)) {
+          const op = peek().t; p += 1;
+          if (match(")")) return { k: "oplit", op, line: lineNo };
+          const sectionValue = expr(0); eat(")");
+          return { k: "section_right", op, value: sectionValue, line: lineNo };
+        }
+        const start = p;
+        try {
+          const lhs = atom();
+          if (peek() && operators.includes(peek().t) && tokens[p + 1] && tokens[p + 1].t === ")") {
+            const op = peek().t; p += 1; eat(")");
+            return { k: "section_left", op, value: lhs, line: lineNo };
+          }
+        } catch (_) {}
+        p = start;
+        const e = expr(0); eat(")"); return e;
+      }
+      if (match("[")) {
+        if (match("]")) return { k: "list", items: [], line: lineNo };
+        const items = [expr(0)];
+        while (match(",")) items.push(expr(0));
+        eat("]"); return { k: "list", items, line: lineNo };
+      }
+      throw new LangError("Syntax", `Could not parse expression on line ${lineNo}.`, lineNo);
+    };
+    const app = () => { let left = atom(); while (isAtomStart(peek())) { left = { k: "call", f: left, a: atom(), line: lineNo }; } return left; };
+    const precedence = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, "<": 4, ">=": 4, "<=": 4, ":": 5, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7 };
+    const rightAssoc = new Set([":"]);
+    const expr = (minPrec) => {
+      let left = app();
+      while (true) {
+        const tk = peek();
+        if (!tk || !(tk.t in precedence) || precedence[tk.t] < minPrec) break;
+        const op = tk.t; p += 1;
+        const right = expr(rightAssoc.has(op) ? precedence[op] : precedence[op] + 1);
+        left = { k: "bin", op, l: left, r: right, line: lineNo };
+      }
+      return left;
+    };
+    const ast = expr(0);
+    if (p !== tokens.length) throw new LangError("Syntax", `Unexpected tokens on line ${lineNo}.`, lineNo);
+    return ast;
+  };
+
+  const parsePattern = (token, lineNo) => {
+    const trimmed = token.trim();
+    if (trimmed === "[]") return { k: "empty" };
+    const consMatch = trimmed.match(/^\(?\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)?$/);
+    if (consMatch) return { k: "cons", h: consMatch[1], t: consMatch[2] };
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) return { k: "var", n: trimmed };
+    throw new LangError("Syntax", `Invalid pattern '${token}' on line ${lineNo}.`, lineNo);
+  };
+
+  const splitDefinition = (line, lineNo) => {
+    if (line.includes(":=")) throw new LangError("Syntax", `I don't recognize the symbol ':=' - did you mean '='?`, lineNo);
+    const eq = line.indexOf("=");
+    if (eq < 0) return null;
+    const left = line.slice(0, eq).trim();
+    const right = line.slice(eq + 1).trim();
+    if (!left || !right) throw new LangError("Syntax", `Malformed definition on line ${lineNo}.`, lineNo);
+    const pieces = left.match(/\([^)]*\)|\S+/g) || [];
+    const name = pieces[0];
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new LangError("Syntax", `Invalid name '${name}' on line ${lineNo}.`, lineNo);
+    const params = pieces.slice(1).map((p) => parsePattern(p, lineNo));
+    return { name, params, body: parseExpression(right, lineNo), line: lineNo };
+  };
+
+  const makeBuiltins = () => {
+    const curry = (arity, fn, got = []) => ({ __kind: "fn", arity, got, call: (arg, ctx) => { const next = [...got, arg]; if (next.length < arity) return curry(arity, fn, next); return fn(...next, ctx); } });
+    return {
+      map: curry(2, (f, list, ctx) => { if (!Array.isArray(list)) throw new LangError("Type", `You tried to map over a non-List.`, ctx.line); return list.map((x) => applyOne(f, x, ctx)); }),
+      filter: curry(2, (f, list, ctx) => { if (!Array.isArray(list)) throw new LangError("Type", `You tried to filter a non-List.`, ctx.line); return list.filter((x) => truthy(applyOne(f, x, ctx))); }),
+      fold: curry(3, (op, start, list, ctx) => { if (!Array.isArray(list)) throw new LangError("Type", `You tried to fold a non-List.`, ctx.line); return list.reduce((acc, v) => applyOne(applyOne(op, acc, ctx), v, ctx), start); })
+    };
+  };
+
+  const truthy = (v) => Boolean(v);
+  const applyOne = (fn, arg, ctx) => { if (!fn || fn.__kind !== "fn") throw new LangError("Type", `Tried to call a non-function on line ${ctx.line}.`, ctx.line); return fn.call(arg, ctx); };
+  const matchPattern = (pat, val) => {
+    if (pat.k === "var") return { ok: true, bind: { [pat.n]: val } };
+    if (pat.k === "empty") return { ok: Array.isArray(val) && val.length === 0, bind: {} };
+    if (pat.k === "cons") { if (!Array.isArray(val) || val.length === 0) return { ok: false, bind: {} }; return { ok: true, bind: { [pat.h]: val[0], [pat.t]: val.slice(1) } }; }
+    return { ok: false, bind: {} };
+  };
+
+  const formatValue = (v) => { if (v && v.__kind === "fn") return "Result is a partial function. Supply more arguments to see a value."; if (Array.isArray(v)) return `[${v.map(formatValueInner).join(", ")}]`; return String(v); };
+  const formatValueInner = (v) => (Array.isArray(v) ? `[${v.map(formatValueInner).join(", ")}]` : String(v));
+  const equalish = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  const evaluateBinary = (op, l, r, line) => {
+    const nums = () => { if (typeof l !== "number" || typeof r !== "number") { const lt = Array.isArray(l) ? "List" : typeof l; const rt = Array.isArray(r) ? "List" : typeof r; throw new LangError("Type", `You tried to ${op === "+" ? "add" : "combine"} a ${lt} to a ${rt} on line ${line}.`, line); } };
+    if (op === ":") { if (!Array.isArray(r)) throw new LangError("Type", `Right side of ':' must be a List on line ${line}.`, line); return [l, ...r]; }
+    switch (op) {
+      case "+": nums(); return l + r; case "-": nums(); return l - r; case "*": nums(); return l * r;
+      case "/": nums(); return l / r; case "%": nums(); return l % r;
+      case "==": return equalish(l, r); case "!=": return !equalish(l, r);
+      case ">": nums(); return l > r; case "<": nums(); return l < r;
+      case ">=": nums(); return l >= r; case "<=": nums(); return l <= r;
+      case "&&": return truthy(l) && truthy(r); case "||": return truthy(l) || truthy(r);
+      default: throw new LangError("Syntax", `Unsupported operator '${op}' on line ${line}.`, line);
+    }
+  };
+
+  const makeBinaryFunction = (op, fixed, side, line) => ({ __kind: "fn", arity: 1, got: [], call: (arg) => side === "left" ? evaluateBinary(op, fixed, arg, line) : evaluateBinary(op, arg, fixed, line) });
+  const makeOperatorLiteral = (op, line) => ({ __kind: "fn", arity: 2, got: [], call: function(arg, ctx) { const next = [...this.got, arg]; if (next.length < 2) return { ...this, got: next }; return evaluateBinary(op, next[0], next[1], line || ctx.line); } });
+
+  const evaluateAST = (ast, env, state) => {
+    state.steps += 1;
+    if (state.steps > state.maxSteps) throw new LangError("Recursion", "Infinite recursion detected. Did you forget a base case like f [] = ...?", ast.line);
+    switch (ast.k) {
+      case "num": return ast.v; case "bool": return ast.v;
+      case "var": { if (ast.n in env) return env[ast.n]; throw new LangError("Reference", `You used '${ast.n}', but '${ast.n}' hasn't been defined yet.`, ast.line); }
+      case "oplit": return makeOperatorLiteral(ast.op, ast.line);
+      case "section_right": return makeBinaryFunction(ast.op, evaluateAST(ast.value, env, state), "right", ast.line);
+      case "section_left": return makeBinaryFunction(ast.op, evaluateAST(ast.value, env, state), "left", ast.line);
+      case "list": return ast.items.map((x) => evaluateAST(x, env, state));
+      case "call": return applyOne(evaluateAST(ast.f, env, state), evaluateAST(ast.a, env, state), { line: ast.line });
+      case "bin": { const l = evaluateAST(ast.l, env, state); const r = evaluateAST(ast.r, env, state); return evaluateBinary(ast.op, l, r, ast.line); }
+      default: throw new LangError("Syntax", "Unknown expression type.", ast.line);
+    }
+  };
+
+  const runProgram = (code) => {
+    const rawLines = code.split(/\r?\n/);
+    const lines = rawLines.map((line, idx) => ({ text: line.trim(), lineNo: idx + 1 })).filter((x) => x.text.length > 0 && !x.text.startsWith("--"));
+    if (!lines.length) throw new LangError("Syntax", "No code entered.", null);
+    const env = { ...makeBuiltins() };
+    const fns = {};
+    const defs = lines.slice(0, -1);
+    const last = lines[lines.length - 1];
+    const valueDefs = [];
+    for (const d of defs) {
+      const def = splitDefinition(d.text, d.lineNo);
+      if (!def) throw new LangError("Syntax", `Only definitions are allowed before the final expression (line ${d.lineNo}).`, d.lineNo);
+      if (def.params.length === 0) { valueDefs.push(def); } else {
+        if (!fns[def.name]) fns[def.name] = { arity: def.params.length, clauses: [] };
+        if (fns[def.name].arity !== def.params.length) throw new LangError("Syntax", `All clauses of '${def.name}' must have the same number of parameters.`, d.lineNo);
+        fns[def.name].clauses.push(def);
       }
     }
-
-    const tokenizer = (input) => {
-      const tokens = [];
-      let i = 0;
-      const two = ["==", "!=", ">=", "<=", "&&", "||"];
-      const one = "()+-*/%=,:[]><";
-      while (i < input.length) {
-        const c = input[i];
-        if (/\s/.test(c)) { i += 1; continue; }
-        const pair = input.slice(i, i + 2);
-        if (two.includes(pair)) { tokens.push({ t: pair }); i += 2; continue; }
-        if (one.includes(c)) { tokens.push({ t: c }); i += 1; continue; }
-        if (/\d/.test(c) || (c === "." && /\d/.test(input[i + 1]))) {
-          let j = i + 1;
-          while (j < input.length && /[\d.]/.test(input[j])) j += 1;
-          tokens.push({ t: "NUMBER", v: Number(input.slice(i, j)) });
-          i = j;
-          continue;
-        }
-        if (/[A-Za-z_]/.test(c)) {
-          let j = i + 1;
-          while (j < input.length && /[A-Za-z0-9_]/.test(input[j])) j += 1;
-          const word = input.slice(i, j);
-          tokens.push({ t: "IDENT", v: word });
-          i = j;
-          continue;
-        }
-        throw new LangError("Syntax", `I don't recognize the symbol '${c}'.`, null);
-      }
-      return tokens;
-    };
-
-    const parseExpression = (line, lineNo) => {
-      const tokens = tokenizer(line);
-      let p = 0;
-      const peek = () => tokens[p];
-      const eat = (t) => {
-        const tk = tokens[p];
-        if (!tk || tk.t !== t) throw new LangError("Syntax", `Expected '${t}' on line ${lineNo}.`, lineNo);
-        p += 1;
-        return tk;
-      };
-      const match = (t) => (tokens[p] && tokens[p].t === t ? (p += 1, true) : false);
-      const isAtomStart = (tk) => tk && ["NUMBER", "IDENT", "(", "["].includes(tk.t);
-
-      const operators = Object.keys({ "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, "<": 4, ">=": 4, "<=": 4, ":": 5, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7 });
-
-      const atom = () => {
-        const tk = peek();
-        if (!tk) throw new LangError("Syntax", `Unexpected end of expression on line ${lineNo}.`, lineNo);
-        if (match("NUMBER")) return { k: "num", v: tk.v, line: lineNo };
-        if (match("IDENT")) {
-          if (tk.v === "True" || tk.v === "False") return { k: "bool", v: tk.v === "True", line: lineNo };
-          return { k: "var", n: tk.v, line: lineNo };
-        }
-        if (match("(")) {
-          if (peek() && operators.includes(peek().t)) {
-            const op = peek().t;
-            p += 1;
-            if (match(")")) return { k: "oplit", op, line: lineNo };
-            const sectionValue = expr(0);
-            eat(")");
-            return { k: "section_right", op, value: sectionValue, line: lineNo };
-          }
-          const start = p;
-          try {
-            const lhs = atom();
-            if (peek() && operators.includes(peek().t) && tokens[p + 1] && tokens[p + 1].t === ")") {
-              const op = peek().t;
-              p += 1;
-              eat(")");
-              return { k: "section_left", op, value: lhs, line: lineNo };
-            }
-          } catch (_) {
-          }
-          p = start;
-          const e = expr(0);
-          eat(")");
-          return e;
-        }
-        if (match("[")) {
-          if (match("]")) return { k: "list", items: [], line: lineNo };
-          const items = [expr(0)];
-          while (match(",")) items.push(expr(0));
-          eat("]");
-          return { k: "list", items, line: lineNo };
-        }
-        throw new LangError("Syntax", `Could not parse expression on line ${lineNo}.`, lineNo);
-      };
-
-      const app = () => {
-        let left = atom();
-        while (isAtomStart(peek())) {
-          left = { k: "call", f: left, a: atom(), line: lineNo };
-        }
-        return left;
-      };
-
-      const precedence = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, "<": 4, ">=": 4, "<=": 4, ":": 5, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7 };
-      const rightAssoc = new Set([":"]);
-
-      const expr = (minPrec) => {
-        let left = app();
-        while (true) {
-          const tk = peek();
-          if (!tk || !(tk.t in precedence) || precedence[tk.t] < minPrec) break;
-          const op = tk.t;
-          p += 1;
-          const nextPrec = rightAssoc.has(op) ? precedence[op] : precedence[op] + 1;
-          const right = expr(nextPrec);
-          left = { k: "bin", op, l: left, r: right, line: lineNo };
-        }
-        return left;
-      };
-
-      const ast = expr(0);
-      if (p !== tokens.length) throw new LangError("Syntax", `Unexpected tokens on line ${lineNo}.`, lineNo);
-      return ast;
-    };
-
-    const parsePattern = (token, lineNo) => {
-      const trimmed = token.trim();
-      if (trimmed === "[]") return { k: "empty" };
-      const consMatch = trimmed.match(/^\(?\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)?$/);
-      if (consMatch) return { k: "cons", h: consMatch[1], t: consMatch[2] };
-      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) return { k: "var", n: trimmed };
-      throw new LangError("Syntax", `Invalid pattern '${token}' on line ${lineNo}.`, lineNo);
-    };
-
-    const splitDefinition = (line, lineNo) => {
-      if (line.includes(":=")) {
-        throw new LangError("Syntax", `I don't recognize the symbol ':=' - did you mean '='?`, lineNo);
-      }
-      const eq = line.indexOf("=");
-      if (eq < 0) return null;
-      const left = line.slice(0, eq).trim();
-      const right = line.slice(eq + 1).trim();
-      if (!left || !right) throw new LangError("Syntax", `Malformed definition on line ${lineNo}.`, lineNo);
-      const pieces = left.match(/\([^)]*\)|\S+/g) || [];
-      const name = pieces[0];
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new LangError("Syntax", `Invalid name '${name}' on line ${lineNo}.`, lineNo);
-      const params = pieces.slice(1).map((p) => parsePattern(p, lineNo));
-      return { name, params, body: parseExpression(right, lineNo), line: lineNo };
-    };
-
-    const makeBuiltins = () => {
-      const curry = (arity, fn, got = []) => ({
-        __kind: "fn",
-        arity,
-        got,
-        call: (arg, ctx) => {
-          const next = [...got, arg];
-          if (next.length < arity) return curry(arity, fn, next);
-          return fn(...next, ctx);
-        }
-      });
-      return {
-        map: curry(2, (f, list, ctx) => {
-          if (!Array.isArray(list)) throw new LangError("Type", `You tried to map over a non-List.`, ctx.line);
-          return list.map((x) => applyOne(f, x, ctx));
-        }),
-        filter: curry(2, (f, list, ctx) => {
-          if (!Array.isArray(list)) throw new LangError("Type", `You tried to filter a non-List.`, ctx.line);
-          return list.filter((x) => truthy(applyOne(f, x, ctx)));
-        }),
-        fold: curry(3, (op, start, list, ctx) => {
-          if (!Array.isArray(list)) throw new LangError("Type", `You tried to fold a non-List.`, ctx.line);
-          return list.reduce((acc, v) => applyOne(applyOne(op, acc, ctx), v, ctx), start);
-        })
-      };
-    };
-
-    const truthy = (v) => Boolean(v);
-
-    const applyOne = (fn, arg, ctx) => {
-      if (!fn || fn.__kind !== "fn") throw new LangError("Type", `Tried to call a non-function on line ${ctx.line}.`, ctx.line);
-      return fn.call(arg, ctx);
-    };
-
-    const matchPattern = (pat, val) => {
-      if (pat.k === "var") return { ok: true, bind: { [pat.n]: val } };
-      if (pat.k === "empty") return { ok: Array.isArray(val) && val.length === 0, bind: {} };
-      if (pat.k === "cons") {
-        if (!Array.isArray(val) || val.length === 0) return { ok: false, bind: {} };
-        return { ok: true, bind: { [pat.h]: val[0], [pat.t]: val.slice(1) } };
-      }
-      return { ok: false, bind: {} };
-    };
-
-    const formatValue = (v) => {
-      if (v && v.__kind === "fn") return "Result is a partial function. Supply more arguments to see a value.";
-      if (Array.isArray(v)) return `[${v.map(formatValueInner).join(", ")}]`;
-      return String(v);
-    };
-
-    const formatValueInner = (v) => (Array.isArray(v) ? `[${v.map(formatValueInner).join(", ")}]` : String(v));
-
-    const equalish = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-
-    const evaluateBinary = (op, l, r, line) => {
-      const nums = () => {
-        if (typeof l !== "number" || typeof r !== "number") {
-          const leftType = Array.isArray(l) ? "List" : typeof l;
-          const rightType = Array.isArray(r) ? "List" : typeof r;
-          throw new LangError("Type", `You tried to ${op === "+" ? "add" : "combine"} a ${leftType} to a ${rightType} on line ${line}.`, line);
-        }
-      };
-      if (op === ":") {
-        if (!Array.isArray(r)) throw new LangError("Type", `Right side of ':' must be a List on line ${line}.`, line);
-        return [l, ...r];
-      }
-      switch (op) {
-        case "+": nums(); return l + r;
-        case "-": nums(); return l - r;
-        case "*": nums(); return l * r;
-        case "/": nums(); return l / r;
-        case "%": nums(); return l % r;
-        case "==": return equalish(l, r);
-        case "!=": return !equalish(l, r);
-        case ">": nums(); return l > r;
-        case "<": nums(); return l < r;
-        case ">=": nums(); return l >= r;
-        case "<=": nums(); return l <= r;
-        case "&&": return truthy(l) && truthy(r);
-        case "||": return truthy(l) || truthy(r);
-        default: throw new LangError("Syntax", `Unsupported operator '${op}' on line ${line}.`, line);
-      }
-    };
-
-    const makeBinaryFunction = (op, fixed, side, line) => ({
-      __kind: "fn",
-      arity: 1,
-      got: [],
-      call: (arg) => side === "left"
-        ? evaluateBinary(op, fixed, arg, line)
-        : evaluateBinary(op, arg, fixed, line)
-    });
-
-    const makeOperatorLiteral = (op, line) => ({
-      __kind: "fn",
-      arity: 2,
-      got: [],
-      call: function(arg, ctx) {
+    for (const [name, fnDef] of Object.entries(fns)) {
+      const fn = { __kind: "fn", arity: fnDef.arity, got: [], call: function(arg, ctx) {
         const next = [...this.got, arg];
-        if (next.length < 2) return { ...this, got: next };
-        return evaluateBinary(op, next[0], next[1], line || ctx.line);
-      }
-    });
-
-    const evaluateAST = (ast, env, state) => {
-      state.steps += 1;
-      if (state.steps > state.maxSteps) {
-        throw new LangError("Recursion", "Infinite recursion detected. Did you forget a base case like f [] = ...?", ast.line);
-      }
-      switch (ast.k) {
-        case "num": return ast.v;
-        case "bool": return ast.v;
-        case "var": {
-          if (ast.n in env) return env[ast.n];
-          throw new LangError("Reference", `You used '${ast.n}', but '${ast.n}' hasn't been defined yet.`, ast.line);
+        if (next.length < this.arity) return { ...fn, got: next };
+        const args = next;
+        for (const clause of fnDef.clauses) {
+          let binds = {}; let ok = true;
+          for (let i = 0; i < clause.params.length; i++) { const m = matchPattern(clause.params[i], args[i]); if (!m.ok) { ok = false; break; } binds = { ...binds, ...m.bind }; }
+          if (ok) { const localEnv = { ...env, ...binds }; return evaluateAST(clause.body, localEnv, { steps: 0, maxSteps: 20000 }); }
         }
-        case "oplit": return makeOperatorLiteral(ast.op, ast.line);
-        case "section_right": return makeBinaryFunction(ast.op, evaluateAST(ast.value, env, state), "right", ast.line);
-        case "section_left": return makeBinaryFunction(ast.op, evaluateAST(ast.value, env, state), "left", ast.line);
-        case "list": return ast.items.map((x) => evaluateAST(x, env, state));
-        case "call": return applyOne(evaluateAST(ast.f, env, state), evaluateAST(ast.a, env, state), { line: ast.line });
-        case "bin": {
-          const l = evaluateAST(ast.l, env, state);
-          const r = evaluateAST(ast.r, env, state);
-          return evaluateBinary(ast.op, l, r, ast.line);
-        }
-        default:
-          throw new LangError("Syntax", "Unknown expression type.", ast.line);
+        throw new LangError("Type", `No pattern matched in function '${name}' on line ${ctx.line}.`, ctx.line);
+      }};
+      env[name] = fn;
+    }
+    for (const def of valueDefs) env[def.name] = evaluateAST(def.body, env, { steps: 0, maxSteps: 20000 });
+    const finalExpr = splitDefinition(last.text, last.lineNo)
+      ? (() => { throw new LangError("Syntax", `Last line must be an expression to evaluate (line ${last.lineNo}).`, last.lineNo); })()
+      : parseExpression(last.text, last.lineNo);
+    const result = evaluateAST(finalExpr, env, { steps: 0, maxSteps: 20000 });
+    return { result, env };
+  };
+
+  const ui = {
+    taskSelect: document.getElementById("taskSelect"),
+    taskTitle: document.getElementById("taskTitle"),
+    taskBody: document.getElementById("taskBody"),
+    editor: document.getElementById("editor"),
+    runBtn: document.getElementById("runBtn"),
+    submitBtn: document.getElementById("submitBtn"),
+    loadTaskBtn: document.getElementById("loadTaskBtn"),
+    console: document.getElementById("console"),
+    submitResult: document.getElementById("submitResult"),
+    successBurst: document.getElementById("successBurst"),
+    guideBtn: document.getElementById("guideBtn"),
+    guideDialog: document.getElementById("guideDialog"),
+    closeGuideBtn: document.getElementById("closeGuideBtn"),
+    solutionBtn: document.getElementById("solutionBtn"),
+    solutionDialog: document.getElementById("solutionDialog"),
+    solutionCode: document.getElementById("solutionCode"),
+    closeSolutionBtn: document.getElementById("closeSolutionBtn")
+  };
+
+  const renderTask = () => { const task = tasks[Number(ui.taskSelect.value)]; ui.taskTitle.textContent = `Task ${task.id}: ${task.name}`; ui.taskBody.textContent = `${task.description}${task.data ? `\n\nGlobal data: ${task.data}` : ""}`; };
+  const loadStarter = () => { const task = tasks[Number(ui.taskSelect.value)]; ui.editor.value = task.starter; showConsole("Click Run to evaluate your code.", "muted"); };
+  const showSolution = () => { const task = tasks[Number(ui.taskSelect.value)]; ui.solutionCode.textContent = task.solution; ui.solutionDialog.showModal(); };
+  const showConsole = (message, cls = "muted") => { ui.console.className = `console ${cls}`; ui.console.textContent = message; };
+
+  const runCode = () => {
+    showConsole("Running...", "muted");
+    window.clearTimeout(runCode._t);
+    runCode._t = window.setTimeout(() => {
+      try { const { result } = runProgram(ui.editor.value); const text = formatValue(result); showConsole(`Output:\n${text}`, result && result.__kind === "fn" ? "warn" : "ok"); }
+      catch (err) { showConsole(err instanceof LangError ? `${err.kind} Error${err.line ? ` (line ${err.line})` : ""}: ${err.message}` : `Unexpected Error: ${err.message}`, "err"); }
+    }, 200);
+  };
+
+  const submit = () => {
+    const task = tasks[Number(ui.taskSelect.value)];
+    try {
+      const { result: got } = runProgram(ui.editor.value);
+      const pass = equalish(got, task.expected);
+      if (pass) {
+        ui.submitResult.className = "console ok";
+        ui.submitResult.textContent = `Success! Your output matches the expected value.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
+        ui.successBurst.classList.remove("play"); void ui.successBurst.offsetWidth; ui.successBurst.classList.add("play");
+      } else {
+        ui.submitResult.className = "console warn";
+        ui.submitResult.textContent = `Not yet. Your output does not match the expected value.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
       }
-    };
+    } catch (err) {
+      ui.submitResult.className = "console err";
+      ui.submitResult.textContent = err instanceof LangError ? `${err.kind} Error${err.line ? ` (line ${err.line})` : ""}: ${err.message}` : `Unexpected Error: ${err.message}`;
+    }
+  };
 
-    const runProgram = (code) => {
-      const rawLines = code.split(/\r?\n/);
-      const lines = rawLines
-        .map((line, idx) => ({ text: line.trim(), lineNo: idx + 1 }))
-        .filter((x) => x.text.length > 0 && !x.text.startsWith("--"));
-      if (!lines.length) throw new LangError("Syntax", "No code entered.", null);
-
-      const env = { ...makeBuiltins() };
-      const fns = {};
-      const defs = lines.slice(0, -1);
-      const last = lines[lines.length - 1];
-
-      const valueDefs = [];
-      for (const d of defs) {
-        const def = splitDefinition(d.text, d.lineNo);
-        if (!def) throw new LangError("Syntax", `Only definitions are allowed before the final expression (line ${d.lineNo}).`, d.lineNo);
-        if (def.params.length === 0) {
-          valueDefs.push(def);
-        } else {
-          if (!fns[def.name]) fns[def.name] = { arity: def.params.length, clauses: [] };
-          if (fns[def.name].arity !== def.params.length) throw new LangError("Syntax", `All clauses of '${def.name}' must have the same number of parameters.`, d.lineNo);
-          fns[def.name].clauses.push(def);
-        }
-      }
-
-      for (const [name, fnDef] of Object.entries(fns)) {
-        const fn = {
-          __kind: "fn",
-          arity: fnDef.arity,
-          got: [],
-          call: function(arg, ctx) {
-            const next = [...this.got, arg];
-            if (next.length < this.arity) return { ...fn, got: next };
-            const args = next;
-            for (const clause of fnDef.clauses) {
-              let binds = {};
-              let ok = true;
-              for (let i = 0; i < clause.params.length; i += 1) {
-                const m = matchPattern(clause.params[i], args[i]);
-                if (!m.ok) { ok = false; break; }
-                binds = { ...binds, ...m.bind };
-              }
-              if (ok) {
-                const localEnv = { ...env, ...binds };
-                return evaluateAST(clause.body, localEnv, { steps: 0, maxSteps: 20000 });
-              }
-            }
-            throw new LangError("Type", `No pattern matched in function '${name}' on line ${ctx.line}.`, ctx.line);
-          }
-        };
-        env[name] = fn;
-      }
-      for (const def of valueDefs) {
-        env[def.name] = evaluateAST(def.body, env, { steps: 0, maxSteps: 20000 });
-      }
-
-      const finalExpr = splitDefinition(last.text, last.lineNo)
-        ? (() => { throw new LangError("Syntax", `Last line must be an expression to evaluate (line ${last.lineNo}).`, last.lineNo); })()
-        : parseExpression(last.text, last.lineNo);
-
-      const result = evaluateAST(finalExpr, env, { steps: 0, maxSteps: 20000 });
-      return { result, env };
-    };
-
-    const ui = {
-      taskSelect: document.getElementById("taskSelect"),
-      taskTitle: document.getElementById("taskTitle"),
-      taskBody: document.getElementById("taskBody"),
-      editor: document.getElementById("editor"),
-      runBtn: document.getElementById("runBtn"),
-      submitBtn: document.getElementById("submitBtn"),
-      loadTaskBtn: document.getElementById("loadTaskBtn"),
-      console: document.getElementById("console"),
-      submitResult: document.getElementById("submitResult"),
-      successBurst: document.getElementById("successBurst"),
-      guideBtn: document.getElementById("guideBtn"),
-      guideDialog: document.getElementById("guideDialog"),
-      closeGuideBtn: document.getElementById("closeGuideBtn"),
-      solutionBtn: document.getElementById("solutionBtn"),
-      solutionDialog: document.getElementById("solutionDialog"),
-      solutionCode: document.getElementById("solutionCode"),
-      closeSolutionBtn: document.getElementById("closeSolutionBtn")
-    };
-
-    const renderTask = () => {
-      const task = tasks[Number(ui.taskSelect.value)];
-      ui.taskTitle.textContent = `Task ${task.id}: ${task.name}`;
-      ui.taskBody.textContent = `${task.description}${task.data ? `\n\nGlobal data: ${task.data}` : ""}`;
-    };
-
-    const loadStarter = () => {
-      const task = tasks[Number(ui.taskSelect.value)];
-      ui.editor.value = task.starter;
-      showConsole("Click Run to evaluate your code.", "muted");
-    };
-
-    const showSolution = () => {
-      const task = tasks[Number(ui.taskSelect.value)];
-      ui.solutionCode.textContent = task.solution;
-      ui.solutionDialog.showModal();
-    };
-
-    const showConsole = (message, cls = "muted") => {
-      ui.console.className = `console ${cls}`;
-      ui.console.textContent = message;
-    };
-
-    const runCode = () => {
-      showConsole("Running...", "muted");
-      window.clearTimeout(runCode._t);
-      runCode._t = window.setTimeout(() => {
-        try {
-          const { result } = runProgram(ui.editor.value);
-          const text = formatValue(result);
-          showConsole(`Output:\n${text}`, result && result.__kind === "fn" ? "warn" : "ok");
-        } catch (err) {
-          if (err instanceof LangError) {
-            showConsole(`${err.kind} Error${err.line ? ` (line ${err.line})` : ""}: ${err.message}`, "err");
-          } else {
-            showConsole(`Unexpected Error: ${err.message}`, "err");
-          }
-        }
-      }, 200);
-    };
-
-    const submit = () => {
-      const task = tasks[Number(ui.taskSelect.value)];
-      try {
-        const { result: got } = runProgram(ui.editor.value);
-        const pass = equalish(got, task.expected);
-        if (pass) {
-          ui.submitResult.className = "console ok";
-          ui.submitResult.textContent = `Success! Your output matches the expected value.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
-          ui.successBurst.classList.remove("play");
-          void ui.successBurst.offsetWidth;
-          ui.successBurst.classList.add("play");
-        } else {
-          ui.submitResult.className = "console warn";
-          ui.submitResult.textContent = `Not yet. Your output does not match the expected value.\nExpected: ${formatValue(task.expected)}\nGot: ${formatValue(got)}`;
-        }
-      } catch (err) {
-        ui.submitResult.className = "console err";
-        ui.submitResult.textContent = err instanceof LangError
-          ? `${err.kind} Error${err.line ? ` (line ${err.line})` : ""}: ${err.message}`
-          : `Unexpected Error: ${err.message}`;
-      }
-    };
-
-    tasks.forEach((task, idx) => {
-      const opt = document.createElement("option");
-      opt.value = idx;
-      opt.textContent = `${task.id}. ${task.name}`;
-      ui.taskSelect.appendChild(opt);
-    });
-
-    ui.taskSelect.addEventListener("change", () => { renderTask(); loadStarter(); });
-    ui.loadTaskBtn.addEventListener("click", loadStarter);
-    ui.runBtn.addEventListener("click", runCode);
-    ui.submitBtn.addEventListener("click", submit);
-    ui.guideBtn.addEventListener("click", () => ui.guideDialog.showModal());
-    ui.closeGuideBtn.addEventListener("click", () => ui.guideDialog.close());
-    ui.solutionBtn.addEventListener("click", showSolution);
-    ui.closeSolutionBtn.addEventListener("click", () => ui.solutionDialog.close());
-
-    renderTask();
-    loadStarter();
-  </script>
+  tasks.forEach((task, idx) => { const opt = document.createElement("option"); opt.value = idx; opt.textContent = `${task.id}. ${task.name}`; ui.taskSelect.appendChild(opt); });
+  ui.taskSelect.addEventListener("change", () => { renderTask(); loadStarter(); });
+  ui.loadTaskBtn.addEventListener("click", loadStarter);
+  ui.runBtn.addEventListener("click", runCode);
+  ui.submitBtn.addEventListener("click", submit);
+  ui.guideBtn.addEventListener("click", () => ui.guideDialog.showModal());
+  ui.closeGuideBtn.addEventListener("click", () => ui.guideDialog.close());
+  ui.solutionBtn.addEventListener("click", showSolution);
+  ui.closeSolutionBtn.addEventListener("click", () => ui.solutionDialog.close());
+  renderTask(); loadStarter();
+</script>
 </body>
 </html>

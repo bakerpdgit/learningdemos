@@ -4,8 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A-Level Sets Interactive</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
     <!-- React and ReactDOM -->
     <script
       crossorigin
@@ -17,31 +43,28 @@
     ></script>
     <!-- Babel for in-browser JSX compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style id="global-home-link-style">
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
-    </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-slate-50 text-slate-800">
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
+  <body>
     <div id="root"></div>
 
     <script type="text/babel">
       const { useState, useEffect, useCallback, useRef } = React;
 
-      // --- ICON COMPONENTS (Replacing lucide-react) ---
+      // --- ICON COMPONENTS ---
       const Check = ({ size = 20, className = "" }) => (
         <svg
           width={size}
@@ -135,6 +158,44 @@
           <polygon points="5 3 19 12 5 21 5 3"></polygon>
         </svg>
       );
+      const SunIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      );
+      const MoonIcon = () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      );
 
       // --- UTILITY FUNCTIONS ---
       const randomInt = (min, max) =>
@@ -184,7 +245,6 @@
         const r = Math.random();
         if (r < 0.33) {
           const limit = randomInt(3, 6);
-          // ℕ starts at 0 in Computer Science
           const ans = Array.from({ length: limit }, (_, i) => i);
           return {
             text: `List the elements of the set:\nA = {x | x ∈ ℕ ∧ x < ${limit}}`,
@@ -300,7 +360,6 @@
           const set = [2, 4, 6];
           const trueStatement = isIn ? set.includes(num) : !set.includes(num);
           const symbol = isIn ? "∈" : "∉";
-
           return {
             text: `True or False: ${num} ${symbol} {${set.join(", ")}}`,
             type: "mcq",
@@ -494,16 +553,31 @@
 
       // --- MAIN APP COMPONENT ---
       function App() {
-        // State
         const [activeTopics, setActiveTopics] = useState(Object.keys(TOPICS));
         const [showDropdown, setShowDropdown] = useState(false);
         const [currentQuestion, setCurrentQuestion] = useState(null);
         const [userAnswer, setUserAnswer] = useState("");
-        const [status, setStatus] = useState("idle"); // 'idle', 'correct', 'incorrect'
+        const [status, setStatus] = useState("idle");
         const [showSolution, setShowSolution] = useState(false);
         const dropdownRef = useRef(null);
 
-        // Close dropdown on outside click
+        const [theme, setTheme] = useState(() => {
+          const saved = localStorage.getItem("uimode");
+          if (saved) return saved;
+          return window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        });
+
+        useEffect(() => {
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          localStorage.setItem("uimode", theme);
+        }, [theme]);
+
+        const toggleTheme = () =>
+          setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+
         useEffect(() => {
           const handleClickOutside = (event) => {
             if (
@@ -522,14 +596,12 @@
           if (activeTopics.length === 0) return;
           const topicKey = randomChoice(activeTopics);
           const newQ = TOPICS[topicKey].generator();
-
           setCurrentQuestion({ ...newQ, topic: TOPICS[topicKey].name });
           setUserAnswer(newQ.type === "multiselect" ? [] : "");
           setStatus("idle");
           setShowSolution(false);
         }, [activeTopics]);
 
-        // Initial generation
         useEffect(() => {
           generateNewQuestion();
         }, [generateNewQuestion]);
@@ -541,7 +613,7 @@
             } else if (!prev.includes(topicKey)) {
               return [...prev, topicKey];
             }
-            return prev; // Prevent unchecking the last topic
+            return prev;
           });
         };
 
@@ -572,7 +644,6 @@
             const isEmptyIndicator = ["empty", "none", "{}", "∅"].includes(
               cleaned,
             );
-
             if (isEmptyIndicator) {
               isCorrect = currentQuestion.correctAnswer.length === 0;
             } else {
@@ -584,7 +655,6 @@
               const correctArr = [...currentQuestion.correctAnswer]
                 .map(String)
                 .sort();
-
               if (userArr.length === correctArr.length) {
                 isCorrect = userArr.every((v, i) => v === correctArr[i]);
               }
@@ -592,7 +662,7 @@
           }
 
           setStatus(isCorrect ? "correct" : "incorrect");
-          if (isCorrect) setShowSolution(true); // Auto-show explanation on correct
+          if (isCorrect) setShowSolution(true);
         };
 
         const renderInput = () => {
@@ -604,7 +674,7 @@
                 {currentQuestion.options.map((opt, idx) => (
                   <label
                     key={idx}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                    className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
                   >
                     <input
                       type="radio"
@@ -617,7 +687,9 @@
                       }}
                       className="w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                     />
-                    <span className="text-slate-700 font-medium">{opt}</span>
+                    <span className="text-slate-700 dark:text-slate-200 font-medium">
+                      {opt}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -625,13 +697,13 @@
           } else if (currentQuestion.type === "multiselect") {
             return (
               <div className="space-y-3 mt-4">
-                <p className="text-sm font-semibold text-slate-500 mb-2">
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-2">
                   Select all that apply:
                 </p>
                 {currentQuestion.options.map((opt, idx) => (
                   <label
                     key={idx}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                    className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -655,7 +727,9 @@
                       }}
                       className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
-                    <span className="text-slate-700 font-medium">{opt}</span>
+                    <span className="text-slate-700 dark:text-slate-200 font-medium">
+                      {opt}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -677,187 +751,223 @@
               }}
               onKeyDown={(e) => e.key === "Enter" && checkAnswer()}
               placeholder={placeholder}
-              className="mt-4 w-full p-4 text-lg border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow outline-none font-mono"
+              className="mt-4 w-full p-4 text-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow outline-none font-mono"
             />
           );
         };
 
         return (
-          <div className="min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
-            <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-              {/* HEADER */}
-              <div className="bg-indigo-600 text-white p-6 flex justify-between items-center relative">
-                <div>
-                  <h1 className="text-2xl font-bold">
-                    AQA A-Level Sets Practice
-                  </h1>
-                  <p className="text-indigo-200 text-sm mt-1">
-                    Interactive Topic Generation
-                  </p>
-                </div>
-
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    onClick={() => setShowDropdown(!showDropdown)}
-                    className="flex items-center space-x-2 bg-indigo-500 hover:bg-indigo-400 transition-colors px-4 py-2 rounded-lg text-sm font-medium"
-                  >
-                    <Filter size={18} />
-                    <span>Topics</span>
-                    <ChevronDown size={16} />
-                  </button>
-
-                  {/* TOPIC DROPDOWN */}
-                  {showDropdown && (
-                    <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl z-20 border border-slate-100 overflow-hidden">
-                      <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 font-semibold text-slate-700">
-                        Select Topics
-                      </div>
-                      <div className="p-2">
-                        {Object.entries(TOPICS).map(([key, topic]) => (
-                          <label
-                            key={key}
-                            className="flex items-start space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={activeTopics.includes(key)}
-                              onChange={() => toggleTopic(key)}
-                              disabled={
-                                activeTopics.length === 1 &&
-                                activeTopics.includes(key)
-                              }
-                              className="mt-1 w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 disabled:opacity-50"
-                            />
-                            <span
-                              className={`text-sm ${activeTopics.includes(key) ? "text-slate-800" : "text-slate-500"}`}
-                            >
-                              {topic.name}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+          <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
                   )}
+                </button>
+              </nav>
+            </header>
+
+            <div className="flex-1 flex items-center justify-center p-4 font-sans">
+              <div className="max-w-3xl w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                {/* Page Sub-Header */}
+                <div className="bg-indigo-600 text-white p-6 flex justify-between items-center relative">
+                  <div>
+                    <h1 className="text-2xl font-bold">
+                      AQA A-Level Sets Practice
+                    </h1>
+                    <p className="text-indigo-200 text-sm mt-1">
+                      Interactive Topic Generation
+                    </p>
+                  </div>
+
+                  <div className="relative" ref={dropdownRef}>
+                    <button
+                      onClick={() => setShowDropdown(!showDropdown)}
+                      className="flex items-center space-x-2 bg-indigo-500 hover:bg-indigo-400 transition-colors px-4 py-2 rounded-lg text-sm font-medium"
+                    >
+                      <Filter size={18} />
+                      <span>Topics</span>
+                      <ChevronDown size={16} />
+                    </button>
+
+                    {showDropdown && (
+                      <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-100 dark:border-slate-700 overflow-hidden">
+                        <div className="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 border-b border-slate-100 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-300">
+                          Select Topics
+                        </div>
+                        <div className="p-2">
+                          {Object.entries(TOPICS).map(([key, topic]) => (
+                            <label
+                              key={key}
+                              className="flex items-start space-x-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={activeTopics.includes(key)}
+                                onChange={() => toggleTopic(key)}
+                                disabled={
+                                  activeTopics.length === 1 &&
+                                  activeTopics.includes(key)
+                                }
+                                className="mt-1 w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 disabled:opacity-50"
+                              />
+                              <span
+                                className={`text-sm ${activeTopics.includes(key) ? "text-slate-800 dark:text-slate-200" : "text-slate-500 dark:text-slate-500"}`}
+                              >
+                                {topic.name}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* MAIN CONTENT */}
-              <div className="p-8">
-                {currentQuestion ? (
-                  <div className="space-y-6">
-                    <div className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-full uppercase tracking-wide">
-                      {currentQuestion.topic}
-                    </div>
+                {/* Main Content */}
+                <div className="p-8">
+                  {currentQuestion ? (
+                    <div className="space-y-6">
+                      <div className="inline-block px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 text-xs font-bold rounded-full uppercase tracking-wide">
+                        {currentQuestion.topic}
+                      </div>
 
-                    <div className="text-xl font-medium leading-relaxed whitespace-pre-wrap font-serif text-slate-900 bg-slate-50 p-6 rounded-xl border border-slate-100">
-                      {currentQuestion.text}
-                    </div>
+                      <div className="text-xl font-medium leading-relaxed whitespace-pre-wrap font-serif text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-700/50 p-6 rounded-xl border border-slate-100 dark:border-slate-600">
+                        {currentQuestion.text}
+                      </div>
 
-                    <div>
-                      {currentQuestion.type === "set" && (
-                        <p className="text-sm text-slate-500 mb-2 italic">
-                          Enter elements separated by commas. If the set has no
-                          elements, type <strong>empty</strong> or{" "}
-                          <strong>∅</strong>.
-                        </p>
+                      <div>
+                        {currentQuestion.type === "set" && (
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mb-2 italic">
+                            Enter elements separated by commas. If the set has
+                            no elements, type <strong>empty</strong> or{" "}
+                            <strong>∅</strong>.
+                          </p>
+                        )}
+                        {renderInput()}
+                      </div>
+
+                      {/* ACTION BUTTONS & FEEDBACK */}
+                      <div className="flex items-center space-x-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                        <button
+                          onClick={checkAnswer}
+                          disabled={
+                            (Array.isArray(userAnswer)
+                              ? userAnswer.length === 0
+                              : !userAnswer) || status === "correct"
+                          }
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                        >
+                          <Check size={20} />
+                          <span>Check Answer</span>
+                        </button>
+
+                        {status === "incorrect" && (
+                          <button
+                            onClick={() => setShowSolution(!showSolution)}
+                            className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 px-4 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                          >
+                            <Lightbulb size={20} />
+                            <span>
+                              {showSolution ? "Hide Solution" : "Show Solution"}
+                            </span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={generateNewQuestion}
+                          className="ml-auto text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold px-4 py-3 flex items-center space-x-2"
+                        >
+                          <span>Next Question</span>
+                          <Play size={18} />
+                        </button>
+                      </div>
+
+                      {/* STATUS INDICATORS */}
+                      {status === "correct" && (
+                        <div className="mt-6 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 p-4 rounded-xl flex items-start space-x-3 border border-green-200 dark:border-green-800">
+                          <div className="bg-green-100 dark:bg-green-900/40 p-1 rounded-full">
+                            <Check size={20} className="text-green-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold">Correct!</h3>
+                            <p className="text-sm mt-1">
+                              {currentQuestion.explanation}
+                            </p>
+                          </div>
+                        </div>
                       )}
-                      {renderInput()}
-                    </div>
-
-                    {/* ACTION BUTTONS & FEEDBACK */}
-                    <div className="flex items-center space-x-4 pt-4 border-t border-slate-100">
-                      <button
-                        onClick={checkAnswer}
-                        disabled={
-                          (Array.isArray(userAnswer)
-                            ? userAnswer.length === 0
-                            : !userAnswer) || status === "correct"
-                        }
-                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2"
-                      >
-                        <Check size={20} />
-                        <span>Check Answer</span>
-                      </button>
 
                       {status === "incorrect" && (
-                        <button
-                          onClick={() => setShowSolution(!showSolution)}
-                          className="text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-4 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                        >
-                          <Lightbulb size={20} />
-                          <span>
-                            {showSolution ? "Hide Solution" : "Show Solution"}
-                          </span>
-                        </button>
+                        <div className="mt-6 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 p-4 rounded-xl flex items-center space-x-3 border border-red-200 dark:border-red-800">
+                          <div className="bg-red-100 dark:bg-red-900/40 p-1 rounded-full">
+                            <X size={20} className="text-red-600" />
+                          </div>
+                          <h3 className="font-bold">Incorrect, try again!</h3>
+                        </div>
                       )}
 
-                      <button
-                        onClick={generateNewQuestion}
-                        className="ml-auto text-indigo-600 hover:text-indigo-800 font-semibold px-4 py-3 flex items-center space-x-2"
-                      >
-                        <span>Next Question</span>
-                        <Play size={18} />
-                      </button>
-                    </div>
-
-                    {/* STATUS INDICATORS */}
-                    {status === "correct" && (
-                      <div className="mt-6 bg-green-50 text-green-800 p-4 rounded-xl flex items-start space-x-3 border border-green-200">
-                        <div className="bg-green-100 p-1 rounded-full">
-                          <Check size={20} className="text-green-600" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold">Correct!</h3>
-                          <p className="text-sm mt-1">
+                      {/* SOLUTION BOX */}
+                      {showSolution && status !== "correct" && (
+                        <div className="mt-4 bg-yellow-50 dark:bg-yellow-900/20 p-5 rounded-xl border border-yellow-200 dark:border-yellow-800 text-yellow-900 dark:text-yellow-300">
+                          <h4 className="font-bold mb-2 flex items-center">
+                            <Lightbulb size={18} className="mr-2" /> Solution
+                          </h4>
+                          <p className="text-sm mb-3">
+                            The correct answer is:{" "}
+                            <strong className="font-mono text-base bg-yellow-100 dark:bg-yellow-900/40 px-2 py-1 rounded">
+                              {currentQuestion.type === "set"
+                                ? currentQuestion.correctAnswer.length > 0
+                                  ? `{${currentQuestion.correctAnswer.join(", ")}}`
+                                  : "∅"
+                                : currentQuestion.type === "multiselect"
+                                  ? currentQuestion.correctAnswer.join(", ")
+                                  : currentQuestion.correctAnswer}
+                            </strong>
+                          </p>
+                          <p className="text-sm">
                             {currentQuestion.explanation}
                           </p>
                         </div>
-                      </div>
-                    )}
-
-                    {status === "incorrect" && (
-                      <div className="mt-6 bg-red-50 text-red-800 p-4 rounded-xl flex items-center space-x-3 border border-red-200">
-                        <div className="bg-red-100 p-1 rounded-full">
-                          <X size={20} className="text-red-600" />
-                        </div>
-                        <h3 className="font-bold">Incorrect, try again!</h3>
-                      </div>
-                    )}
-
-                    {/* SOLUTION BOX */}
-                    {showSolution && status !== "correct" && (
-                      <div className="mt-4 bg-yellow-50 p-5 rounded-xl border border-yellow-200 text-yellow-900">
-                        <h4 className="font-bold mb-2 flex items-center">
-                          <Lightbulb size={18} className="mr-2" /> Solution
-                        </h4>
-                        <p className="text-sm mb-3">
-                          The correct answer is:{" "}
-                          <strong className="font-mono text-base bg-yellow-100 px-2 py-1 rounded">
-                            {currentQuestion.type === "set"
-                              ? currentQuestion.correctAnswer.length > 0
-                                ? `{${currentQuestion.correctAnswer.join(", ")}}`
-                                : "∅"
-                              : currentQuestion.type === "multiselect"
-                                ? currentQuestion.correctAnswer.join(", ")
-                                : currentQuestion.correctAnswer}
-                          </strong>
-                        </p>
-                        <p className="text-sm">{currentQuestion.explanation}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-slate-500">
-                    Generating your first question...
-                  </div>
-                )}
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                      Generating your first question...
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         );
       }
 
-      // Render the app
       const root = ReactDOM.createRoot(document.getElementById("root"));
       root.render(<App />);
     </script>

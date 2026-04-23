@@ -4,51 +4,92 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A Level SQL Practice</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: { extend: { colors: { headerBg: "#0f172a", headerAccent: "#38bdf8" } } }
+      };
+    </script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Prevent FOUC -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style>
-      body {
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-          "Segoe UI", sans-serif;
-      }
-
-      .fade-in-up {
-        animation: fadeInUp 0.3s ease-out;
-      }
-
+      body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      .fade-in-up { animation: fadeInUp 0.3s ease-out; }
       @keyframes fadeInUp {
-        from {
-          opacity: 0;
-          transform: translateY(16px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
       }
     </style>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
-</head>
-  <body class="min-h-screen bg-slate-50 text-slate-900">
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+  </head>
+  <body class="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors">
+
+    <!-- CS Learning Header -->
+    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 sticky top-0">
+      <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+        <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+      </a>
+      <nav class="flex items-center gap-6">
+        <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors">Home</a>
+        <button id="theme-toggle" class="text-slate-400 hover:text-headerAccent transition-colors p-1" aria-label="Toggle Dark Mode">
+          <svg id="icon-sun" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+          <svg id="icon-moon" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </button>
+      </nav>
+    </header>
 
     <div id="app"></div>
 
     <script>
+      // ── Theme ──
+      function applyTheme(mode) {
+        const html = document.documentElement;
+        const sun = document.getElementById('icon-sun');
+        const moon = document.getElementById('icon-moon');
+        if (mode === 'dark') {
+          html.classList.add('dark');
+          sun.style.display = 'block';
+          moon.style.display = 'none';
+        } else {
+          html.classList.remove('dark');
+          sun.style.display = 'none';
+          moon.style.display = 'block';
+        }
+      }
+      (function initTheme() {
+        const saved = localStorage.getItem('uimode');
+        applyTheme(saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      })();
+      document.getElementById('theme-toggle').addEventListener('click', () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        const next = isDark ? 'light' : 'dark';
+        localStorage.setItem('uimode', next);
+        applyTheme(next);
+      });
+
+      // ── App ──
       const dbTables = {
         Student: {
           columns: ["StudentID", "FirstName", "LastName", "YearGroup", "TutorGroup"],
@@ -71,132 +112,47 @@
       };
 
       const questions = [
-        {
-          id: 1,
-          type: "SELECT (Basic)",
-          text: "Write a query to retrieve all fields and all records from the Student table.",
-          tables: ["Student"],
-          expectedSql: "SELECT * \nFROM Student",
-        },
-        {
-          id: 2,
-          type: "SELECT with WHERE",
-          text: "Write a query to output only the FirstName and LastName of all students who are in YearGroup 13.",
-          tables: ["Student"],
-          expectedSql: "SELECT FirstName, LastName \nFROM Student \nWHERE YearGroup = 13",
-        },
-        {
-          id: 3,
-          type: "ORDER BY",
-          text: "Write a query to list all fields for students in YearGroup 12, ordered alphabetically by their LastName.",
-          tables: ["Student"],
-          expectedSql: "SELECT * \nFROM Student \nWHERE YearGroup = 12 \nORDER BY LastName ASC",
-        },
-        {
-          id: 4,
-          type: "INSERT",
-          text: "Write a query to add a new student to the database. Their StudentID is 105, FirstName is 'John', LastName is 'Smith', YearGroup is 12, and TutorGroup is '12A'.",
-          tables: ["Student"],
-          expectedSql:
-            "INSERT INTO Student (StudentID, FirstName, LastName, YearGroup, TutorGroup)\nVALUES (105, 'John', 'Smith', 12, '12A')",
-        },
-        {
-          id: 5,
-          type: "UPDATE",
-          text: "Alan Turing (StudentID 102) has moved to a new tutor group. Write a query to update his TutorGroup to '13B'.",
-          tables: ["Student"],
-          expectedSql: "UPDATE Student \nSET TutorGroup = '13B' \nWHERE StudentID = 102",
-        },
-        {
-          id: 6,
-          type: "DELETE",
-          text: "The school is no longer supporting tablets. Write a query to delete any device record where the DeviceType is 'Tablet'.",
-          tables: ["Device"],
-          expectedSql: "DELETE FROM Device \nWHERE DeviceType = 'Tablet'",
-        },
-        {
-          id: 7,
-          type: "Multi-Table (JOIN)",
-          text: "Write a query to output the FirstName, LastName, and DeviceType for all students and their devices. Use the AQA comma-separated FROM clause approach.",
-          tables: ["Student", "Device"],
-          expectedSql:
-            "SELECT Student.FirstName, Student.LastName, Device.DeviceType \nFROM Student, Device \nWHERE Student.StudentID = Device.StudentID",
-        },
-        {
-          id: 8,
-          type: "Multi-Table (JOIN + WHERE)",
-          text: "Write a query to find the DeviceType and OS for the student with the LastName 'Lovelace'. Use the AQA comma-separated FROM clause approach.",
-          tables: ["Student", "Device"],
-          expectedSql:
-            "SELECT Device.DeviceType, Device.OS \nFROM Student, Device \nWHERE Student.StudentID = Device.StudentID \n  AND Student.LastName = 'Lovelace'",
-        },
+        { id:1, type:"SELECT (Basic)", text:"Write a query to retrieve all fields and all records from the Student table.", tables:["Student"], expectedSql:"SELECT * \nFROM Student" },
+        { id:2, type:"SELECT with WHERE", text:"Write a query to output only the FirstName and LastName of all students who are in YearGroup 13.", tables:["Student"], expectedSql:"SELECT FirstName, LastName \nFROM Student \nWHERE YearGroup = 13" },
+        { id:3, type:"ORDER BY", text:"Write a query to list all fields for students in YearGroup 12, ordered alphabetically by their LastName.", tables:["Student"], expectedSql:"SELECT * \nFROM Student \nWHERE YearGroup = 12 \nORDER BY LastName ASC" },
+        { id:4, type:"INSERT", text:"Write a query to add a new student to the database. Their StudentID is 105, FirstName is 'John', LastName is 'Smith', YearGroup is 12, and TutorGroup is '12A'.", tables:["Student"], expectedSql:"INSERT INTO Student (StudentID, FirstName, LastName, YearGroup, TutorGroup)\nVALUES (105, 'John', 'Smith', 12, '12A')" },
+        { id:5, type:"UPDATE", text:"Alan Turing (StudentID 102) has moved to a new tutor group. Write a query to update his TutorGroup to '13B'.", tables:["Student"], expectedSql:"UPDATE Student \nSET TutorGroup = '13B' \nWHERE StudentID = 102" },
+        { id:6, type:"DELETE", text:"The school is no longer supporting tablets. Write a query to delete any device record where the DeviceType is 'Tablet'.", tables:["Device"], expectedSql:"DELETE FROM Device \nWHERE DeviceType = 'Tablet'" },
+        { id:7, type:"Multi-Table (JOIN)", text:"Write a query to output the FirstName, LastName, and DeviceType for all students and their devices. Use the AQA comma-separated FROM clause approach.", tables:["Student","Device"], expectedSql:"SELECT Student.FirstName, Student.LastName, Device.DeviceType \nFROM Student, Device \nWHERE Student.StudentID = Device.StudentID" },
+        { id:8, type:"Multi-Table (JOIN + WHERE)", text:"Write a query to find the DeviceType and OS for the student with the LastName 'Lovelace'. Use the AQA comma-separated FROM clause approach.", tables:["Student","Device"], expectedSql:"SELECT Device.DeviceType, Device.OS \nFROM Student, Device \nWHERE Student.StudentID = Device.StudentID \n  AND Student.LastName = 'Lovelace'" },
       ];
 
-      const state = {
-        currentQuestionIndex: 0,
-        currentInput: "",
-        viewState: "question",
-        results: [],
-      };
-
+      const state = { currentQuestionIndex: 0, currentInput: "", viewState: "question", results: [] };
       const app = document.getElementById("app");
 
-      function currentQuestion() {
-        return questions[state.currentQuestionIndex];
-      }
-
-      function icon(name, className = "") {
-        return `<i data-lucide="${name}" class="${className}"></i>`;
-      }
-
+      function currentQuestion() { return questions[state.currentQuestionIndex]; }
+      function icon(name, cls = "") { return `<i data-lucide="${name}" class="${cls}"></i>`; }
       function escapeHtml(text) {
-        return text
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#39;");
+        return text.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
       }
 
       function renderTable(tableName) {
         const table = dbTables[tableName];
         return `
-          <div class="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div class="flex items-center gap-2 bg-slate-800 px-4 py-2 font-mono text-sm font-semibold text-white">
-              ${icon("database", "h-4 w-4")}
+          <div class="mb-4 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+            <div class="flex items-center gap-2 bg-slate-800 dark:bg-slate-900 px-4 py-2 font-mono text-sm font-semibold text-white">
+              ${icon("database","h-4 w-4")}
               <span>Table: ${tableName}</span>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-left text-sm">
-                <thead class="bg-slate-100 text-slate-700">
-                  <tr>
-                    ${table.columns
-                      .map(
-                        (col) =>
-                          `<th class="border-b border-slate-200 px-4 py-2 font-semibold">${col}</th>`
-                      )
-                      .join("")}
-                  </tr>
+                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300">
+                  <tr>${table.columns.map(col => `<th class="border-b border-slate-200 dark:border-slate-600 px-4 py-2 font-semibold">${col}</th>`).join("")}</tr>
                 </thead>
                 <tbody>
-                  ${table.data
-                    .map(
-                      (row) => `
-                        <tr class="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50">
-                          ${row
-                            .map(
-                              (cell) =>
-                                `<td class="px-4 py-2 font-mono text-slate-600">${escapeHtml(String(cell))}</td>`
-                            )
-                            .join("")}
-                        </tr>`
-                    )
-                    .join("")}
+                  ${table.data.map(row => `
+                    <tr class="border-b border-slate-100 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                      ${row.map(cell => `<td class="px-4 py-2 font-mono text-slate-600 dark:text-slate-300">${escapeHtml(String(cell))}</td>`).join("")}
+                    </tr>`).join("")}
                 </tbody>
               </table>
             </div>
-          </div>
-        `;
+          </div>`;
       }
 
       function render() {
@@ -204,132 +160,111 @@
         const score = state.results.filter(Boolean).length;
 
         app.innerHTML = `
-          <header class="bg-blue-600 p-4 text-white shadow-md">
-            <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
+          <div class="bg-slate-800 dark:bg-slate-950 px-6 py-4 shadow-md">
+            <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 sm:flex-row">
               <div>
-                <h1 class="flex items-center gap-2 text-2xl font-bold">
-                  ${icon("code", "h-6 w-6")}
+                <h1 class="flex items-center gap-2 text-xl font-bold text-white">
+                  ${icon("code","h-5 w-5 text-sky-400")}
                   AQA A Level SQL Practice
                 </h1>
-                <p class="mt-1 text-sm text-blue-100">Master your database queries for the exam</p>
+                <p class="mt-0.5 text-sm text-slate-400">Master your database queries for the exam</p>
               </div>
-              ${state.viewState !== "results"
-                ? `<div class="rounded-full border border-blue-500 bg-blue-700 px-4 py-2 text-sm font-medium shadow-inner">
-                    Question ${state.currentQuestionIndex + 1} of ${questions.length}
-                  </div>`
-                : ""}
+              ${state.viewState !== "results" ? `
+                <div class="rounded-full border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm font-medium text-slate-200 shadow-inner">
+                  Question ${state.currentQuestionIndex + 1} of ${questions.length}
+                </div>` : ""}
             </div>
-          </header>
+          </div>
 
           <main class="mx-auto max-w-6xl p-4 md:p-6 lg:p-8">
-            ${state.viewState === "results"
-              ? `
-                <div class="mx-auto mt-12 max-w-2xl rounded-xl border border-slate-200 bg-white p-8 text-center shadow-lg">
-                  <h2 class="mb-4 text-3xl font-bold text-slate-800">Practice Complete!</h2>
-                  <div class="mb-6 text-6xl font-black text-blue-600">${score} / ${questions.length}</div>
-                  <p class="mb-8 text-lg text-slate-600">
-                    ${score === questions.length
-                      ? "Perfect score! You are fully prepared for the SQL section of the AQA exam."
-                      : "Great effort! Review the topics you missed to ensure you are ready for the exam."}
-                  </p>
-
-                  <div class="mb-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
-                    ${questions
-                      .map(
-                        (q, idx) => `
-                          <div class="flex items-center gap-3 rounded-lg border p-3 ${state.results[idx] ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}">
-                            ${state.results[idx] ? icon("check-circle", "h-5 w-5 text-green-600") : icon("x-circle", "h-5 w-5 text-red-600")}
-                            <span class="text-sm font-medium">${q.type}</span>
-                          </div>`
-                      )
-                      .join("")}
+            ${state.viewState === "results" ? `
+              <div class="mx-auto mt-10 max-w-2xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center shadow-lg">
+                <h2 class="mb-4 text-3xl font-bold text-slate-800 dark:text-slate-100">Practice Complete!</h2>
+                <div class="mb-6 text-6xl font-black text-sky-500">${score} / ${questions.length}</div>
+                <p class="mb-8 text-lg text-slate-600 dark:text-slate-300">
+                  ${score === questions.length
+                    ? "Perfect score! You are fully prepared for the SQL section of the AQA exam."
+                    : "Great effort! Review the topics you missed to ensure you are ready for the exam."}
+                </p>
+                <div class="mb-8 grid grid-cols-1 gap-3 text-left sm:grid-cols-2">
+                  ${questions.map((q, idx) => `
+                    <div class="flex items-center gap-3 rounded-lg border p-3 ${state.results[idx]
+                      ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20"
+                      : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20"}">
+                      ${state.results[idx]
+                        ? icon("check-circle","h-5 w-5 text-green-600 dark:text-green-400")
+                        : icon("x-circle","h-5 w-5 text-red-600 dark:text-red-400")}
+                      <span class="text-sm font-medium text-slate-700 dark:text-slate-200">${q.type}</span>
+                    </div>`).join("")}
+                </div>
+                <button id="restart-btn"
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-700 px-8 py-3 font-bold text-white transition-colors">
+                  ${icon("rotate-ccw","h-5 w-5")} Restart Practice
+                </button>
+              </div>` : `
+              <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                <div class="flex flex-col lg:col-span-5">
+                  <h2 class="mb-3 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2 text-lg font-bold text-slate-700 dark:text-slate-300">
+                    ${icon("database","h-5 w-5 text-sky-500")} Database Schema
+                  </h2>
+                  <div class="rounded-xl bg-slate-100 dark:bg-slate-800/50 p-3">
+                    ${question.tables.map(renderTable).join("")}
                   </div>
+                </div>
 
-                  <button
-                    id="restart-btn"
-                    class="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-8 py-3 font-bold text-white transition-colors hover:bg-blue-700"
-                  >
-                    ${icon("rotate-ccw", "h-5 w-5")}
-                    Restart Practice
-                  </button>
-                </div>`
-              : `
-                <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
-                  <div class="flex flex-col lg:col-span-5">
-                    <h2 class="mb-4 flex items-center gap-2 border-b pb-2 text-lg font-bold text-slate-700">
-                      ${icon("database", "h-5 w-5 text-blue-500")}
-                      Database Schema
-                    </h2>
-                    <div class="rounded-xl bg-slate-200/50 p-4">
-                      ${question.tables.map(renderTable).join("")}
+                <div class="flex flex-col lg:col-span-7">
+                  <div class="mb-4 flex-grow rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-md">
+                    <div class="mb-5">
+                      <span class="mb-3 inline-block rounded-full bg-sky-100 dark:bg-sky-900/40 px-2 py-1 text-xs font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300">
+                        ${question.type}
+                      </span>
+                      <h3 class="text-xl font-medium leading-relaxed text-slate-800 dark:text-slate-100">${question.text}</h3>
                     </div>
+
+                    ${state.viewState === "question" ? `
+                      <div class="flex h-full flex-col">
+                        <label class="mb-2 block text-sm font-semibold text-slate-600 dark:text-slate-400">Your SQL Query:</label>
+                        <textarea id="sql-input"
+                          class="h-48 w-full resize-none rounded-lg bg-slate-900 dark:bg-black/50 p-4 font-mono text-base text-green-400 shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-500/50 border border-slate-700"
+                          placeholder="Write your SQL query here..."
+                          spellcheck="false">${escapeHtml(state.currentInput)}</textarea>
+                        <div class="mt-5 flex justify-end">
+                          <button id="check-btn"
+                            class="flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-700 px-6 py-2.5 font-bold text-white transition-all hover:scale-105">
+                            Check Answer ${icon("arrow-right","h-5 w-5")}
+                          </button>
+                        </div>
+                      </div>` : `
+                      <div class="fade-in-up">
+                        <div class="mb-6 grid grid-cols-1 gap-5">
+                          <div>
+                            <h4 class="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Your Answer</h4>
+                            <pre class="overflow-x-auto whitespace-pre-wrap rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-900 p-4 font-mono text-slate-700 dark:text-slate-300">${escapeHtml(state.currentInput)}</pre>
+                          </div>
+                          <div>
+                            <h4 class="mb-2 text-sm font-bold uppercase tracking-wide text-sky-600 dark:text-sky-400">Expected AQA Answer</h4>
+                            <pre class="overflow-x-auto whitespace-pre-wrap rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 p-4 font-mono font-semibold text-sky-800 dark:text-sky-200 shadow-sm">${escapeHtml(question.expectedSql)}</pre>
+                          </div>
+                        </div>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-5 text-center">
+                          <h4 class="mb-3 text-lg font-bold text-slate-800 dark:text-slate-100">Did you get it right?</h4>
+                          <p class="mb-5 text-sm text-slate-500 dark:text-slate-400">Compare your query with the expected answer. Syntax like line breaks and spacing don't matter as long as the logic and keywords are correct.</p>
+                          <div class="flex flex-col justify-center gap-3 sm:flex-row">
+                            <button id="wrong-btn"
+                              class="flex-1 rounded-xl border-2 border-red-200 dark:border-red-800 bg-white dark:bg-slate-800 px-6 py-4 font-bold text-red-600 dark:text-red-400 transition-colors hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+                              <span class="flex items-center justify-center gap-2">${icon("x-circle","h-6 w-6")} I got it Wrong</span>
+                            </button>
+                            <button id="right-btn"
+                              class="flex-1 rounded-xl bg-green-600 hover:bg-green-700 px-6 py-4 font-bold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg">
+                              <span class="flex items-center justify-center gap-2">${icon("check-circle","h-6 w-6")} I got it Right</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>`}
                   </div>
-
-                  <div class="flex flex-col lg:col-span-7">
-                    <div class="mb-6 flex-grow rounded-xl border border-slate-200 bg-white p-6 shadow-md">
-                      <div class="mb-6">
-                        <span class="mb-3 inline-block rounded-full bg-blue-100 px-2 py-1 text-xs font-bold uppercase tracking-wider text-blue-800">
-                          ${question.type}
-                        </span>
-                        <h3 class="text-xl font-medium leading-relaxed text-slate-800">${question.text}</h3>
-                      </div>
-
-                      ${state.viewState === "question"
-                        ? `
-                          <div class="flex h-full flex-col">
-                            <label class="mb-2 block text-sm font-semibold text-slate-700">Your SQL Query:</label>
-                            <textarea
-                              id="sql-input"
-                              class="h-48 w-full resize-none rounded-lg bg-slate-800 p-4 font-mono text-lg text-green-400 shadow-inner focus:outline-none focus:ring-4 focus:ring-blue-500/50"
-                              placeholder="Write your SQL query here..."
-                              spellcheck="false"
-                            >${escapeHtml(state.currentInput)}</textarea>
-                            <div class="mt-6 flex justify-end">
-                              <button
-                                id="check-btn"
-                                class="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-bold text-white transition-all hover:scale-105 hover:bg-blue-700"
-                              >
-                                Check Answer ${icon("arrow-right", "h-5 w-5")}
-                              </button>
-                            </div>
-                          </div>`
-                        : `
-                          <div class="fade-in-up">
-                            <div class="mb-8 grid grid-cols-1 gap-6">
-                              <div>
-                                <h4 class="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">Your Answer</h4>
-                                <pre class="overflow-x-auto whitespace-pre-wrap rounded-lg border border-slate-300 bg-slate-100 p-4 font-mono text-slate-700">${escapeHtml(state.currentInput)}</pre>
-                              </div>
-                              <div>
-                                <h4 class="mb-2 text-sm font-bold uppercase tracking-wide text-blue-600">Expected AQA Answer</h4>
-                                <pre class="overflow-x-auto whitespace-pre-wrap rounded-lg border border-blue-200 bg-blue-50 p-4 font-mono font-semibold text-blue-800 shadow-sm">${escapeHtml(question.expectedSql)}</pre>
-                              </div>
-                            </div>
-
-                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
-                              <h4 class="mb-4 text-lg font-bold text-slate-800">Did you get it right?</h4>
-                              <p class="mb-6 text-sm text-slate-500">Compare your query with the expected answer. Syntax like line breaks and spacing don't matter as long as the logic and keywords are correct.</p>
-                              <div class="flex flex-col justify-center gap-4 sm:flex-row">
-                                <button
-                                  id="wrong-btn"
-                                  class="flex-1 rounded-xl border-2 border-red-200 bg-white px-6 py-4 font-bold text-red-600 transition-colors hover:border-red-500 hover:bg-red-50"
-                                >
-                                  <span class="flex items-center justify-center gap-2">${icon("x-circle", "h-6 w-6")} I got it Wrong</span>
-                                </button>
-                                <button
-                                  id="right-btn"
-                                  class="flex-1 rounded-xl bg-green-600 px-6 py-4 font-bold text-white shadow-md transition-all hover:scale-105 hover:bg-green-700 hover:shadow-lg"
-                                >
-                                  <span class="flex items-center justify-center gap-2">${icon("check-circle", "h-6 w-6")} I got it Right</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>`}
-                    </div>
-                  </div>
-                </div>`}
-          </main>
-        `;
+                </div>
+              </div>`}
+          </main>`;
 
         lucide.createIcons();
         bindEvents();
@@ -337,57 +272,27 @@
 
       function bindEvents() {
         const sqlInput = document.getElementById("sql-input");
-        if (sqlInput) {
-          sqlInput.addEventListener("input", (event) => {
-            state.currentInput = event.target.value;
-          });
-        }
-
+        if (sqlInput) sqlInput.addEventListener("input", e => { state.currentInput = e.target.value; });
         const checkBtn = document.getElementById("check-btn");
-        if (checkBtn) {
-          checkBtn.addEventListener("click", () => {
-            if (state.currentInput.trim() === "") {
-              alert("Please attempt writing an SQL query first!");
-              return;
-            }
-            state.viewState = "review";
-            render();
-          });
-        }
-
+        if (checkBtn) checkBtn.addEventListener("click", () => {
+          if (state.currentInput.trim() === "") { alert("Please attempt writing an SQL query first!"); return; }
+          state.viewState = "review"; render();
+        });
         const wrongBtn = document.getElementById("wrong-btn");
-        if (wrongBtn) {
-          wrongBtn.addEventListener("click", () => handleMark(false));
-        }
-
+        if (wrongBtn) wrongBtn.addEventListener("click", () => handleMark(false));
         const rightBtn = document.getElementById("right-btn");
-        if (rightBtn) {
-          rightBtn.addEventListener("click", () => handleMark(true));
-        }
-
+        if (rightBtn) rightBtn.addEventListener("click", () => handleMark(true));
         const restartBtn = document.getElementById("restart-btn");
-        if (restartBtn) {
-          restartBtn.addEventListener("click", () => {
-            state.currentQuestionIndex = 0;
-            state.currentInput = "";
-            state.viewState = "question";
-            state.results = [];
-            render();
-          });
-        }
+        if (restartBtn) restartBtn.addEventListener("click", () => {
+          state.currentQuestionIndex = 0; state.currentInput = ""; state.viewState = "question"; state.results = []; render();
+        });
       }
 
       function handleMark(isCorrect) {
         state.results = [...state.results, isCorrect];
-
         if (state.currentQuestionIndex < questions.length - 1) {
-          state.currentQuestionIndex += 1;
-          state.currentInput = "";
-          state.viewState = "question";
-        } else {
-          state.viewState = "results";
-        }
-
+          state.currentQuestionIndex++; state.currentInput = ""; state.viewState = "question";
+        } else { state.viewState = "results"; }
         render();
       }
 

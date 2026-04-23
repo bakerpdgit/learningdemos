@@ -4,29 +4,44 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A Level CS: Search & Sort Tracer</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
 
     <!-- React & ReactDOM -->
-    <script
-      crossorigin
-      src="https://unpkg.com/react@18/umd/react.production.min.js"
-    ></script>
-    <script
-      crossorigin
-      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
-    ></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 
     <style>
       body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
-        background-color: #f3f4f6;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
       .table-input {
         width: 100%;
@@ -44,6 +59,14 @@
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
         background-color: white;
       }
+      .dark .table-input {
+        border-color: #475569;
+        color: #e2e8f0;
+      }
+      .dark .table-input:focus {
+        background-color: #1e293b;
+        border-color: #3b82f6;
+      }
       .pseudocode-line {
         padding: 4px 8px;
         font-family: monospace;
@@ -57,22 +80,20 @@
         font-weight: bold;
         color: #854d0e;
       }
+      .dark .pseudocode-line.active {
+        background-color: #422006;
+        border-left-color: #d97706;
+        color: #fef08a;
+      }
 
       /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-      }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: #f1f1f1; }
+      ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+      .dark ::-webkit-scrollbar-track { background: #1e293b; }
+      .dark ::-webkit-scrollbar-thumb { background: #475569; }
+      .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
       .dropdown-content {
         display: none;
@@ -86,9 +107,14 @@
         padding: 8px;
         border: 1px solid #e5e7eb;
       }
-      .dropdown:hover .dropdown-content {
-        display: block;
+      .dropdown:hover .dropdown-content { display: block; }
+      .dark .dropdown-content {
+        background-color: #1e293b;
+        border-color: #475569;
+        box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.5);
+        color: #e2e8f0;
       }
+      .dark .dropdown-content label:hover { background-color: #334155; }
 
       /* Resizer Styles */
       .resizer-h {
@@ -101,10 +127,14 @@
         z-index: 30;
         transition: background-color 0.2s;
       }
-      .resizer-h:hover,
-      .resizer-h:active {
-        background-color: #cbd5e1;
+      .resizer-h:hover, .resizer-h:active { background-color: #cbd5e1; }
+      .dark .resizer-h {
+        background-color: #1e293b;
+        border-left-color: #334155;
+        border-right-color: #334155;
       }
+      .dark .resizer-h:hover, .dark .resizer-h:active { background-color: #334155; }
+
       .resizer-v {
         height: 8px;
         cursor: row-resize;
@@ -115,19 +145,16 @@
         z-index: 30;
         transition: background-color 0.2s;
       }
-      .resizer-v:hover,
-      .resizer-v:active {
-        background-color: #cbd5e1;
+      .resizer-v:hover, .resizer-v:active { background-color: #cbd5e1; }
+      .dark .resizer-v {
+        background-color: #1e293b;
+        border-top-color: #334155;
+        border-bottom-color: #334155;
       }
+      .dark .resizer-v:hover, .dark .resizer-v:active { background-color: #334155; }
 
-      .dragging-h * {
-        cursor: col-resize !important;
-        user-select: none !important;
-      }
-      .dragging-v * {
-        cursor: row-resize !important;
-        user-select: none !important;
-      }
+      .dragging-h * { cursor: col-resize !important; user-select: none !important; }
+      .dragging-v * { cursor: row-resize !important; user-select: none !important; }
 
       /* Array visualizer blocks */
       .array-box {
@@ -143,35 +170,54 @@
         background: white;
         transition: all 0.2s;
       }
+      .dark .array-box {
+        background: #1e293b;
+        border-color: #475569;
+        color: #e2e8f0;
+      }
       .array-box.highlight {
         border-color: #3b82f6;
         background-color: #eff6ff;
         transform: scale(1.05);
       }
-    </style>
-    <style id="global-home-link-style">
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
+      .dark .array-box.highlight {
+        background-color: #1e3a5f;
+        border-color: #3b82f6;
+        color: #93c5fd;
       }
     </style>
-  </head>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+</head>
   <body>
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
     <div id="root"></div>
 
     <script type="text/babel">
       const { useState, useEffect, useRef } = React;
+
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      );
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      );
 
       // --- PROBLEM DEFINITIONS & STEP ORACLES ---
       const ALL_PROBLEMS = [
@@ -182,8 +228,7 @@
           arr: [12, 5, 8, 2, 7, 10],
           target: 7,
           columns: ["idx", "return"],
-          explanation:
-            "Step line-by-line. Blank cells implicitly carry the value down from the row above.",
+          explanation: "Step line-by-line. Blank cells implicitly carry the value down from the row above.",
           pseudocode: [
             "01: SUBROUTINE LinearSearch(arr, target)",
             "02:   FOR idx = 0 TO LEN(arr) - 1",
@@ -200,20 +245,11 @@
             const add = (l) => steps.push({ line: l, state: { ...s } });
             add(1);
             for (let idx = 0; idx < p.arr.length; idx++) {
-              s.idx = idx.toString();
-              add(2);
-              add(3);
-              if (p.arr[idx] === p.target) {
-                s["return"] = idx.toString();
-                add(4);
-                return steps;
-              }
-              add(5);
-              add(6);
+              s.idx = idx.toString(); add(2); add(3);
+              if (p.arr[idx] === p.target) { s["return"] = idx.toString(); add(4); return steps; }
+              add(5); add(6);
             }
-            add(2);
-            s["return"] = "-1";
-            add(7);
+            add(2); s["return"] = "-1"; add(7);
             return steps;
           },
         },
@@ -224,8 +260,7 @@
           arr: [4, 9, 2, 1, 6],
           target: 5,
           columns: ["idx", "return"],
-          explanation:
-            "Target is absent. Ensure you reach the final return statement.",
+          explanation: "Target is absent. Ensure you reach the final return statement.",
           pseudocode: [
             "01: SUBROUTINE LinearSearch(arr, target)",
             "02:   FOR idx = 0 TO LEN(arr) - 1",
@@ -242,15 +277,9 @@
             const add = (l) => steps.push({ line: l, state: { ...s } });
             add(1);
             for (let idx = 0; idx < p.arr.length; idx++) {
-              s.idx = idx.toString();
-              add(2);
-              add(3);
-              add(5);
-              add(6);
+              s.idx = idx.toString(); add(2); add(3); add(5); add(6);
             }
-            add(2);
-            s["return"] = "-1";
-            add(7);
+            add(2); s["return"] = "-1"; add(7);
             return steps;
           },
         },
@@ -261,8 +290,7 @@
           arr: [2, 5, 8, 12, 16, 23, 38, 56, 72, 91],
           target: 23,
           columns: ["low", "high", "mid", "return"],
-          explanation:
-            "Remember AQA uses integer division (DIV). mid = (low + high) DIV 2.",
+          explanation: "Remember AQA uses integer division (DIV). mid = (low + high) DIV 2.",
           pseudocode: [
             "01: SUBROUTINE BinarySearch(arr, target)",
             "02:   low = 0",
@@ -285,40 +313,18 @@
             let s = {};
             const add = (l) => steps.push({ line: l, state: { ...s } });
             add(1);
-            let low = 0;
-            s.low = low.toString();
-            add(2);
-            let high = p.arr.length - 1;
-            s.high = high.toString();
-            add(3);
+            let low = 0; s.low = low.toString(); add(2);
+            let high = p.arr.length - 1; s.high = high.toString(); add(3);
             while (low <= high) {
               add(4);
-              let mid = Math.floor((low + high) / 2);
-              s.mid = mid.toString();
-              add(5);
-              add(6);
-              if (p.arr[mid] === p.target) {
-                s["return"] = mid.toString();
-                add(7);
-                return steps;
-              }
+              let mid = Math.floor((low + high) / 2); s.mid = mid.toString(); add(5); add(6);
+              if (p.arr[mid] === p.target) { s["return"] = mid.toString(); add(7); return steps; }
               add(8);
-              if (p.arr[mid] > p.target) {
-                high = mid - 1;
-                s.high = high.toString();
-                add(9);
-              } else {
-                add(10);
-                low = mid + 1;
-                s.low = low.toString();
-                add(11);
-              }
-              add(12);
-              add(13);
+              if (p.arr[mid] > p.target) { high = mid - 1; s.high = high.toString(); add(9); }
+              else { add(10); low = mid + 1; s.low = low.toString(); add(11); }
+              add(12); add(13);
             }
-            add(4);
-            s["return"] = "-1";
-            add(14);
+            add(4); s["return"] = "-1"; add(14);
             return steps;
           },
         },
@@ -329,8 +335,7 @@
           arr: [2, 5, 8, 12, 16, 23, 38, 56, 72, 91],
           target: 20,
           columns: ["low", "high", "mid", "return"],
-          explanation:
-            "Trace until low becomes greater than high, triggering the exit condition.",
+          explanation: "Trace until low becomes greater than high, triggering the exit condition.",
           pseudocode: [
             "01: SUBROUTINE BinarySearch(arr, target)",
             "02:   low = 0",
@@ -350,33 +355,16 @@
             let s = {};
             const add = (l) => steps.push({ line: l, state: { ...s } });
             add(1);
-            let low = 0;
-            s.low = low.toString();
-            add(2);
-            let high = p.arr.length - 1;
-            s.high = high.toString();
-            add(3);
+            let low = 0; s.low = low.toString(); add(2);
+            let high = p.arr.length - 1; s.high = high.toString(); add(3);
             while (low <= high) {
               add(4);
-              let mid = Math.floor((low + high) / 2);
-              s.mid = mid.toString();
-              add(5);
-              add(6);
-              if (p.arr[mid] > p.target) {
-                high = mid - 1;
-                s.high = high.toString();
-                add(7);
-              } else {
-                low = mid + 1;
-                s.low = low.toString();
-                add(8);
-              }
-              add(9);
-              add(10);
+              let mid = Math.floor((low + high) / 2); s.mid = mid.toString(); add(5); add(6);
+              if (p.arr[mid] > p.target) { high = mid - 1; s.high = high.toString(); add(7); }
+              else { low = mid + 1; s.low = low.toString(); add(8); }
+              add(9); add(10);
             }
-            add(4);
-            s["return"] = "-1";
-            add(11);
+            add(4); s["return"] = "-1"; add(11);
             return steps;
           },
         },
@@ -387,8 +375,7 @@
           arr: [3, 7, 15, 22, 33, 42, 55, 61],
           target: 42,
           columns: ["call_number", "low", "high", "mid", "return"],
-          explanation:
-            "When returning from a recursive call, local variables revert to the previous call's state. You MUST write these restored values on a new row in your trace table to acknowledge the scope change!",
+          explanation: "When returning from a recursive call, local variables revert to the previous call's state. You MUST write these restored values on a new row in your trace table to acknowledge the scope change!",
           pseudocode: [
             "01: SUBROUTINE BinarySearch(arr, target, low, high)",
             "02:   IF low > high THEN RETURN -1",
@@ -407,51 +394,22 @@
             let s = {};
             let callCount = 0;
             const add = (l) => steps.push({ line: l, state: { ...s } });
-
             function bs(l, h) {
               callCount++;
               let myCall = callCount.toString();
-              s.call_number = myCall;
-              s.low = l.toString();
-              s.high = h.toString();
-
-              add(1);
-              add(2);
-              if (l > h) {
-                s["return"] = "-1";
-                add(2);
-                return "-1";
-              }
-
-              let m = Math.floor((l + h) / 2);
-              s.mid = m.toString();
-              add(3);
-              add(4);
-              if (p.arr[m] === p.target) {
-                s["return"] = m.toString();
-                add(5);
-                return m.toString();
-              }
-
+              s.call_number = myCall; s.low = l.toString(); s.high = h.toString();
+              add(1); add(2);
+              if (l > h) { s["return"] = "-1"; add(2); return "-1"; }
+              let m = Math.floor((l + h) / 2); s.mid = m.toString(); add(3); add(4);
+              if (p.arr[m] === p.target) { s["return"] = m.toString(); add(5); return m.toString(); }
               add(6);
               let res;
               if (p.arr[m] > p.target) {
                 add(7);
-                let saved = { ...s };
-                res = bs(l, m - 1);
-                s = { ...saved };
-                s["return"] = res;
-                add(7);
-                return res;
+                let saved = { ...s }; res = bs(l, m - 1); s = { ...saved }; s["return"] = res; add(7); return res;
               } else {
-                add(8);
-                add(9);
-                let saved = { ...s };
-                res = bs(m + 1, h);
-                s = { ...saved };
-                s["return"] = res;
-                add(9);
-                return res;
+                add(8); add(9);
+                let saved = { ...s }; res = bs(m + 1, h); s = { ...saved }; s["return"] = res; add(9); return res;
               }
             }
             bs(0, p.arr.length - 1);
@@ -464,17 +422,8 @@
           name: "Bubble Sort (Unoptimized)",
           arr: [5, 2, 8, 1],
           target: null,
-          columns: [
-            "pass",
-            "idx",
-            "temp",
-            "arr[0]",
-            "arr[1]",
-            "arr[2]",
-            "arr[3]",
-          ],
-          explanation:
-            "Trace line-by-line. Empty cells imply no change from above.",
+          columns: ["pass", "idx", "temp", "arr[0]", "arr[1]", "arr[2]", "arr[3]"],
+          explanation: "Trace line-by-line. Empty cells imply no change from above.",
           pseudocode: [
             "01: SUBROUTINE BubbleSort(arr)",
             "02:   FOR pass = 1 TO LEN(arr) - 1",
@@ -492,29 +441,19 @@
             let steps = [];
             let s = {};
             const add = (l) => steps.push({ line: l, state: { ...s } });
-            for (let i = 0; i < p.arr.length; i++)
-              s[`arr[${i}]`] = p.arr[i].toString();
+            for (let i = 0; i < p.arr.length; i++) s[`arr[${i}]`] = p.arr[i].toString();
             add(1);
             let arr = [...p.arr];
             for (let pass = 1; pass < arr.length; pass++) {
-              s.pass = pass.toString();
-              add(2);
+              s.pass = pass.toString(); add(2);
               for (let idx = 0; idx < arr.length - 1; idx++) {
-                s.idx = idx.toString();
-                add(3);
-                add(4);
+                s.idx = idx.toString(); add(3); add(4);
                 if (arr[idx] > arr[idx + 1]) {
-                  s.temp = arr[idx].toString();
-                  add(5);
-                  arr[idx] = arr[idx + 1];
-                  s[`arr[${idx}]`] = arr[idx].toString();
-                  add(6);
-                  arr[idx + 1] = parseInt(s.temp);
-                  s[`arr[${idx + 1}]`] = s.temp;
-                  add(7);
+                  s.temp = arr[idx].toString(); add(5);
+                  arr[idx] = arr[idx + 1]; s[`arr[${idx}]`] = arr[idx].toString(); add(6);
+                  arr[idx + 1] = parseInt(s.temp); s[`arr[${idx + 1}]`] = s.temp; add(7);
                 }
-                add(8);
-                add(9);
+                add(8); add(9);
               }
               add(10);
             }
@@ -528,19 +467,8 @@
           name: "Bubble Sort (Optimized w/ Flag)",
           arr: [3, 1, 4, 5, 6],
           target: null,
-          columns: [
-            "swapped",
-            "pass",
-            "idx",
-            "temp",
-            "arr[0]",
-            "arr[1]",
-            "arr[2]",
-            "arr[3]",
-            "arr[4]",
-          ],
-          explanation:
-            "Optimized bubble sort stops early if an entire pass happens with swapped = False.",
+          columns: ["swapped", "pass", "idx", "temp", "arr[0]", "arr[1]", "arr[2]", "arr[3]", "arr[4]"],
+          explanation: "Optimized bubble sort stops early if an entire pass happens with swapped = False.",
           pseudocode: [
             "01: SUBROUTINE BubbleSort(arr)",
             "02:   swapped = True",
@@ -563,48 +491,26 @@
             let steps = [];
             let s = {};
             const add = (l) => steps.push({ line: l, state: { ...s } });
-            for (let i = 0; i < p.arr.length; i++)
-              s[`arr[${i}]`] = p.arr[i].toString();
-            add(1);
-            s.swapped = "TRUE";
-            add(2);
-            s.pass = "1";
-            add(3);
+            for (let i = 0; i < p.arr.length; i++) s[`arr[${i}]`] = p.arr[i].toString();
+            add(1); s.swapped = "TRUE"; add(2); s.pass = "1"; add(3);
             let arr = [...p.arr];
             let swapped = true;
             let pass = 1;
             while (swapped && pass < arr.length) {
-              add(4);
-              swapped = false;
-              s.swapped = "FALSE";
-              add(5);
+              add(4); swapped = false; s.swapped = "FALSE"; add(5);
               for (let idx = 0; idx < arr.length - pass; idx++) {
-                s.idx = idx.toString();
-                add(6);
-                add(7);
+                s.idx = idx.toString(); add(6); add(7);
                 if (arr[idx] > arr[idx + 1]) {
-                  s.temp = arr[idx].toString();
-                  add(8);
-                  arr[idx] = arr[idx + 1];
-                  s[`arr[${idx}]`] = arr[idx].toString();
-                  add(9);
-                  arr[idx + 1] = parseInt(s.temp);
-                  s[`arr[${idx + 1}]`] = s.temp;
-                  add(10);
-                  swapped = true;
-                  s.swapped = "TRUE";
-                  add(11);
+                  s.temp = arr[idx].toString(); add(8);
+                  arr[idx] = arr[idx + 1]; s[`arr[${idx}]`] = arr[idx].toString(); add(9);
+                  arr[idx + 1] = parseInt(s.temp); s[`arr[${idx + 1}]`] = s.temp; add(10);
+                  swapped = true; s.swapped = "TRUE"; add(11);
                 }
-                add(12);
-                add(13);
+                add(12); add(13);
               }
-              pass++;
-              s.pass = pass.toString();
-              add(14);
-              add(15);
+              pass++; s.pass = pass.toString(); add(14); add(15);
             }
-            add(4);
-            add(16);
+            add(4); add(16);
             return steps;
           },
         },
@@ -615,8 +521,7 @@
           arr: [5, 2, 8, 1, 9, 3, 7, 4],
           target: null,
           columns: ["call_number", "arr", "mid", "Left", "Right", "return"],
-          explanation:
-            "Trace the recursive calls line-by-line. 'arr' is the list passed into the current call. When returning, local variables revert to the previous call's state! Format lists like [5, 2].",
+          explanation: "Trace the recursive calls line-by-line. 'arr' is the list passed into the current call. When returning, local variables revert to the previous call's state! Format lists like [5, 2].",
           pseudocode: [
             "01: SUBROUTINE MergeSort(arr)",
             "02:   IF LEN(arr) <= 1 THEN RETURN arr",
@@ -631,52 +536,27 @@
             let s = {};
             let callCount = 0;
             const add = (l) => steps.push({ line: l, state: { ...s } });
-
             function ms(arr) {
               callCount++;
-              let myCall = callCount.toString();
-              s.call_number = myCall;
+              s.call_number = callCount.toString();
               s.arr = `[${arr.join(", ")}]`;
-
-              add(1);
-              add(2);
-              if (arr.length <= 1) {
-                s["return"] = `[${arr.join(", ")}]`;
-                add(2);
-                return arr;
-              }
-
-              let mid = Math.floor(arr.length / 2);
-              s.mid = mid.toString();
-              add(3);
-
+              add(1); add(2);
+              if (arr.length <= 1) { s["return"] = `[${arr.join(", ")}]`; add(2); return arr; }
+              let mid = Math.floor(arr.length / 2); s.mid = mid.toString(); add(3);
               add(4);
-              let savedLeft = { ...s };
-              let leftRes = ms(arr.slice(0, mid));
-              s = { ...savedLeft };
-              s.Left = `[${leftRes.join(", ")}]`;
-              add(4);
-
+              let savedLeft = { ...s }; let leftRes = ms(arr.slice(0, mid));
+              s = { ...savedLeft }; s.Left = `[${leftRes.join(", ")}]`; add(4);
               add(5);
-              let savedRight = { ...s };
-              let rightRes = ms(arr.slice(mid));
-              s = { ...savedRight };
-              s.Right = `[${rightRes.join(", ")}]`;
-              add(5);
-
+              let savedRight = { ...s }; let rightRes = ms(arr.slice(mid));
+              s = { ...savedRight }; s.Right = `[${rightRes.join(", ")}]`; add(5);
               add(6);
-              let merged = [];
-              let i = 0,
-                j = 0;
+              let merged = [], i = 0, j = 0;
               while (i < leftRes.length && j < rightRes.length) {
-                if (leftRes[i] <= rightRes[j]) merged.push(leftRes[i++]);
-                else merged.push(rightRes[j++]);
+                if (leftRes[i] <= rightRes[j]) merged.push(leftRes[i++]); else merged.push(rightRes[j++]);
               }
               while (i < leftRes.length) merged.push(leftRes[i++]);
               while (j < rightRes.length) merged.push(rightRes[j++]);
-
-              s["return"] = `[${merged.join(", ")}]`;
-              add(6);
+              s["return"] = `[${merged.join(", ")}]`; add(6);
               return merged;
             }
             ms(p.arr);
@@ -690,8 +570,7 @@
           arr: [5, 2, 8, 1, 9, 3, 7, 4, 6],
           target: null,
           columns: ["call_number", "arr", "mid", "Left", "Right", "return"],
-          explanation:
-            "CRITICAL: AQA bounds standard. mid = 9 DIV 2 = 4. Left is index 0 TO 3 (Length 4). Right is index 4 TO 8 (Length 5).",
+          explanation: "CRITICAL: AQA bounds standard. mid = 9 DIV 2 = 4. Left is index 0 TO 3 (Length 4). Right is index 4 TO 8 (Length 5).",
           pseudocode: [
             "01: SUBROUTINE MergeSort(arr)",
             "02:   IF LEN(arr) <= 1 THEN RETURN arr",
@@ -706,52 +585,27 @@
             let s = {};
             let callCount = 0;
             const add = (l) => steps.push({ line: l, state: { ...s } });
-
             function ms(arr) {
               callCount++;
-              let myCall = callCount.toString();
-              s.call_number = myCall;
+              s.call_number = callCount.toString();
               s.arr = `[${arr.join(", ")}]`;
-
-              add(1);
-              add(2);
-              if (arr.length <= 1) {
-                s["return"] = `[${arr.join(", ")}]`;
-                add(2);
-                return arr;
-              }
-
-              let mid = Math.floor(arr.length / 2);
-              s.mid = mid.toString();
-              add(3);
-
+              add(1); add(2);
+              if (arr.length <= 1) { s["return"] = `[${arr.join(", ")}]`; add(2); return arr; }
+              let mid = Math.floor(arr.length / 2); s.mid = mid.toString(); add(3);
               add(4);
-              let savedLeft = { ...s };
-              let leftRes = ms(arr.slice(0, mid));
-              s = { ...savedLeft };
-              s.Left = `[${leftRes.join(", ")}]`;
-              add(4);
-
+              let savedLeft = { ...s }; let leftRes = ms(arr.slice(0, mid));
+              s = { ...savedLeft }; s.Left = `[${leftRes.join(", ")}]`; add(4);
               add(5);
-              let savedRight = { ...s };
-              let rightRes = ms(arr.slice(mid));
-              s = { ...savedRight };
-              s.Right = `[${rightRes.join(", ")}]`;
-              add(5);
-
+              let savedRight = { ...s }; let rightRes = ms(arr.slice(mid));
+              s = { ...savedRight }; s.Right = `[${rightRes.join(", ")}]`; add(5);
               add(6);
-              let merged = [];
-              let i = 0,
-                j = 0;
+              let merged = [], i = 0, j = 0;
               while (i < leftRes.length && j < rightRes.length) {
-                if (leftRes[i] <= rightRes[j]) merged.push(leftRes[i++]);
-                else merged.push(rightRes[j++]);
+                if (leftRes[i] <= rightRes[j]) merged.push(leftRes[i++]); else merged.push(rightRes[j++]);
               }
               while (i < leftRes.length) merged.push(leftRes[i++]);
               while (j < rightRes.length) merged.push(rightRes[j++]);
-
-              s["return"] = `[${merged.join(", ")}]`;
-              add(6);
+              s["return"] = `[${merged.join(", ")}]`; add(6);
               return merged;
             }
             ms(p.arr);
@@ -762,27 +616,31 @@
 
       // --- MAIN APP COMPONENT ---
       function App() {
-        // Configuration State
-        const [selectedTopics, setSelectedTopics] = useState([
-          "Linear Search",
-          "Binary Search",
-          "Bubble Sort",
-          "Merge Sort",
-        ]);
-        const [activeProblem, setActiveProblem] = useState(ALL_PROBLEMS[0]);
+        const [theme, setTheme] = useState(() => {
+          try {
+            return localStorage.getItem("uimode") ||
+              (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          } catch { return "light"; }
+        });
 
-        // Simulation State
+        useEffect(() => {
+          const root = document.documentElement;
+          if (theme === "dark") root.classList.add("dark");
+          else root.classList.remove("dark");
+          try { localStorage.setItem("uimode", theme); } catch {}
+        }, [theme]);
+
+        const toggleTheme = () => setTheme((t) => t === "dark" ? "light" : "dark");
+        const isDark = theme === "dark";
+
+        const [selectedTopics, setSelectedTopics] = useState(["Linear Search", "Binary Search", "Bubble Sort", "Merge Sort"]);
+        const [activeProblem, setActiveProblem] = useState(ALL_PROBLEMS[0]);
         const [oracle, setOracle] = useState([]);
         const [userTable, setUserTable] = useState([]);
         const [currentStepIdx, setCurrentStepIdx] = useState(0);
         const [isDone, setIsDone] = useState(false);
-        const [feedback, setFeedback] = useState({
-          type: "info",
-          msg: "Welcome. Read the explanation and start tracing line-by-line.",
-        });
+        const [feedback, setFeedback] = useState({ type: "info", msg: "Welcome. Read the explanation and start tracing line-by-line." });
         const pseudocodeRef = useRef(null);
-
-        // Resizing State
         const [leftWidth, setLeftWidth] = useState(33.33);
         const [topHeight, setTopHeight] = useState(40);
 
@@ -790,12 +648,7 @@
           e.preventDefault();
           document.body.classList.add("dragging-h");
           const onMouseMove = (moveEvent) =>
-            setLeftWidth(
-              Math.max(
-                20,
-                Math.min((moveEvent.clientX / window.innerWidth) * 100, 80),
-              ),
-            );
+            setLeftWidth(Math.max(20, Math.min((moveEvent.clientX / window.innerWidth) * 100, 80)));
           const onMouseUp = () => {
             document.body.classList.remove("dragging-h");
             document.removeEventListener("mousemove", onMouseMove);
@@ -812,15 +665,7 @@
           if (!leftPane) return;
           const rect = leftPane.getBoundingClientRect();
           const onMouseMove = (moveEvent) =>
-            setTopHeight(
-              Math.max(
-                15,
-                Math.min(
-                  ((moveEvent.clientY - rect.top) / rect.height) * 100,
-                  85,
-                ),
-              ),
-            );
+            setTopHeight(Math.max(15, Math.min(((moveEvent.clientY - rect.top) / rect.height) * 100, 85)));
           const onMouseUp = () => {
             document.body.classList.remove("dragging-v");
             document.removeEventListener("mousemove", onMouseMove);
@@ -834,8 +679,7 @@
           let lastRow = tableData[tableData.length - 1];
           let isEmpty = true;
           for (let key in lastRow) {
-            if (lastRow[key] && String(lastRow[key]).trim() !== "")
-              isEmpty = false;
+            if (lastRow[key] && String(lastRow[key]).trim() !== "") isEmpty = false;
           }
           if (!isEmpty) {
             let nextRow = {};
@@ -848,75 +692,46 @@
         useEffect(() => {
           const generatedSteps = activeProblem.generateSteps(activeProblem);
           setOracle(generatedSteps);
-
           let initRow = {};
-          activeProblem.columns.forEach((col) => {
-            initRow[col] = generatedSteps[0]?.state[col] || "";
-          });
-
+          activeProblem.columns.forEach((col) => { initRow[col] = generatedSteps[0]?.state[col] || ""; });
           setUserTable(ensureBlankRow([initRow]));
           setCurrentStepIdx(0);
           setIsDone(false);
-          setFeedback({
-            type: "info",
-            msg: "Trace started. The highlighted line is currently executing. Click Next Step when table is updated.",
-          });
+          setFeedback({ type: "info", msg: "Trace started. The highlighted line is currently executing. Click Next Step when table is updated." });
         }, [activeProblem]);
 
         useEffect(() => {
           if (pseudocodeRef.current) {
             const activeEl = pseudocodeRef.current.querySelector(".active");
-            if (activeEl)
-              activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (activeEl) activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
           }
         }, [currentStepIdx]);
 
-        // Handlers
         const handleCellChange = (rIdx, col, value) => {
           let newTable = [...userTable];
           newTable[rIdx] = { ...newTable[rIdx], [col]: value };
           setUserTable(ensureBlankRow(newTable));
         };
 
-        const formatForCompare = (str) =>
-          String(str).toUpperCase().replace(/[\s]/g, "");
+        const formatForCompare = (str) => String(str).toUpperCase().replace(/[\s]/g, "");
 
-        // Calculates effective state by reading top-to-bottom
         const getEffectiveState = (tableData) => {
           let eff = {};
           let returnCallNum = undefined;
-
           for (let row of tableData) {
             let rowCallNum =
-              row["call_number"] !== undefined &&
-              String(row["call_number"]).trim() !== ""
+              row["call_number"] !== undefined && String(row["call_number"]).trim() !== ""
                 ? String(row["call_number"]).trim()
                 : eff["call_number"];
-
             for (let key in row) {
               let val = row[key];
-              if (
-                val !== undefined &&
-                val !== null &&
-                String(val).trim() !== "" &&
-                String(val).trim() !== "..."
-              ) {
+              if (val !== undefined && val !== null && String(val).trim() !== "" && String(val).trim() !== "...") {
                 eff[key] = String(val).trim();
-                if (key === "return") {
-                  // Record the specific call scope where the return was registered
-                  returnCallNum = rowCallNum;
-                }
+                if (key === "return") returnCallNum = rowCallNum;
               }
             }
-
-            // CRITICAL FIX: If we change scopes (call_number changes), previous return values must NOT carry over
-            if (
-              eff["return"] !== undefined &&
-              eff["call_number"] !== undefined &&
-              eff["call_number"] !== returnCallNum
-            ) {
-              delete eff["return"];
-              returnCallNum = undefined;
+            if (eff["return"] !== undefined && eff["call_number"] !== undefined && eff["call_number"] !== returnCallNum) {
+              delete eff["return"]; returnCallNum = undefined;
             }
           }
           return eff;
@@ -927,38 +742,25 @@
           let eff = getEffectiveState(userTable);
           let exp = oracle[currentStepIdx].state;
           let errors = [];
-
           activeProblem.columns.forEach((col) => {
             let uVal = formatForCompare(eff[col] || "");
             let eVal = formatForCompare(exp[col] || "");
             if (uVal !== eVal) {
-              if (eVal === "")
-                errors.push(`'${col}' should not have a value yet.`);
-              else if (uVal === "")
-                errors.push(`You missed updating '${col}'.`);
+              if (eVal === "") errors.push(`'${col}' should not have a value yet.`);
+              else if (uVal === "") errors.push(`You missed updating '${col}'.`);
               else errors.push(`'${col}' is incorrect.`);
             }
           });
-
           if (errors.length === 0) {
             if (currentStepIdx >= oracle.length - 1) {
               setIsDone(true);
-              setFeedback({
-                type: "success",
-                msg: `Excellent! The algorithm trace is complete.`,
-              });
+              setFeedback({ type: "success", msg: "Excellent! The algorithm trace is complete." });
             } else {
               setCurrentStepIdx(currentStepIdx + 1);
-              setFeedback({
-                type: "success",
-                msg: `Correct! Proceeding to the next line.`,
-              });
+              setFeedback({ type: "success", msg: "Correct! Proceeding to the next line." });
             }
           } else {
-            setFeedback({
-              type: "error",
-              msg: errors[0] + " Please fix the trace table before continuing.",
-            });
+            setFeedback({ type: "error", msg: errors[0] + " Please fix the trace table before continuing." });
           }
         };
 
@@ -968,56 +770,34 @@
           let exp = oracle[currentStepIdx].state;
           let diff = {};
           activeProblem.columns.forEach((col) => {
-            if (
-              formatForCompare(eff[col] || "") !==
-              formatForCompare(exp[col] || "")
-            )
-              diff[col] = exp[col] || "";
+            if (formatForCompare(eff[col] || "") !== formatForCompare(exp[col] || "")) diff[col] = exp[col] || "";
           });
-
           let newTable = [...userTable];
           let lastRow = newTable[newTable.length - 1];
-          let isDirty = activeProblem.columns.some(
-            (c) => lastRow[c] && String(lastRow[c]).trim() !== "",
-          );
-
+          let isDirty = activeProblem.columns.some((c) => lastRow[c] && String(lastRow[c]).trim() !== "");
           let targetRowIdx = isDirty ? newTable.length : newTable.length - 1;
           if (isDirty) {
             let nextRow = {};
             activeProblem.columns.forEach((c) => (nextRow[c] = ""));
             newTable.push(nextRow);
           }
-
           for (let col in diff) newTable[targetRowIdx][col] = diff[col];
-
           setUserTable(ensureBlankRow(newTable));
-          setFeedback({
-            type: "info",
-            msg: `Hint applied. Table now matches expected state for this line. Click 'Next Step'.`,
-          });
+          setFeedback({ type: "info", msg: "Hint applied. Table now matches expected state for this line. Click 'Next Step'." });
         };
 
         const effState = getEffectiveState(userTable);
 
-        // Array Visualizer logic
         const getArrayVisualizer = () => {
           if (activeProblem.topic === "Merge Sort") {
-            let currentArrStr = effState["arr"]
-              ? effState["arr"].replace(/\[|\]/g, "")
-              : activeProblem.arr.join(", ");
-            let currentArr = currentArrStr
-              .split(",")
-              .map((x) => x.trim())
-              .filter((x) => x !== "");
-
+            let currentArrStr = effState["arr"] ? effState["arr"].replace(/\[|\]/g, "") : activeProblem.arr.join(", ");
+            let currentArr = currentArrStr.split(",").map((x) => x.trim()).filter((x) => x !== "");
             return (
               <div className="flex gap-2 flex-wrap justify-center">
                 {currentArr.map((val, idx) => (
                   <div key={idx} className="flex flex-col items-center">
-                    <div className="array-box highlight bg-blue-50 text-blue-800">
-                      {val}
-                    </div>
-                    <span className="text-xs text-gray-400 mt-1">{idx}</span>
+                    <div className="array-box highlight">{val}</div>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 mt-1">{idx}</span>
                   </div>
                 ))}
               </div>
@@ -1029,61 +809,24 @@
               {activeProblem.arr.map((val, idx) => {
                 let highlight = false;
                 let labels = [];
-
                 if (activeProblem.topic.includes("Search")) {
-                  if (
-                    effState["idx"] !== undefined &&
-                    parseInt(effState["idx"]) === idx
-                  ) {
-                    highlight = true;
-                    labels.push("idx");
-                  }
-                  if (
-                    effState["low"] !== undefined &&
-                    parseInt(effState["low"]) === idx
-                  )
-                    labels.push("low");
-                  if (
-                    effState["high"] !== undefined &&
-                    parseInt(effState["high"]) === idx
-                  )
-                    labels.push("high");
-                  if (
-                    effState["mid"] !== undefined &&
-                    parseInt(effState["mid"]) === idx
-                  ) {
-                    highlight = true;
-                    labels.push("mid");
-                  }
+                  if (effState["idx"] !== undefined && parseInt(effState["idx"]) === idx) { highlight = true; labels.push("idx"); }
+                  if (effState["low"] !== undefined && parseInt(effState["low"]) === idx) labels.push("low");
+                  if (effState["high"] !== undefined && parseInt(effState["high"]) === idx) labels.push("high");
+                  if (effState["mid"] !== undefined && parseInt(effState["mid"]) === idx) { highlight = true; labels.push("mid"); }
                 } else if (activeProblem.topic === "Bubble Sort") {
-                  if (
-                    effState["idx"] !== undefined &&
-                    (parseInt(effState["idx"]) === idx ||
-                      parseInt(effState["idx"]) + 1 === idx)
-                  ) {
+                  if (effState["idx"] !== undefined && (parseInt(effState["idx"]) === idx || parseInt(effState["idx"]) + 1 === idx)) {
                     highlight = true;
-                    labels.push(
-                      parseInt(effState["idx"]) === idx ? "idx" : "idx+1",
-                    );
+                    labels.push(parseInt(effState["idx"]) === idx ? "idx" : "idx+1");
                   }
                 }
-
                 return (
                   <div key={idx} className="flex flex-col items-center">
-                    <div
-                      className={"array-box " + (highlight ? "highlight" : "")}
-                    >
-                      {val}
-                    </div>
-                    <span className="text-xs text-gray-400 mt-1">{idx}</span>
+                    <div className={"array-box " + (highlight ? "highlight" : "")}>{val}</div>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 mt-1">{idx}</span>
                     <div className="h-6 mt-1 flex flex-col items-center">
                       {labels.map((l) => (
-                        <span
-                          key={l}
-                          className="text-[10px] font-bold text-blue-600 uppercase leading-tight"
-                        >
-                          {l}
-                        </span>
+                        <span key={l} className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase leading-tight">{l}</span>
                       ))}
                     </div>
                   </div>
@@ -1093,46 +836,66 @@
           );
         };
 
-        const activeLine = oracle[currentStepIdx]
-          ? oracle[currentStepIdx].line
-          : -1;
+        const activeLine = oracle[currentStepIdx] ? oracle[currentStepIdx].line : -1;
 
         const feedbackClass =
           "p-4 border-b font-semibold flex items-center shadow-sm z-10 " +
           (feedback.type === "error"
-            ? "bg-red-50 text-red-700 border-red-200"
+            ? "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800"
             : feedback.type === "success"
-              ? "bg-green-50 text-green-700 border-green-200"
-              : "bg-blue-50 text-blue-700 border-blue-200");
+              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
+              : "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800");
 
         return (
-          <div className="flex flex-col h-screen overflow-hidden">
-            {/* TOP NAVBAR */}
-            <header className="bg-white shadow px-6 py-3 flex justify-between items-center z-20 shrink-0">
+          <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+
+            {/* Sub-header / Tool Navbar */}
+            <header className="bg-white dark:bg-slate-800 shadow px-6 py-3 flex justify-between items-center z-20 shrink-0 border-b border-slate-200 dark:border-slate-700">
               <div>
-                <h1 className="text-xl font-bold text-gray-800">
-                  Search & Sort Algorithm Tracer
-                </h1>
-                <p className="text-sm text-gray-500">
-                  AQA A-Level Computer Science
-                </p>
+                <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">Search & Sort Algorithm Tracer</h1>
+                <p className="text-sm text-gray-500 dark:text-slate-400">AQA A-Level Computer Science</p>
               </div>
               <div className="flex items-center space-x-4">
                 <div className="dropdown relative">
-                  <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 hover:bg-gray-200">
+                  <button className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600">
                     Filter Topics <span className="ml-2">▼</span>
                   </button>
                   <div className="dropdown-content">
-                    {[
-                      "Linear Search",
-                      "Binary Search",
-                      "Bubble Sort",
-                      "Merge Sort",
-                    ].map((topic) => (
-                      <label
-                        key={topic}
-                        className="flex items-center p-2 cursor-pointer hover:bg-gray-50"
-                      >
+                    {["Linear Search", "Binary Search", "Bubble Sort", "Merge Sort"].map((topic) => (
+                      <label key={topic} className="flex items-center p-2 cursor-pointer hover:bg-gray-50">
                         <input
                           type="checkbox"
                           className="mr-2"
@@ -1141,8 +904,7 @@
                             const newTopics = selectedTopics.includes(topic)
                               ? selectedTopics.filter((t) => t !== topic)
                               : [...selectedTopics, topic];
-                            if (newTopics.length > 0)
-                              setSelectedTopics(newTopics);
+                            if (newTopics.length > 0) setSelectedTopics(newTopics);
                           }}
                         />
                         {topic}
@@ -1151,22 +913,12 @@
                   </div>
                 </div>
                 <select
-                  className="bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded shadow font-semibold hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 py-2 px-4 rounded shadow font-semibold hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={activeProblem.id}
-                  onChange={(e) =>
-                    setActiveProblem(
-                      ALL_PROBLEMS.find(
-                        (p) => p.id === parseInt(e.target.value),
-                      ),
-                    )
-                  }
+                  onChange={(e) => setActiveProblem(ALL_PROBLEMS.find((p) => p.id === parseInt(e.target.value)))}
                 >
-                  {ALL_PROBLEMS.filter((p) =>
-                    selectedTopics.includes(p.topic),
-                  ).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
+                  {ALL_PROBLEMS.filter((p) => selectedTopics.includes(p.topic)).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>
@@ -1178,97 +930,75 @@
               <div
                 id="left-pane-container"
                 style={{ width: leftWidth + "%", minWidth: "20%" }}
-                className="bg-white flex flex-col relative z-10 shadow-lg shrink-0"
+                className="bg-white dark:bg-slate-800 flex flex-col relative z-10 shadow-lg shrink-0"
               >
                 {/* Array Visualizer Panel */}
                 <div
                   style={{ height: topHeight + "%", minHeight: "15%" }}
-                  className="bg-[#f8fafc] flex flex-col items-center justify-center p-4 relative overflow-hidden shrink-0 border-b"
+                  className="bg-[#f8fafc] dark:bg-slate-700 flex flex-col items-center justify-center p-4 relative overflow-hidden shrink-0 border-b border-slate-200 dark:border-slate-600"
                 >
-                  <h3 className="absolute top-2 left-4 font-bold text-gray-700 uppercase text-xs tracking-wider opacity-60">
+                  <h3 className="absolute top-2 left-4 font-bold text-gray-700 dark:text-slate-300 uppercase text-xs tracking-wider opacity-60">
                     Array Data
                   </h3>
                   {activeProblem.target !== null && (
-                    <div className="absolute top-2 right-4 bg-yellow-100 border border-yellow-300 text-yellow-800 px-3 py-1 rounded text-sm font-bold shadow-sm">
+                    <div className="absolute top-2 right-4 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 px-3 py-1 rounded text-sm font-bold shadow-sm">
                       Target: {activeProblem.target}
                     </div>
                   )}
                   {effState.call_number && (
-                    <div className="absolute top-12 right-4 bg-purple-100 border border-purple-300 text-purple-800 px-3 py-1 rounded text-sm font-bold shadow-sm">
+                    <div className="absolute top-12 right-4 bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700 text-purple-800 dark:text-purple-300 px-3 py-1 rounded text-sm font-bold shadow-sm">
                       Call Number: {effState.call_number}
                     </div>
                   )}
-
                   {getArrayVisualizer()}
                 </div>
 
                 {/* Vertical Resizer */}
-                <div
-                  className="resizer-v flex items-center justify-center group"
-                  onMouseDown={startVertDrag}
-                >
-                  <div className="w-8 h-1 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+                <div className="resizer-v flex items-center justify-center group" onMouseDown={startVertDrag}>
+                  <div className="w-8 h-1 bg-gray-300 dark:bg-slate-500 rounded group-hover:bg-gray-400 dark:group-hover:bg-slate-400"></div>
                 </div>
 
                 {/* Pseudocode & Explanation Panel */}
-                <div
-                  className="flex-1 overflow-y-auto bg-white p-4 font-mono text-sm flex flex-col"
-                  ref={pseudocodeRef}
-                >
-                  <div className="bg-blue-50 border-l-4 border-blue-500 p-3 mb-4 text-blue-900 font-sans text-sm rounded-r shadow-sm">
+                <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-800 p-4 font-mono text-sm flex flex-col" ref={pseudocodeRef}>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-3 mb-4 text-blue-900 dark:text-blue-200 font-sans text-sm rounded-r shadow-sm">
                     <strong className="block mb-1">Instructor Note:</strong>
                     {activeProblem.explanation}
                   </div>
-                  <h3 className="font-bold text-gray-700 mb-2 uppercase text-xs tracking-wider mt-2">
+                  <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-2 uppercase text-xs tracking-wider mt-2">
                     Pseudocode Reference
                   </h3>
                   {activeProblem.pseudocode.map((line, i) => (
                     <div
                       key={i}
-                      className={
-                        "pseudocode-line " +
-                        (activeLine === i + 1 ? "active" : "")
-                      }
-                      dangerouslySetInnerHTML={{
-                        __html: line.replace(/ /g, "&nbsp;"),
-                      }}
+                      className={"pseudocode-line " + (activeLine === i + 1 ? "active" : "")}
+                      dangerouslySetInnerHTML={{ __html: line.replace(/ /g, "&nbsp;") }}
                     />
                   ))}
                 </div>
               </div>
 
               {/* Horizontal Resizer */}
-              <div
-                className="resizer-h flex flex-col items-center justify-center group"
-                onMouseDown={startHorizDrag}
-              >
-                <div className="w-1 h-8 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+              <div className="resizer-h flex flex-col items-center justify-center group" onMouseDown={startHorizDrag}>
+                <div className="w-1 h-8 bg-gray-300 dark:bg-slate-500 rounded group-hover:bg-gray-400 dark:group-hover:bg-slate-400"></div>
               </div>
 
               {/* RIGHT PANE: Interactive Trace Table */}
-              <div className="flex-1 flex flex-col bg-white overflow-hidden">
+              <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 overflow-hidden">
                 {/* Feedback Banner */}
                 <div className={feedbackClass}>
                   <span className="mr-3 text-xl">
-                    {feedback.type === "error"
-                      ? "❌"
-                      : feedback.type === "success"
-                        ? "✅"
-                        : "ℹ️"}
+                    {feedback.type === "error" ? "❌" : feedback.type === "success" ? "✅" : "ℹ️"}
                   </span>
                   <span>{feedback.msg}</span>
                 </div>
 
                 {/* Dynamic Table Area */}
-                <div className="flex-1 overflow-auto p-6 bg-gray-50 pb-32">
-                  <table className="w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden text-sm relative">
-                    <thead className="bg-gray-200 text-gray-700 sticky top-0 z-10 shadow-sm">
+                <div className="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-slate-900 pb-32">
+                  <table className="w-full border-collapse bg-white dark:bg-slate-800 shadow-sm rounded-lg overflow-hidden text-sm relative">
+                    <thead className="bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-200 sticky top-0 z-10 shadow-sm">
                       <tr>
                         {activeProblem.columns.map((col) => (
-                          <th
-                            key={col}
-                            className="border p-3 font-semibold tracking-wider text-xs"
-                          >
+                          <th key={col} className="border border-slate-300 dark:border-slate-600 p-3 font-semibold tracking-wider text-xs">
                             {col}
                           </th>
                         ))}
@@ -1276,22 +1006,14 @@
                     </thead>
                     <tbody>
                       {userTable.map((row, rIdx) => (
-                        <tr
-                          key={"row-" + rIdx}
-                          className="hover:bg-gray-50 transition-colors"
-                        >
+                        <tr key={"row-" + rIdx} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                           {activeProblem.columns.map((col) => (
-                            <td
-                              key={rIdx + "-" + col}
-                              className="border p-1 bg-white"
-                            >
+                            <td key={rIdx + "-" + col} className="border border-slate-200 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
                               <input
                                 type="text"
                                 className="table-input"
                                 value={row[col] || ""}
-                                onChange={(e) =>
-                                  handleCellChange(rIdx, col, e.target.value)
-                                }
+                                onChange={(e) => handleCellChange(rIdx, col, e.target.value)}
                               />
                             </td>
                           ))}
@@ -1300,30 +1022,18 @@
                     </tbody>
                   </table>
 
-                  {/* Completion State */}
                   {isDone && (
-                    <div className="mt-8 bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm flex flex-col items-center">
-                      <h3 className="text-xl font-bold text-green-800 mb-2">
-                        🎉 Trace Complete!
-                      </h3>
-                      <p className="text-green-700 mb-6 text-center">
+                    <div className="mt-8 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6 shadow-sm flex flex-col items-center">
+                      <h3 className="text-xl font-bold text-green-800 dark:text-green-300 mb-2">🎉 Trace Complete!</h3>
+                      <p className="text-green-700 dark:text-green-400 mb-6 text-center">
                         You have successfully traced this algorithm end-to-end.
                       </p>
                       <button
                         onClick={() => {
-                          const currentIdx = ALL_PROBLEMS.findIndex(
-                            (p) => p.id === activeProblem.id,
-                          );
-                          const nextProb =
-                            ALL_PROBLEMS[
-                              (currentIdx + 1) % ALL_PROBLEMS.length
-                            ];
+                          const currentIdx = ALL_PROBLEMS.findIndex((p) => p.id === activeProblem.id);
+                          const nextProb = ALL_PROBLEMS[(currentIdx + 1) % ALL_PROBLEMS.length];
                           setActiveProblem(nextProb);
-                          if (!selectedTopics.includes(nextProb.topic))
-                            setSelectedTopics([
-                              ...selectedTopics,
-                              nextProb.topic,
-                            ]);
+                          if (!selectedTopics.includes(nextProb.topic)) setSelectedTopics([...selectedTopics, nextProb.topic]);
                         }}
                         className="px-8 py-3 bg-green-600 text-white rounded font-bold hover:bg-green-700 transition-colors shadow-md"
                       >
@@ -1335,10 +1045,10 @@
 
                 {/* Fixed Action Controls at Bottom */}
                 {!isDone && (
-                  <div className="p-4 bg-white border-t flex gap-4 justify-end shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 shrink-0">
+                  <div className="p-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex gap-4 justify-end shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 shrink-0">
                     <button
                       onClick={showHint}
-                      className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-100 font-medium transition-colors shadow-sm"
+                      className="px-5 py-2.5 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 rounded hover:bg-gray-100 dark:hover:bg-slate-700 font-medium transition-colors shadow-sm"
                     >
                       Reveal Step Answer
                     </button>

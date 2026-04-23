@@ -1,602 +1,505 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Newton's First Law Simulator</title>
-    <style>
-      body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin: 0;
-        padding: 20px;
-        background-color: #f0f0f0;
-        color: #333;
-      }
-      h1 {
-        color: #2c3e50;
-      }
-      .container {
-        display: flex;
-        gap: 20px;
-        width: 100%;
-        max-width: 1200px;
-      }
-      #simulationCanvas {
-        border: 1px solid #2c3e50;
-        background-color: #fff;
-      }
-      .controls {
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-        padding: 20px;
-        background-color: #ecf0f1;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        width: 300px; /* Fixed width for controls panel */
-      }
-      .control-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .control-group label {
-        font-weight: bold;
-        color: #34495e;
-      }
-      .control-group div {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .control-group button {
-        padding: 8px 12px;
-        background-color: #3498db;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-      }
-      .control-group button:hover {
-        background-color: #2980b9;
-      }
-      .control-group button:active {
-        background-color: #1f618d;
-      }
-      .control-group span {
-        min-width: 50px;
-        text-align: center;
-        font-size: 1em;
-        background-color: #fff;
-        padding: 5px 8px;
-        border-radius: 4px;
-        border: 1px solid #bdc3c7;
-      }
-      .main-buttons button {
-        width: 100%;
-        padding: 10px;
-        font-size: 1.1em;
-      }
-      #simulateButton {
-        background-color: #2ecc71; /* Green */
-      }
-      #simulateButton:hover {
-        background-color: #27ae60;
-      }
-      #resetButton {
-        background-color: #f39c12; /* Orange */
-      }
-      #resetButton:hover {
-        background-color: #e67e22;
-      }
-      #clearButton {
-        background-color: #e74c3c; /* Red */
-      }
-      #clearButton:hover {
-        background-color: #c0392b;
-      }
-    </style>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Newton's First Law Simulator</title>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag("js", new Date());
+    gtag("config", "G-DYQESQXT38");
+  </script>
+  <!-- Prevent FOUC: apply dark class before render -->
+  <script>
+    (function () {
+      try {
+        var mode = localStorage.getItem("uimode");
+        if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --panel: #e2e8f0;
+      --panel-border: #cbd5e1;
+      --text: #1e293b;
+      --label: #334155;
+      --btn-bg: #3b82f6;
+      --btn-hover: #2563eb;
+      --btn-active: #1d4ed8;
+      --val-bg: #ffffff;
+      --val-border: #94a3b8;
+      --sim-btn: #22c55e;
+      --sim-btn-hover: #16a34a;
+      --reset-btn: #f59e0b;
+      --reset-btn-hover: #d97706;
+      --clear-btn: #ef4444;
+      --clear-btn-hover: #dc2626;
+      --canvas-border: #334155;
+      --header-bg: #0f172a;
+      --header-accent: #38bdf8;
+    }
+    html.dark {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-border: #334155;
+      --text: #f1f5f9;
+      --label: #94a3b8;
+      --btn-bg: #2563eb;
+      --btn-hover: #1d4ed8;
+      --btn-active: #1e40af;
+      --val-bg: #0f172a;
+      --val-border: #475569;
+      --sim-btn: #16a34a;
+      --sim-btn-hover: #15803d;
+      --reset-btn: #d97706;
+      --reset-btn-hover: #b45309;
+      --clear-btn: #dc2626;
+      --clear-btn-hover: #b91c1c;
+      --canvas-border: #475569;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      transition: background-color 0.2s, color 0.2s;
+    }
+    /* CS Learning Header */
+    .cs-header {
+      width: 100%;
+      background-color: var(--header-bg);
+      padding: 0 1.5rem;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .cs-header-brand {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--header-accent);
       text-decoration: none;
     }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
+    .cs-header-nav { display: flex; align-items: center; gap: 1.25rem; }
+    .cs-header-nav a {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.15s;
     }
+    .cs-header-nav a:hover { color: #f1f5f9; }
+    #theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    #theme-toggle:hover { color: #f1f5f9; }
+
+    .page-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      width: 100%;
+    }
+    h1 { color: var(--text); margin-bottom: 16px; }
+    .container { display: flex; gap: 20px; width: 100%; max-width: 1200px; }
+    #simulationCanvas {
+      border: 1px solid var(--canvas-border);
+      border-radius: 4px;
+      flex-grow: 1;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 20px;
+      background-color: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+      width: 300px;
+      flex-shrink: 0;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 8px; }
+    .control-group label { font-weight: bold; color: var(--label); }
+    .control-group div { display: flex; align-items: center; gap: 10px; }
+    .control-group button {
+      padding: 8px 12px;
+      background-color: var(--btn-bg);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .control-group button:hover { background-color: var(--btn-hover); }
+    .control-group button:active { background-color: var(--btn-active); }
+    .control-group span {
+      min-width: 50px;
+      text-align: center;
+      font-size: 1em;
+      background-color: var(--val-bg);
+      color: var(--text);
+      padding: 5px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--val-border);
+    }
+    .main-buttons button { width: 100%; padding: 10px; font-size: 1.1em; }
+    #simulateButton { background-color: var(--sim-btn); }
+    #simulateButton:hover { background-color: var(--sim-btn-hover); }
+    #resetButton { background-color: var(--reset-btn); }
+    #resetButton:hover { background-color: var(--reset-btn-hover); }
+    #clearButton { background-color: var(--clear-btn); }
+    #clearButton:hover { background-color: var(--clear-btn-hover); }
   </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
-  <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+<body>
 
-    <h1>Newton's First Law Particle Simulation</h1>
-    <div class="container">
-      <canvas id="simulationCanvas"></canvas>
-      <div class="controls">
-        <div class="control-group">
-          <label for="mass">Mass (kg):</label>
-          <div>
-            <button onclick="changeMass(-1)">-</button>
-            <span id="massDisplay">1</span>
-            <button onclick="changeMass(1)">+</button>
-          </div>
-        </div>
+<header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
-        <div class="control-group">
-          <label>Forces (N):</label>
-          <div>
-            Up: <button onclick="changeForce('up', -1)">-</button
-            ><span id="forceUpDisplay">0</span
-            ><button onclick="changeForce('up', 1)">+</button>
-          </div>
-          <div>
-            Down: <button onclick="changeForce('down', -1)">-</button
-            ><span id="forceDownDisplay">0</span
-            ><button onclick="changeForce('down', 1)">+</button>
-          </div>
-          <div>
-            Left: <button onclick="changeForce('left', -1)">-</button
-            ><span id="forceLeftDisplay">0</span
-            ><button onclick="changeForce('left', 1)">+</button>
-          </div>
-          <div>
-            Right: <button onclick="changeForce('right', -1)">-</button
-            ><span id="forceRightDisplay">0</span
-            ><button onclick="changeForce('right', 1)">+</button>
-          </div>
-        </div>
-
-        <div class="control-group">
-          <label>Initial Velocity X (m/s):</label>
-          <div>
-            <button onclick="changeVelocity('vx', -1)">-</button>
-            <span id="velocityXDisplay">0</span>
-            <button onclick="changeVelocity('vx', 1)">+</button>
-          </div>
-        </div>
-
-        <div class="control-group">
-          <label>Initial Velocity Y (m/s):</label>
-          <div>
-            <button onclick="changeVelocity('vy', -1)">-</button>
-            <span id="velocityYDisplay">0</span>
-            <button onclick="changeVelocity('vy', 1)">+</button>
-          </div>
-        </div>
-
-        <div class="control-group main-buttons">
-          <button id="simulateButton" onclick="toggleSimulation()">
-            Simulate
-          </button>
-          <button id="resetButton" onclick="resetSimulationState()">
-            Reset
-          </button>
-          <button id="clearButton" onclick="clearSimulation()">
-            Clear All
-          </button>
+<div class="page-content">
+  <h1>Newton's First Law Particle Simulation</h1>
+  <div class="container">
+    <canvas id="simulationCanvas"></canvas>
+    <div class="controls">
+      <div class="control-group">
+        <label for="mass">Mass (kg):</label>
+        <div>
+          <button onclick="changeMass(-1)">-</button>
+          <span id="massDisplay">1</span>
+          <button onclick="changeMass(1)">+</button>
         </div>
       </div>
+      <div class="control-group">
+        <label>Forces (N):</label>
+        <div>Up: <button onclick="changeForce('up',-1)">-</button><span id="forceUpDisplay">0</span><button onclick="changeForce('up',1)">+</button></div>
+        <div>Down: <button onclick="changeForce('down',-1)">-</button><span id="forceDownDisplay">0</span><button onclick="changeForce('down',1)">+</button></div>
+        <div>Left: <button onclick="changeForce('left',-1)">-</button><span id="forceLeftDisplay">0</span><button onclick="changeForce('left',1)">+</button></div>
+        <div>Right: <button onclick="changeForce('right',-1)">-</button><span id="forceRightDisplay">0</span><button onclick="changeForce('right',1)">+</button></div>
+      </div>
+      <div class="control-group">
+        <label>Initial Velocity X (m/s):</label>
+        <div>
+          <button onclick="changeVelocity('vx',-1)">-</button>
+          <span id="velocityXDisplay">0</span>
+          <button onclick="changeVelocity('vx',1)">+</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <label>Initial Velocity Y (m/s):</label>
+        <div>
+          <button onclick="changeVelocity('vy',-1)">-</button>
+          <span id="velocityYDisplay">0</span>
+          <button onclick="changeVelocity('vy',1)">+</button>
+        </div>
+      </div>
+      <div class="control-group main-buttons">
+        <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
+        <button id="resetButton" onclick="resetSimulationState()">Reset</button>
+        <button id="clearButton" onclick="clearSimulation()">Clear All</button>
+      </div>
     </div>
+  </div>
+</div>
 
-    <script>
-      const canvas = document.getElementById("simulationCanvas");
-      const ctx = canvas.getContext("2d");
+<script>
+  const canvas = document.getElementById("simulationCanvas");
+  const ctx = canvas.getContext("2d");
 
-      // Display elements
-      const massDisplay = document.getElementById("massDisplay");
-      const forceUpDisplay = document.getElementById("forceUpDisplay");
-      const forceDownDisplay = document.getElementById("forceDownDisplay");
-      const forceLeftDisplay = document.getElementById("forceLeftDisplay");
-      const forceRightDisplay = document.getElementById("forceRightDisplay");
-      const velocityXDisplay = document.getElementById("velocityXDisplay");
-      const velocityYDisplay = document.getElementById("velocityYDisplay");
-      const simulateButton = document.getElementById("simulateButton");
+  const massDisplay = document.getElementById("massDisplay");
+  const forceUpDisplay = document.getElementById("forceUpDisplay");
+  const forceDownDisplay = document.getElementById("forceDownDisplay");
+  const forceLeftDisplay = document.getElementById("forceLeftDisplay");
+  const forceRightDisplay = document.getElementById("forceRightDisplay");
+  const velocityXDisplay = document.getElementById("velocityXDisplay");
+  const velocityYDisplay = document.getElementById("velocityYDisplay");
+  const simulateButton = document.getElementById("simulateButton");
 
-      // Simulation parameters
-      let mass = 1; // kg
-      let forces = { up: 0, down: 0, left: 0, right: 0 }; // N
-      let initialVelocity = { x: 0, y: 0 }; // m/s (positive y will now be up)
+  let mass = 1;
+  let forces = { up: 0, down: 0, left: 0, right: 0 };
+  let initialVelocity = { x: 0, y: 0 };
+  let particle = { x: 0, y: 0, vx: 0, vy: 0, radius: 0.2 };
+  let isPaused = true;
+  let animationFrameId;
 
-      let particle = {
-        x: 0, // m, position relative to canvas center (physics coordinates)
-        y: 0, // m, position relative to canvas center (physics coordinates, positive Y is UP)
-        vx: 0, // m/s, current velocity
-        vy: 0, // m/s
-        radius: 0.2, // m, for drawing
-      };
+  const PIXELS_PER_METER = 50;
+  const PARTICLE_DRAW_RADIUS = 10;
+  const ARROW_BASE_LENGTH = 20;
+  const MAX_FORCE = 3;
+  const MIN_FORCE = 0;
+  const FORCE_STEP = 1;
+  const MIN_MASS = 1;
+  const MASS_STEP = 1;
+  const MAX_VELOCITY = 3;
+  const MIN_VELOCITY = -3;
+  const VELOCITY_STEP = 1;
+  const TIME_STEP = 1 / 60;
 
-      let isPaused = true;
-      let animationFrameId;
+  function getColors() {
+    const dark = document.documentElement.classList.contains("dark");
+    return {
+      bg:      dark ? "#0f172a" : "#f8fafc",
+      grid:    dark ? "rgba(255,255,255,0.05)" : "#e0e0e0",
+      particle:dark ? "#38bdf8" : "#3498db",
+      arrow:   dark ? "#f87171" : "#e74c3c",
+      label:   dark ? "#f1f5f9" : "#333333",
+      pauseCircle: dark ? "rgba(200,200,200,0.35)" : "rgba(100,100,100,0.5)",
+      pauseBar: "rgba(255,255,255,0.9)",
+    };
+  }
 
-      // Constants
-      const PIXELS_PER_METER = 50; // Scale: 50 pixels = 1 meter
-      const PARTICLE_DRAW_RADIUS = 10; // pixels
-      const ARROW_BASE_LENGTH = 20; // pixels for 1N force
-      const MAX_FORCE = 3; // N
-      const MIN_FORCE = 0; // N
-      const FORCE_STEP = 1; // N
-      const MIN_MASS = 1; // kg
-      const MASS_STEP = 1; // kg
-      const MAX_VELOCITY = 3; // m/s
-      const MIN_VELOCITY = -3; // m/s
-      const VELOCITY_STEP = 1; // m/s
-      const TIME_STEP = 1 / 60; // s, for physics simulation step
+  function applyTheme(mode) {
+    if (mode === "dark") document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+    try { localStorage.setItem("uimode", mode); } catch(e) {}
+    document.getElementById("icon-moon").style.display = mode === "dark" ? "none" : "";
+    document.getElementById("icon-sun").style.display  = mode === "dark" ? "" : "none";
+    draw();
+  }
 
-      function setupCanvas() {
-        // Adjust canvas size based on container, maintaining aspect ratio or fixed size
-        const containerWidth = canvas.parentElement.offsetWidth - 340; // Subtract controls width + gap
-        const canvasHeight = 600; // Fixed height
-        canvas.width = Math.max(400, containerWidth); // Min width 400px
-        canvas.height = canvasHeight;
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    applyTheme(document.documentElement.classList.contains("dark") ? "light" : "dark");
+  });
 
-        // Particle physics coordinates are relative to the center of the canvas, with Y positive upwards.
-        particle.x = 0;
-        particle.y = 0;
+  (function() {
+    const isDark = document.documentElement.classList.contains("dark");
+    document.getElementById("icon-moon").style.display = isDark ? "none" : "";
+    document.getElementById("icon-sun").style.display  = isDark ? "" : "none";
+  })();
 
-        if (isPaused) {
-          // Only reset current velocities if paused and setting up
-          particle.vx = initialVelocity.x;
-          particle.vy = initialVelocity.y; // Positive initialVelocity.y means up
-        }
-        draw();
-      }
+  function setupCanvas() {
+    const containerWidth = canvas.parentElement.offsetWidth - 340;
+    canvas.width = Math.max(400, containerWidth);
+    canvas.height = 600;
+    particle.x = 0;
+    particle.y = 0;
+    if (isPaused) { particle.vx = initialVelocity.x; particle.vy = initialVelocity.y; }
+    draw();
+  }
 
-      function changeMass(delta) {
-        if (!isPaused) return;
-        mass = Math.max(MIN_MASS, mass + delta * MASS_STEP);
-        massDisplay.textContent = mass;
-        draw();
-      }
+  function changeMass(delta) {
+    if (!isPaused) return;
+    mass = Math.max(MIN_MASS, mass + delta * MASS_STEP);
+    massDisplay.textContent = mass;
+    draw();
+  }
 
-      function changeForce(direction, delta) {
-        if (!isPaused) return;
-        forces[direction] = Math.max(
-          MIN_FORCE,
-          Math.min(MAX_FORCE, forces[direction] + delta * FORCE_STEP)
-        );
-        document.getElementById(
-          `force${
-            direction.charAt(0).toUpperCase() + direction.slice(1)
-          }Display`
-        ).textContent = forces[direction];
-        draw();
-      }
+  function changeForce(direction, delta) {
+    if (!isPaused) return;
+    forces[direction] = Math.max(MIN_FORCE, Math.min(MAX_FORCE, forces[direction] + delta * FORCE_STEP));
+    document.getElementById(`force${direction.charAt(0).toUpperCase() + direction.slice(1)}Display`).textContent = forces[direction];
+    draw();
+  }
 
-      function changeVelocity(axis, delta) {
-        if (!isPaused) return;
-        if (axis === "vx") {
-          initialVelocity.x = Math.max(
-            MIN_VELOCITY,
-            Math.min(MAX_VELOCITY, initialVelocity.x + delta * VELOCITY_STEP)
-          );
-          velocityXDisplay.textContent = initialVelocity.x;
-          particle.vx = initialVelocity.x; // Update current velocity if paused
-        } else if (axis === "vy") {
-          initialVelocity.y = Math.max(
-            MIN_VELOCITY,
-            Math.min(MAX_VELOCITY, initialVelocity.y + delta * VELOCITY_STEP)
-          );
-          velocityYDisplay.textContent = initialVelocity.y;
-          particle.vy = initialVelocity.y; // Update current velocity if paused
-        }
-        draw();
-      }
+  function changeVelocity(axis, delta) {
+    if (!isPaused) return;
+    if (axis === "vx") {
+      initialVelocity.x = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, initialVelocity.x + delta * VELOCITY_STEP));
+      velocityXDisplay.textContent = initialVelocity.x;
+      particle.vx = initialVelocity.x;
+    } else {
+      initialVelocity.y = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, initialVelocity.y + delta * VELOCITY_STEP));
+      velocityYDisplay.textContent = initialVelocity.y;
+      particle.vy = initialVelocity.y;
+    }
+    draw();
+  }
 
-      function toggleSimulation() {
-        isPaused = !isPaused;
-        simulateButton.textContent = isPaused ? "Simulate" : "Pause";
-        if (!isPaused) {
-          // When starting simulation, ensure current particle velocity is set from initialVelocity
-          particle.vx = initialVelocity.x;
-          particle.vy = initialVelocity.y;
-          animate();
-        } else {
-          cancelAnimationFrame(animationFrameId);
-          // When pausing, current particle velocity becomes the new initial for next run if user doesn't change it
-          // initialVelocity.x = particle.vx;
-          // initialVelocity.y = particle.vy;
-          // velocityXDisplay.textContent = initialVelocity.x.toFixed(1);
-          // velocityYDisplay.textContent = initialVelocity.y.toFixed(1);
-          // No, the problem states "Reset button to put it back to the middle with the same options as previously chosen"
-          // So initial velocities should remain as set by user.
-          draw(); // Draw pause icon
-        }
-      }
+  function toggleSimulation() {
+    isPaused = !isPaused;
+    simulateButton.textContent = isPaused ? "Simulate" : "Pause";
+    if (!isPaused) {
+      particle.vx = initialVelocity.x;
+      particle.vy = initialVelocity.y;
+      animate();
+    } else {
+      cancelAnimationFrame(animationFrameId);
+      draw();
+    }
+  }
 
-      function resetSimulationState() {
-        isPaused = true;
-        simulateButton.textContent = "Simulate";
-        cancelAnimationFrame(animationFrameId);
+  function resetSimulationState() {
+    isPaused = true;
+    simulateButton.textContent = "Simulate";
+    cancelAnimationFrame(animationFrameId);
+    particle.x = 0; particle.y = 0;
+    particle.vx = initialVelocity.x;
+    particle.vy = initialVelocity.y;
+    draw();
+  }
 
-        particle.x = 0; // Reset to center in physics coordinates
-        particle.y = 0; // Reset to center in physics coordinates
-        particle.vx = initialVelocity.x; // Reset to chosen initial velocities
-        particle.vy = initialVelocity.y;
-        draw();
-      }
+  function clearSimulation() {
+    isPaused = true;
+    simulateButton.textContent = "Simulate";
+    cancelAnimationFrame(animationFrameId);
+    mass = MIN_MASS;
+    forces = { up: 0, down: 0, left: 0, right: 0 };
+    initialVelocity = { x: 0, y: 0 };
+    massDisplay.textContent = mass;
+    forceUpDisplay.textContent = 0;
+    forceDownDisplay.textContent = 0;
+    forceLeftDisplay.textContent = 0;
+    forceRightDisplay.textContent = 0;
+    velocityXDisplay.textContent = 0;
+    velocityYDisplay.textContent = 0;
+    particle.x = 0; particle.y = 0; particle.vx = 0; particle.vy = 0;
+    draw();
+  }
 
-      function clearSimulation() {
-        isPaused = true;
-        simulateButton.textContent = "Simulate";
-        cancelAnimationFrame(animationFrameId);
+  function drawParticle(c) {
+    const canvasX = canvas.width / 2 + particle.x * PIXELS_PER_METER;
+    const canvasY = canvas.height / 2 - particle.y * PIXELS_PER_METER;
+    ctx.fillStyle = c.particle;
+    ctx.fillRect(canvasX - PARTICLE_DRAW_RADIUS, canvasY - PARTICLE_DRAW_RADIUS, PARTICLE_DRAW_RADIUS * 2, PARTICLE_DRAW_RADIUS * 2);
+  }
 
-        mass = MIN_MASS;
-        forces = { up: 0, down: 0, left: 0, right: 0 };
-        initialVelocity = { x: 0, y: 0 };
+  function drawForceArrow(direction, magnitude, c) {
+    if (magnitude === 0) return;
+    const particleCanvasX = canvas.width / 2 + particle.x * PIXELS_PER_METER;
+    const particleCanvasY = canvas.height / 2 - particle.y * PIXELS_PER_METER;
+    const arrowLength = magnitude * ARROW_BASE_LENGTH;
+    const headLength = 10;
+    const headWidth = 5;
 
-        massDisplay.textContent = mass;
-        forceUpDisplay.textContent = forces.up;
-        forceDownDisplay.textContent = forces.down;
-        forceLeftDisplay.textContent = forces.left;
-        forceRightDisplay.textContent = forces.right;
-        velocityXDisplay.textContent = initialVelocity.x;
-        velocityYDisplay.textContent = initialVelocity.y;
+    ctx.strokeStyle = c.arrow;
+    ctx.fillStyle = c.arrow;
+    ctx.lineWidth = 2;
+    ctx.font = "12px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
 
-        particle.x = 0; // Reset to center in physics coordinates
-        particle.y = 0; // Reset to center in physics coordinates
-        particle.vx = initialVelocity.x;
-        particle.vy = initialVelocity.y;
-        draw();
-      }
+    let toX = particleCanvasX, toY = particleCanvasY;
+    let labelX, labelY;
+    const labelOffset = 15;
 
-      function drawParticle() {
-        // Convert physics coordinates (center origin, Y up) to canvas coordinates (top-left origin, Y down)
-        const canvasX = canvas.width / 2 + particle.x * PIXELS_PER_METER;
-        const canvasY = canvas.height / 2 - particle.y * PIXELS_PER_METER;
+    switch (direction) {
+      case "up":
+        toY -= arrowLength; labelX = toX; labelY = toY - labelOffset;
+        ctx.beginPath(); ctx.moveTo(particleCanvasX, particleCanvasY - PARTICLE_DRAW_RADIUS); ctx.lineTo(toX, toY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(toX, toY); ctx.lineTo(toX - headWidth, toY + headLength); ctx.lineTo(toX + headWidth, toY + headLength); ctx.closePath(); ctx.fill();
+        break;
+      case "down":
+        toY += arrowLength; labelX = toX; labelY = toY + labelOffset;
+        ctx.beginPath(); ctx.moveTo(particleCanvasX, particleCanvasY + PARTICLE_DRAW_RADIUS); ctx.lineTo(toX, toY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(toX, toY); ctx.lineTo(toX - headWidth, toY - headLength); ctx.lineTo(toX + headWidth, toY - headLength); ctx.closePath(); ctx.fill();
+        break;
+      case "left":
+        toX -= arrowLength; labelX = toX - labelOffset - 5; labelY = toY;
+        ctx.beginPath(); ctx.moveTo(particleCanvasX - PARTICLE_DRAW_RADIUS, particleCanvasY); ctx.lineTo(toX, toY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(toX, toY); ctx.lineTo(toX + headLength, toY - headWidth); ctx.lineTo(toX + headLength, toY + headWidth); ctx.closePath(); ctx.fill();
+        break;
+      case "right":
+        toX += arrowLength; labelX = toX + labelOffset + 5; labelY = toY;
+        ctx.beginPath(); ctx.moveTo(particleCanvasX + PARTICLE_DRAW_RADIUS, particleCanvasY); ctx.lineTo(toX, toY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(toX, toY); ctx.lineTo(toX - headLength, toY - headWidth); ctx.lineTo(toX - headLength, toY + headWidth); ctx.closePath(); ctx.fill();
+        break;
+    }
+    ctx.fillStyle = c.label;
+    ctx.fillText(`${magnitude}N`, labelX, labelY);
+  }
 
-        ctx.fillStyle = "#3498db"; // Blue particle
-        // Draw a rectangle as requested
-        ctx.fillRect(
-          canvasX - PARTICLE_DRAW_RADIUS,
-          canvasY - PARTICLE_DRAW_RADIUS,
-          PARTICLE_DRAW_RADIUS * 2,
-          PARTICLE_DRAW_RADIUS * 2
-        );
-      }
+  function drawPauseIcon(c) {
+    if (!isPaused) return;
+    const iconCenterX = canvas.width / 2;
+    const iconCenterY = canvas.height / 3;
+    ctx.fillStyle = c.pauseCircle;
+    ctx.beginPath();
+    ctx.arc(iconCenterX, iconCenterY, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c.pauseBar;
+    ctx.fillRect(iconCenterX - 9, iconCenterY - 12, 8, 25);
+    ctx.fillRect(iconCenterX + 1, iconCenterY - 12, 8, 25);
+  }
 
-      function drawForceArrow(direction, magnitude) {
-        if (magnitude === 0) return;
+  function draw() {
+    const c = getColors();
+    ctx.fillStyle = c.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Convert physics coordinates (center origin, Y up) to canvas coordinates (top-left origin, Y down)
-        const particleCanvasX =
-          canvas.width / 2 + particle.x * PIXELS_PER_METER;
-        const particleCanvasY =
-          canvas.height / 2 - particle.y * PIXELS_PER_METER;
-        const arrowLength = magnitude * ARROW_BASE_LENGTH;
-        const headLength = 10; // pixels for arrowhead
-        const headWidth = 5; // pixels for arrowhead half-width
+    ctx.strokeStyle = c.grid;
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < canvas.width; x += PIXELS_PER_METER) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += PIXELS_PER_METER) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
 
-        ctx.strokeStyle = "#e74c3c"; // Red arrows
-        ctx.fillStyle = "#e74c3c";
-        ctx.lineWidth = 2;
-        ctx.font = "12px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
+    drawParticle(c);
+    drawForceArrow("up", forces.up, c);
+    drawForceArrow("down", forces.down, c);
+    drawForceArrow("left", forces.left, c);
+    drawForceArrow("right", forces.right, c);
+    drawPauseIcon(c);
+  }
 
-        let toX = particleCanvasX;
-        let toY = particleCanvasY;
-        let labelX = particleCanvasX;
-        let labelY = particleCanvasY;
-        const labelOffset = 15; // pixels from arrowhead for label
+  function updatePhysics() {
+    const netForceX = forces.right - forces.left;
+    const netForceY = forces.up - forces.down;
+    particle.vx += (netForceX / mass) * TIME_STEP;
+    particle.vy += (netForceY / mass) * TIME_STEP;
+    particle.x += particle.vx * TIME_STEP;
+    particle.y += particle.vy * TIME_STEP;
+  }
 
-        switch (direction) {
-          case "up":
-            toY -= arrowLength;
-            labelX = toX;
-            labelY = toY - labelOffset;
-            ctx.beginPath();
-            ctx.moveTo(particleCanvasX, particleCanvasY - PARTICLE_DRAW_RADIUS);
-            ctx.lineTo(toX, toY);
-            ctx.stroke();
-            // Arrowhead
-            ctx.beginPath();
-            ctx.moveTo(toX, toY);
-            ctx.lineTo(toX - headWidth, toY + headLength);
-            ctx.lineTo(toX + headWidth, toY + headLength);
-            ctx.closePath();
-            ctx.fill();
-            break;
-          case "down":
-            toY += arrowLength;
-            labelX = toX;
-            labelY = toY + labelOffset;
-            ctx.beginPath();
-            ctx.moveTo(particleCanvasX, particleCanvasY + PARTICLE_DRAW_RADIUS);
-            ctx.lineTo(toX, toY);
-            ctx.stroke();
-            // Arrowhead
-            ctx.beginPath();
-            ctx.moveTo(toX, toY);
-            ctx.lineTo(toX - headWidth, toY - headLength);
-            ctx.lineTo(toX + headWidth, toY - headLength);
-            ctx.closePath();
-            ctx.fill();
-            break;
-          case "left":
-            toX -= arrowLength;
-            labelX = toX - labelOffset - 5; // Adjust for text width
-            labelY = toY;
-            ctx.beginPath();
-            ctx.moveTo(particleCanvasX - PARTICLE_DRAW_RADIUS, particleCanvasY);
-            ctx.lineTo(toX, toY);
-            ctx.stroke();
-            // Arrowhead
-            ctx.beginPath();
-            ctx.moveTo(toX, toY);
-            ctx.lineTo(toX + headLength, toY - headWidth);
-            ctx.lineTo(toX + headLength, toY + headWidth);
-            ctx.closePath();
-            ctx.fill();
-            break;
-          case "right":
-            toX += arrowLength;
-            labelX = toX + labelOffset + 5; // Adjust for text width
-            labelY = toY;
-            ctx.beginPath();
-            ctx.moveTo(particleCanvasX + PARTICLE_DRAW_RADIUS, particleCanvasY);
-            ctx.lineTo(toX, toY);
-            ctx.stroke();
-            // Arrowhead
-            ctx.beginPath();
-            ctx.moveTo(toX, toY);
-            ctx.lineTo(toX - headLength, toY - headWidth);
-            ctx.lineTo(toX - headLength, toY + headWidth);
-            ctx.closePath();
-            ctx.fill();
-            break;
-        }
-        ctx.fillStyle = "#333"; // Black text for labels
-        ctx.fillText(`${magnitude}N`, labelX, labelY);
-      }
+  function animate() {
+    if (isPaused) return;
+    updatePhysics();
+    draw();
+    animationFrameId = requestAnimationFrame(animate);
+  }
 
-      function drawPauseIcon() {
-        if (!isPaused) return;
-
-        const iconCenterX = canvas.width / 2;
-        const iconCenterY = canvas.height / 3; // Position 1/3 down the canvas
-        const circleRadius = 30;
-
-        // Draw semi-transparent circle background
-        ctx.fillStyle = "rgba(100, 100, 100, 0.5)";
-        ctx.beginPath();
-        ctx.arc(iconCenterX, iconCenterY, circleRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw pause bars (white)
-        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-        const barWidth = 8;
-        const barHeight = 25;
-        const spacing = 6;
-
-        const bar1X = iconCenterX - spacing / 2 - barWidth;
-        const bar2X = iconCenterX + spacing / 2;
-        const barY = iconCenterY - barHeight / 2;
-
-        ctx.fillRect(bar1X, barY, barWidth, barHeight);
-        ctx.fillRect(bar2X, barY, barWidth, barHeight);
-      }
-
-      function drawNetForceVector() {
-        if (isPaused) return; // Only show during simulation if desired, or always if forces are non-zero
-
-        const netFx = forces.right - forces.left;
-        const netFy = forces.up - forces.down; // positive Y is up
-
-        if (netFx === 0 && netFy === 0) return;
-
-        const particleCanvasX = particle.x * PIXELS_PER_METER;
-        const particleCanvasY = particle.y * PIXELS_PER_METER;
-
-        const arrowScale = 15; // Pixels per Newton for net force vector
-        const toX = particleCanvasX + netFx * arrowScale;
-        const toY = particleCanvasY + netFy * arrowScale;
-
-        const headLength = 8;
-        const headWidth = 4;
-
-        ctx.strokeStyle = "#27ae60"; // Green for net force
-        ctx.fillStyle = "#27ae60";
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-        ctx.moveTo(particleCanvasX, particleCanvasY);
-        ctx.lineTo(toX, toY);
-        ctx.stroke();
-
-        // Arrowhead for net force
-        const angle = Math.atan2(toY - particleCanvasY, toX - particleCanvasX);
-        ctx.beginPath();
-        ctx.moveTo(toX, toY);
-        ctx.lineTo(
-          toX - headLength * Math.cos(angle - Math.PI / 6),
-          toY - headLength * Math.sin(angle - Math.PI / 6)
-        );
-        ctx.lineTo(
-          toX - headLength * Math.cos(angle + Math.PI / 6),
-          toY - headLength * Math.sin(angle + Math.PI / 6)
-        );
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw grid (optional, for visual reference)
-        ctx.strokeStyle = "#e0e0e0"; // Light grey grid
-        ctx.lineWidth = 0.5;
-        for (let x = 0; x < canvas.width; x += PIXELS_PER_METER) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, canvas.height);
-          ctx.stroke();
-        }
-        for (let y = 0; y < canvas.height; y += PIXELS_PER_METER) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(canvas.width, y);
-          ctx.stroke();
-        }
-
-        drawParticle();
-        drawForceArrow("up", forces.up);
-        drawForceArrow("down", forces.down);
-        drawForceArrow("left", forces.left);
-        drawForceArrow("right", forces.right);
-        // drawNetForceVector(); // Optionally draw net force vector
-
-        if (isPaused) {
-          drawPauseIcon();
-        }
-      }
-
-      function updatePhysics() {
-        const netForceX = forces.right - forces.left; // N
-        const netForceY = forces.up - forces.down; // N (positive Y is up in physics model)
-
-        const accelerationX = netForceX / mass; // m/s^2
-        const accelerationY = netForceY / mass; // m/s^2
-
-        particle.vx += accelerationX * TIME_STEP; // m/s
-        particle.vy += accelerationY * TIME_STEP; // m/s
-
-        particle.x += particle.vx * TIME_STEP; // m
-        particle.y += particle.vy * TIME_STEP; // m
-      }
-
-      function animate() {
-        if (isPaused) return;
-
-        updatePhysics();
-        draw();
-
-        // Boundary check (optional: stop simulation or make particle bounce)
-        // For now, let it go off screen
-        // if (particle.x * PIXELS_PER_METER < 0 || particle.x * PIXELS_PER_METER > canvas.width ||
-        //     particle.y * PIXELS_PER_METER < 0 || particle.y * PIXELS_PER_METER > canvas.height) {
-        //     // Particle is off-screen
-        //     // toggleSimulation(); // Optionally pause
-        // }
-
-        animationFrameId = requestAnimationFrame(animate);
-      }
-
-      // Initial setup
-      window.onload = () => {
-        setupCanvas();
-        clearSimulation(); // Initialize with default cleared state
-      };
-      window.onresize = setupCanvas; // Adjust canvas on window resize
-    </script>
-  </body>
+  window.onload = () => { setupCanvas(); clearSimulation(); };
+  window.onresize = setupCanvas;
+</script>
+</body>
 </html>

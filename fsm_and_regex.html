@@ -4,395 +4,83 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A-Level CS: FSM & Regular Expressions</title>
-    <!-- Tailwind CSS -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
-    <script
-      crossorigin
-      src="https://unpkg.com/react@18/umd/react.production.min.js"
-    ></script>
-    <script
-      crossorigin
-      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
-    ></script>
-    <!-- Babel for in-browser JSX compilation -->
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: { extend: { colors: { headerBg: "#0f172a", headerAccent: "#38bdf8" } } },
+      };
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
-        background-color: #f3f4f6;
-      }
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
-      .canvas-container {
-        user-select: none;
-      }
-      .fsm-node {
-        cursor: pointer;
-      }
-      .fsm-edge {
-        cursor: pointer;
-      }
-      .fsm-label {
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 14px;
-        user-select: none;
-      }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .canvas-container { user-select: none; }
+      .fsm-node { cursor: pointer; }
+      .fsm-edge { cursor: pointer; }
+      .fsm-label { cursor: pointer; font-weight: 600; font-size: 14px; user-select: none; }
     </style>
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
     <div id="root"></div>
 
     <script type="text/babel">
       const { useState, useEffect, useRef } = React;
 
-      // --- QUESTION DATA (AQA Aligned, Differentiated) ---
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07-.707.707M6.343 17.657l-.707.707m12.728 0-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14A7 7 0 0012 5z" />
+        </svg>
+      );
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+        </svg>
+      );
+
+      // --- QUESTION DATA ---
       const QUESTIONS = [
-        {
-          id: 1,
-          type: "FSM_TO_REGEX",
-          difficulty: "Easy",
-          alphabet: ["0", "1"],
-          description:
-            "Find the regular expression. It accepts strings with an even number of 1s (including zero 1s).",
-          targetRegex: "0*(10*10*)*",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 250, y: 200, isStart: true, isAccept: true },
-              { id: "S1", x: 450, y: 200, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S0", label: "0" },
-              { id: "t2", from: "S0", to: "S1", label: "1" },
-              { id: "t3", from: "S1", to: "S1", label: "0" },
-              { id: "t4", from: "S1", to: "S0", label: "1" },
-            ],
-          },
-        },
-        {
-          id: 2,
-          type: "REGEX_TO_FSM",
-          difficulty: "Easy",
-          alphabet: ["0", "1"],
-          description: "Build a fully valid DFA that matches the regex: 0*1*",
-          targetRegex: "0*1*",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 200, y: 200, isStart: true, isAccept: true },
-              { id: "S1", x: 400, y: 200, isStart: false, isAccept: true },
-              { id: "S2", x: 300, y: 300, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S0", label: "0" },
-              { id: "t2", from: "S0", to: "S1", label: "1" },
-              { id: "t3", from: "S1", to: "S1", label: "1" },
-              { id: "t4", from: "S1", to: "S2", label: "0" },
-              { id: "t5", from: "S2", to: "S2", label: "0|1" },
-            ],
-          },
-        },
-        {
-          id: 3,
-          type: "FSM_TO_REGEX",
-          difficulty: "Medium",
-          alphabet: ["0", "1"],
-          description:
-            "Find the regular expression for this FSM. It accepts any string ending in 00.",
-          targetRegex: "(0|1)*00",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 150, y: 200, isStart: true, isAccept: false },
-              { id: "S1", x: 300, y: 200, isStart: false, isAccept: false },
-              { id: "S2", x: 450, y: 200, isStart: false, isAccept: true },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S1", label: "0" },
-              { id: "t2", from: "S0", to: "S0", label: "1" },
-              { id: "t3", from: "S1", to: "S2", label: "0" },
-              { id: "t4", from: "S1", to: "S0", label: "1" },
-              { id: "t5", from: "S2", to: "S2", label: "0" },
-              { id: "t6", from: "S2", to: "S0", label: "1", curve: 0.4 },
-            ],
-          },
-        },
-        {
-          id: 4,
-          type: "REGEX_TO_FSM",
-          difficulty: "Medium",
-          alphabet: ["a", "b"],
-          description:
-            "Build a fully valid DFA that matches the regex: (a|b)*abb",
-          targetRegex: "(a|b)*abb",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 150, y: 200, isStart: true, isAccept: false },
-              { id: "S1", x: 280, y: 200, isStart: false, isAccept: false },
-              { id: "S2", x: 410, y: 200, isStart: false, isAccept: false },
-              { id: "S3", x: 540, y: 200, isStart: false, isAccept: true },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S0", label: "b" },
-              { id: "t2", from: "S0", to: "S1", label: "a" },
-              { id: "t3", from: "S1", to: "S1", label: "a" },
-              { id: "t4", from: "S1", to: "S2", label: "b" },
-              { id: "t5", from: "S2", to: "S1", label: "a" },
-              { id: "t6", from: "S2", to: "S3", label: "b" },
-              { id: "t7", from: "S3", to: "S1", label: "a", curve: 0.4 },
-              { id: "t8", from: "S3", to: "S0", label: "b", curve: 0.6 },
-            ],
-          },
-        },
-        {
-          id: 5,
-          type: "FSM_TO_REGEX",
-          difficulty: "Medium",
-          alphabet: ["a", "b"],
-          description:
-            "Find the regular expression. It accepts strings starting with a and ending with b.",
-          targetRegex: "a(a|b)*b",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 200, y: 200, isStart: true, isAccept: false },
-              { id: "S1", x: 350, y: 120, isStart: false, isAccept: false },
-              { id: "S2", x: 500, y: 120, isStart: false, isAccept: true },
-              { id: "S3", x: 350, y: 300, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S1", label: "a" },
-              { id: "t2", from: "S0", to: "S3", label: "b" },
-              { id: "t3", from: "S1", to: "S1", label: "a" },
-              { id: "t4", from: "S1", to: "S2", label: "b" },
-              { id: "t5", from: "S2", to: "S1", label: "a" },
-              { id: "t6", from: "S2", to: "S2", label: "b" },
-              { id: "t7", from: "S3", to: "S3", label: "a|b" },
-            ],
-          },
-        },
-        {
-          id: 6,
-          type: "REGEX_TO_FSM",
-          difficulty: "Medium",
-          alphabet: ["0", "1"],
-          description:
-            "Build a fully valid DFA that matches the regex: 1(0|1)*0",
-          targetRegex: "1(0|1)*0",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 180, y: 200, isStart: true, isAccept: false },
-              { id: "S1", x: 330, y: 200, isStart: false, isAccept: false },
-              { id: "S2", x: 480, y: 200, isStart: false, isAccept: true },
-              { id: "S3", x: 330, y: 330, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S1", label: "1" },
-              { id: "t2", from: "S0", to: "S3", label: "0" },
-              { id: "t3", from: "S1", to: "S2", label: "0" },
-              { id: "t4", from: "S1", to: "S1", label: "1" },
-              { id: "t5", from: "S2", to: "S2", label: "0" },
-              { id: "t6", from: "S2", to: "S1", label: "1" },
-              { id: "t7", from: "S3", to: "S3", label: "0|1" },
-            ],
-          },
-        },
-        {
-          id: 7,
-          type: "FSM_TO_REGEX",
-          difficulty: "Hard",
-          alphabet: ["a", "b"],
-          description:
-            'Find the regular expression. It accepts strings containing the substring "aba".',
-          targetRegex: "(a|b)*aba(a|b)*",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 150, y: 200, isStart: true, isAccept: false },
-              { id: "S1", x: 280, y: 200, isStart: false, isAccept: false },
-              { id: "S2", x: 410, y: 200, isStart: false, isAccept: false },
-              { id: "S3", x: 540, y: 200, isStart: false, isAccept: true },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S0", label: "b" },
-              { id: "t2", from: "S0", to: "S1", label: "a" },
-              { id: "t3", from: "S1", to: "S1", label: "a" },
-              { id: "t4", from: "S1", to: "S2", label: "b" },
-              { id: "t5", from: "S2", to: "S3", label: "a" },
-              { id: "t6", from: "S2", to: "S0", label: "b", curve: 0.5 },
-              { id: "t7", from: "S3", to: "S3", label: "a|b" },
-            ],
-          },
-        },
-        {
-          id: 8,
-          type: "REGEX_TO_FSM",
-          difficulty: "Hard",
-          alphabet: ["a", "b"],
-          description:
-            "Build a fully valid DFA that matches the regex: (aa|bb)+",
-          targetRegex: "(aa|bb)+",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 150, y: 200, isStart: true, isAccept: false },
-              { id: "S1", x: 280, y: 100, isStart: false, isAccept: false },
-              { id: "S2", x: 280, y: 300, isStart: false, isAccept: false },
-              { id: "S3", x: 450, y: 200, isStart: false, isAccept: true },
-              { id: "S4", x: 580, y: 200, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S1", label: "a" },
-              { id: "t2", from: "S0", to: "S2", label: "b" },
-              { id: "t3", from: "S1", to: "S3", label: "a" },
-              { id: "t4", from: "S1", to: "S4", label: "b" },
-              { id: "t5", from: "S2", to: "S3", label: "b" },
-              { id: "t6", from: "S2", to: "S4", label: "a" },
-              { id: "t7", from: "S3", to: "S1", label: "a" },
-              { id: "t8", from: "S3", to: "S2", label: "b" },
-              { id: "t9", from: "S4", to: "S4", label: "a|b" },
-            ],
-          },
-        },
-        {
-          id: 9,
-          type: "FSM_TO_REGEX",
-          difficulty: "A*",
-          alphabet: ["0", "1"],
-          description:
-            "Find the regular expression. Every 0 must be immediately followed by 11.",
-          targetRegex: "(1|011)*",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 200, y: 200, isStart: true, isAccept: true },
-              { id: "S1", x: 350, y: 100, isStart: false, isAccept: false },
-              { id: "S2", x: 500, y: 100, isStart: false, isAccept: false },
-              { id: "S3", x: 350, y: 300, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S0", label: "1" },
-              { id: "t2", from: "S0", to: "S1", label: "0" },
-              { id: "t3", from: "S1", to: "S2", label: "1" },
-              { id: "t4", from: "S1", to: "S3", label: "0" },
-              { id: "t5", from: "S2", to: "S0", label: "1", curve: 0.5 },
-              { id: "t6", from: "S2", to: "S3", label: "0" },
-              { id: "t7", from: "S3", to: "S3", label: "0|1" },
-            ],
-          },
-        },
-        {
-          id: 10,
-          type: "REGEX_TO_FSM",
-          difficulty: "A*",
-          alphabet: ["0", "1"],
-          description:
-            "Build a fully valid DFA that matches: (01|10)* (Alternating pairs)",
-          targetRegex: "(01|10)*",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 250, y: 200, isStart: true, isAccept: true },
-              { id: "S1", x: 400, y: 100, isStart: false, isAccept: false },
-              { id: "S2", x: 400, y: 300, isStart: false, isAccept: false },
-              { id: "S3", x: 550, y: 200, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S1", label: "0" },
-              { id: "t2", from: "S0", to: "S2", label: "1" },
-              { id: "t3", from: "S1", to: "S0", label: "1" },
-              { id: "t4", from: "S1", to: "S3", label: "0" },
-              { id: "t5", from: "S2", to: "S0", label: "0" },
-              { id: "t6", from: "S2", to: "S3", label: "1" },
-              { id: "t7", from: "S3", to: "S3", label: "0|1" },
-            ],
-          },
-        },
-        {
-          id: 11,
-          type: "FSM_TO_REGEX",
-          difficulty: "A*",
-          alphabet: ["a", "b"],
-          description:
-            "Find the regex. Accepts either: zero or one a followed by any number of bs, OR exactly one b followed by zero or one a.",
-          targetRegex: "a?b*|ba?",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 150, y: 200, isStart: true, isAccept: true },
-              { id: "S1", x: 270, y: 100, isStart: false, isAccept: true },
-              { id: "S3", x: 270, y: 300, isStart: false, isAccept: true },
-              { id: "S4", x: 430, y: 300, isStart: false, isAccept: true },
-              { id: "S5", x: 430, y: 100, isStart: false, isAccept: true },
-              { id: "S6", x: 550, y: 200, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S1", label: "a" },
-              { id: "t2", from: "S0", to: "S3", label: "b" },
-              { id: "t3", from: "S1", to: "S6", label: "a", curve: 0.2 },
-              { id: "t4", from: "S1", to: "S5", label: "b" },
-              { id: "t5", from: "S3", to: "S4", label: "a" },
-              { id: "t6", from: "S3", to: "S5", label: "b" },
-              { id: "t7", from: "S4", to: "S6", label: "a|b", curve: -0.2 },
-              { id: "t8", from: "S5", to: "S6", label: "a" },
-              { id: "t9", from: "S5", to: "S5", label: "b" },
-              { id: "t10", from: "S6", to: "S6", label: "a|b" },
-            ],
-          },
-        },
-        {
-          id: 12,
-          type: "REGEX_TO_FSM",
-          difficulty: "A*",
-          alphabet: ["a", "b"],
-          description: "Build a valid DFA matching: a?b*|ba?",
-          targetRegex: "a?b*|ba?",
-          targetFSM: {
-            states: [
-              { id: "S0", x: 150, y: 200, isStart: true, isAccept: true },
-              { id: "S1", x: 270, y: 100, isStart: false, isAccept: true },
-              { id: "S3", x: 270, y: 300, isStart: false, isAccept: true },
-              { id: "S4", x: 430, y: 300, isStart: false, isAccept: true },
-              { id: "S5", x: 430, y: 100, isStart: false, isAccept: true },
-              { id: "S6", x: 550, y: 200, isStart: false, isAccept: false },
-            ],
-            transitions: [
-              { id: "t1", from: "S0", to: "S1", label: "a" },
-              { id: "t2", from: "S0", to: "S3", label: "b" },
-              { id: "t3", from: "S1", to: "S6", label: "a", curve: 0.2 },
-              { id: "t4", from: "S1", to: "S5", label: "b" },
-              { id: "t5", from: "S3", to: "S4", label: "a" },
-              { id: "t6", from: "S3", to: "S5", label: "b" },
-              { id: "t7", from: "S4", to: "S6", label: "a|b", curve: -0.2 },
-              { id: "t8", from: "S5", to: "S6", label: "a" },
-              { id: "t9", from: "S5", to: "S5", label: "b" },
-              { id: "t10", from: "S6", to: "S6", label: "a|b" },
-            ],
-          },
-        },
+        { id: 1, type: "FSM_TO_REGEX", difficulty: "Easy", alphabet: ["0", "1"], description: "Find the regular expression. It accepts strings with an even number of 1s (including zero 1s).", targetRegex: "0*(10*10*)*", targetFSM: { states: [{ id: "S0", x: 250, y: 200, isStart: true, isAccept: true }, { id: "S1", x: 450, y: 200, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S0", label: "0" }, { id: "t2", from: "S0", to: "S1", label: "1" }, { id: "t3", from: "S1", to: "S1", label: "0" }, { id: "t4", from: "S1", to: "S0", label: "1" }] } },
+        { id: 2, type: "REGEX_TO_FSM", difficulty: "Easy", alphabet: ["0", "1"], description: "Build a fully valid DFA that matches the regex: 0*1*", targetRegex: "0*1*", targetFSM: { states: [{ id: "S0", x: 200, y: 200, isStart: true, isAccept: true }, { id: "S1", x: 400, y: 200, isStart: false, isAccept: true }, { id: "S2", x: 300, y: 300, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S0", label: "0" }, { id: "t2", from: "S0", to: "S1", label: "1" }, { id: "t3", from: "S1", to: "S1", label: "1" }, { id: "t4", from: "S1", to: "S2", label: "0" }, { id: "t5", from: "S2", to: "S2", label: "0|1" }] } },
+        { id: 3, type: "FSM_TO_REGEX", difficulty: "Medium", alphabet: ["0", "1"], description: "Find the regular expression for this FSM. It accepts any string ending in 00.", targetRegex: "(0|1)*00", targetFSM: { states: [{ id: "S0", x: 150, y: 200, isStart: true, isAccept: false }, { id: "S1", x: 300, y: 200, isStart: false, isAccept: false }, { id: "S2", x: 450, y: 200, isStart: false, isAccept: true }], transitions: [{ id: "t1", from: "S0", to: "S1", label: "0" }, { id: "t2", from: "S0", to: "S0", label: "1" }, { id: "t3", from: "S1", to: "S2", label: "0" }, { id: "t4", from: "S1", to: "S0", label: "1" }, { id: "t5", from: "S2", to: "S2", label: "0" }, { id: "t6", from: "S2", to: "S0", label: "1", curve: 0.4 }] } },
+        { id: 4, type: "REGEX_TO_FSM", difficulty: "Medium", alphabet: ["a", "b"], description: "Build a fully valid DFA that matches the regex: (a|b)*abb", targetRegex: "(a|b)*abb", targetFSM: { states: [{ id: "S0", x: 150, y: 200, isStart: true, isAccept: false }, { id: "S1", x: 280, y: 200, isStart: false, isAccept: false }, { id: "S2", x: 410, y: 200, isStart: false, isAccept: false }, { id: "S3", x: 540, y: 200, isStart: false, isAccept: true }], transitions: [{ id: "t1", from: "S0", to: "S0", label: "b" }, { id: "t2", from: "S0", to: "S1", label: "a" }, { id: "t3", from: "S1", to: "S1", label: "a" }, { id: "t4", from: "S1", to: "S2", label: "b" }, { id: "t5", from: "S2", to: "S1", label: "a" }, { id: "t6", from: "S2", to: "S3", label: "b" }, { id: "t7", from: "S3", to: "S1", label: "a", curve: 0.4 }, { id: "t8", from: "S3", to: "S0", label: "b", curve: 0.6 }] } },
+        { id: 5, type: "FSM_TO_REGEX", difficulty: "Medium", alphabet: ["a", "b"], description: "Find the regular expression. It accepts strings starting with a and ending with b.", targetRegex: "a(a|b)*b", targetFSM: { states: [{ id: "S0", x: 200, y: 200, isStart: true, isAccept: false }, { id: "S1", x: 350, y: 120, isStart: false, isAccept: false }, { id: "S2", x: 500, y: 120, isStart: false, isAccept: true }, { id: "S3", x: 350, y: 300, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S1", label: "a" }, { id: "t2", from: "S0", to: "S3", label: "b" }, { id: "t3", from: "S1", to: "S1", label: "a" }, { id: "t4", from: "S1", to: "S2", label: "b" }, { id: "t5", from: "S2", to: "S1", label: "a" }, { id: "t6", from: "S2", to: "S2", label: "b" }, { id: "t7", from: "S3", to: "S3", label: "a|b" }] } },
+        { id: 6, type: "REGEX_TO_FSM", difficulty: "Medium", alphabet: ["0", "1"], description: "Build a fully valid DFA that matches the regex: 1(0|1)*0", targetRegex: "1(0|1)*0", targetFSM: { states: [{ id: "S0", x: 180, y: 200, isStart: true, isAccept: false }, { id: "S1", x: 330, y: 200, isStart: false, isAccept: false }, { id: "S2", x: 480, y: 200, isStart: false, isAccept: true }, { id: "S3", x: 330, y: 330, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S1", label: "1" }, { id: "t2", from: "S0", to: "S3", label: "0" }, { id: "t3", from: "S1", to: "S2", label: "0" }, { id: "t4", from: "S1", to: "S1", label: "1" }, { id: "t5", from: "S2", to: "S2", label: "0" }, { id: "t6", from: "S2", to: "S1", label: "1" }, { id: "t7", from: "S3", to: "S3", label: "0|1" }] } },
+        { id: 7, type: "FSM_TO_REGEX", difficulty: "Hard", alphabet: ["a", "b"], description: 'Find the regular expression. It accepts strings containing the substring "aba".', targetRegex: "(a|b)*aba(a|b)*", targetFSM: { states: [{ id: "S0", x: 150, y: 200, isStart: true, isAccept: false }, { id: "S1", x: 280, y: 200, isStart: false, isAccept: false }, { id: "S2", x: 410, y: 200, isStart: false, isAccept: false }, { id: "S3", x: 540, y: 200, isStart: false, isAccept: true }], transitions: [{ id: "t1", from: "S0", to: "S0", label: "b" }, { id: "t2", from: "S0", to: "S1", label: "a" }, { id: "t3", from: "S1", to: "S1", label: "a" }, { id: "t4", from: "S1", to: "S2", label: "b" }, { id: "t5", from: "S2", to: "S3", label: "a" }, { id: "t6", from: "S2", to: "S0", label: "b", curve: 0.5 }, { id: "t7", from: "S3", to: "S3", label: "a|b" }] } },
+        { id: 8, type: "REGEX_TO_FSM", difficulty: "Hard", alphabet: ["a", "b"], description: "Build a fully valid DFA that matches the regex: (aa|bb)+", targetRegex: "(aa|bb)+", targetFSM: { states: [{ id: "S0", x: 150, y: 200, isStart: true, isAccept: false }, { id: "S1", x: 280, y: 100, isStart: false, isAccept: false }, { id: "S2", x: 280, y: 300, isStart: false, isAccept: false }, { id: "S3", x: 450, y: 200, isStart: false, isAccept: true }, { id: "S4", x: 580, y: 200, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S1", label: "a" }, { id: "t2", from: "S0", to: "S2", label: "b" }, { id: "t3", from: "S1", to: "S3", label: "a" }, { id: "t4", from: "S1", to: "S4", label: "b" }, { id: "t5", from: "S2", to: "S3", label: "b" }, { id: "t6", from: "S2", to: "S4", label: "a" }, { id: "t7", from: "S3", to: "S1", label: "a" }, { id: "t8", from: "S3", to: "S2", label: "b" }, { id: "t9", from: "S4", to: "S4", label: "a|b" }] } },
+        { id: 9, type: "FSM_TO_REGEX", difficulty: "A*", alphabet: ["0", "1"], description: "Find the regular expression. Every 0 must be immediately followed by 11.", targetRegex: "(1|011)*", targetFSM: { states: [{ id: "S0", x: 200, y: 200, isStart: true, isAccept: true }, { id: "S1", x: 350, y: 100, isStart: false, isAccept: false }, { id: "S2", x: 500, y: 100, isStart: false, isAccept: false }, { id: "S3", x: 350, y: 300, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S0", label: "1" }, { id: "t2", from: "S0", to: "S1", label: "0" }, { id: "t3", from: "S1", to: "S2", label: "1" }, { id: "t4", from: "S1", to: "S3", label: "0" }, { id: "t5", from: "S2", to: "S0", label: "1", curve: 0.5 }, { id: "t6", from: "S2", to: "S3", label: "0" }, { id: "t7", from: "S3", to: "S3", label: "0|1" }] } },
+        { id: 10, type: "REGEX_TO_FSM", difficulty: "A*", alphabet: ["0", "1"], description: "Build a fully valid DFA that matches: (01|10)* (Alternating pairs)", targetRegex: "(01|10)*", targetFSM: { states: [{ id: "S0", x: 250, y: 200, isStart: true, isAccept: true }, { id: "S1", x: 400, y: 100, isStart: false, isAccept: false }, { id: "S2", x: 400, y: 300, isStart: false, isAccept: false }, { id: "S3", x: 550, y: 200, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S1", label: "0" }, { id: "t2", from: "S0", to: "S2", label: "1" }, { id: "t3", from: "S1", to: "S0", label: "1" }, { id: "t4", from: "S1", to: "S3", label: "0" }, { id: "t5", from: "S2", to: "S0", label: "0" }, { id: "t6", from: "S2", to: "S3", label: "1" }, { id: "t7", from: "S3", to: "S3", label: "0|1" }] } },
+        { id: 11, type: "FSM_TO_REGEX", difficulty: "A*", alphabet: ["a", "b"], description: "Find the regex. Accepts either: zero or one a followed by any number of bs, OR exactly one b followed by zero or one a.", targetRegex: "a?b*|ba?", targetFSM: { states: [{ id: "S0", x: 150, y: 200, isStart: true, isAccept: true }, { id: "S1", x: 270, y: 100, isStart: false, isAccept: true }, { id: "S3", x: 270, y: 300, isStart: false, isAccept: true }, { id: "S4", x: 430, y: 300, isStart: false, isAccept: true }, { id: "S5", x: 430, y: 100, isStart: false, isAccept: true }, { id: "S6", x: 550, y: 200, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S1", label: "a" }, { id: "t2", from: "S0", to: "S3", label: "b" }, { id: "t3", from: "S1", to: "S6", label: "a", curve: 0.2 }, { id: "t4", from: "S1", to: "S5", label: "b" }, { id: "t5", from: "S3", to: "S4", label: "a" }, { id: "t6", from: "S3", to: "S5", label: "b" }, { id: "t7", from: "S4", to: "S6", label: "a|b", curve: -0.2 }, { id: "t8", from: "S5", to: "S6", label: "a" }, { id: "t9", from: "S5", to: "S5", label: "b" }, { id: "t10", from: "S6", to: "S6", label: "a|b" }] } },
+        { id: 12, type: "REGEX_TO_FSM", difficulty: "A*", alphabet: ["a", "b"], description: "Build a valid DFA matching: a?b*|ba?", targetRegex: "a?b*|ba?", targetFSM: { states: [{ id: "S0", x: 150, y: 200, isStart: true, isAccept: true }, { id: "S1", x: 270, y: 100, isStart: false, isAccept: true }, { id: "S3", x: 270, y: 300, isStart: false, isAccept: true }, { id: "S4", x: 430, y: 300, isStart: false, isAccept: true }, { id: "S5", x: 430, y: 100, isStart: false, isAccept: true }, { id: "S6", x: 550, y: 200, isStart: false, isAccept: false }], transitions: [{ id: "t1", from: "S0", to: "S1", label: "a" }, { id: "t2", from: "S0", to: "S3", label: "b" }, { id: "t3", from: "S1", to: "S6", label: "a", curve: 0.2 }, { id: "t4", from: "S1", to: "S5", label: "b" }, { id: "t5", from: "S3", to: "S4", label: "a" }, { id: "t6", from: "S3", to: "S5", label: "b" }, { id: "t7", from: "S4", to: "S6", label: "a|b", curve: -0.2 }, { id: "t8", from: "S5", to: "S6", label: "a" }, { id: "t9", from: "S5", to: "S5", label: "b" }, { id: "t10", from: "S6", to: "S6", label: "a|b" }] } },
       ];
 
-      // --- AUTOMARKING & ENGINE UTILITIES ---
+      // --- ENGINE UTILITIES ---
       const generateAllStrings = (alphabet, maxLength) => {
-        let result = [""]; // Include empty string
+        let result = [""];
         for (let len = 1; len <= maxLength; len++) {
           let currentLenStrings = [""];
           for (let i = 0; i < len; i++) {
-            let nextLenStrings = [];
-            for (let str of currentLenStrings) {
-              for (let char of alphabet) {
-                nextLenStrings.push(str + char);
-              }
-            }
-            currentLenStrings = nextLenStrings;
+            let next = [];
+            for (let str of currentLenStrings) for (let char of alphabet) next.push(str + char);
+            currentLenStrings = next;
           }
           result = result.concat(currentLenStrings);
         }
@@ -401,11 +89,8 @@
 
       const validateDFA = (fsm, alphabet) => {
         const startStates = fsm.states.filter((s) => s.isStart);
-        if (startStates.length === 0)
-          return "Error: No start state defined. Select a state and mark it as 'Start'.";
-        if (startStates.length > 1)
-          return "Error: Multiple start states defined. A DFA can only have one.";
-
+        if (startStates.length === 0) return "Error: No start state defined. Select a state and mark it as 'Start'.";
+        if (startStates.length > 1) return "Error: Multiple start states defined. A DFA can only have one.";
         for (const state of fsm.states) {
           const outgoing = fsm.transitions.filter((t) => t.from === state.id);
           const coveredSymbols = new Set();
@@ -413,31 +98,25 @@
             const symbols = t.label.split(/[\|*,]/).map((s) => s.trim());
             for (const sym of symbols) {
               if (sym === "") continue;
-              if (coveredSymbols.has(sym)) {
-                return `Error: State '${state.id}' has multiple transitions for symbol '${sym}'. DFAs require exactly one path per symbol.`;
-              }
+              if (coveredSymbols.has(sym)) return `Error: State '${state.id}' has multiple transitions for symbol '${sym}'. DFAs require exactly one path per symbol.`;
               coveredSymbols.add(sym);
             }
           }
           for (const a of alphabet) {
-            if (!coveredSymbols.has(a)) {
-              return `Error: State '${state.id}' is missing a transition for symbol '${a}'. A fully defined DFA requires rules for all alphabet possibilities. You may need to create a 'Trap' or 'Dead' state.`;
-            }
+            if (!coveredSymbols.has(a)) return `Error: State '${state.id}' is missing a transition for symbol '${a}'. A fully defined DFA requires rules for all alphabet possibilities. You may need to create a 'Trap' or 'Dead' state.`;
           }
         }
-        return null; // Valid
+        return null;
       };
 
       const runDFA = (fsm, str) => {
         let currentState = fsm.states.find((s) => s.isStart);
         if (!currentState) return false;
         if (str === "") return currentState.isAccept;
-
         for (let char of str) {
           const transition = fsm.transitions.find((t) => {
             if (t.from !== currentState.id) return false;
-            const symbols = t.label.split(/[\|*,]/).map((x) => x.trim());
-            return symbols.includes(char);
+            return t.label.split(/[\|*,]/).map((x) => x.trim()).includes(char);
           });
           if (!transition) return false;
           currentState = fsm.states.find((s) => s.id === transition.to);
@@ -446,93 +125,57 @@
       };
 
       const testRegex = (regexStr, str) => {
-        try {
-          // Ensure regex anchors to match full string, exactly as FSM does
-          const r = new RegExp("^(" + regexStr + ")$");
-          return r.test(str);
-        } catch (e) {
-          return false;
-        }
+        try { return new RegExp("^(" + regexStr + ")$").test(str); } catch (e) { return false; }
       };
 
       const checkRegexValidity = (regexStr) => {
-        try {
-          new RegExp("^(" + regexStr + ")$");
-          return null;
-        } catch (e) {
-          return "Syntax Error in Regular Expression. Check your parentheses and metacharacters.";
-        }
+        try { new RegExp("^(" + regexStr + ")$"); return null; } catch (e) { return "Syntax Error in Regular Expression. Check your parentheses and metacharacters."; }
       };
 
       const runExhaustiveTest = (studentAns, targetRegex, alphabet, mode) => {
-        const strings = generateAllStrings(alphabet, 8); // Test up to length 8
-
+        const strings = generateAllStrings(alphabet, 8);
         for (let str of strings) {
-          let studentResult;
-          if (mode === "REGEX") {
-            studentResult = testRegex(studentAns, str);
-          } else {
-            studentResult = runDFA(studentAns, str);
-          }
-
+          const studentResult = mode === "REGEX" ? testRegex(studentAns, str) : runDFA(studentAns, str);
           const targetResult = testRegex(targetRegex, str);
-
           if (studentResult !== targetResult) {
             const displayStr = str === "" ? "<empty string>" : str;
-            if (studentResult && !targetResult) {
-              return {
-                correct: false,
-                msg: `Incorrect. Your answer ACCEPTED the string "${displayStr}", but it should be REJECTED.`,
-              };
-            } else {
-              return {
-                correct: false,
-                msg: `Incorrect. Your answer REJECTED the string "${displayStr}", but it should be ACCEPTED.`,
-              };
-            }
+            return { correct: false, msg: studentResult && !targetResult ? `Incorrect. Your answer ACCEPTED the string "${displayStr}", but it should be REJECTED.` : `Incorrect. Your answer REJECTED the string "${displayStr}", but it should be ACCEPTED.` };
           }
         }
-        return {
-          correct: true,
-          msg: "Correct! Your answer perfectly matches the target language requirements.",
-        };
+        return { correct: true, msg: "Correct! Your answer perfectly matches the target language requirements." };
       };
 
-      // --- COMPONENTS ---
-
-      const InteractiveFSM = ({ fsm, setFsm, readOnly }) => {
+      // --- FSM COMPONENT ---
+      const InteractiveFSM = ({ fsm, setFsm, readOnly, isDark }) => {
         const svgRef = useRef(null);
-        const [mode, setMode] = useState("SELECT"); // SELECT, ADD_STATE, ADD_EDGE
+        const [mode, setMode] = useState("SELECT");
         const [selectedId, setSelectedId] = useState(null);
         const [draggedState, setDraggedState] = useState(null);
         const [drawingEdgeStart, setDrawingEdgeStart] = useState(null);
         const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
+        // Dynamic colors based on theme
+        const nodeColor = isDark ? "#1e293b" : "white";
+        const edgeColor = isDark ? "#94a3b8" : "#4B5563";
+        const textColor = isDark ? "#e2e8f0" : "#1f2937";
+        const labelBgColor = isDark ? "#334155" : "#f3f4f6";
+        const selfLoopLabelBg = isDark ? "#1e293b" : "white";
+        const arrowMarkerId = isDark ? "arrow-dark" : "arrow-light";
+
         const getMouseCoords = (e) => {
           const rect = svgRef.current.getBoundingClientRect();
-          return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-          };
+          return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         };
 
         const handleMouseDown = (e, type, item) => {
           if (readOnly) return;
           e.stopPropagation();
-
           if (mode === "SELECT") {
-            if (type === "STATE") {
-              setSelectedId({ type: "STATE", id: item.id });
-              setDraggedState(item.id);
-            } else if (type === "EDGE") {
-              setSelectedId({ type: "EDGE", id: item.id });
-            } else {
-              setSelectedId(null);
-            }
-          } else if (mode === "ADD_EDGE") {
-            if (type === "STATE") {
-              setDrawingEdgeStart(item.id);
-            }
+            if (type === "STATE") { setSelectedId({ type: "STATE", id: item.id }); setDraggedState(item.id); }
+            else if (type === "EDGE") setSelectedId({ type: "EDGE", id: item.id });
+            else setSelectedId(null);
+          } else if (mode === "ADD_EDGE" && type === "STATE") {
+            setDrawingEdgeStart(item.id);
           }
         };
 
@@ -540,58 +183,28 @@
           if (readOnly) return;
           const coords = getMouseCoords(e);
           setMousePos(coords);
-
           if (draggedState && mode === "SELECT") {
-            setFsm((prev) => ({
-              ...prev,
-              states: prev.states.map((s) =>
-                s.id === draggedState ? { ...s, x: coords.x, y: coords.y } : s,
-              ),
-            }));
+            setFsm((prev) => ({ ...prev, states: prev.states.map((s) => s.id === draggedState ? { ...s, x: coords.x, y: coords.y } : s) }));
           }
         };
 
         const handleMouseUp = (e, type, item) => {
           if (readOnly) return;
           e.stopPropagation();
-
-          if (draggedState) {
-            setDraggedState(null);
-          }
-
+          if (draggedState) setDraggedState(null);
           if (mode === "ADD_EDGE" && drawingEdgeStart) {
             if (type === "STATE") {
-              // Create Edge
-              const newEdge = {
-                id: "t" + Date.now(),
-                from: drawingEdgeStart,
-                to: item.id,
-                label: "0",
-              };
-              setFsm((prev) => ({
-                ...prev,
-                transitions: [...prev.transitions, newEdge],
-              }));
+              const newEdge = { id: "t" + Date.now(), from: drawingEdgeStart, to: item.id, label: "0" };
+              setFsm((prev) => ({ ...prev, transitions: [...prev.transitions, newEdge] }));
               setSelectedId({ type: "EDGE", id: newEdge.id });
-              setMode("SELECT"); // revert to select mode
+              setMode("SELECT");
             }
             setDrawingEdgeStart(null);
           } else if (mode === "ADD_STATE" && type === "BG") {
             const coords = getMouseCoords(e);
             const newState = {
-              id:
-                "S" +
-                (fsm.states.length > 0
-                  ? Math.max(
-                      ...fsm.states.map(
-                        (s) => parseInt(s.id.substring(1)) || 0,
-                      ),
-                    ) + 1
-                  : 0),
-              x: coords.x,
-              y: coords.y,
-              isStart: fsm.states.length === 0,
-              isAccept: false,
+              id: "S" + (fsm.states.length > 0 ? Math.max(...fsm.states.map((s) => parseInt(s.id.substring(1)) || 0)) + 1 : 0),
+              x: coords.x, y: coords.y, isStart: fsm.states.length === 0, isAccept: false,
             };
             setFsm((prev) => ({ ...prev, states: [...prev.states, newState] }));
             setSelectedId({ type: "STATE", id: newState.id });
@@ -602,361 +215,130 @@
         const updateSelectedState = (updates) => {
           if (!selectedId || selectedId.type !== "STATE") return;
           setFsm((prev) => {
-            let newStates = prev.states.map((s) =>
-              s.id === selectedId.id ? { ...s, ...updates } : s,
-            );
-            if (updates.isStart) {
-              newStates = newStates.map((s) =>
-                s.id === selectedId.id ? s : { ...s, isStart: false },
-              );
-            }
+            let newStates = prev.states.map((s) => s.id === selectedId.id ? { ...s, ...updates } : s);
+            if (updates.isStart) newStates = newStates.map((s) => s.id === selectedId.id ? s : { ...s, isStart: false });
             return { ...prev, states: newStates };
           });
         };
 
         const updateSelectedEdge = (updates) => {
           if (!selectedId || selectedId.type !== "EDGE") return;
-          setFsm((prev) => ({
-            ...prev,
-            transitions: prev.transitions.map((t) =>
-              t.id === selectedId.id ? { ...t, ...updates } : t,
-            ),
-          }));
+          setFsm((prev) => ({ ...prev, transitions: prev.transitions.map((t) => t.id === selectedId.id ? { ...t, ...updates } : t) }));
         };
 
         const deleteSelected = () => {
           if (!selectedId) return;
           if (selectedId.type === "STATE") {
-            setFsm((prev) => ({
-              states: prev.states.filter((s) => s.id !== selectedId.id),
-              transitions: prev.transitions.filter(
-                (t) => t.from !== selectedId.id && t.to !== selectedId.id,
-              ),
-            }));
+            setFsm((prev) => ({ states: prev.states.filter((s) => s.id !== selectedId.id), transitions: prev.transitions.filter((t) => t.from !== selectedId.id && t.to !== selectedId.id) }));
           } else {
-            setFsm((prev) => ({
-              ...prev,
-              transitions: prev.transitions.filter(
-                (t) => t.id !== selectedId.id,
-              ),
-            }));
+            setFsm((prev) => ({ ...prev, transitions: prev.transitions.filter((t) => t.id !== selectedId.id) }));
           }
           setSelectedId(null);
         };
 
-        // Render calculations
-        const renderEdge = (t, index) => {
+        const renderEdge = (t) => {
           const source = fsm.states.find((s) => s.id === t.from);
           const target = fsm.states.find((s) => s.id === t.to);
           if (!source || !target) return null;
+          const isSelected = selectedId && selectedId.type === "EDGE" && selectedId.id === t.id;
+          const strokeColor = isSelected ? "#3b82f6" : edgeColor;
+          const markerEnd = `url(#${isSelected ? "arrow-selected" : arrowMarkerId})`;
 
-          const isSelected =
-            selectedId && selectedId.type === "EDGE" && selectedId.id === t.id;
-
-          // Self Loop
           if (source.id === target.id) {
             const r = 20;
             const path = `M ${source.x - 10} ${source.y - r} C ${source.x - 50} ${source.y - 80}, ${source.x + 50} ${source.y - 80}, ${source.x + 10} ${source.y - r}`;
             return (
-              <g
-                key={t.id}
-                onMouseDown={(e) => handleMouseDown(e, "EDGE", t)}
-                className="fsm-edge"
-              >
-                <path
-                  d={path}
-                  fill="transparent"
-                  stroke={isSelected ? "#3b82f6" : "#4B5563"}
-                  strokeWidth={isSelected ? 3 : 2}
-                  markerEnd={`url(#arrow${isSelected ? "-selected" : ""})`}
-                />
-                <rect
-                  x={source.x - 15}
-                  y={source.y - 70}
-                  width="30"
-                  height="20"
-                  fill="white"
-                  rx="4"
-                />
-                <text
-                  x={source.x}
-                  y={source.y - 56}
-                  textAnchor="middle"
-                  className="fsm-label"
-                  fill={isSelected ? "#3b82f6" : "#1f2937"}
-                  style={{ pointerEvents: "none" }}
-                >
-                  {t.label}
-                </text>
+              <g key={t.id} onMouseDown={(e) => handleMouseDown(e, "EDGE", t)} className="fsm-edge">
+                <path d={path} fill="transparent" stroke={strokeColor} strokeWidth={isSelected ? 3 : 2} markerEnd={markerEnd} />
+                <rect x={source.x - 15} y={source.y - 70} width="30" height="20" fill={selfLoopLabelBg} rx="4" />
+                <text x={source.x} y={source.y - 56} textAnchor="middle" className="fsm-label" fill={isSelected ? "#3b82f6" : textColor} style={{ pointerEvents: "none" }}>{t.label}</text>
               </g>
             );
           }
 
-          // Normal Edge
           const dx = target.x - source.x;
           const dy = target.y - source.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          // Curve slightly to avoid bidirectional overlap
-          const isBidirectional = fsm.transitions.some(
-            (other) => other.from === target.id && other.to === source.id,
-          );
-          const offset =
-            t.curve !== undefined ? t.curve : isBidirectional ? 0.35 : 0;
-
+          const isBidirectional = fsm.transitions.some((other) => other.from === target.id && other.to === source.id);
+          const offset = t.curve !== undefined ? t.curve : isBidirectional ? 0.35 : 0;
           const midX = (source.x + target.x) / 2 - dy * offset;
           const midY = (source.y + target.y) / 2 + dx * offset;
-
-          // Move arrow start/end to circle edge
           const angle = Math.atan2(target.y - midY, target.x - midX);
-          const targetX = target.x - Math.cos(angle) * 22; // 20 radius + 2 padding
+          const targetX = target.x - Math.cos(angle) * 22;
           const targetY = target.y - Math.sin(angle) * 22;
-
           const path = `M ${source.x} ${source.y} Q ${midX} ${midY} ${targetX} ${targetY}`;
-
-          // Calculate actual midpoint of quadratic bezier curve for perfect label placement
           const curveMidX = 0.25 * source.x + 0.5 * midX + 0.25 * target.x;
           const curveMidY = 0.25 * source.y + 0.5 * midY + 0.25 * target.y;
 
           return (
-            <g
-              key={t.id}
-              onMouseDown={(e) => handleMouseDown(e, "EDGE", t)}
-              className="fsm-edge"
-            >
-              <path
-                d={path}
-                fill="transparent"
-                stroke={isSelected ? "#3b82f6" : "#4B5563"}
-                strokeWidth={isSelected ? 3 : 2}
-                markerEnd={`url(#arrow${isSelected ? "-selected" : ""})`}
-              />
-              <rect
-                x={curveMidX - 15}
-                y={curveMidY - 10}
-                width="30"
-                height="20"
-                fill="#f3f4f6"
-                rx="4"
-                opacity="0.9"
-              />
-              <text
-                x={curveMidX}
-                y={curveMidY + 4}
-                textAnchor="middle"
-                className="fsm-label"
-                fill={isSelected ? "#3b82f6" : "#1f2937"}
-                style={{ pointerEvents: "none" }}
-              >
-                {t.label}
-              </text>
+            <g key={t.id} onMouseDown={(e) => handleMouseDown(e, "EDGE", t)} className="fsm-edge">
+              <path d={path} fill="transparent" stroke={strokeColor} strokeWidth={isSelected ? 3 : 2} markerEnd={markerEnd} />
+              <rect x={curveMidX - 15} y={curveMidY - 10} width="30" height="20" fill={labelBgColor} rx="4" opacity="0.9" />
+              <text x={curveMidX} y={curveMidY + 4} textAnchor="middle" className="fsm-label" fill={isSelected ? "#3b82f6" : textColor} style={{ pointerEvents: "none" }}>{t.label}</text>
             </g>
           );
         };
 
         return (
-          <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="flex flex-col h-full bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
             {!readOnly && (
-              <div className="flex bg-gray-50 border-b border-gray-200 p-2 gap-2">
-                <button
-                  onClick={() => setMode("SELECT")}
-                  className={`px-3 py-1 text-sm rounded ${mode === "SELECT" ? "bg-blue-600 text-white" : "bg-gray-200 hover:bg-gray-300"}`}
-                >
-                  Select / Move
-                </button>
-                <button
-                  onClick={() => setMode("ADD_STATE")}
-                  className={`px-3 py-1 text-sm rounded ${mode === "ADD_STATE" ? "bg-blue-600 text-white" : "bg-gray-200 hover:bg-gray-300"}`}
-                >
-                  + Add State
-                </button>
-                <button
-                  onClick={() => setMode("ADD_EDGE")}
-                  className={`px-3 py-1 text-sm rounded ${mode === "ADD_EDGE" ? "bg-blue-600 text-white" : "bg-gray-200 hover:bg-gray-300"}`}
-                >
-                  ↗ Draw Transition
-                </button>
+              <div className="flex bg-gray-50 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600 p-2 gap-2">
+                <button onClick={() => setMode("SELECT")} className={`px-3 py-1 text-sm rounded ${mode === "SELECT" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-slate-600 dark:text-slate-200 hover:bg-gray-300 dark:hover:bg-slate-500"}`}>Select / Move</button>
+                <button onClick={() => setMode("ADD_STATE")} className={`px-3 py-1 text-sm rounded ${mode === "ADD_STATE" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-slate-600 dark:text-slate-200 hover:bg-gray-300 dark:hover:bg-slate-500"}`}>+ Add State</button>
+                <button onClick={() => setMode("ADD_EDGE")} className={`px-3 py-1 text-sm rounded ${mode === "ADD_EDGE" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-slate-600 dark:text-slate-200 hover:bg-gray-300 dark:hover:bg-slate-500"}`}>↗ Draw Transition</button>
               </div>
             )}
-
             <div className="flex-1 relative">
-              <svg
-                ref={svgRef}
-                className="w-full h-full min-h-[400px] bg-gray-50 canvas-container"
-                onMouseDown={(e) => handleMouseDown(e, "BG", null)}
-                onMouseMove={handleMouseMove}
-                onMouseUp={(e) => handleMouseUp(e, "BG", null)}
-              >
+              <svg ref={svgRef} className="w-full h-full min-h-[400px] bg-gray-50 dark:bg-slate-800 canvas-container" onMouseDown={(e) => handleMouseDown(e, "BG", null)} onMouseMove={handleMouseMove} onMouseUp={(e) => handleMouseUp(e, "BG", null)}>
                 <defs>
-                  <marker
-                    id="arrow"
-                    viewBox="0 -5 10 10"
-                    refX="8"
-                    refY="0"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto"
-                  >
-                    <path d="M0,-5L10,0L0,5" fill="#4B5563" />
-                  </marker>
-                  <marker
-                    id="arrow-selected"
-                    viewBox="0 -5 10 10"
-                    refX="8"
-                    refY="0"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto"
-                  >
-                    <path d="M0,-5L10,0L0,5" fill="#3b82f6" />
-                  </marker>
+                  <marker id="arrow-light" viewBox="0 -5 10 10" refX="8" refY="0" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,-5L10,0L0,5" fill="#4B5563" /></marker>
+                  <marker id="arrow-dark" viewBox="0 -5 10 10" refX="8" refY="0" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,-5L10,0L0,5" fill="#94a3b8" /></marker>
+                  <marker id="arrow-selected" viewBox="0 -5 10 10" refX="8" refY="0" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,-5L10,0L0,5" fill="#3b82f6" /></marker>
                 </defs>
 
-                {/* Render completed edges */}
-                {fsm.transitions.map((t, i) => renderEdge(t, i))}
+                {fsm.transitions.map((t) => renderEdge(t))}
 
-                {/* Render drawing edge */}
-                {mode === "ADD_EDGE" &&
-                  drawingEdgeStart &&
-                  (() => {
-                    const source = fsm.states.find(
-                      (s) => s.id === drawingEdgeStart,
-                    );
-                    return (
-                      <path
-                        d={`M ${source.x} ${source.y} L ${mousePos.x} ${mousePos.y}`}
-                        stroke="#9ca3af"
-                        strokeWidth="2"
-                        strokeDasharray="5,5"
-                        fill="transparent"
-                      />
-                    );
-                  })()}
+                {mode === "ADD_EDGE" && drawingEdgeStart && (() => {
+                  const source = fsm.states.find((s) => s.id === drawingEdgeStart);
+                  return <path d={`M ${source.x} ${source.y} L ${mousePos.x} ${mousePos.y}`} stroke="#9ca3af" strokeWidth="2" strokeDasharray="5,5" fill="transparent" />;
+                })()}
 
-                {/* Render states */}
                 {fsm.states.map((s) => {
-                  const isSelected =
-                    selectedId &&
-                    selectedId.type === "STATE" &&
-                    selectedId.id === s.id;
+                  const isSelected = selectedId && selectedId.type === "STATE" && selectedId.id === s.id;
+                  const strokeColor = isSelected ? "#3b82f6" : edgeColor;
                   return (
-                    <g
-                      key={s.id}
-                      transform={`translate(${s.x}, ${s.y})`}
-                      onMouseDown={(e) => handleMouseDown(e, "STATE", s)}
-                      onMouseUp={(e) => handleMouseUp(e, "STATE", s)}
-                      className="fsm-node"
-                    >
-                      {/* Start State Arrow */}
-                      {s.isStart && (
-                        <path
-                          d="M -40 0 L -22 0"
-                          stroke="#4B5563"
-                          strokeWidth="2"
-                          markerEnd="url(#arrow)"
-                        />
-                      )}
-
-                      {/* Main Circle */}
-                      <circle
-                        r="20"
-                        fill="white"
-                        stroke={isSelected ? "#3b82f6" : "#4B5563"}
-                        strokeWidth={isSelected ? 3 : 2}
-                      />
-
-                      {/* Accept State Inner Circle */}
-                      {s.isAccept && (
-                        <circle
-                          r="15"
-                          fill="transparent"
-                          stroke={isSelected ? "#3b82f6" : "#4B5563"}
-                          strokeWidth={isSelected ? 2 : 1}
-                        />
-                      )}
-
-                      <text
-                        textAnchor="middle"
-                        y="5"
-                        fontSize="12"
-                        fill="#1f2937"
-                        style={{ pointerEvents: "none" }}
-                      >
-                        {s.id}
-                      </text>
+                    <g key={s.id} transform={`translate(${s.x}, ${s.y})`} onMouseDown={(e) => handleMouseDown(e, "STATE", s)} onMouseUp={(e) => handleMouseUp(e, "STATE", s)} className="fsm-node">
+                      {s.isStart && <path d="M -40 0 L -22 0" stroke={edgeColor} strokeWidth="2" markerEnd={`url(#${arrowMarkerId})`} />}
+                      <circle r="20" fill={nodeColor} stroke={strokeColor} strokeWidth={isSelected ? 3 : 2} />
+                      {s.isAccept && <circle r="15" fill="transparent" stroke={strokeColor} strokeWidth={isSelected ? 2 : 1} />}
+                      <text textAnchor="middle" y="5" fontSize="12" fill={textColor} style={{ pointerEvents: "none" }}>{s.id}</text>
                     </g>
                   );
                 })}
               </svg>
 
-              {/* Properties Panel Overlay */}
               {!readOnly && selectedId && (
-                <div className="absolute top-2 right-2 bg-white p-3 rounded shadow-lg border border-gray-200 w-64 text-sm z-10">
+                <div className="absolute top-2 right-2 bg-white dark:bg-slate-700 p-3 rounded shadow-lg border border-gray-200 dark:border-slate-600 w-64 text-sm z-10 text-slate-800 dark:text-slate-200">
                   {selectedId.type === "STATE" ? (
                     <div>
-                      <h4 className="font-bold mb-2 border-b pb-1">
-                        State: {selectedId.id}
-                      </h4>
+                      <h4 className="font-bold mb-2 border-b dark:border-slate-600 pb-1">State: {selectedId.id}</h4>
                       <label className="flex items-center gap-2 mb-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={
-                            fsm.states.find((s) => s.id === selectedId.id)
-                              ?.isStart || false
-                          }
-                          onChange={(e) =>
-                            updateSelectedState({ isStart: e.target.checked })
-                          }
-                        />
+                        <input type="checkbox" checked={fsm.states.find((s) => s.id === selectedId.id)?.isStart || false} onChange={(e) => updateSelectedState({ isStart: e.target.checked })} />
                         Is Start State
                       </label>
                       <label className="flex items-center gap-2 mb-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={
-                            fsm.states.find((s) => s.id === selectedId.id)
-                              ?.isAccept || false
-                          }
-                          onChange={(e) =>
-                            updateSelectedState({ isAccept: e.target.checked })
-                          }
-                        />
+                        <input type="checkbox" checked={fsm.states.find((s) => s.id === selectedId.id)?.isAccept || false} onChange={(e) => updateSelectedState({ isAccept: e.target.checked })} />
                         Is Accept State (Double Circle)
                       </label>
-                      <button
-                        onClick={deleteSelected}
-                        className="w-full text-red-600 bg-red-50 hover:bg-red-100 py-1 rounded"
-                      >
-                        Delete State
-                      </button>
+                      <button onClick={deleteSelected} className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 py-1 rounded">Delete State</button>
                     </div>
                   ) : (
                     <div>
-                      <h4 className="font-bold mb-2 border-b pb-1">
-                        Transition Rule
-                      </h4>
+                      <h4 className="font-bold mb-2 border-b dark:border-slate-600 pb-1">Transition Rule</h4>
                       <div className="mb-3">
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Alphabet Condition (e.g. 0 or 0|1)
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full border rounded p-1"
-                          value={
-                            fsm.transitions.find((t) => t.id === selectedId.id)
-                              ?.label || ""
-                          }
-                          onChange={(e) =>
-                            updateSelectedEdge({ label: e.target.value })
-                          }
-                        />
+                        <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Alphabet Condition (e.g. 0 or 0|1)</label>
+                        <input type="text" className="w-full border dark:border-slate-600 rounded p-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" value={fsm.transitions.find((t) => t.id === selectedId.id)?.label || ""} onChange={(e) => updateSelectedEdge({ label: e.target.value })} />
                       </div>
-                      <button
-                        onClick={deleteSelected}
-                        className="w-full text-red-600 bg-red-50 hover:bg-red-100 py-1 rounded"
-                      >
-                        Delete Transition
-                      </button>
+                      <button onClick={deleteSelected} className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 py-1 rounded">Delete Transition</button>
                     </div>
                   )}
                 </div>
@@ -967,258 +349,178 @@
       };
 
       const App = () => {
-        const [currentQIndex, setCurrentQIndex] = useState(0);
-
-        const currentQ = QUESTIONS[currentQIndex];
-
-        // User Answers
-        const [studentRegex, setStudentRegex] = useState("");
-        const [studentFsm, setStudentFsm] = useState({
-          states: [],
-          transitions: [],
+        const [theme, setTheme] = useState(() => {
+          try { return localStorage.getItem("uimode") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
+          catch { return "light"; }
         });
+        useEffect(() => {
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          try { localStorage.setItem("uimode", theme); } catch {}
+        }, [theme]);
+        const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+        const isDark = theme === "dark";
 
-        // UI State
+        const [currentQIndex, setCurrentQIndex] = useState(0);
+        const currentQ = QUESTIONS[currentQIndex];
+        const [studentRegex, setStudentRegex] = useState("");
+        const [studentFsm, setStudentFsm] = useState({ states: [], transitions: [] });
         const [feedback, setFeedback] = useState(null);
         const [showSolution, setShowSolution] = useState(false);
 
-        // Reset when question changes
         useEffect(() => {
-          setStudentRegex("");
-          setStudentFsm({ states: [], transitions: [] });
-          setFeedback(null);
-          setShowSolution(false);
+          setStudentRegex(""); setStudentFsm({ states: [], transitions: [] }); setFeedback(null); setShowSolution(false);
         }, [currentQ?.id]);
 
         const handleCheckAnswer = () => {
           if (currentQ.type === "FSM_TO_REGEX") {
-            // Validate regex syntax first
             const regexError = checkRegexValidity(studentRegex);
-            if (regexError) {
-              setFeedback({ correct: false, msg: regexError });
-              return;
-            }
-            const result = runExhaustiveTest(
-              studentRegex,
-              currentQ.targetRegex,
-              currentQ.alphabet,
-              "REGEX",
-            );
-            setFeedback(result);
+            if (regexError) { setFeedback({ correct: false, msg: regexError }); return; }
+            setFeedback(runExhaustiveTest(studentRegex, currentQ.targetRegex, currentQ.alphabet, "REGEX"));
           } else {
-            // Validate DFA rules first
             const dfaError = validateDFA(studentFsm, currentQ.alphabet);
-            if (dfaError) {
-              setFeedback({ correct: false, msg: dfaError });
-              return;
-            }
-            const result = runExhaustiveTest(
-              studentFsm,
-              currentQ.targetRegex,
-              currentQ.alphabet,
-              "FSM",
-            );
-            setFeedback(result);
+            if (dfaError) { setFeedback({ correct: false, msg: dfaError }); return; }
+            setFeedback(runExhaustiveTest(studentFsm, currentQ.targetRegex, currentQ.alphabet, "FSM"));
           }
         };
 
-        if (!currentQ)
-          return (
-            <div className="p-10 text-center">
-              No questions match your filter.
-            </div>
-          );
+        if (!currentQ) return <div className="p-10 text-center">No questions match your filter.</div>;
 
         return (
-          <div className="max-w-6xl mx-auto p-4 md:p-6 min-h-screen flex flex-col">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200 gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">
-                  FSM & Regex Automarker
-                </h1>
-                <p className="text-gray-500 text-sm">
-                  AQA A-Level Computer Science
-                </p>
+          <div className="min-h-screen bg-gray-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex flex-col">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+
+            <div className="max-w-6xl mx-auto p-4 md:p-6 w-full flex flex-col flex-1">
+              {/* Header */}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">FSM & Regex Automarker</h1>
+                  <p className="text-gray-500 dark:text-slate-400 text-sm">AQA A-Level Computer Science</p>
+                </div>
               </div>
-            </div>
 
-            {/* Navigation */}
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-              <button
-                disabled={currentQIndex === 0}
-                onClick={() => setCurrentQIndex((prev) => prev - 1)}
-                className="px-4 py-2 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 font-medium"
-              >
-                ← Previous
-              </button>
+              {/* Navigation */}
+              <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                <button disabled={currentQIndex === 0} onClick={() => setCurrentQIndex((prev) => prev - 1)} className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-slate-200 disabled:opacity-50 font-medium">← Previous</button>
+                <select value={currentQIndex} onChange={(e) => setCurrentQIndex(Number(e.target.value))} className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 font-semibold text-gray-700 dark:text-slate-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {QUESTIONS.map((q, idx) => (
+                    <option key={q.id} value={idx}>Question {idx + 1}: {q.type === "FSM_TO_REGEX" ? "FSM → Regex" : "Regex → FSM"} ({q.difficulty})</option>
+                  ))}
+                </select>
+                <button disabled={currentQIndex === QUESTIONS.length - 1} onClick={() => setCurrentQIndex((prev) => prev + 1)} className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-slate-200 disabled:opacity-50 font-medium">Next →</button>
+              </div>
 
-              <select
-                value={currentQIndex}
-                onChange={(e) => setCurrentQIndex(Number(e.target.value))}
-                className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded bg-white font-semibold text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {QUESTIONS.map((q, idx) => (
-                  <option key={q.id} value={idx}>
-                    Question {idx + 1}:{" "}
-                    {q.type === "FSM_TO_REGEX" ? "FSM → Regex" : "Regex → FSM"}{" "}
-                    ({q.difficulty})
-                  </option>
-                ))}
-              </select>
+              {/* Main Workspace */}
+              <div className="flex flex-col lg:flex-row gap-6 flex-1">
+                {/* Left Column */}
+                <div className="w-full lg:w-1/3 flex flex-col gap-4">
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+                    <h2 className="font-bold text-lg mb-2 text-blue-800 dark:text-blue-300">Task Instructions</h2>
+                    <p className="mb-2 text-gray-700 dark:text-slate-300">{currentQ.description}</p>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-100 dark:border-blue-900 text-sm dark:text-slate-300">
+                      <strong>Alphabet (Σ): </strong>{`{${currentQ.alphabet.join(", ")}}`}
+                    </div>
+                  </div>
 
-              <button
-                disabled={currentQIndex === QUESTIONS.length - 1}
-                onClick={() => setCurrentQIndex((prev) => prev + 1)}
-                className="px-4 py-2 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 font-medium"
-              >
-                Next →
-              </button>
-            </div>
+                  {currentQ.type === "FSM_TO_REGEX" && (
+                    <div className="bg-white dark:bg-slate-800 p-5 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 flex-1">
+                      <h3 className="font-bold mb-3 dark:text-slate-100">Your Answer (Regex)</h3>
+                      <input type="text" className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-blue-500 font-mono text-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" placeholder="e.g. (a|b)*" value={studentRegex} onChange={(e) => setStudentRegex(e.target.value)} spellCheck="false" />
+                      <div className="flex gap-2 mt-3 flex-wrap">
+                        {["*", "+", "?", "|", "(", ")"].map((char) => (
+                          <button key={char} onClick={() => setStudentRegex((prev) => prev + char)} className="px-3 py-1 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded hover:bg-gray-200 dark:hover:bg-slate-600 font-mono font-bold dark:text-slate-200">{char}</button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-4">Use AQA standard metacharacters. The system will exhaustively test your regex against the FSM for equivalence.</p>
+                    </div>
+                  )}
 
-            {/* Main Workspace */}
-            <div className="flex flex-col lg:flex-row gap-6 flex-1">
-              {/* Left Column: Instructions & Interaction */}
-              <div className="w-full lg:w-1/3 flex flex-col gap-4">
-                <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                  <h2 className="font-bold text-lg mb-2 text-blue-800">
-                    Task Instructions
-                  </h2>
-                  <p className="mb-2 text-gray-700">{currentQ.description}</p>
-                  <div className="bg-blue-50 p-3 rounded border border-blue-100 text-sm">
-                    <strong>Alphabet (Σ): </strong>{" "}
-                    {`{${currentQ.alphabet.join(", ")}}`}
+                  {currentQ.type === "REGEX_TO_FSM" && (
+                    <div className="bg-white dark:bg-slate-800 p-5 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 flex-1">
+                      <h3 className="font-bold mb-3 dark:text-slate-100">Target Regex</h3>
+                      <div className="p-4 bg-gray-800 text-green-400 font-mono text-2xl text-center rounded">{currentQ.targetRegex}</div>
+                      <ul className="text-xs text-gray-600 dark:text-slate-400 mt-4 list-disc pl-4 space-y-1">
+                        <li>Build an equivalent DFA using the visual editor.</li>
+                        <li>Your FSM must have rules for <strong>all</strong> alphabet symbols from every state.</li>
+                        <li>Create a non-accepting loop-back state (a 'Trap') if paths need to explicitly fail.</li>
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+                    <div className="flex gap-3 mb-4">
+                      <button onClick={handleCheckAnswer} className="flex-1 bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition-colors">Check Answer</button>
+                      <button onClick={() => setShowSolution(!showSolution)} className="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-slate-200 font-semibold py-2 px-4 rounded hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors">
+                        {showSolution ? "Hide Solution" : "Show Solution"}
+                      </button>
+                    </div>
+                    {feedback && (
+                      <div className={`p-4 rounded border ${feedback.correct ? "bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300" : "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"}`}>
+                        {feedback.msg}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* FSM -> Regex Input */}
-                {currentQ.type === "FSM_TO_REGEX" && (
-                  <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 flex-1">
-                    <h3 className="font-bold mb-3">Your Answer (Regex)</h3>
-                    <input
-                      type="text"
-                      className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 font-mono text-lg"
-                      placeholder="e.g. (a|b)*"
-                      value={studentRegex}
-                      onChange={(e) => setStudentRegex(e.target.value)}
-                      spellCheck="false"
-                    />
-                    <div className="flex gap-2 mt-3 flex-wrap">
-                      {["*", "+", "?", "|", "(", ")"].map((char) => (
-                        <button
-                          key={char}
-                          onClick={() => setStudentRegex((prev) => prev + char)}
-                          className="px-3 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 font-mono font-bold"
-                        >
-                          {char}
-                        </button>
-                      ))}
+                {/* Right Column */}
+                <div className="w-full lg:w-2/3 flex flex-col bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+                  {showSolution ? (
+                    <div className="p-6 bg-yellow-50 dark:bg-yellow-900/20 h-full flex flex-col">
+                      <h3 className="font-bold text-yellow-800 dark:text-yellow-300 mb-4 text-xl">Solution Provided</h3>
+                      {currentQ.type === "FSM_TO_REGEX" ? (
+                        <div className="text-center mt-10">
+                          <p className="text-gray-600 dark:text-slate-400 mb-2">Equivalent Regular Expression:</p>
+                          <p className="font-mono text-3xl font-bold bg-white dark:bg-slate-700 inline-block p-4 rounded shadow">{currentQ.targetRegex}</p>
+                          <p className="text-sm text-gray-500 dark:text-slate-400 mt-4 max-w-md mx-auto">Note: Your answer may look different but still be marked correct if it evaluates to the same logical language.</p>
+                        </div>
+                      ) : (
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">Equivalent DFA Visualization:</p>
+                          <InteractiveFSM fsm={currentQ.targetFSM} readOnly={true} isDark={isDark} />
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-4">
-                      Use AQA standard metacharacters. The system will
-                      exhaustively test your regex against the FSM for
-                      equivalence.
-                    </p>
-                  </div>
-                )}
-
-                {/* Regex -> FSM Target Display */}
-                {currentQ.type === "REGEX_TO_FSM" && (
-                  <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 flex-1">
-                    <h3 className="font-bold mb-3">Target Regex</h3>
-                    <div className="p-4 bg-gray-800 text-green-400 font-mono text-2xl text-center rounded">
-                      {currentQ.targetRegex}
-                    </div>
-                    <ul className="text-xs text-gray-600 mt-4 list-disc pl-4 space-y-1">
-                      <li>Build an equivalent DFA using the visual editor.</li>
-                      <li>
-                        Your FSM must have rules for <strong>all</strong>{" "}
-                        alphabet symbols from every state.
-                      </li>
-                      <li>
-                        Create a non-accepting loop-back state (a 'Trap') if
-                        paths need to explicitly fail.
-                      </li>
-                    </ul>
-                  </div>
-                )}
-
-                {/* Actions & Feedback */}
-                <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex gap-3 mb-4">
-                    <button
-                      onClick={handleCheckAnswer}
-                      className="flex-1 bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition-colors"
-                    >
-                      Check Answer
-                    </button>
-                    <button
-                      onClick={() => setShowSolution(!showSolution)}
-                      className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded hover:bg-gray-300 transition-colors"
-                    >
-                      {showSolution ? "Hide Solution" : "Show Solution"}
-                    </button>
-                  </div>
-
-                  {feedback && (
-                    <div
-                      className={`p-4 rounded border ${feedback.correct ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}
-                    >
-                      {feedback.msg}
+                  ) : (
+                    <div className="flex-1 h-full min-h-[400px]">
+                      {currentQ.type === "FSM_TO_REGEX" ? (
+                        <InteractiveFSM fsm={currentQ.targetFSM} readOnly={true} isDark={isDark} />
+                      ) : (
+                        <InteractiveFSM fsm={studentFsm} setFsm={setStudentFsm} readOnly={false} isDark={isDark} />
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Right Column: Visualizer / Builder */}
-              <div className="w-full lg:w-2/3 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                {showSolution ? (
-                  <div className="p-6 bg-yellow-50 h-full flex flex-col">
-                    <h3 className="font-bold text-yellow-800 mb-4 text-xl">
-                      Solution Provided
-                    </h3>
-                    {currentQ.type === "FSM_TO_REGEX" ? (
-                      <div className="text-center mt-10">
-                        <p className="text-gray-600 mb-2">
-                          Equivalent Regular Expression:
-                        </p>
-                        <p className="font-mono text-3xl font-bold bg-white inline-block p-4 rounded shadow">
-                          {currentQ.targetRegex}
-                        </p>
-                        <p className="text-sm text-gray-500 mt-4 max-w-md mx-auto">
-                          Note: Your answer may look different but still be
-                          marked correct if it evaluates to the same logical
-                          language.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">
-                          Equivalent DFA Visualization:
-                        </p>
-                        <InteractiveFSM
-                          fsm={currentQ.targetFSM}
-                          readOnly={true}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex-1 h-full min-h-[400px]">
-                    {currentQ.type === "FSM_TO_REGEX" ? (
-                      <InteractiveFSM
-                        fsm={currentQ.targetFSM}
-                        readOnly={true}
-                      />
-                    ) : (
-                      <InteractiveFSM
-                        fsm={studentFsm}
-                        setFsm={setStudentFsm}
-                        readOnly={false}
-                      />
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </div>

@@ -4,35 +4,92 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SQL Practice Activity 2</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
     <style>
       body {
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
           "Segoe UI", sans-serif;
       }
     </style>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
-</head>
-  <body class="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8">
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+    <!-- Prevent FOUC -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col">
 
-    <div id="app"></div>
+    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+      <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+        <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+      </a>
+      <nav class="flex items-center gap-6">
+        <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+        <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+          <svg id="icon-sun" class="hidden w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+          <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </button>
+      </nav>
+    </header>
+
+    <div class="flex-1 p-4 md:p-8">
+      <div id="app"></div>
+    </div>
 
     <script>
+      function applyTheme(mode) {
+        if (mode === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        localStorage.setItem('uimode', mode);
+        document.getElementById('icon-sun').classList.toggle('hidden', mode !== 'dark');
+        document.getElementById('icon-moon').classList.toggle('hidden', mode === 'dark');
+      }
+
+      document.getElementById('theme-toggle').addEventListener('click', () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        applyTheme(isDark ? 'light' : 'dark');
+      });
+
+      (function () {
+        const isDark = document.documentElement.classList.contains('dark');
+        document.getElementById('icon-sun').classList.toggle('hidden', !isDark);
+        document.getElementById('icon-moon').classList.toggle('hidden', isDark);
+      })();
+
       const questions = [
         {
           id: 1,
@@ -338,13 +395,12 @@
 
       function badge(content, tone = "slate") {
         const tones = {
-          slate: "bg-slate-100 text-slate-700 border-slate-200",
-          blue: "bg-blue-50 text-blue-700 border-blue-200",
-          amber: "bg-amber-50 text-amber-700 border-amber-200",
-          emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
-          rose: "bg-rose-50 text-rose-700 border-rose-200",
+          slate: "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600",
+          blue: "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700",
+          amber: "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700",
+          emerald: "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700",
+          rose: "bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-700",
         };
-
         return `<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${tones[tone]}">${content}</span>`;
       }
 
@@ -359,13 +415,13 @@
 
       function dataTable(table) {
         return `
-          <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <div class="font-semibold text-slate-800">Table: ${escapeHtml(table.name)}</div>
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-4 py-3">
+              <div class="font-semibold text-slate-800 dark:text-slate-100">Table: ${escapeHtml(table.name)}</div>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-sm">
-                <thead class="bg-slate-100 text-slate-700">
+                <thead class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                   <tr>
                     ${table.columns
                       .map(
@@ -379,11 +435,11 @@
                   ${table.rows
                     .map(
                       (row) => `
-                        <tr class="border-t border-slate-100">
+                        <tr class="border-t border-slate-100 dark:border-slate-700">
                           ${row
                             .map(
                               (cell) =>
-                                `<td class="px-4 py-3 whitespace-nowrap text-slate-700">${escapeHtml(cell)}</td>`
+                                `<td class="px-4 py-3 whitespace-nowrap text-slate-700 dark:text-slate-300">${escapeHtml(cell)}</td>`
                             )
                             .join("")}
                         </tr>`
@@ -398,9 +454,9 @@
 
       function requirementsTable(requirements) {
         return `
-          <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <div class="font-semibold text-slate-800">Table requirements</div>
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-4 py-3">
+              <div class="font-semibold text-slate-800 dark:text-slate-100">Table requirements</div>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-sm">
@@ -408,9 +464,9 @@
                   ${requirements
                     .map(
                       (row, rowIndex) => `
-                        <tr class="border-t border-slate-100 ${rowIndex === 0 ? "first:border-t-0" : ""}">
-                          <td class="px-4 py-3 font-semibold text-slate-700 w-48">${escapeHtml(row[0])}</td>
-                          <td class="px-4 py-3 text-slate-700">${escapeHtml(row[1])}</td>
+                        <tr class="border-t border-slate-100 dark:border-slate-700 ${rowIndex === 0 ? "first:border-t-0" : ""}">
+                          <td class="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300 w-48">${escapeHtml(row[0])}</td>
+                          <td class="px-4 py-3 text-slate-700 dark:text-slate-300">${escapeHtml(row[1])}</td>
                         </tr>`
                     )
                     .join("")}
@@ -423,7 +479,7 @@
 
       function sqlBlock(label, value) {
         return `
-          <div class="rounded-2xl border border-slate-200 bg-slate-950 text-slate-100 shadow-sm overflow-hidden">
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-950 text-slate-100 shadow-sm overflow-hidden">
             <div class="border-b border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300">${escapeHtml(label)}</div>
             <pre class="p-4 text-sm leading-6 whitespace-pre-wrap overflow-x-auto">${value ? escapeHtml(value) : "(No SQL entered)"}</pre>
           </div>
@@ -438,13 +494,11 @@
 
       function markQuestion(isRight) {
         state.marks[state.index] = isRight;
-
         if (state.index === questions.length - 1) {
           state.stage = "finished";
           render();
           return;
         }
-
         state.index += 1;
         state.stage = "answer";
         render();
@@ -468,7 +522,7 @@
 
         document.getElementById("app").innerHTML = `
           <div class="mx-auto max-w-7xl space-y-6">
-            <div class="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div class="rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               <div class="p-6 md:p-8">
                 <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div class="space-y-3 max-w-3xl">
@@ -476,53 +530,53 @@
                       ${badge("U6th AQA A Level Computer Science", "blue")}
                       ${badge("Interactive SQL practice", "emerald")}
                     </div>
-                    <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">SQL Practice Activity 2</h1>
-                    <p class="text-slate-600 leading-7">
+                    <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-100">SQL Practice Activity 2</h1>
+                    <p class="text-slate-600 dark:text-slate-400 leading-7">
                       Work through each exam-style prompt, write your SQL, then click the compare button.
                       You will see your answer beside a model answer and decide whether yours is right or wrong.
                     </p>
                   </div>
                   <div class="grid grid-cols-2 gap-3 min-w-[240px]">
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div class="text-xs uppercase tracking-wide text-slate-500">Score</div>
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-4">
+                      <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Score</div>
                       <div class="mt-1 text-2xl font-bold">${score} / ${questions.length}</div>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div class="text-xs uppercase tracking-wide text-slate-500">Marked</div>
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-4">
+                      <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Marked</div>
                       <div class="mt-1 text-2xl font-bold">${completed}</div>
                     </div>
                   </div>
                 </div>
 
-                <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div class="flex items-center justify-between text-sm text-slate-600">
+                <div class="mt-6 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-4">
+                  <div class="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
                     <span>Progress</span>
                     <span>${progress}%</span>
                   </div>
-                  <div class="mt-2 h-3 w-full rounded-full bg-slate-200 overflow-hidden">
+                  <div class="mt-2 h-3 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                     <div
-                      class="h-full rounded-full bg-slate-800 transition-all"
+                      class="h-full rounded-full bg-slate-800 dark:bg-sky-500 transition-all"
                       style="width: ${state.stage === "finished" ? 100 : Math.max(6, progress)}%"
                     ></div>
                   </div>
                 </div>
 
                 <div class="mt-6 grid gap-3 md:grid-cols-4 text-sm">
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-4">
                     <div class="font-semibold">What is covered?</div>
-                    <div class="mt-2 text-slate-600">SELECT, WHERE, ORDER BY, LIKE, aggregates, GROUP BY, INSERT, UPDATE, DELETE, CREATE TABLE and two-table joins.</div>
+                    <div class="mt-2 text-slate-600 dark:text-slate-400">SELECT, WHERE, ORDER BY, LIKE, aggregates, GROUP BY, INSERT, UPDATE, DELETE, CREATE TABLE and two-table joins.</div>
                   </div>
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-4">
                     <div class="font-semibold">Marking rule</div>
-                    <div class="mt-2 text-slate-600">Whitespace, line breaks and sensible aliases do not matter if the SQL is logically equivalent.</div>
+                    <div class="mt-2 text-slate-600 dark:text-slate-400">Whitespace, line breaks and sensible aliases do not matter if the SQL is logically equivalent.</div>
                   </div>
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-4">
                     <div class="font-semibold">String values</div>
-                    <div class="mt-2 text-slate-600">Use single quotes around text values such as 'Yes' or 'Computer Science'.</div>
+                    <div class="mt-2 text-slate-600 dark:text-slate-400">Use single quotes around text values such as 'Yes' or 'Computer Science'.</div>
                   </div>
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-4">
                     <div class="font-semibold">Join style</div>
-                    <div class="mt-2 text-slate-600">For the harder questions, use the simple comma-separated FROM syntax with the join written in WHERE.</div>
+                    <div class="mt-2 text-slate-600 dark:text-slate-400">For the harder questions, use the simple comma-separated FROM syntax with the join written in WHERE.</div>
                   </div>
                 </div>
               </div>
@@ -532,7 +586,7 @@
               ? `
                 <div class="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
                   <div class="space-y-6">
-                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                    <div class="rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8">
                       <div class="flex flex-wrap items-center gap-2">
                         ${badge(`Question ${state.index + 1} of ${questions.length}`, "slate")}
                         ${badge(current.difficulty, difficultyTone(current.difficulty))}
@@ -540,9 +594,9 @@
                       </div>
 
                       <h2 class="mt-4 text-2xl font-bold tracking-tight">Task</h2>
-                      <p class="mt-3 text-slate-700 leading-7">${escapeHtml(current.prompt)}</p>
+                      <p class="mt-3 text-slate-700 dark:text-slate-300 leading-7">${escapeHtml(current.prompt)}</p>
                       ${current.notes
-                        ? `<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">${escapeHtml(current.notes)}</div>`
+                        ? `<div class="mt-4 rounded-2xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-800 dark:text-amber-300">${escapeHtml(current.notes)}</div>`
                         : ""}
                     </div>
 
@@ -554,20 +608,20 @@
                   </div>
 
                   <div class="space-y-6">
-                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8 sticky top-6">
+                    <div class="rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 sticky top-6">
                       ${state.stage === "answer"
                         ? `
                           <h3 class="text-xl font-bold">Write your SQL</h3>
-                          <p class="mt-2 text-sm text-slate-600">Enter your answer below, then click the button to compare it with the model answer.</p>
+                          <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Enter your answer below, then click the button to compare it with the model answer.</p>
                           <textarea
                             id="sql-answer"
                             spellcheck="false"
-                            class="mt-4 min-h-[280px] w-full rounded-2xl border border-slate-300 bg-slate-50 p-4 font-mono text-sm leading-6 outline-none focus:ring-2 focus:ring-slate-300"
+                            class="mt-4 min-h-[280px] w-full rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 dark:text-slate-100 p-4 font-mono text-sm leading-6 outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-500 dark:placeholder:text-slate-500"
                             placeholder="Type SQL for question ${state.index + 1} here..."
                           >${escapeHtml(state.answers[state.index])}</textarea>
                           <button
                             id="compare-button"
-                            class="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+                            class="mt-4 w-full rounded-2xl bg-slate-900 dark:bg-white px-4 py-3 font-semibold text-white dark:text-slate-900 shadow-sm hover:bg-slate-800 dark:hover:bg-slate-100 transition"
                           >
                             Next: compare my answer
                           </button>
@@ -575,7 +629,7 @@
                         : `
                           <div class="space-y-4">
                             <h3 class="text-xl font-bold">Compare answers</h3>
-                            <p class="text-sm text-slate-600 leading-6">Read both versions carefully. If your SQL would produce the same correct result, mark it right. If not, mark it wrong.</p>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 leading-6">Read both versions carefully. If your SQL would produce the same correct result, mark it right. If not, mark it wrong.</p>
                             ${sqlBlock("Your SQL", state.answers[state.index])}
                             ${sqlBlock("Expected SQL", current.expectedSQL)}
                             <div class="grid grid-cols-2 gap-3 pt-2">
@@ -600,7 +654,7 @@
               `
               : `
                 <div class="space-y-6">
-                  <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                  <div class="rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8">
                     <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                       <div>
                         <div class="flex flex-wrap gap-2">
@@ -608,11 +662,11 @@
                           ${badge(`${percent}%`, percent >= 80 ? "emerald" : percent >= 60 ? "amber" : "rose")}
                         </div>
                         <h2 class="mt-3 text-3xl font-bold tracking-tight">Final score: ${score} / ${questions.length}</h2>
-                        <p class="mt-2 text-slate-600 leading-7 max-w-3xl">Use the review below to spot patterns. Aim to be fluent with the command words, field names, quote marks and join conditions.</p>
+                        <p class="mt-2 text-slate-600 dark:text-slate-400 leading-7 max-w-3xl">Use the review below to spot patterns. Aim to be fluent with the command words, field names, quote marks and join conditions.</p>
                       </div>
                       <button
                         id="restart-button"
-                        class="rounded-2xl bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800 transition"
+                        class="rounded-2xl bg-slate-900 dark:bg-white px-5 py-3 font-semibold text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition"
                       >
                         Restart activity
                       </button>
@@ -620,15 +674,15 @@
                   </div>
 
                   <div class="grid gap-6 lg:grid-cols-[0.85fr,1.15fr]">
-                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                    <div class="rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8">
                       <h3 class="text-xl font-bold">At a glance</h3>
                       <div class="mt-4 grid grid-cols-2 gap-4">
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div class="text-xs uppercase tracking-wide text-slate-500">Correct</div>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-4">
+                          <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Correct</div>
                           <div class="mt-1 text-3xl font-bold">${score}</div>
                         </div>
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div class="text-xs uppercase tracking-wide text-slate-500">To revisit</div>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-4">
+                          <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">To revisit</div>
                           <div class="mt-1 text-3xl font-bold">${questions.length - score}</div>
                         </div>
                       </div>
@@ -639,10 +693,10 @@
                           ${questions
                             .map(
                               (question, questionIndex) => `
-                                <div class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                                <div class="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3">
                                   <div>
                                     <div class="font-medium">Q${questionIndex + 1}. ${escapeHtml(question.type)}</div>
-                                    <div class="text-sm text-slate-500">${escapeHtml(question.difficulty)}</div>
+                                    <div class="text-sm text-slate-500 dark:text-slate-400">${escapeHtml(question.difficulty)}</div>
                                   </div>
                                   ${badge(state.marks[questionIndex] ? "Right" : "Wrong", state.marks[questionIndex] ? "emerald" : "rose")}
                                 </div>`
@@ -652,20 +706,20 @@
                       </div>
                     </div>
 
-                    <div class="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 md:p-8">
+                    <div class="rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8">
                       <h3 class="text-xl font-bold">Review the ones you marked wrong</h3>
                       ${missed.length === 0
-                        ? `<div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800">Excellent. You marked every question right.</div>`
+                        ? `<div class="mt-4 rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-5 text-emerald-800 dark:text-emerald-300">Excellent. You marked every question right.</div>`
                         : `
                           <div class="mt-4 space-y-4">
                             ${missed
                               .map((question) => {
                                 const questionIndex = questions.findIndex((item) => item.id === question.id);
                                 return `
-                                  <div class="rounded-2xl border border-slate-200 overflow-hidden">
-                                    <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                                  <div class="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                    <div class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-4 py-3">
                                       <div class="font-semibold">Q${questionIndex + 1}. ${escapeHtml(question.type)}</div>
-                                      <div class="text-sm text-slate-600 mt-1">${escapeHtml(question.prompt)}</div>
+                                      <div class="text-sm text-slate-600 dark:text-slate-400 mt-1">${escapeHtml(question.prompt)}</div>
                                     </div>
                                     <div class="p-4 space-y-4">
                                       ${sqlBlock("Your SQL", state.answers[questionIndex])}

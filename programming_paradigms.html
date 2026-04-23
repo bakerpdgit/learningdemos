@@ -4,8 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A Level CS: Programming Paradigms</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
     <!-- React & ReactDOM -->
     <script
       src="https://unpkg.com/react@18/umd/react.production.min.js"
@@ -20,7 +44,6 @@
     <style>
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f3f4f6;
         overflow-x: hidden;
       }
       .uml-box {
@@ -43,6 +66,8 @@
       .uml-header:active {
         cursor: grabbing;
       }
+      html.dark .uml-box { background: #1e293b; border-color: #94a3b8; }
+      html.dark .uml-header { background: #334155; border-bottom-color: #94a3b8; color: #e2e8f0; }
       .uml-box > div:last-child {
         border-radius: 0 0 4px 4px;
       }
@@ -104,25 +129,22 @@
         background-color: rgba(59, 130, 246, 0.2);
       }
     </style>
-    <style id="global-home-link-style">
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
-    </style>
-  </head>
+      <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+</head>
   <body>
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
     <div id="root"></div>
 
     <script type="text/babel">
@@ -630,7 +652,7 @@
                   setSelected(opt);
                   onAnswerChange(opt);
                 }}
-                className={`p-3 border-2 rounded cursor-pointer transition-colors ${selected === opt ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300 bg-white"}`}
+                className={`p-3 border-2 rounded cursor-pointer transition-colors ${selected === opt ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30" : "border-gray-200 dark:border-slate-600 hover:border-blue-300 bg-white dark:bg-slate-700 dark:text-slate-200"}`}
               >
                 {opt}
               </div>
@@ -648,7 +670,7 @@
 
         const parts = question.prompt.split(`[FIB]`);
         return (
-          <div className="mt-4 text-lg font-medium text-gray-800 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r shadow-sm">
+          <div className="mt-4 text-lg font-medium text-gray-800 dark:text-slate-200 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r shadow-sm">
             {parts.map((part, i) => (
               <React.Fragment key={i}>
                 {part}
@@ -664,7 +686,7 @@
                         setVal(e.target.value);
                         onAnswerChange(e.target.value);
                       }}
-                      className="border-b-2 border-gray-400 outline-none focus:border-blue-500 w-32 px-1 text-center font-bold text-blue-700 bg-white rounded-t"
+                      className="border-b-2 border-gray-400 outline-none focus:border-blue-500 w-32 px-1 text-center font-bold text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-600 rounded-t"
                       placeholder="..."
                     />
                   </span>
@@ -847,11 +869,11 @@
                 <div className="uml-header py-4">{question.entity1}</div>
               </div>
               <div
-                className="flex-grow px-2 cursor-pointer flex flex-col items-center hover:bg-gray-100 rounded h-16 justify-center transition-colors"
+                className="flex-grow px-2 cursor-pointer flex flex-col items-center hover:bg-gray-100 dark:hover:bg-slate-700 rounded h-16 justify-center transition-colors"
                 onClick={cycleRel}
               >
                 {renderLine()}
-                <div className="text-xs font-bold text-blue-800 mt-1">
+                <div className="text-xs font-bold text-blue-800 dark:text-blue-300 mt-1">
                   {typeLabels[relType]}
                 </div>
               </div>
@@ -1106,7 +1128,7 @@
 
         return (
           <div
-            className="mt-4 border rounded bg-gray-50 relative select-none"
+            className="mt-4 border dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-700 relative select-none"
             style={{ height: "400px" }}
             ref={containerRef}
             onPointerMove={onPointerMove}
@@ -1119,7 +1141,7 @@
                   setEdges([]);
                   onAnswerChange({ nodes, edges: [] });
                 }}
-                className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-1 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
               >
                 <TrashIcon /> Clear Lines
               </button>
@@ -1359,13 +1381,13 @@
             {/* Explicit Edge Selection Menu */}
             {edgeModal && (
               <div
-                className="absolute z-50 bg-white border-2 border-blue-500 shadow-xl rounded p-2 text-sm w-72"
+                className="absolute z-50 bg-white dark:bg-slate-700 border-2 border-blue-500 shadow-xl rounded p-2 text-sm w-72"
                 style={{
                   left: Math.min(edgeModal.x, 550),
                   top: Math.min(edgeModal.y, 200),
                 }}
               >
-                <div className="font-bold border-b pb-1 mb-2 text-blue-800">
+                <div className="font-bold border-b dark:border-slate-600 pb-1 mb-2 text-blue-800 dark:text-blue-300">
                   Select Relationship
                 </div>
                 <div className="space-y-1">
@@ -1373,7 +1395,7 @@
                     onClick={() =>
                       addEdge("aggregation", edgeModal.fromIdx, edgeModal.toIdx)
                     }
-                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-transparent hover:border-blue-200 transition-colors dark:text-slate-200"
                   >
                     <b>{nodes[edgeModal.fromIdx].name}</b> aggregates{" "}
                     <b>{nodes[edgeModal.toIdx].name}</b>
@@ -1382,17 +1404,17 @@
                     onClick={() =>
                       addEdge("aggregation", edgeModal.toIdx, edgeModal.fromIdx)
                     }
-                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-transparent hover:border-blue-200 transition-colors dark:text-slate-200"
                   >
                     <b>{nodes[edgeModal.toIdx].name}</b> aggregates{" "}
                     <b>{nodes[edgeModal.fromIdx].name}</b>
                   </button>
-                  <div className="h-px bg-gray-200 my-1"></div>
+                  <div className="h-px bg-gray-200 dark:bg-slate-600 my-1"></div>
                   <button
                     onClick={() =>
                       addEdge("composition", edgeModal.fromIdx, edgeModal.toIdx)
                     }
-                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-transparent hover:border-blue-200 transition-colors dark:text-slate-200"
                   >
                     <b>{nodes[edgeModal.fromIdx].name}</b> is composed of{" "}
                     <b>{nodes[edgeModal.toIdx].name}</b>
@@ -1401,17 +1423,17 @@
                     onClick={() =>
                       addEdge("composition", edgeModal.toIdx, edgeModal.fromIdx)
                     }
-                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-transparent hover:border-blue-200 transition-colors dark:text-slate-200"
                   >
                     <b>{nodes[edgeModal.toIdx].name}</b> is composed of{" "}
                     <b>{nodes[edgeModal.fromIdx].name}</b>
                   </button>
-                  <div className="h-px bg-gray-200 my-1"></div>
+                  <div className="h-px bg-gray-200 dark:bg-slate-600 my-1"></div>
                   <button
                     onClick={() =>
                       addEdge("inheritance", edgeModal.fromIdx, edgeModal.toIdx)
                     }
-                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-transparent hover:border-blue-200 transition-colors dark:text-slate-200"
                   >
                     <b>{nodes[edgeModal.fromIdx].name}</b> inherits from{" "}
                     <b>{nodes[edgeModal.toIdx].name}</b>
@@ -1420,7 +1442,7 @@
                     onClick={() =>
                       addEdge("inheritance", edgeModal.toIdx, edgeModal.fromIdx)
                     }
-                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200 transition-colors"
+                    className="block w-full text-left px-2 py-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded border border-transparent hover:border-blue-200 transition-colors dark:text-slate-200"
                   >
                     <b>{nodes[edgeModal.toIdx].name}</b> inherits from{" "}
                     <b>{nodes[edgeModal.fromIdx].name}</b>
@@ -1479,11 +1501,11 @@
           <div className="mt-4 flex flex-col gap-4 items-start w-full">
             {/* Horizontal Term Bank */}
             <div
-              className="w-full bg-gray-100 p-4 rounded border-2 border-dashed border-gray-300 min-h-[80px]"
+              className="w-full bg-gray-100 dark:bg-slate-700 p-4 rounded border-2 border-dashed border-gray-300 dark:border-slate-500 min-h-[80px]"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => handleDrop(e, null)}
             >
-              <h4 className="font-bold text-gray-700 mb-3 text-sm">
+              <h4 className="font-bold text-gray-700 dark:text-slate-300 mb-3 text-sm">
                 Term Bank (Drag these into the empty slots):
               </h4>
               <div className="flex flex-wrap gap-2">
@@ -1492,7 +1514,7 @@
                     key={term}
                     draggable
                     onDragStart={(e) => handleDragStart(e, term, null)}
-                    className="bg-white border border-blue-400 text-blue-800 px-3 py-1.5 rounded shadow-sm cursor-grab active:cursor-grabbing text-sm font-semibold"
+                    className="bg-white dark:bg-slate-600 border border-blue-400 text-blue-800 dark:text-blue-300 px-3 py-1.5 rounded shadow-sm cursor-grab active:cursor-grabbing text-sm font-semibold"
                   >
                     {term}
                   </div>
@@ -1514,7 +1536,7 @@
                       <td className="w-48 pl-4">
                         {line.slotId && (
                           <div
-                            className={`droppable-slot flex items-center justify-center rounded text-xs text-gray-800 font-bold ${slots[line.slotId] ? "bg-blue-100 border-blue-400 border-solid" : ""}`}
+                            className={`droppable-slot flex items-center justify-center rounded text-xs text-gray-800 dark:text-slate-200 font-bold ${slots[line.slotId] ? "bg-blue-100 dark:bg-blue-900/40 border-blue-400 border-solid" : ""}`}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => handleDrop(e, line.slotId)}
                           >
@@ -1572,7 +1594,7 @@
           <div className="flex flex-col items-center">
             <span className="text-xs text-gray-500 mb-1">{label}</span>
             <select
-              className="border-2 border-gray-400 p-2 rounded bg-white shadow-sm font-semibold text-sm outline-none focus:border-blue-500"
+              className="border-2 border-gray-400 dark:border-slate-500 p-2 rounded bg-white dark:bg-slate-700 dark:text-slate-200 shadow-sm font-semibold text-sm outline-none focus:border-blue-500"
               value={state[nodeKey]}
               onChange={(e) => updateNode(nodeKey, e.target.value)}
             >
@@ -1613,8 +1635,32 @@
         );
       };
 
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      );
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+        </svg>
+      );
+
       // --- Main App Component ---
       const App = () => {
+        const [isDark, setIsDark] = useState(() => {
+          try {
+            const stored = localStorage.getItem("uimode");
+            if (stored) return stored === "dark";
+            return window.matchMedia("(prefers-color-scheme: dark)").matches;
+          } catch(e) { return false; }
+        });
+
+        useEffect(() => {
+          document.documentElement.classList.toggle("dark", isDark);
+          try { localStorage.setItem("uimode", isDark ? "dark" : "light"); } catch(e) {}
+        }, [isDark]);
+
         const [isFilterOpen, setIsFilterOpen] = useState(false);
         const [selectedTopics, setSelectedTopics] = useState([...TOPICS]);
         const [tempSelectedTopics, setTempSelectedTopics] = useState([
@@ -1873,34 +1919,68 @@
             currentQ.type !== "complex-uml");
 
         return (
-          <div className="min-h-screen flex flex-col items-center py-10 px-4">
-            <div className="w-full max-w-4xl bg-white shadow-xl rounded-xl overflow-hidden flex flex-col">
-              <div className="bg-blue-900 text-white p-4 flex justify-between items-center relative">
+          <div className="min-h-screen flex flex-col bg-slate-100 dark:bg-slate-900">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={() => setIsDark(d => !d)}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {isDark ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+            <div className="flex flex-col items-center py-10 px-4 flex-grow">
+            <div className="w-full max-w-4xl bg-white dark:bg-slate-800 shadow-xl rounded-xl overflow-hidden flex flex-col">
+              <div className="bg-blue-900 dark:bg-slate-800 border-b dark:border-slate-700 text-white p-4 flex justify-between items-center relative">
                 <div>
                   <h1 className="text-xl font-bold">
                     Programming Paradigms (AQA 4.1.2)
                   </h1>
-                  <p className="text-sm text-blue-200 mt-1">
+                  <p className="text-sm text-blue-200 dark:text-slate-400 mt-1">
                     Interactive Learning Environment
                   </p>
                 </div>
                 <div className="relative">
                   <button
                     onClick={() => setIsFilterOpen(!isFilterOpen)}
-                    className="flex items-center space-x-2 bg-blue-800 hover:bg-blue-700 px-3 py-2 rounded transition-colors"
+                    className="flex items-center space-x-2 bg-blue-800 dark:bg-slate-700 hover:bg-blue-700 dark:hover:bg-slate-600 px-3 py-2 rounded transition-colors"
                   >
                     <FilterIcon />
                     <span>Topics</span>
                   </button>
                   {isFilterOpen && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white border rounded shadow-2xl z-50 text-gray-800 p-3">
-                      <div className="font-bold border-b pb-2 mb-2">
+                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-700 border dark:border-slate-600 rounded shadow-2xl z-50 text-gray-800 dark:text-slate-200 p-3">
+                      <div className="font-bold border-b dark:border-slate-600 pb-2 mb-2">
                         Filter Subtopics
                       </div>
                       {TOPICS.map((t) => (
                         <label
                           key={t}
-                          className="flex items-center space-x-2 py-1 cursor-pointer hover:bg-gray-50"
+                          className="flex items-center space-x-2 py-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-600"
                         >
                           <input
                             type="checkbox"
@@ -1922,7 +2002,7 @@
                 </div>
               </div>
 
-              <div className="bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 border-b flex justify-between">
+              <div className="bg-gray-100 dark:bg-slate-700 px-4 py-2 text-xs font-semibold text-gray-500 dark:text-slate-400 border-b dark:border-slate-600 flex justify-between">
                 <span>Subtopic: {currentQ.subtopic}</span>
                 <span>
                   Question {currentQIndex + 1} of {totalInLoop} (Current Loop)
@@ -1931,7 +2011,7 @@
 
               <div className="p-6 flex-grow">
                 {currentQ.type !== "fib" && (
-                  <div className="text-lg font-medium text-gray-800 mb-4 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r whitespace-pre-line">
+                  <div className="text-lg font-medium text-gray-800 dark:text-slate-200 mb-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r whitespace-pre-line">
                     {currentQ.prompt}
                   </div>
                 )}
@@ -1977,7 +2057,7 @@
 
                 {status !== "idle" && (
                   <div
-                    className={`mt-4 p-4 rounded flex items-start space-x-3 ${status === "correct" ? "bg-green-100 border border-green-300 text-green-800" : "bg-red-100 border border-red-300 text-red-800"}`}
+                    className={`mt-4 p-4 rounded flex items-start space-x-3 ${status === "correct" ? "bg-green-100 dark:bg-green-900/20 border border-green-300 dark:border-green-800 text-green-800 dark:text-green-300" : "bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-300"}`}
                   >
                     <div className="mt-0.5">
                       {status === "correct" ? <CheckIcon /> : <XIcon />}
@@ -1993,7 +2073,7 @@
                         </p>
                       )}
                       {showSolution && (
-                        <div className="mt-2 text-sm bg-white bg-opacity-60 p-3 rounded text-gray-800 border border-gray-200 shadow-sm">
+                        <div className="mt-2 text-sm bg-white dark:bg-slate-700 bg-opacity-60 p-3 rounded text-gray-800 dark:text-slate-200 border border-gray-200 dark:border-slate-600 shadow-sm">
                           <strong>Solution:</strong> {currentQ.solution}
                         </div>
                       )}
@@ -2002,12 +2082,12 @@
                 )}
               </div>
 
-              <div className="bg-gray-50 border-t p-4 flex justify-between items-center">
+              <div className="bg-gray-50 dark:bg-slate-700 border-t dark:border-slate-600 p-4 flex justify-between items-center">
                 <div>
                   {status === "incorrect" && !showSolution && (
                     <button
                       onClick={() => setShowSolution(true)}
-                      className="text-gray-600 underline text-sm hover:text-gray-800"
+                      className="text-gray-600 dark:text-slate-400 underline text-sm hover:text-gray-800 dark:hover:text-slate-200"
                     >
                       Show Solution
                     </button>
@@ -2018,7 +2098,7 @@
                     <button
                       onClick={validateAnswer}
                       disabled={isSubmitDisabled}
-                      className={`px-6 py-2 rounded font-bold shadow transition-all ${isSubmitDisabled ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg"} ${shake ? "shake-animation" : ""}`}
+                      className={`px-6 py-2 rounded font-bold shadow transition-all ${isSubmitDisabled ? "bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg"} ${shake ? "shake-animation" : ""}`}
                     >
                       Submit Answer
                     </button>
@@ -2032,6 +2112,7 @@
                   )}
                 </div>
               </div>
+            </div>
             </div>
           </div>
         );

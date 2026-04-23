@@ -4,418 +4,429 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ice to Water to Steam Simulation</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+    <!-- Prevent FOUC -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style>
-        body {
-            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f0f0f0;
-        }
-        h1 { margin-top: 20px; color: #2c3e50; }
-        .container {
-            display: flex;
-            gap: 20px;
-            width: 100%;
-            max-width: 1200px;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .canvas-stack {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        #mainCanvas {
-            border: 1px solid #2c3e50;
-            background-color: #fff;
-        }
-        #graphCanvas {
-            border: 1px solid #2c3e50;
-            background-color: #fff;
-            margin-top: 10px;
-        }
-        #graphLabel {
-            text-align: center;
-            font-size: 14px;
-            margin-top: 4px;
-        }
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            padding: 20px;
-            background-color: #ecf0f1;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            width: 300px;
-        }
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .control-group button {
-            padding: 8px 12px;
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .speed-buttons button { width: 60px; }
-        .main-buttons button { width: 100%; }
-    </style>
+      :root {
+        --bg: #f1f5f9;
+        --panel: #ffffff;
+        --text: #1e293b;
+        --text-label: #475569;
+        --border: #e2e8f0;
+        --ctrl-bg: #f8fafc;
+        --ctrl-border: #cbd5e1;
+        --val-bg: #ffffff;
+        --accent: #0ea5e9;
+        --btn-bg: #3b82f6;
+        --btn-hover: #2563eb;
+        --btn-green: #16a34a;
+        --btn-red: #dc2626;
+        --canvas-bg: #ffffff;
+        --canvas-border: #cbd5e1;
+        --header-bg: #0f172a;
+        --header-accent: #38bdf8;
+        --header-link: #94a3b8;
+      }
+      html.dark {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --text: #f1f5f9;
+        --text-label: #94a3b8;
+        --border: #334155;
+        --ctrl-bg: #1e293b;
+        --ctrl-border: #334155;
+        --val-bg: #0f172a;
+        --accent: #38bdf8;
+        --btn-bg: #3b82f6;
+        --btn-hover: #2563eb;
+        --btn-green: #16a34a;
+        --btn-red: #dc2626;
+        --canvas-bg: #1e293b;
+        --canvas-border: #334155;
+      }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        transition: background-color 0.2s, color 0.2s;
+      }
 
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+      /* ── Header ── */
+      #cs-header {
+        background: var(--header-bg);
+        padding: 0 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 58px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+        flex-shrink: 0;
+      }
+      #site-title {
+        font-family: "Consolas","Courier New",monospace;
+        font-size: 1.2rem; font-weight: 700;
+        color: var(--header-accent); text-decoration: none; letter-spacing: 0.04em;
+      }
+      #site-title .bracket { color: #475569; }
+      #cs-header nav { display: flex; align-items: center; gap: 1.5rem; }
+      #home-link { color: var(--header-link); text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: color 0.15s; }
+      #home-link:hover { color: var(--header-accent); }
+      #theme-btn { background: none; border: none; cursor: pointer; color: var(--header-link); padding: 4px; display: flex; align-items: center; transition: color 0.15s; }
+      #theme-btn:hover { color: var(--header-accent); }
+      #theme-btn svg { width: 20px; height: 20px; }
+
+      /* ── Page layout ── */
+      .page-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 1.5rem 1rem;
+        gap: 1rem;
+      }
+      h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+      .container {
+        display: flex;
+        gap: 1.25rem;
+        width: 100%;
+        max-width: 1100px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .canvas-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      #mainCanvas, #graphCanvas {
+        border: 1px solid var(--canvas-border);
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      }
+      html.dark #mainCanvas, html.dark #graphCanvas { box-shadow: 0 2px 6px rgba(0,0,0,0.35); }
+      #graphLabel { text-align: center; font-size: 0.85rem; color: var(--text-label); }
+
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1.25rem;
+        background: var(--ctrl-bg);
+        border: 1px solid var(--ctrl-border);
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        width: 260px;
+        flex-shrink: 0;
+      }
+      html.dark .controls { box-shadow: 0 2px 6px rgba(0,0,0,0.35); }
+      .control-group { display: flex; flex-direction: column; gap: 6px; }
+      .control-group label, .control-group span { font-size: 0.875rem; color: var(--text-label); font-weight: 500; }
+      input[type="range"] { width: 100%; accent-color: var(--accent); }
+      #heatValue, #tempDisplay { font-weight: 600; color: var(--text); font-size: 0.9rem; }
+
+      .speed-buttons { flex-direction: row; align-items: center; }
+      .speed-buttons span { margin-right: 0.5rem; }
+      .speed-btn {
+        padding: 5px 12px;
+        background: var(--btn-bg);
+        color: white; border: none; border-radius: 5px;
+        cursor: pointer; font-size: 0.85rem; font-weight: 600;
+        transition: background 0.15s;
+      }
+      .speed-btn:hover { background: var(--btn-hover); }
+      .main-btn {
+        width: 100%; padding: 0.55rem;
+        border: none; border-radius: 6px;
+        cursor: pointer; font-weight: 700; font-size: 0.9rem;
+        color: white; transition: opacity 0.15s;
+      }
+      .main-btn:hover { opacity: 0.9; }
+      #startPause { background: var(--btn-green); }
+      #reset { background: var(--btn-red); }
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
 <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+  <!-- CS Learning Header -->
+  <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
+  <div class="page-main">
     <h1>Ice → Water → Steam</h1>
     <div class="container">
-        <div class="canvas-stack">
-            <canvas id="mainCanvas"></canvas>
-            <canvas id="graphCanvas" height="150"></canvas>
-            <div id="graphLabel">Temperature of ice/water (°C)</div>
+      <div class="canvas-stack">
+        <canvas id="mainCanvas"></canvas>
+        <canvas id="graphCanvas" height="150"></canvas>
+        <div id="graphLabel">Temperature of ice/water (°C)</div>
+      </div>
+      <div class="controls">
+        <div class="control-group">
+          <label for="heatSlider">Burner Power (W)</label>
+          <input type="range" id="heatSlider" min="0" max="3000" value="200">
+          <span id="heatValue">200 W</span>
         </div>
-        <div class="controls">
-            <div class="control-group">
-                <label for="heatSlider">Burner Power (W)</label>
-                <input type="range" id="heatSlider" min="0" max="3000" value="200">
-                <span id="heatValue">200 W</span>
-            </div>
-            <div class="control-group speed-buttons">
-                <span>Speed</span>
-                <div>
-                    <button data-speed="1">×1</button>
-                    <button data-speed="2">×2</button>
-                    <button data-speed="3">×3</button>
-                </div>
-            </div>
-            <div class="control-group">
-                <span id="tempDisplay">Temperature: -10 °C</span>
-            </div>
-            <div class="control-group main-buttons">
-                <button id="startPause">Start</button>
-                <button id="reset">Reset</button>
-            </div>
+        <div class="control-group speed-buttons">
+          <span>Speed</span>
+          <button class="speed-btn" data-speed="1">×1</button>
+          <button class="speed-btn" data-speed="2">×2</button>
+          <button class="speed-btn" data-speed="3">×3</button>
         </div>
+        <div class="control-group">
+          <span id="tempDisplay">Temperature: -10 °C</span>
+        </div>
+        <div class="control-group" style="gap:8px">
+          <button id="startPause" class="main-btn">Start</button>
+          <button id="reset" class="main-btn">Reset</button>
+        </div>
+      </div>
     </div>
+  </div>
 
 <script>
-const RHO_ICE = 917;   // kg/m^3
-const RHO_WATER = 1000;
-const C_ICE = 2100;    // J/(kg*K)
-const C_WATER = 4184;
-const L_FUS = 334000;  // J/kg
-const L_VAP = 2260000; // J/kg
-const PARTICLE_COUNT = 400;
-const PARTICLE_RADIUS = 3; // px
-const BEAKER_RADIUS_M = 0.05; // m, physical radius
-const BEAKER_AREA = Math.PI * BEAKER_RADIUS_M * BEAKER_RADIUS_M;
-const GRAPH_X_SCALE = 6; // px per simulated second
-const FLAME_HEIGHT = 30; // px space for burner flame
-const GAS_VX = 1500; // px/s horizontal launch speed
-const GAS_VY = 1200; // px/s vertical launch speed
-
-let canvas = document.getElementById('mainCanvas');
-let gCanvas = document.getElementById('graphCanvas');
-let ctx = canvas.getContext('2d');
-let gctx = gCanvas.getContext('2d');
-let heatSlider = document.getElementById('heatSlider');
-let heatValue = document.getElementById('heatValue');
-let tempDisplay = document.getElementById('tempDisplay');
-let startPauseBtn = document.getElementById('startPause');
-let resetBtn = document.getElementById('reset');
-let speedButtons = document.querySelectorAll('[data-speed]');
-
-let state;
-let particles = [];
-let graphData = [];
-let graphOffset = 0;
-let lastTime = 0;
-let beakerWidth, beakerLeft, pxPerM, beakerBottom;
-
-function resetState() {
-    state = {
-        massIce: 0.2,     // kg
-        massWater: 0,
-        massSteam: 0,
-        temperature: -10, // Celsius
-        energy: 0,
-        running: false,
-        speed: 1,
-        power: +heatSlider.value,
-        phase: 'solid',
-        time: 0
+  // ── Theme ──
+  function getColors() {
+    const dark = document.documentElement.classList.contains('dark');
+    return {
+      canvasBg: dark ? '#1e293b' : '#ffffff',
+      beakerStroke: dark ? '#64748b' : '#555555',
+      water: dark ? 'rgba(56,189,248,0.25)' : 'rgba(0,150,255,0.3)',
+      ice: dark ? '#475569' : '#c0c0c0',
+      particles: dark ? '#94a3b8' : '#555555',
+      flame: dark ? '#f87171' : '#ef4444',
+      graphLine: dark ? '#38bdf8' : '#e74c3c',
+      graphBg: dark ? '#0f172a' : '#ffffff',
     };
-    particles = [];
-    graphData = [];
-    graphOffset = 0;
+  }
+  function applyTheme(mode) {
+    const html = document.documentElement;
+    if (mode === 'dark') { html.classList.add('dark'); document.getElementById('icon-sun').style.display='block'; document.getElementById('icon-moon').style.display='none'; }
+    else { html.classList.remove('dark'); document.getElementById('icon-sun').style.display='none'; document.getElementById('icon-moon').style.display='block'; }
+  }
+  function toggleTheme() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const next = isDark ? 'light' : 'dark';
+    localStorage.setItem('uimode', next);
+    applyTheme(next);
+  }
+  (function initTheme() {
+    const saved = localStorage.getItem('uimode');
+    applyTheme(saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  })();
+
+  // ── Physics constants ──
+  const RHO_ICE=917, RHO_WATER=1000, C_ICE=2100, C_WATER=4184;
+  const L_FUS=334000, L_VAP=2260000;
+  const PARTICLE_COUNT=400, PARTICLE_RADIUS=3;
+  const BEAKER_RADIUS_M=0.05, BEAKER_AREA=Math.PI*BEAKER_RADIUS_M*BEAKER_RADIUS_M;
+  const GRAPH_X_SCALE=6, FLAME_HEIGHT=30;
+  const GAS_VX=1500, GAS_VY=1200;
+
+  let canvas=document.getElementById('mainCanvas');
+  let gCanvas=document.getElementById('graphCanvas');
+  let ctx=canvas.getContext('2d');
+  let gctx=gCanvas.getContext('2d');
+  let heatSlider=document.getElementById('heatSlider');
+  let heatValue=document.getElementById('heatValue');
+  let tempDisplay=document.getElementById('tempDisplay');
+  let startPauseBtn=document.getElementById('startPause');
+  let resetBtn=document.getElementById('reset');
+  let speedButtons=document.querySelectorAll('[data-speed]');
+
+  let state, particles=[], graphData=[], graphOffset=0, lastTime=0;
+  let beakerWidth, beakerLeft, pxPerM, beakerBottom;
+
+  function resetState() {
+    state={massIce:0.2,massWater:0,massSteam:0,temperature:-10,energy:0,running:false,speed:1,power:+heatSlider.value,phase:'solid',time:0};
+    particles=[]; graphData=[]; graphOffset=0;
     createParticles();
-    tempDisplay.textContent = `Temperature: ${state.temperature.toFixed(1)} °C`;
-}
-
-function resize() {
-    const width = Math.min(600, window.innerWidth*0.6);
-    canvas.width = width;
-    canvas.height = width*1.2;
-    gCanvas.width = width;
-    beakerWidth = width*0.6;
-    beakerLeft = (width-beakerWidth)/2;
-    pxPerM = beakerWidth/(BEAKER_RADIUS_M*2);
-    beakerBottom = canvas.height - FLAME_HEIGHT;
-}
-
-function createParticles() {
-    particles = [];
-    const cols = 20;
-    const rows = 20;
-    const iceHeight = getIceHeightPx();
-    const iceWidth = beakerWidth*2/3;
-    const startX = (canvas.width-iceWidth)/2;
-    const startY = beakerBottom-iceHeight;
-    const spacingX = iceWidth/cols;
-    const spacingY = iceHeight/rows;
-    for(let r=0;r<rows;r++){
-        for(let c=0;c<cols;c++){
-            let x = startX + c*spacingX + (r%2?spacingX/2:0);
-            let y = startY + r*spacingY;
-            particles.push({x,y,vx:0,vy:0,phase:'solid',baseX:x,baseY:y});
+    tempDisplay.textContent=`Temperature: ${state.temperature.toFixed(1)} °C`;
+  }
+  function resize() {
+    const width=Math.min(600, window.innerWidth*0.6);
+    canvas.width=width; canvas.height=width*1.2;
+    gCanvas.width=width;
+    beakerWidth=width*0.6; beakerLeft=(width-beakerWidth)/2;
+    pxPerM=beakerWidth/(BEAKER_RADIUS_M*2);
+    beakerBottom=canvas.height-FLAME_HEIGHT;
+  }
+  function createParticles() {
+    particles=[];
+    const cols=20, rows=20;
+    const iceHeight=getIceHeightPx(), iceWidth=beakerWidth*2/3;
+    const startX=(canvas.width-iceWidth)/2, startY=beakerBottom-iceHeight;
+    const spacingX=iceWidth/cols, spacingY=iceHeight/rows;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+      let x=startX+c*spacingX+(r%2?spacingX/2:0), y=startY+r*spacingY;
+      particles.push({x,y,vx:0,vy:0,phase:'solid',baseX:x,baseY:y});
+    }
+  }
+  function getIceHeightPx(){ return (state.massIce/RHO_ICE/BEAKER_AREA)*pxPerM; }
+  function getWaterHeightPx(){ return (state.massWater/RHO_WATER/BEAKER_AREA)*pxPerM; }
+  function updatePhysics(dt) {
+    state.energy+=state.power*dt;
+    switch(state.phase) {
+      case 'solid':
+        if(state.temperature<0) {
+          const needed=state.massIce*C_ICE*(0-state.temperature);
+          if(state.energy>=needed){state.energy-=needed;state.temperature=0;}
+          else{state.temperature+=state.energy/(state.massIce*C_ICE);state.energy=0;}
+        } else {
+          const dm=Math.min(state.energy/L_FUS,state.massIce);
+          state.massIce-=dm; state.massWater+=dm; state.energy-=dm*L_FUS;
+          if(state.massIce===0) state.phase='liquid';
         }
-    }
-}
-
-function getIceHeightPx(){
-    const V = state.massIce / RHO_ICE; // m^3
-    const h = V / BEAKER_AREA; // m
-    return h * pxPerM;
-}
-function getWaterHeightPx(){
-    const V = state.massWater / RHO_WATER;
-    const h = V / BEAKER_AREA;
-    return h * pxPerM;
-}
-
-function updatePhysics(dt){
-    state.energy += state.power * dt;
-    switch(state.phase){
-        case 'solid':
-            if(state.temperature < 0){
-                const needed = state.massIce*C_ICE*(0-state.temperature);
-                if(state.energy >= needed){
-                    state.energy -= needed;
-                    state.temperature = 0;
-                }else{
-                    state.temperature += state.energy/(state.massIce*C_ICE);
-                    state.energy = 0;
-                }
-            }else{
-                // melting
-                const meltNeeded = state.massIce*L_FUS;
-                const dm = Math.min(state.energy/L_FUS,state.massIce);
-                state.massIce -= dm;
-                state.massWater += dm;
-                state.energy -= dm*L_FUS;
-                if(state.massIce===0){state.phase='liquid';}
-            }
-            break;
-        case 'liquid':
-            if(state.temperature < 100){
-                const needed = state.massWater*C_WATER*(100-state.temperature);
-                if(state.energy >= needed){
-                    state.energy -= needed;
-                    state.temperature = 100;
-                }else{
-                    state.temperature += state.energy/(state.massWater*C_WATER);
-                    state.energy = 0;
-                }
-            }else{
-                const dm = Math.min(state.energy/L_VAP,state.massWater);
-                state.massWater -= dm;
-                state.massSteam += dm;
-                state.energy -= dm*L_VAP;
-                if(state.massWater===0){state.phase='gas';}
-            }
-            break;
-        case 'gas':
-            state.temperature += state.energy/(state.massSteam*C_WATER);
-            state.energy = 0;
-            break;
-    }
-}
-
-function updateParticles(dt){
-    const waterHeight = getWaterHeightPx();
-    const iceHeight = getIceHeightPx();
-    let solidCount = Math.round(state.massIce/0.2*PARTICLE_COUNT);
-    solidCount = Math.min(solidCount, PARTICLE_COUNT);
-    let waterCount = Math.round(state.massWater/0.2*PARTICLE_COUNT);
-    for(let i=0;i<PARTICLE_COUNT;i++){
-        const p = particles[i];
-        if(i<solidCount){
-            p.phase='solid';
-            const vibAmp=Math.max(0,Math.min(2,(state.temperature+10)*0.2));
-            p.x=p.baseX+vibAmp*Math.sin(Date.now()/200+p.baseX);
-            p.y=p.baseY+vibAmp*Math.sin(Date.now()/200+p.baseY);
-        }else if(i<solidCount+waterCount){
-            if(p.phase!=='liquid'){
-                p.x=beakerLeft+Math.random()*beakerWidth;
-                p.y=beakerBottom-waterHeight*Math.random();
-                // higher base speed for liquid particles
-                p.vx=60*(Math.random()-0.5);
-                p.vy=60*(Math.random()-0.5);
-            }
-            p.phase='liquid';
-            const tempFactor=Math.max(1,(state.temperature)/50+1);
-            p.x+=p.vx*dt*tempFactor;
-            p.y+=p.vy*dt*tempFactor;
-            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
-            if(p.y>beakerBottom-PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-PARTICLE_RADIUS;}
-            if(p.y<beakerBottom-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-waterHeight+PARTICLE_RADIUS;}
-            const evapChance=0.02*Math.exp(state.temperature/50)*dt;
-            if(p.y<beakerBottom-waterHeight+2*PARTICLE_RADIUS && Math.random()<evapChance){
-                p.phase='gas';
-                // give escaping particles uniform high speed
-                p.vx=GAS_VX*(Math.random()-0.5);
-                p.vy=-GAS_VY*Math.random();
-                state.massWater=Math.max(0,state.massWater-0.2/PARTICLE_COUNT);
-                state.massSteam+=0.2/PARTICLE_COUNT;
-            }
-        }else{
-            if(p.phase!=='gas'){
-                p.x=beakerLeft+Math.random()*beakerWidth;
-                p.y=beakerBottom-waterHeight-iceHeight-Math.random()*100;
-                // initial gas particle speed (uniform)
-                p.vx=GAS_VX*(Math.random()-0.5);
-                p.vy=-GAS_VY*Math.random();
-            }
-            p.phase='gas';
-            p.x+=p.vx*dt;
-            p.y+=p.vy*dt;
-            if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
-            if(p.y<0){p.y=-1000;} // disappear
+        break;
+      case 'liquid':
+        if(state.temperature<100) {
+          const needed=state.massWater*C_WATER*(100-state.temperature);
+          if(state.energy>=needed){state.energy-=needed;state.temperature=100;}
+          else{state.temperature+=state.energy/(state.massWater*C_WATER);state.energy=0;}
+        } else {
+          const dm=Math.min(state.energy/L_VAP,state.massWater);
+          state.massWater-=dm; state.massSteam+=dm; state.energy-=dm*L_VAP;
+          if(state.massWater===0) state.phase='gas';
         }
+        break;
+      case 'gas':
+        state.temperature+=state.energy/(state.massSteam*C_WATER);
+        state.energy=0; break;
     }
-}
-
-function draw(){
+  }
+  function updateParticles(dt) {
+    const waterHeight=getWaterHeightPx(), iceHeight=getIceHeightPx();
+    let solidCount=Math.min(Math.round(state.massIce/0.2*PARTICLE_COUNT),PARTICLE_COUNT);
+    let waterCount=Math.round(state.massWater/0.2*PARTICLE_COUNT);
+    for(let i=0;i<PARTICLE_COUNT;i++) {
+      const p=particles[i];
+      if(i<solidCount) {
+        p.phase='solid';
+        const vibAmp=Math.max(0,Math.min(2,(state.temperature+10)*0.2));
+        p.x=p.baseX+vibAmp*Math.sin(Date.now()/200+p.baseX);
+        p.y=p.baseY+vibAmp*Math.sin(Date.now()/200+p.baseY);
+      } else if(i<solidCount+waterCount) {
+        if(p.phase!=='liquid'){p.x=beakerLeft+Math.random()*beakerWidth;p.y=beakerBottom-waterHeight*Math.random();p.vx=60*(Math.random()-0.5);p.vy=60*(Math.random()-0.5);}
+        p.phase='liquid';
+        const tf=Math.max(1,state.temperature/50+1);
+        p.x+=p.vx*dt*tf; p.y+=p.vy*dt*tf;
+        if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
+        if(p.y>beakerBottom-PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-PARTICLE_RADIUS;}
+        if(p.y<beakerBottom-waterHeight+PARTICLE_RADIUS){p.vy*=-1;p.y=beakerBottom-waterHeight+PARTICLE_RADIUS;}
+        const evapChance=0.02*Math.exp(state.temperature/50)*dt;
+        if(p.y<beakerBottom-waterHeight+2*PARTICLE_RADIUS&&Math.random()<evapChance){p.phase='gas';p.vx=GAS_VX*(Math.random()-0.5);p.vy=-GAS_VY*Math.random();state.massWater=Math.max(0,state.massWater-0.2/PARTICLE_COUNT);state.massSteam+=0.2/PARTICLE_COUNT;}
+      } else {
+        if(p.phase!=='gas'){p.x=beakerLeft+Math.random()*beakerWidth;p.y=beakerBottom-waterHeight-iceHeight-Math.random()*100;p.vx=GAS_VX*(Math.random()-0.5);p.vy=-GAS_VY*Math.random();}
+        p.phase='gas'; p.x+=p.vx*dt; p.y+=p.vy*dt;
+        if(p.x<beakerLeft+PARTICLE_RADIUS||p.x>beakerLeft+beakerWidth-PARTICLE_RADIUS)p.vx*=-1;
+        if(p.y<0)p.y=-1000;
+      }
+    }
+  }
+  function draw() {
+    const c=getColors();
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    // beaker
-    ctx.strokeStyle='#555';
-    ctx.lineWidth=2;
+    ctx.fillStyle=c.canvasBg; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    ctx.strokeStyle=c.beakerStroke; ctx.lineWidth=2;
     ctx.strokeRect(beakerLeft,10,beakerWidth,beakerBottom-10);
 
-    // burner flame arrows
-    const arrowWidth = 5 + state.power/300;
-    const flameHeight = FLAME_HEIGHT - 5;
-    ctx.fillStyle = 'red';
-    for(let i=-1;i<=1;i++){
-        const x = beakerLeft + beakerWidth/2 + i*(arrowWidth+3) - arrowWidth/2;
-        ctx.beginPath();
-        ctx.moveTo(x, beakerBottom + flameHeight);
-        ctx.lineTo(x+arrowWidth/2, beakerBottom);
-        ctx.lineTo(x+arrowWidth, beakerBottom + flameHeight);
-        ctx.closePath();
-        ctx.fill();
+    const arrowWidth=5+state.power/300, flameHeight=FLAME_HEIGHT-5;
+    ctx.fillStyle=c.flame;
+    for(let i=-1;i<=1;i++) {
+      const x=beakerLeft+beakerWidth/2+i*(arrowWidth+3)-arrowWidth/2;
+      ctx.beginPath(); ctx.moveTo(x,beakerBottom+flameHeight);
+      ctx.lineTo(x+arrowWidth/2,beakerBottom); ctx.lineTo(x+arrowWidth,beakerBottom+flameHeight);
+      ctx.closePath(); ctx.fill();
     }
 
-    const waterHeight = getWaterHeightPx();
-    const iceHeight = getIceHeightPx();
+    const waterHeight=getWaterHeightPx(), iceHeight=getIceHeightPx();
+    if(state.massWater>0){ctx.fillStyle=c.water;ctx.fillRect(beakerLeft,beakerBottom-waterHeight,beakerWidth,waterHeight);}
+    if(state.massIce>0){ctx.fillStyle=c.ice;ctx.fillRect(beakerLeft+beakerWidth/6,beakerBottom-waterHeight-iceHeight,beakerWidth*2/3,iceHeight);}
 
-    // water
-    if(state.massWater>0){
-        ctx.fillStyle='rgba(0,150,255,0.3)';
-        ctx.fillRect(beakerLeft,beakerBottom-waterHeight,beakerWidth,waterHeight);
-    }
-    // ice
-    if(state.massIce>0){
-        ctx.fillStyle='#c0c0c0';
-        ctx.fillRect(beakerLeft + beakerWidth/6,beakerBottom-waterHeight-iceHeight,beakerWidth*2/3,iceHeight);
-    }
+    ctx.fillStyle=c.particles;
+    particles.forEach(p=>{if(p.phase!=='gas'||(p.y>-50)){ctx.beginPath();ctx.arc(p.x,p.y,PARTICLE_RADIUS,0,Math.PI*2);ctx.fill();}});
 
-    // particles
-    ctx.fillStyle='#555';
-    particles.forEach(p=>{
-        if(p.phase!=='gas' || (p.y>-50)){
-            ctx.beginPath();
-            ctx.arc(p.x,p.y,PARTICLE_RADIUS,0,Math.PI*2);
-            ctx.fill();
-        }
-    });
-
-    // update graph
     gctx.clearRect(0,0,gCanvas.width,gCanvas.height);
-    gctx.strokeStyle='#e74c3c';
+    gctx.fillStyle=c.graphBg; gctx.fillRect(0,0,gCanvas.width,gCanvas.height);
+    gctx.strokeStyle=c.graphLine;
     gctx.beginPath();
-    const lastX = graphData.length ? graphData[graphData.length-1].time*GRAPH_X_SCALE : 0;
-    if(lastX - graphOffset > gCanvas.width) graphOffset = lastX - gCanvas.width;
-    graphData.forEach((pt,i)=>{
-        const x = pt.time*GRAPH_X_SCALE - graphOffset;
-        const y = gCanvas.height - (pt.temp+20);
-        if(i===0) gctx.moveTo(x,y); else gctx.lineTo(x,y);
-    });
+    const lastX=graphData.length?graphData[graphData.length-1].time*GRAPH_X_SCALE:0;
+    if(lastX-graphOffset>gCanvas.width) graphOffset=lastX-gCanvas.width;
+    graphData.forEach((pt,i)=>{const x=pt.time*GRAPH_X_SCALE-graphOffset;const y=gCanvas.height-(pt.temp+20);if(i===0)gctx.moveTo(x,y);else gctx.lineTo(x,y);});
     gctx.stroke();
-}
-
-function loop(ts){
-    if(!lastTime) lastTime=ts;
-    const dt=(ts-lastTime)/1000*state.speed;
-    lastTime=ts;
+  }
+  function loop(ts) {
+    if(!lastTime)lastTime=ts;
+    const dt=(ts-lastTime)/1000*state.speed; lastTime=ts;
     if(state.running){
-        state.time=(state.time||0)+dt;
-        updatePhysics(dt);
-        updateParticles(dt);
-        if(state.massWater===0 && state.massIce===0){
-            state.running=false;
-            startPauseBtn.textContent='Start';
-        }
-        if(!graphData.length||state.time-graphData[graphData.length-1].time>0.5){
-            graphData.push({time:state.time,temp:state.temperature});
-        }
-        tempDisplay.textContent=`Temperature: ${state.temperature.toFixed(1)} °C`;
+      state.time=(state.time||0)+dt;
+      updatePhysics(dt); updateParticles(dt);
+      if(state.massWater===0&&state.massIce===0){state.running=false;startPauseBtn.textContent='Start';}
+      if(!graphData.length||state.time-graphData[graphData.length-1].time>0.5)graphData.push({time:state.time,temp:state.temperature});
+      tempDisplay.textContent=`Temperature: ${state.temperature.toFixed(1)} °C`;
     }
     draw();
     requestAnimationFrame(loop);
-}
+  }
 
-heatSlider.addEventListener('input',()=>{
-    state.power=+heatSlider.value;
-    heatValue.textContent=`${state.power} W`;
-});
-
-startPauseBtn.addEventListener('click',()=>{
-    state.running=!state.running;
-    startPauseBtn.textContent=state.running?'Pause':'Start';
-});
-resetBtn.addEventListener('click',()=>{
-    resetState();
-    startPauseBtn.textContent='Start';
-});
-
-speedButtons.forEach(btn=>btn.addEventListener('click',()=>{
-    state.speed=+btn.dataset.speed;
-}));
-
-window.addEventListener('resize',resize);
-resize();
-resetState();
-requestAnimationFrame(loop);
+  heatSlider.addEventListener('input',()=>{state.power=+heatSlider.value;heatValue.textContent=`${state.power} W`;});
+  startPauseBtn.addEventListener('click',()=>{state.running=!state.running;startPauseBtn.textContent=state.running?'Pause':'Start';});
+  resetBtn.addEventListener('click',()=>{resetState();startPauseBtn.textContent='Start';});
+  speedButtons.forEach(btn=>btn.addEventListener('click',()=>{state.speed=+btn.dataset.speed;}));
+  window.addEventListener('resize',resize);
+  resize(); resetState(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>

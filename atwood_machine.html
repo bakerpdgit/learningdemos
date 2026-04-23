@@ -4,20 +4,119 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atwood Machine Simulator</title>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag("js", new Date());
+    gtag("config", "G-DYQESQXT38");
+  </script>
+  <!-- Prevent FOUC: apply dark class before render -->
+  <script>
+    (function () {
+      try {
+        var mode = localStorage.getItem("uimode");
+        if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    })();
+  </script>
   <style>
+    :root {
+      --bg: #f1f5f9;
+      --panel: #e2e8f0;
+      --panel-border: #cbd5e1;
+      --text: #1e293b;
+      --label: #334155;
+      --btn-bg: #3b82f6;
+      --btn-hover: #2563eb;
+      --btn-active: #1d4ed8;
+      --val-bg: #ffffff;
+      --val-border: #94a3b8;
+      --sim-btn: #22c55e;
+      --sim-btn-hover: #16a34a;
+      --reset-btn: #f59e0b;
+      --reset-btn-hover: #d97706;
+      --canvas-border: #334155;
+      --header-bg: #0f172a;
+      --header-accent: #38bdf8;
+    }
+    html.dark {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-border: #334155;
+      --text: #f1f5f9;
+      --label: #94a3b8;
+      --btn-bg: #2563eb;
+      --btn-hover: #1d4ed8;
+      --btn-active: #1e40af;
+      --val-bg: #0f172a;
+      --val-border: #475569;
+      --sim-btn: #16a34a;
+      --sim-btn-hover: #15803d;
+      --reset-btn: #d97706;
+      --reset-btn-hover: #b45309;
+      --canvas-border: #475569;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
     body {
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      transition: background-color 0.2s, color 0.2s;
+    }
+    /* CS Learning Header */
+    .cs-header {
+      width: 100%;
+      background-color: var(--header-bg);
+      padding: 0 1.5rem;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .cs-header-brand {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--header-accent);
+      text-decoration: none;
+    }
+    .cs-header-nav { display: flex; align-items: center; gap: 1.25rem; }
+    .cs-header-nav a {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.15s;
+    }
+    .cs-header-nav a:hover { color: #f1f5f9; }
+    #theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    #theme-toggle:hover { color: #f1f5f9; }
+
+    .page-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       padding: 20px;
-      background-color: #f0f0f0;
-      color: #333;
+      width: 100%;
     }
-    h1 {
-      color: #2c3e50;
-    }
+    h1 { color: var(--text); margin-bottom: 16px; }
     .container {
       display: flex;
       gap: 20px;
@@ -25,19 +124,21 @@
       max-width: 1000px;
     }
     #simCanvas {
-      border: 1px solid #2c3e50;
-      background-color: #fff;
+      border: 1px solid var(--canvas-border);
       flex-grow: 1;
+      border-radius: 4px;
     }
     .controls {
       display: flex;
       flex-direction: column;
       gap: 15px;
       padding: 20px;
-      background-color: #ecf0f1;
+      background-color: var(--panel);
+      border: 1px solid var(--panel-border);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
       width: 260px;
+      flex-shrink: 0;
     }
     .control-group {
       display: flex;
@@ -46,7 +147,7 @@
     }
     .control-group label {
       font-weight: bold;
-      color: #34495e;
+      color: var(--label);
     }
     .control-group div {
       display: flex;
@@ -55,99 +156,115 @@
     }
     .control-group button {
       padding: 8px 12px;
-      background-color: #3498db;
+      background-color: var(--btn-bg);
       color: white;
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      transition: background-color 0.3s ease;
+      transition: background-color 0.2s;
     }
-    .control-group button:hover {
-      background-color: #2980b9;
-    }
-    .control-group button:active {
-      background-color: #1f618d;
-    }
+    .control-group button:hover { background-color: var(--btn-hover); }
+    .control-group button:active { background-color: var(--btn-active); }
     .control-group span {
       min-width: 50px;
       text-align: center;
       font-size: 1em;
-      background-color: #fff;
+      background-color: var(--val-bg);
+      color: var(--text);
       padding: 5px 8px;
       border-radius: 4px;
-      border: 1px solid #bdc3c7;
+      border: 1px solid var(--val-border);
     }
     .main-buttons button {
       width: 100%;
       padding: 10px;
       font-size: 1.1em;
     }
-    #simulateButton { background-color: #2ecc71; }
-    #simulateButton:hover { background-color: #27ae60; }
-    #resetButton { background-color: #f39c12; }
-    #resetButton:hover { background-color: #e67e22; }
+    #simulateButton { background-color: var(--sim-btn); }
+    #simulateButton:hover { background-color: var(--sim-btn-hover); }
+    #resetButton { background-color: var(--reset-btn); }
+    #resetButton:hover { background-color: var(--reset-btn-hover); }
   </style>
-
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
 <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
 
-<h1>Atwood Machine Simulator</h1>
-<div class="container">
-  <canvas id="simCanvas"></canvas>
-  <div class="controls">
-    <div class="control-group">
-      <label>Mass A (kg):</label>
-      <div>
-        <button onclick="changeMass('A',-1)">-</button>
-        <span id="massADisplay">5</span>
-        <button onclick="changeMass('A',1)">+</button>
+<header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
+
+<div class="page-content">
+  <h1>Atwood Machine Simulator</h1>
+  <div class="container">
+    <canvas id="simCanvas"></canvas>
+    <div class="controls">
+      <div class="control-group">
+        <label>Mass A (kg):</label>
+        <div>
+          <button onclick="changeMass('A',-1)">-</button>
+          <span id="massADisplay">5</span>
+          <button onclick="changeMass('A',1)">+</button>
+        </div>
       </div>
-    </div>
-    <div class="control-group">
-      <label>Mass B (kg):</label>
-      <div>
-        <button onclick="changeMass('B',-1)">-</button>
-        <span id="massBDisplay">5</span>
-        <button onclick="changeMass('B',1)">+</button>
+      <div class="control-group">
+        <label>Mass B (kg):</label>
+        <div>
+          <button onclick="changeMass('B',-1)">-</button>
+          <span id="massBDisplay">5</span>
+          <button onclick="changeMass('B',1)">+</button>
+        </div>
       </div>
-    </div>
-    <div class="control-group">
-      <label>Friction μ:</label>
-      <div>
-        <button onclick="changeMu(-0.1)">-</button>
-        <span id="muDisplay">0.0</span>
-        <button onclick="changeMu(0.1)">+</button>
+      <div class="control-group">
+        <label>Friction μ:</label>
+        <div>
+          <button onclick="changeMu(-0.1)">-</button>
+          <span id="muDisplay">0.0</span>
+          <button onclick="changeMu(0.1)">+</button>
+        </div>
       </div>
-    </div>
-    <div class="control-group">
-      <label>Table Height (m):</label>
-      <div>
-        <button onclick="changeTable(-0.5)">-</button>
-        <span id="tableDisplay">3.5</span>
-        <button onclick="changeTable(0.5)">+</button>
+      <div class="control-group">
+        <label>Table Height (m):</label>
+        <div>
+          <button onclick="changeTable(-0.5)">-</button>
+          <span id="tableDisplay">3.5</span>
+          <button onclick="changeTable(0.5)">+</button>
+        </div>
       </div>
-    </div>
-    <div class="control-group main-buttons">
-      <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
-      <button id="resetButton" onclick="resetSimulationState()">Reset</button>
+      <div class="control-group main-buttons">
+        <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
+        <button id="resetButton" onclick="resetSimulationState()">Reset</button>
+      </div>
     </div>
   </div>
 </div>
+
 <script>
 const canvas = document.getElementById('simCanvas');
 const ctx = canvas.getContext('2d');
@@ -164,9 +281,9 @@ let tableHeight = 3.5;
 let isPaused = true;
 let animationFrameId = null;
 
-let yA = 2; // meters from pulley center
+let yA = 2;
 let yB = 2;
-let v = 0; // rope velocity (B positive downward)
+let v = 0;
 let totalLength = yA + yB;
 let freezeA = false;
 let freezeB = false;
@@ -190,6 +307,47 @@ const TIME_STEP = 1/60;
 const pulleyY = 60;
 const pulleyRadius = 25;
 
+function getColors() {
+  const dark = document.documentElement.classList.contains('dark');
+  return {
+    bg:      dark ? '#0f172a' : '#f8fafc',
+    pulley:  dark ? '#94a3b8' : '#2c3e50',
+    rope:    dark ? '#64748b' : '#7f8c8d',
+    mass:    dark ? '#38bdf8' : '#3498db',
+    arrow:   dark ? '#f87171' : '#e74c3c',
+    arrowTxt:dark ? '#f1f5f9' : '#333333',
+    table:   dark ? '#a78bfa' : '#8e44ad',
+    pauseCircle: dark ? 'rgba(200,200,200,0.4)' : 'rgba(100,100,100,0.5)',
+    pauseBar:    dark ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.9)',
+  };
+}
+
+function applyTheme(mode) {
+  if (mode === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+  try { localStorage.setItem('uimode', mode); } catch(e) {}
+  document.getElementById('icon-moon').style.display = mode === 'dark' ? 'none' : '';
+  document.getElementById('icon-sun').style.display  = mode === 'dark' ? '' : 'none';
+  draw();
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.classList.contains('dark');
+  applyTheme(isDark ? 'light' : 'dark');
+}
+
+document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+
+// Sync icons on load
+(function() {
+  const isDark = document.documentElement.classList.contains('dark');
+  document.getElementById('icon-moon').style.display = isDark ? 'none' : '';
+  document.getElementById('icon-sun').style.display  = isDark ? '' : 'none';
+})();
+
 function setupCanvas() {
   const containerWidth = canvas.parentElement.offsetWidth - 280;
   const canvasHeight = window.innerHeight - 160;
@@ -198,28 +356,29 @@ function setupCanvas() {
   draw();
 }
 
-function changeMass(which,dir) {
+function changeMass(which, dir) {
   if (!isPaused) return;
-  if (which==='A') {
-    massA = Math.min(MAX_MASS, Math.max(MIN_MASS, massA + dir*MASS_STEP));
+  if (which === 'A') {
+    massA = Math.min(MAX_MASS, Math.max(MIN_MASS, massA + dir * MASS_STEP));
     massADisplay.textContent = massA;
   } else {
-    massB = Math.min(MAX_MASS, Math.max(MIN_MASS, massB + dir*MASS_STEP));
+    massB = Math.min(MAX_MASS, Math.max(MIN_MASS, massB + dir * MASS_STEP));
     massBDisplay.textContent = massB;
   }
   draw();
 }
+
 function changeMu(delta) {
   if (!isPaused) return;
   mu = Math.min(MAX_MU, Math.max(MIN_MU, +(mu + delta).toFixed(1)));
   muDisplay.textContent = mu.toFixed(1);
   draw();
 }
+
 function changeTable(delta) {
   if (!isPaused) return;
   tableHeight = Math.min(MAX_TABLE, Math.max(MIN_TABLE, +(tableHeight + delta).toFixed(1)));
   tableDisplay.textContent = tableHeight.toFixed(1);
-  // ensure masses above table
   yA = Math.min(yA, tableHeight - HALF_BOX_M - 0.01);
   yB = Math.min(yB, tableHeight - HALF_BOX_M - 0.01);
   totalLength = yA + yB;
@@ -257,21 +416,18 @@ function resetSimulationState() {
 function computeAcceleration() {
   const muFactor = Math.exp(mu * Math.PI);
   if (freezeA || freezeB) return 0;
-  // Determine direction
-  if (massB > massA*muFactor) {
-    const a = g*(massB - massA*muFactor)/(massB + massA*muFactor);
-    return a; // B downward positive
-  } else if (massA > massB*muFactor) {
-    const a = g*(massA - massB*muFactor)/(massA + massB*muFactor);
-    return -a; // B upward (negative)
+  if (massB > massA * muFactor) {
+    return g * (massB - massA * muFactor) / (massB + massA * muFactor);
+  } else if (massA > massB * muFactor) {
+    return -g * (massA - massB * muFactor) / (massA + massB * muFactor);
   }
   return 0;
 }
 
 function updatePhysics() {
   if (freezeA) {
-    v += g*TIME_STEP; // B downward
-    yB += v*TIME_STEP;
+    v += g * TIME_STEP;
+    yB += v * TIME_STEP;
     if (justFrozen) {
       justFrozen = false;
     } else if (yA + yB >= slackLength) {
@@ -280,8 +436,8 @@ function updatePhysics() {
     return;
   }
   if (freezeB) {
-    v -= g*TIME_STEP; // A downward => B upward
-    yA += -v*TIME_STEP;
+    v -= g * TIME_STEP;
+    yA += -v * TIME_STEP;
     if (justFrozen) {
       justFrozen = false;
     } else if (yA + yB >= slackLength) {
@@ -290,10 +446,9 @@ function updatePhysics() {
     return;
   }
   const a = computeAcceleration();
-  v += a*TIME_STEP;
-  yB += v*TIME_STEP;
+  v += a * TIME_STEP;
+  yB += v * TIME_STEP;
   yA = totalLength - yB;
-  // check table collision (account for block size)
   if (yA + HALF_BOX_M >= tableHeight) {
     yA = tableHeight - HALF_BOX_M;
     freezeA = true;
@@ -309,9 +464,9 @@ function updatePhysics() {
   }
 }
 
-function drawArrow(x, yStart, length, upward, label) {
-  ctx.strokeStyle = '#e74c3c';
-  ctx.fillStyle = '#e74c3c';
+function drawArrow(x, yStart, length, upward, label, c) {
+  ctx.strokeStyle = c.arrow;
+  ctx.fillStyle = c.arrow;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x, yStart);
@@ -328,29 +483,33 @@ function drawArrow(x, yStart, length, upward, label) {
   }
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#333';
+  ctx.fillStyle = c.arrowTxt;
   ctx.textAlign = 'center';
   ctx.fillText(label + 'N', x, upward ? yStart - length - 12 : yStart + length + 12);
 }
 
 function draw() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  const centerX = canvas.width/2;
-  // draw pulley
-  ctx.strokeStyle = '#2c3e50';
+  const c = getColors();
+  ctx.fillStyle = c.bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const centerX = canvas.width / 2;
+
+  // pulley
+  ctx.strokeStyle = c.pulley;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(centerX, pulleyY, pulleyRadius, 0, Math.PI*2);
+  ctx.arc(centerX, pulleyY, pulleyRadius, 0, Math.PI * 2);
   ctx.stroke();
 
-  // rope positions
   const ax = centerX - 100;
   const bx = centerX + 100;
-  const aY = pulleyY + yA*PIXELS_PER_METER;
-  const bY = pulleyY + yB*PIXELS_PER_METER;
-
+  const aY = pulleyY + yA * PIXELS_PER_METER;
+  const bY = pulleyY + yB * PIXELS_PER_METER;
   const ropeGap = pulleyRadius + 5;
-  ctx.strokeStyle = '#7f8c8d';
+
+  // ropes
+  ctx.strokeStyle = c.rope;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(ax, aY);
@@ -362,62 +521,59 @@ function draw() {
   ctx.lineTo(bx, pulleyY + ropeGap);
   ctx.stroke();
 
-  ctx.fillStyle = '#3498db';
-  ctx.fillRect(ax-BOX_SIZE/2, aY-BOX_SIZE/2, BOX_SIZE, BOX_SIZE);
-  ctx.fillRect(bx-BOX_SIZE/2, bY-BOX_SIZE/2, BOX_SIZE, BOX_SIZE);
+  // masses
+  ctx.fillStyle = c.mass;
+  ctx.fillRect(ax - BOX_SIZE / 2, aY - BOX_SIZE / 2, BOX_SIZE, BOX_SIZE);
+  ctx.fillRect(bx - BOX_SIZE / 2, bY - BOX_SIZE / 2, BOX_SIZE, BOX_SIZE);
 
   const weightA = massA * g;
   const weightB = massB * g;
-  const aArrowLen = weightA*5/50;
-  const bArrowLen = weightB*5/50;
-  drawArrow(ax, aY, aArrowLen, false, weightA.toFixed(1));
-  drawArrow(bx, bY, bArrowLen, false, weightB.toFixed(1));
+  drawArrow(ax, aY, weightA * 5 / 50, false, weightA.toFixed(1), c);
+  drawArrow(bx, bY, weightB * 5 / 50, false, weightB.toFixed(1), c);
 
   if (!freezeA && !freezeB) {
     const a = computeAcceleration();
-    const muFactor = Math.exp(mu*Math.PI);
-    let tensionA,tensionB;
-    if (a>0) {
-      tensionA = massA*(g+a);
-      tensionB = massB*(g-a);
-      tensionB = tensionA*muFactor; // ensure difference
-    } else if (a<0) {
+    const muFactor = Math.exp(mu * Math.PI);
+    let tensionA, tensionB;
+    if (a > 0) {
+      tensionA = massA * (g + a);
+      tensionB = massB * (g - a);
+      tensionB = tensionA * muFactor;
+    } else if (a < 0) {
       const aMag = -a;
-      tensionB = massB*(g+aMag);
-      tensionA = tensionB*muFactor;
+      tensionB = massB * (g + aMag);
+      tensionA = tensionB * muFactor;
     } else {
-      tensionA = massA*g;
-      tensionB = massB*g;
+      tensionA = massA * g;
+      tensionB = massB * g;
     }
-    const tArrowA = tensionA*5/50;
-    const tArrowB = tensionB*5/50;
-    drawArrow(ax, aY, tArrowA, true, tensionA.toFixed(1));
-    drawArrow(bx, bY, tArrowB, true, tensionB.toFixed(1));
-    // pulley arrows
-    drawArrow(centerX-20, pulleyY+pulleyRadius+5, tArrowA, false, tensionA.toFixed(1));
-    drawArrow(centerX+20, pulleyY+pulleyRadius+5, tArrowB, false, tensionB.toFixed(1));
+    drawArrow(ax, aY, tensionA * 5 / 50, true, tensionA.toFixed(1), c);
+    drawArrow(bx, bY, tensionB * 5 / 50, true, tensionB.toFixed(1), c);
+    drawArrow(centerX - 20, pulleyY + pulleyRadius + 5, tensionA * 5 / 50, false, tensionA.toFixed(1), c);
+    drawArrow(centerX + 20, pulleyY + pulleyRadius + 5, tensionB * 5 / 50, false, tensionB.toFixed(1), c);
   }
 
-  // draw table
-  const tableY = pulleyY + tableHeight*PIXELS_PER_METER;
-  ctx.strokeStyle = '#8e44ad';
+  // table line
+  const tableY = pulleyY + tableHeight * PIXELS_PER_METER;
+  ctx.strokeStyle = c.table;
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(40, tableY);
-  ctx.lineTo(canvas.width-40, tableY);
+  ctx.lineTo(canvas.width - 40, tableY);
   ctx.stroke();
-  ctx.fillStyle = '#8e44ad';
-  ctx.fillText('Table', canvas.width-60, tableY-10);
-  ctx.fillText(tableHeight.toFixed(1)+' m', canvas.width-80, tableY+20);
+  ctx.fillStyle = c.table;
+  ctx.textAlign = 'right';
+  ctx.fillText('Table', canvas.width - 40, tableY - 10);
+  ctx.fillText(tableHeight.toFixed(1) + ' m', canvas.width - 40, tableY + 20);
 
   if (isPaused) {
-    ctx.fillStyle = 'rgba(100,100,100,0.5)';
+    ctx.fillStyle = c.pauseCircle;
     ctx.beginPath();
-    ctx.arc(canvas.width/2, canvas.height/3, 25, 0, Math.PI*2);
+    ctx.arc(canvas.width / 2, canvas.height / 3, 25, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillRect(canvas.width/2-10, canvas.height/3-12, 6, 24);
-    ctx.fillRect(canvas.width/2+4, canvas.height/3-12, 6, 24);
+    ctx.fillStyle = c.pauseBar;
+    ctx.fillRect(canvas.width / 2 - 10, canvas.height / 3 - 12, 6, 24);
+    ctx.fillRect(canvas.width / 2 + 4, canvas.height / 3 - 12, 6, 24);
   }
 }
 

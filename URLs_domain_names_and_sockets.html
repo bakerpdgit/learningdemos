@@ -4,744 +4,292 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A-Level CS: URLs & Sockets Interactive</title>
-    <!-- Tailwind CSS -->
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
-    <script
-      src="https://unpkg.com/react@18/umd/react.production.min.js"
-      crossorigin
-    ></script>
-    <script
-      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
-      crossorigin
-    ></script>
-    <!-- Babel for in-browser JSX transpilation -->
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-      body {
-        font-family: "Inter", sans-serif;
-        background-color: #f3f4f6;
-      }
+      body { font-family: "Inter", sans-serif; }
       .glass-panel {
         background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.2);
       }
-      .sim-item {
-        transition: all 0.2s ease-in-out;
+      html.dark .glass-panel {
+        background: rgba(30, 41, 59, 0.97);
+        border: 1px solid rgba(51, 65, 85, 0.5);
       }
-      .sim-item:hover {
-        transform: translateY(-2px);
-        box-shadow:
-          0 4px 6px -1px rgba(0, 0, 0, 0.1),
-          0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      }
-      .terminal-text {
-        font-family: "Courier New", Courier, monospace;
-      }
+      .sim-item { transition: all 0.2s ease-in-out; }
+      .sim-item:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+      .terminal-text { font-family: "Courier New", Courier, monospace; }
+      .custom-checkbox:checked + div { background-color: #3b82f6; border-color: #3b82f6; }
+      .custom-checkbox:checked + div svg { display: block; }
+    </style>
 
-      /* Custom Checkbox styles */
-      .custom-checkbox:checked + div {
-        background-color: #3b82f6;
-        border-color: #3b82f6;
-      }
-      .custom-checkbox:checked + div svg {
-        display: block;
-      }
-    </style>
-    <style id="global-home-link-style">
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
-    </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
     <div id="root"></div>
 
     <script type="text/babel">
       const { useState, useEffect, useMemo, useRef } = React;
 
-      // --- DATA: Subtopics & Questions ---
-      const SUBTOPICS = [
-        "URLs & Domain Names",
-        "Internet Registries",
-        "Sockets & Ports",
-        "Well-known Ports",
-        "Server Protocols & SSH",
-      ];
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+        </svg>
+      );
+
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+      );
+
+      const SUBTOPICS = ["URLs & Domain Names", "Internet Registries", "Sockets & Ports", "Well-known Ports", "Server Protocols & SSH"];
 
       const QUESTION_BANK = [
-        // Subtopic 1: URLs & Domain Names
-        {
-          id: "url_1",
-          subtopic: "URLs & Domain Names",
-          type: "text",
-          text: "What does FQDN stand for?",
-          hint: "F... Q... D... N...",
-          answer: "Fully Qualified Domain Name",
-          explanation:
-            "An FQDN includes both the host name (like 'www') and the domain name, specifying an exact location in the DNS hierarchy.",
-        },
-        {
-          id: "url_2",
-          subtopic: "URLs & Domain Names",
-          type: "mcq",
-          text: "In the URL 'https://www.aqa.org.uk/index.html', which part is the Top-Level Domain (TLD)?",
-          options: ["www", "aqa", "org", "uk"],
-          answer: "uk",
-          explanation:
-            "The TLD is the highest level in the domain name hierarchy, located at the far right of the domain name. 'uk' is the Country Code TLD.",
-        },
-        {
-          id: "url_3",
-          subtopic: "URLs & Domain Names",
-          type: "sim_url",
-          text: "Interactive: URL Anatomy",
-        },
-
-        // Subtopic 2: Internet Registries
-        {
-          id: "reg_1",
-          subtopic: "Internet Registries",
-          type: "text",
-          text: "Which organisations are responsible for allocating domain names and IP addresses to ensure they are globally unique?",
-          hint: "I... R...",
-          answer: "Internet Registries",
-          explanation:
-            "Internet Registries (like the regional internet registries - RIRs) provide the service of allocating IP addresses and domain names, keeping a record of them to ensure there are no duplicates globally.",
-        },
-        {
-          id: "reg_2",
-          subtopic: "Internet Registries",
-          type: "mcq",
-          text: "Why are Internet Registries needed?",
-          options: [
-            "To render web pages securely",
-            "To ensure domain names and IP addresses are unique and resolve correctly",
-            "To encrypt traffic between clients and servers",
-            "To assign well-known port numbers to protocols",
-          ],
-          answer:
-            "To ensure domain names and IP addresses are unique and resolve correctly",
-          explanation:
-            "Without a central registry system, two servers might claim the same IP or domain name, causing routing and resolution failures on the Internet.",
-        },
-        {
-          id: "reg_3",
-          subtopic: "Internet Registries",
-          type: "mcq",
-          text: "What specific information is stored by an Internet Registry?",
-          options: [
-            "The HTML, CSS and image files for all registered websites.",
-            "Records of allocated domain names, their associated IP addresses, and registrant details.",
-            "The routing tables used by core Internet routers to direct packets.",
-            "Encryption keys for all secure HTTPS connections globally.",
-          ],
-          answer:
-            "Records of allocated domain names, their associated IP addresses, and registrant details.",
-          explanation:
-            "Registries maintain databases mapping domain names to IP addresses and keep track of who registered them to prevent conflicts. They do not store the website content itself.",
-        },
-
-        // Subtopic 3: Sockets & Ports
-        {
-          id: "sock_1",
-          subtopic: "Sockets & Ports",
-          type: "mcq",
-          text: "In the TCP/IP stack, what creates a 'Socket'?",
-          options: [
-            "An IP address combined with a MAC address",
-            "A Protocol combined with a Port number",
-            "An IP address combined with a Port number",
-            "A Domain name combined with an IP address",
-          ],
-          answer: "An IP address combined with a Port number",
-          explanation:
-            "A socket is an endpoint of a two-way communication link between two programs running on the network. It consists of an IP address and a port number.",
-        },
-        {
-          id: "sock_2",
-          subtopic: "Sockets & Ports",
-          type: "text",
-          text: "Client ports (also known as ephemeral ports) are temporarily assigned by the client OS. What is the alternative to a client port, typically used by servers and in the range 0-1023?",
-          hint: "W...-K... P...",
-          answer: "Well-Known Port",
-          explanation:
-            "Well-known ports (0-1023) are permanently assigned to standard server protocols (like 80 for HTTP) so clients always know how to connect.",
-        },
-        {
-          id: "sock_3",
-          subtopic: "Sockets & Ports",
-          type: "sim_socket",
-          text: "Interactive: Form a Connection Socket",
-        },
-
-        // Subtopic 4: Well-known Ports
-        {
-          id: "port_1",
-          subtopic: "Well-known Ports",
-          type: "sim_port_match",
-          text: "Interactive: Match the Well-known Port Numbers",
-        },
-        {
-          id: "port_2",
-          subtopic: "Well-known Ports",
-          type: "text",
-          text: "What port number is used by HTTPS?",
-          hint: "4...",
-          answer: "443",
-          explanation:
-            "HTTPS uses port 443 by default to securely transfer hyper-text data.",
-        },
-        {
-          id: "port_3",
-          subtopic: "Well-known Ports",
-          type: "mcq",
-          text: "Which of the following ports is used by SMTP for sending email?",
-          options: ["25", "110", "143", "22"],
-          answer: "25",
-          explanation:
-            "SMTP (Simple Mail Transfer Protocol) uses port 25. POP3 uses 110, IMAP uses 143, and SSH uses 22.",
-        },
-
-        // Subtopic 5: Server Protocols & SSH
-        {
-          id: "proto_1",
-          subtopic: "Server Protocols & SSH",
-          type: "text",
-          text: "Which protocol is used to log in securely to a remote computer and execute commands?",
-          hint: "S...",
-          answer: "SSH",
-          explanation:
-            "Secure Shell (SSH) is a cryptographic network protocol for operating network services securely over an unsecured network, heavily used for remote management.",
-        },
-        {
-          id: "proto_web_1",
-          subtopic: "Server Protocols & SSH",
-          type: "mcq",
-          text: "According to the AQA specification, what is the role of a web server?",
-          options: [
-            "To retrieve web pages and render them on a screen.",
-            "To execute database queries and return encrypted tables.",
-            "To serve up web pages in text form and deliver associated resources to clients.",
-            "To allocate IP addresses to new clients joining the network.",
-          ],
-          answer:
-            "To serve up web pages in text form and deliver associated resources to clients.",
-          explanation:
-            "A web server listens for HTTP/HTTPS requests and serves the requested web page (usually text like HTML) and associated resources back to the client browser.",
-        },
-        {
-          id: "proto_mail_1",
-          subtopic: "Server Protocols & SSH",
-          type: "text",
-          text: "What type of server has the role of both receiving incoming email from other servers (using SMTP) and allowing clients to retrieve their email (using POP3/IMAP)?",
-          hint: "E... S...",
-          answer: "Email Server",
-          explanation:
-            "An email server receives outgoing mail to send across the internet, receives incoming mail from the internet, and stores it until the client retrieves it.",
-        },
-        {
-          id: "proto_ftp_1",
-          subtopic: "Server Protocols & SSH",
-          type: "mcq",
-          text: "When configuring an FTP server, why might an administrator enable 'anonymous' access?",
-          options: [
-            "To ensure that all file transfers are heavily encrypted.",
-            "To allow users to log in securely using SSH.",
-            "To allow public users to download files without needing a specific account or password.",
-            "To hide the IP address of the server from the clients.",
-          ],
-          answer:
-            "To allow public users to download files without needing a specific account or password.",
-          explanation:
-            "Anonymous FTP is typically used for public software repositories or document archives where anyone can download files without formal authentication.",
-        },
-        {
-          id: "proto_2",
-          subtopic: "Server Protocols & SSH",
-          type: "mcq",
-          text: "Regarding FTP, which of the following is true?",
-          options: [
-            "It only allows anonymous access.",
-            "It relies on port 80 to transfer files.",
-            "It can be used with both anonymous access and non-anonymous (authenticated) access.",
-            "It encrypts files automatically during transfer.",
-          ],
-          answer:
-            "It can be used with both anonymous access and non-anonymous (authenticated) access.",
-          explanation:
-            "FTP servers can be configured to allow anyone to download files (anonymous) or require a username and password (non-anonymous).",
-        },
-        {
-          id: "proto_3",
-          subtopic: "Server Protocols & SSH",
-          type: "mcq",
-          text: "What is the role of a web browser?",
-          options: [
-            "To serve web pages in text form.",
-            "To assign IP addresses to domain names.",
-            "To retrieve web pages and resources and render them accordingly.",
-            "To establish a secure shell connection to manage servers.",
-          ],
-          answer:
-            "To retrieve web pages and resources and render them accordingly.",
-          explanation:
-            "A web browser acts as a client to send HTTP requests, retrieve the text/HTML/resources, and render (draw) them on the screen.",
-        },
-        {
-          id: "proto_4",
-          subtopic: "Server Protocols & SSH",
-          type: "sim_ssh",
-          text: "Interactive: Remote Server Management via SSH",
-        },
+        { id: "url_1", subtopic: "URLs & Domain Names", type: "text", text: "What does FQDN stand for?", hint: "F... Q... D... N...", answer: "Fully Qualified Domain Name", explanation: "An FQDN includes both the host name (like 'www') and the domain name, specifying an exact location in the DNS hierarchy." },
+        { id: "url_2", subtopic: "URLs & Domain Names", type: "mcq", text: "In the URL 'https://www.aqa.org.uk/index.html', which part is the Top-Level Domain (TLD)?", options: ["www", "aqa", "org", "uk"], answer: "uk", explanation: "The TLD is the highest level in the domain name hierarchy, located at the far right of the domain name. 'uk' is the Country Code TLD." },
+        { id: "url_3", subtopic: "URLs & Domain Names", type: "sim_url", text: "Interactive: URL Anatomy" },
+        { id: "reg_1", subtopic: "Internet Registries", type: "text", text: "Which organisations are responsible for allocating domain names and IP addresses to ensure they are globally unique?", hint: "I... R...", answer: "Internet Registries", explanation: "Internet Registries (like the regional internet registries - RIRs) provide the service of allocating IP addresses and domain names, keeping a record of them to ensure there are no duplicates globally." },
+        { id: "reg_2", subtopic: "Internet Registries", type: "mcq", text: "Why are Internet Registries needed?", options: ["To render web pages securely", "To ensure domain names and IP addresses are unique and resolve correctly", "To encrypt traffic between clients and servers", "To assign well-known port numbers to protocols"], answer: "To ensure domain names and IP addresses are unique and resolve correctly", explanation: "Without a central registry system, two servers might claim the same IP or domain name, causing routing and resolution failures on the Internet." },
+        { id: "reg_3", subtopic: "Internet Registries", type: "mcq", text: "What specific information is stored by an Internet Registry?", options: ["The HTML, CSS and image files for all registered websites.", "Records of allocated domain names, their associated IP addresses, and registrant details.", "The routing tables used by core Internet routers to direct packets.", "Encryption keys for all secure HTTPS connections globally."], answer: "Records of allocated domain names, their associated IP addresses, and registrant details.", explanation: "Registries maintain databases mapping domain names to IP addresses and keep track of who registered them to prevent conflicts." },
+        { id: "sock_1", subtopic: "Sockets & Ports", type: "mcq", text: "In the TCP/IP stack, what creates a 'Socket'?", options: ["An IP address combined with a MAC address", "A Protocol combined with a Port number", "An IP address combined with a Port number", "A Domain name combined with an IP address"], answer: "An IP address combined with a Port number", explanation: "A socket is an endpoint of a two-way communication link between two programs running on the network. It consists of an IP address and a port number." },
+        { id: "sock_2", subtopic: "Sockets & Ports", type: "text", text: "Client ports (also known as ephemeral ports) are temporarily assigned by the client OS. What is the alternative to a client port, typically used by servers and in the range 0-1023?", hint: "W...-K... P...", answer: "Well-Known Port", explanation: "Well-known ports (0-1023) are permanently assigned to standard server protocols (like 80 for HTTP) so clients always know how to connect." },
+        { id: "sock_3", subtopic: "Sockets & Ports", type: "sim_socket", text: "Interactive: Form a Connection Socket" },
+        { id: "port_1", subtopic: "Well-known Ports", type: "sim_port_match", text: "Interactive: Match the Well-known Port Numbers" },
+        { id: "port_2", subtopic: "Well-known Ports", type: "text", text: "What port number is used by HTTPS?", hint: "4...", answer: "443", explanation: "HTTPS uses port 443 by default to securely transfer hyper-text data." },
+        { id: "port_3", subtopic: "Well-known Ports", type: "mcq", text: "Which of the following ports is used by SMTP for sending email?", options: ["25", "110", "143", "22"], answer: "25", explanation: "SMTP (Simple Mail Transfer Protocol) uses port 25. POP3 uses 110, IMAP uses 143, and SSH uses 22." },
+        { id: "proto_1", subtopic: "Server Protocols & SSH", type: "text", text: "Which protocol is used to log in securely to a remote computer and execute commands?", hint: "S...", answer: "SSH", explanation: "Secure Shell (SSH) is a cryptographic network protocol for operating network services securely over an unsecured network, heavily used for remote management." },
+        { id: "proto_web_1", subtopic: "Server Protocols & SSH", type: "mcq", text: "According to the AQA specification, what is the role of a web server?", options: ["To retrieve web pages and render them on a screen.", "To execute database queries and return encrypted tables.", "To serve up web pages in text form and deliver associated resources to clients.", "To allocate IP addresses to new clients joining the network."], answer: "To serve up web pages in text form and deliver associated resources to clients.", explanation: "A web server listens for HTTP/HTTPS requests and serves the requested web page (usually text like HTML) and associated resources back to the client browser." },
+        { id: "proto_mail_1", subtopic: "Server Protocols & SSH", type: "text", text: "What type of server has the role of both receiving incoming email from other servers (using SMTP) and allowing clients to retrieve their email (using POP3/IMAP)?", hint: "E... S...", answer: "Email Server", explanation: "An email server receives outgoing mail to send across the internet, receives incoming mail from the internet, and stores it until the client retrieves it." },
+        { id: "proto_ftp_1", subtopic: "Server Protocols & SSH", type: "mcq", text: "When configuring an FTP server, why might an administrator enable 'anonymous' access?", options: ["To ensure that all file transfers are heavily encrypted.", "To allow users to log in securely using SSH.", "To allow public users to download files without needing a specific account or password.", "To hide the IP address of the server from the clients."], answer: "To allow public users to download files without needing a specific account or password.", explanation: "Anonymous FTP is typically used for public software repositories or document archives where anyone can download files without formal authentication." },
+        { id: "proto_2", subtopic: "Server Protocols & SSH", type: "mcq", text: "Regarding FTP, which of the following is true?", options: ["It only allows anonymous access.", "It relies on port 80 to transfer files.", "It can be used with both anonymous access and non-anonymous (authenticated) access.", "It encrypts files automatically during transfer."], answer: "It can be used with both anonymous access and non-anonymous (authenticated) access.", explanation: "FTP servers can be configured to allow anyone to download files (anonymous) or require a username and password (non-anonymous)." },
+        { id: "proto_3", subtopic: "Server Protocols & SSH", type: "mcq", text: "What is the role of a web browser?", options: ["To serve web pages in text form.", "To assign IP addresses to domain names.", "To retrieve web pages and resources and render them accordingly.", "To establish a secure shell connection to manage servers."], answer: "To retrieve web pages and resources and render them accordingly.", explanation: "A web browser acts as a client to send HTTP requests, retrieve the text/HTML/resources, and render (draw) them on the screen." },
+        { id: "proto_4", subtopic: "Server Protocols & SSH", type: "sim_ssh", text: "Interactive: Remote Server Management via SSH" },
       ];
 
-      // --- HELPER COMPONENTS ---
-
       const CheckIcon = () => (
-        <svg
-          className="w-5 h-5 text-green-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M5 13l4 4L19 7"
-          ></path>
+        <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
         </svg>
       );
 
       const CrossIcon = () => (
-        <svg
-          className="w-5 h-5 text-red-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M6 18L18 6M6 6l12 12"
-          ></path>
+        <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
         </svg>
       );
 
-      // String matching for text input that ignores case, whitespace, and leading hint letters
       const checkTextAnswer = (userInput, correctAnswer) => {
         const clean = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, "");
         const cInput = clean(userInput);
         const cAns = clean(correctAnswer);
-        // Allow exact match
         if (cInput === cAns) return true;
-
-        // Allow match if user included hint letter. e.g. "Fully Qualified" and hint was "F". User might type "FFully"
-        if (cAns.startsWith(cInput) && cInput.length > cAns.length - 3)
-          return true; // Loose catch
-
+        if (cAns.startsWith(cInput) && cInput.length > cAns.length - 3) return true;
         return false;
       };
 
-      // --- SIMULATION COMPONENTS ---
-
-      // Sim: URL Builder
       const SimURL = ({ onComplete }) => {
         const [step, setStep] = useState(0);
         const [feedback, setFeedback] = useState("");
-
         const urlParts = [
-          {
-            id: "proto",
-            text: "https",
-            type: "Protocol/Scheme",
-            desc: "The method used to access the resource.",
-          },
+          { id: "proto", text: "https", type: "Protocol/Scheme", desc: "The method used to access the resource." },
           { id: "sep", text: "://", type: "Separator", desc: "" },
-          {
-            id: "host",
-            text: "www",
-            type: "Host Name",
-            desc: "Identifies a specific machine/server.",
-          },
+          { id: "host", text: "www", type: "Host Name", desc: "Identifies a specific machine/server." },
           { id: "dot1", text: ".", type: "Dot", desc: "" },
-          {
-            id: "3ld",
-            text: "bbc",
-            type: "3rd Level Domain",
-            desc: "Specific organisation name.",
-          },
+          { id: "3ld", text: "bbc", type: "3rd Level Domain", desc: "Specific organisation name." },
           { id: "dot2", text: ".", type: "Dot", desc: "" },
-          {
-            id: "2ld",
-            text: "co",
-            type: "2nd Level Domain (2LD)",
-            desc: "Indicates company/commercial.",
-          },
+          { id: "2ld", text: "co", type: "2nd Level Domain (2LD)", desc: "Indicates company/commercial." },
           { id: "dot3", text: ".", type: "Dot", desc: "" },
-          {
-            id: "tld",
-            text: "uk",
-            type: "Top Level Domain (TLD)",
-            desc: "Highest level in hierarchy.",
-          },
-          {
-            id: "path",
-            text: "/news",
-            type: "Path",
-            desc: "Directory/file location.",
-          },
+          { id: "tld", text: "uk", type: "Top Level Domain (TLD)", desc: "Highest level in hierarchy." },
+          { id: "path", text: "/news", type: "Path", desc: "Directory/file location." },
         ];
-
         const steps = [
-          {
-            target: "proto",
-            instruction: "Click the part of the URL representing the Protocol.",
-          },
+          { target: "proto", instruction: "Click the part of the URL representing the Protocol." },
           { target: "tld", instruction: "Click the Top-Level Domain (TLD)." },
-          {
-            target: "2ld",
-            instruction: "Click the Second-Level Domain (2LD).",
-          },
+          { target: "2ld", instruction: "Click the Second-Level Domain (2LD)." },
           { target: "host", instruction: "Click the Host Name." },
         ];
-
         const handlePartClick = (part) => {
           if (step >= steps.length) return;
-
           if (part.id === steps[step].target) {
             setFeedback(`Correct! ${part.text} is the ${part.type}.`);
             if (step === steps.length - 1) {
-              setTimeout(() => {
-                setFeedback(
-                  "Simulation Complete! You understand URL components.",
-                );
-                onComplete();
-              }, 1500);
+              setTimeout(() => { setFeedback("Simulation Complete! You understand URL components."); onComplete(); }, 1500);
             }
             setStep((s) => s + 1);
           } else {
             if (part.id.startsWith("dot") || part.id === "sep") return;
-            setFeedback(
-              `Incorrect. You clicked '${part.text}' which is the ${part.type}. Try again.`,
-            );
+            setFeedback(`Incorrect. You clicked '${part.text}' which is the ${part.type}. Try again.`);
           }
         };
-
         return (
           <div className="flex flex-col items-center space-y-6 w-full">
-            <p className="text-lg font-semibold text-gray-800 text-center">
+            <p className="text-lg font-semibold text-gray-800 dark:text-slate-200 text-center">
               {step < steps.length ? steps[step].instruction : "Well done!"}
             </p>
-            <div className="flex flex-wrap text-2xl font-mono bg-gray-100 p-4 rounded-lg border-2 border-gray-300">
+            <div className="flex flex-wrap text-2xl font-mono bg-gray-100 dark:bg-slate-700 p-4 rounded-lg border-2 border-gray-300 dark:border-slate-600">
               {urlParts.map((p, i) => (
-                <span
-                  key={i}
-                  onClick={() => handlePartClick(p)}
-                  className={`cursor-pointer ${p.id.startsWith("dot") || p.id === "sep" ? "text-gray-500 cursor-default" : "text-blue-700 hover:bg-blue-200"} rounded px-1 transition-colors`}
-                >
+                <span key={i} onClick={() => handlePartClick(p)} className={`cursor-pointer ${p.id.startsWith("dot") || p.id === "sep" ? "text-gray-500 dark:text-slate-400 cursor-default" : "text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/40"} rounded px-1 transition-colors`}>
                   {p.text}
                 </span>
               ))}
             </div>
-            <div className="h-8 text-md font-medium text-blue-600">
-              {feedback}
-            </div>
-
+            <div className="h-8 text-md font-medium text-blue-600 dark:text-blue-400">{feedback}</div>
             {step === steps.length && (
-              <div className="mt-4 p-4 bg-green-50 rounded text-sm text-green-800 border border-green-200">
-                <strong>Note:</strong> The combination of the Host Name and the
-                Domain Name (e.g., <code>www.bbc.co.uk</code>) forms the{" "}
-                <strong>Fully Qualified Domain Name (FQDN)</strong>.
+              <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded text-sm text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800">
+                <strong>Note:</strong> The combination of the Host Name and the Domain Name (e.g., <code>www.bbc.co.uk</code>) forms the <strong>Fully Qualified Domain Name (FQDN)</strong>.
               </div>
             )}
           </div>
         );
       };
 
-      // Sim: Socket Builder
       const SimSocket = ({ onComplete }) => {
         const [step, setStep] = useState(0);
         const [serverIP, setServerIP] = useState("");
         const [serverPort, setServerPort] = useState("");
-        const [clientIP, setClientIP] = useState("192.168.1.10");
+        const [clientIP] = useState("192.168.1.10");
         const [clientPort, setClientPort] = useState("");
         const [clientSocket, setClientSocket] = useState("");
         const [feedback, setFeedback] = useState("");
-
         const handleCheckStep0 = () => {
-          if (serverIP === "8.8.8.8" && serverPort === "80") {
-            setFeedback(
-              "Correct! The server socket is 8.8.8.8:80. Now create the client socket.",
-            );
-            setStep(1);
-          } else {
-            setFeedback(
-              "Incorrect. Remember the target IP is 8.8.8.8 and HTTP uses port 80.",
-            );
-          }
+          if (serverIP === "8.8.8.8" && serverPort === "80") { setFeedback("Correct! The server socket is 8.8.8.8:80. Now create the client socket."); setStep(1); }
+          else setFeedback("Incorrect. Remember the target IP is 8.8.8.8 and HTTP uses port 80.");
         };
-
         const handleCheckStep1 = () => {
-          if (clientPort >= 1024 && clientPort <= 65535) {
-            setFeedback(
-              "Good! Client ports (ephemeral ports) are in the upper range. Now combine them.",
-            );
-            setStep(2);
-          } else {
-            setFeedback(
-              "Client ports must be outside the well-known range (e.g., choose a number > 1023).",
-            );
-          }
+          if (clientPort >= 1024 && clientPort <= 65535) { setFeedback("Good! Client ports (ephemeral ports) are in the upper range. Now combine them."); setStep(2); }
+          else setFeedback("Client ports must be outside the well-known range (e.g., choose a number > 1023).");
         };
-
         const handleCheckStep2 = () => {
-          if (clientSocket === `${clientIP}:${clientPort}`) {
-            setFeedback("Perfect! You formed the socket correctly.");
-            setTimeout(onComplete, 1500);
-          } else {
-            setFeedback(
-              `Incorrect. It should be IP:Port (e.g. ${clientIP}:${clientPort})`,
-            );
-          }
+          if (clientSocket === `${clientIP}:${clientPort}`) { setFeedback("Perfect! You formed the socket correctly."); setTimeout(onComplete, 1500); }
+          else setFeedback(`Incorrect. It should be IP:Port (e.g. ${clientIP}:${clientPort})`);
         };
-
+        const inputClass = "border dark:border-slate-600 p-2 rounded focus:outline-blue-500 bg-white dark:bg-slate-700 dark:text-slate-100 disabled:opacity-60";
         return (
           <div className="flex flex-col space-y-4">
-            <p className="text-gray-700 font-medium">
-              A Socket is an endpoint of a connection, combining an IP address
-              and a Port.
-            </p>
-
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 relative overflow-hidden">
-              {/* Step 0: Server Socket */}
-              <div
-                className={`transition-opacity duration-500 ${step >= 0 ? "opacity-100" : "opacity-0 hidden"}`}
-              >
-                <p className="mb-2">
-                  <strong>1. Server Side:</strong> A web server has IP{" "}
-                  <code>8.8.8.8</code>. It is listening for standard HTTP
-                  requests. Enter its IP and well-known port.
-                </p>
+            <p className="text-gray-700 dark:text-slate-300 font-medium">A Socket is an endpoint of a connection, combining an IP address and a Port.</p>
+            <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg border border-gray-200 dark:border-slate-600">
+              <div className={`transition-opacity duration-500 ${step >= 0 ? "opacity-100" : "opacity-0 hidden"}`}>
+                <p className="mb-2 text-gray-800 dark:text-slate-200"><strong>1. Server Side:</strong> A web server has IP <code>8.8.8.8</code>. It is listening for standard HTTP requests. Enter its IP and well-known port.</p>
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    placeholder="IP Address"
-                    value={serverIP}
-                    onChange={(e) => setServerIP(e.target.value)}
-                    disabled={step > 0}
-                    className="border p-2 rounded w-32 focus:outline-blue-500"
-                  />
-                  <span>:</span>
-                  <input
-                    type="text"
-                    placeholder="Port"
-                    value={serverPort}
-                    onChange={(e) => setServerPort(e.target.value)}
-                    disabled={step > 0}
-                    className="border p-2 rounded w-20 focus:outline-blue-500"
-                  />
-                  {step === 0 && (
-                    <button
-                      onClick={handleCheckStep0}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                    >
-                      Check
-                    </button>
-                  )}
+                  <input type="text" placeholder="IP Address" value={serverIP} onChange={(e) => setServerIP(e.target.value)} disabled={step > 0} className={`${inputClass} w-32`} />
+                  <span className="text-gray-700 dark:text-slate-300">:</span>
+                  <input type="text" placeholder="Port" value={serverPort} onChange={(e) => setServerPort(e.target.value)} disabled={step > 0} className={`${inputClass} w-20`} />
+                  {step === 0 && <button onClick={handleCheckStep0} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Check</button>}
                 </div>
               </div>
-
-              {/* Step 1: Client Port */}
-              <div
-                className={`mt-6 transition-opacity duration-500 ${step >= 1 ? "opacity-100" : "opacity-0 hidden"}`}
-              >
-                <p className="mb-2">
-                  <strong>2. Client Side:</strong> The client OS (IP{" "}
-                  <code>{clientIP}</code>) needs a temporary{" "}
-                  <em>Client Port</em>. Assign a valid port number.
-                </p>
+              <div className={`mt-6 transition-opacity duration-500 ${step >= 1 ? "opacity-100" : "opacity-0 hidden"}`}>
+                <p className="mb-2 text-gray-800 dark:text-slate-200"><strong>2. Client Side:</strong> The client OS (IP <code>{clientIP}</code>) needs a temporary <em>Client Port</em>. Assign a valid port number.</p>
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="number"
-                    placeholder="e.g. 50000"
-                    value={clientPort}
-                    onChange={(e) => setClientPort(e.target.value)}
-                    disabled={step > 1}
-                    className="border p-2 rounded w-32 focus:outline-blue-500"
-                  />
-                  {step === 1 && (
-                    <button
-                      onClick={handleCheckStep1}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                    >
-                      Assign Port
-                    </button>
-                  )}
+                  <input type="number" placeholder="e.g. 50000" value={clientPort} onChange={(e) => setClientPort(e.target.value)} disabled={step > 1} className={`${inputClass} w-32`} />
+                  {step === 1 && <button onClick={handleCheckStep1} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Assign Port</button>}
                 </div>
               </div>
-
-              {/* Step 2: Client Socket String */}
-              <div
-                className={`mt-6 transition-opacity duration-500 ${step >= 2 ? "opacity-100" : "opacity-0 hidden"}`}
-              >
-                <p className="mb-2">
-                  <strong>3. Final Socket:</strong> Type the full client socket
-                  string exactly as it would be formatted.
-                </p>
+              <div className={`mt-6 transition-opacity duration-500 ${step >= 2 ? "opacity-100" : "opacity-0 hidden"}`}>
+                <p className="mb-2 text-gray-800 dark:text-slate-200"><strong>3. Final Socket:</strong> Type the full client socket string exactly as it would be formatted.</p>
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    placeholder="IP:Port"
-                    value={clientSocket}
-                    onChange={(e) => setClientSocket(e.target.value)}
-                    disabled={step > 2}
-                    className="border p-2 rounded w-48 font-mono focus:outline-blue-500"
-                  />
-                  {step === 2 && (
-                    <button
-                      onClick={handleCheckStep2}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                    >
-                      Connect
-                    </button>
-                  )}
+                  <input type="text" placeholder="IP:Port" value={clientSocket} onChange={(e) => setClientSocket(e.target.value)} disabled={step > 2} className={`${inputClass} w-48 font-mono`} />
+                  {step === 2 && <button onClick={handleCheckStep2} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Connect</button>}
                 </div>
               </div>
             </div>
-            <div className="h-6 text-sm font-semibold text-blue-700">
-              {feedback}
-            </div>
+            <div className="h-6 text-sm font-semibold text-blue-700 dark:text-blue-400">{feedback}</div>
           </div>
         );
       };
 
-      // Sim: Port Matching
       const SimPortMatch = ({ onComplete }) => {
         const pairs = [
-          { proto: "FTP", port: "20/21" },
-          { proto: "SSH", port: "22" },
-          { proto: "SMTP", port: "25" },
-          { proto: "HTTP", port: "80" },
-          { proto: "POP3", port: "110" },
-          { proto: "HTTPS", port: "443" },
+          { proto: "FTP", port: "20/21" }, { proto: "SSH", port: "22" }, { proto: "SMTP", port: "25" },
+          { proto: "HTTP", port: "80" }, { proto: "POP3", port: "110" }, { proto: "HTTPS", port: "443" },
         ];
-
         const [matched, setMatched] = useState([]);
         const [selectedProto, setSelectedProto] = useState(null);
         const [selectedPort, setSelectedPort] = useState(null);
-        const [feedback, setFeedback] = useState(
-          "Click a protocol, then click its matching port.",
-        );
-
-        // Shuffle display arrays
+        const [feedback, setFeedback] = useState("Click a protocol, then click its matching port.");
         const [protos] = useState([...pairs].sort(() => 0.5 - Math.random()));
         const [ports] = useState([...pairs].sort(() => 0.5 - Math.random()));
-
         const handleProtoClick = (p) => {
           if (matched.includes(p.proto)) return;
           setSelectedProto(p.proto);
           if (selectedPort) checkMatch(p.proto, selectedPort);
         };
-
         const handlePortClick = (p) => {
-          if (matched.includes(p.port)) return; // using port as id is fine here as they are unique
+          if (matched.includes(p.port)) return;
           setSelectedPort(p.port);
           if (selectedProto) checkMatch(selectedProto, p.port);
         };
-
         const checkMatch = (proto, port) => {
           const correctPair = pairs.find((x) => x.proto === proto);
           if (correctPair && correctPair.port === port) {
             setMatched((prev) => [...prev, proto, port]);
             setFeedback(`Correct! ${proto} uses port ${port}.`);
-            setSelectedProto(null);
-            setSelectedPort(null);
-
-            if (matched.length + 2 === pairs.length * 2) {
-              setFeedback("All matched correctly! Well done.");
-              setTimeout(onComplete, 1500);
-            }
+            setSelectedProto(null); setSelectedPort(null);
+            if (matched.length + 2 === pairs.length * 2) { setFeedback("All matched correctly! Well done."); setTimeout(onComplete, 1500); }
           } else {
             setFeedback("Incorrect match. Try again.");
-            setTimeout(() => {
-              setSelectedProto(null);
-              setSelectedPort(null);
-            }, 800);
+            setTimeout(() => { setSelectedProto(null); setSelectedPort(null); }, 800);
           }
         };
-
+        const btnBase = "w-24 py-2 rounded font-bold shadow transition-all";
         return (
           <div className="flex flex-col items-center">
-            <p className="mb-4 text-gray-700">{feedback}</p>
+            <p className="mb-4 text-gray-700 dark:text-slate-300">{feedback}</p>
             <div className="flex space-x-12 w-full justify-center">
-              {/* Protocols */}
               <div className="flex flex-col space-y-2">
-                <h3 className="font-bold text-center text-gray-600 mb-2">
-                  Protocol
-                </h3>
+                <h3 className="font-bold text-center text-gray-600 dark:text-slate-400 mb-2">Protocol</h3>
                 {protos.map((p, i) => {
                   const isMatched = matched.includes(p.proto);
                   const isSelected = selectedProto === p.proto;
                   return (
-                    <button
-                      key={i}
-                      onClick={() => handleProtoClick(p)}
-                      disabled={isMatched}
-                      className={`w-24 py-2 rounded font-bold shadow transition-all
-                                            ${
-                                              isMatched
-                                                ? "bg-green-100 text-green-800 opacity-50 cursor-not-allowed"
-                                                : isSelected
-                                                  ? "bg-blue-500 text-white transform scale-105"
-                                                  : "bg-white hover:bg-gray-100 border border-gray-300"
-                                            }
-                                        `}
-                    >
+                    <button key={i} onClick={() => handleProtoClick(p)} disabled={isMatched} className={`${btnBase} ${isMatched ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 opacity-50 cursor-not-allowed" : isSelected ? "bg-blue-500 text-white transform scale-105" : "bg-white dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 border border-gray-300 dark:border-slate-600 dark:text-slate-200"}`}>
                       {p.proto}
                     </button>
                   );
                 })}
               </div>
-              {/* Ports */}
               <div className="flex flex-col space-y-2">
-                <h3 className="font-bold text-center text-gray-600 mb-2">
-                  Port Number
-                </h3>
+                <h3 className="font-bold text-center text-gray-600 dark:text-slate-400 mb-2">Port Number</h3>
                 {ports.map((p, i) => {
                   const isMatched = matched.includes(p.port);
                   const isSelected = selectedPort === p.port;
                   return (
-                    <button
-                      key={i}
-                      onClick={() => handlePortClick(p)}
-                      disabled={isMatched}
-                      className={`w-24 py-2 rounded font-bold shadow transition-all
-                                            ${
-                                              isMatched
-                                                ? "bg-green-100 text-green-800 opacity-50 cursor-not-allowed"
-                                                : isSelected
-                                                  ? "bg-blue-500 text-white transform scale-105"
-                                                  : "bg-white hover:bg-gray-100 border border-gray-300"
-                                            }
-                                        `}
-                    >
+                    <button key={i} onClick={() => handlePortClick(p)} disabled={isMatched} className={`${btnBase} ${isMatched ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 opacity-50 cursor-not-allowed" : isSelected ? "bg-blue-500 text-white transform scale-105" : "bg-white dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 border border-gray-300 dark:border-slate-600 dark:text-slate-200"}`}>
                       {p.port}
                     </button>
                   );
@@ -752,177 +300,128 @@
         );
       };
 
-      // Sim: SSH / Terminal Builder
       const SimSSH = ({ onComplete }) => {
         const [step, setStep] = useState(0);
         const [command, setCommand] = useState("");
-        const [terminalOutput, setTerminalOutput] = useState([
-          "Instruction: Securely connect to 'mail.server.com' using SSH with the username 'admin'. (Format: ssh user@host)",
-        ]);
+        const [terminalOutput, setTerminalOutput] = useState(["Instruction: Securely connect to 'mail.server.com' using SSH with the username 'admin'. (Format: ssh user@host)"]);
         const [inputIsPassword, setInputIsPassword] = useState(false);
         const terminalRef = useRef(null);
-
-        // Auto-scroll to the bottom when new output appears
-        useEffect(() => {
-          if (terminalRef.current) {
-            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-          }
-        }, [terminalOutput]);
-
+        useEffect(() => { if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight; }, [terminalOutput]);
         const handleCommand = (e) => {
           e.preventDefault();
           const cmd = command.trim();
           let newOutput = [...terminalOutput];
-
-          // Hide password output
-          if (inputIsPassword) {
-            newOutput.push(`> ${"*".repeat(cmd.length)}`);
-          } else {
-            newOutput.push(`> ${cmd}`);
-          }
-
+          newOutput.push(inputIsPassword ? `> ${"*".repeat(cmd.length)}` : `> ${cmd}`);
           if (step === 0) {
             if (cmd.toLowerCase() === "ssh admin@mail.server.com") {
-              newOutput.push(
-                "The authenticity of host 'mail.server.com' can't be established.",
-              );
-              newOutput.push(
-                "Warning: Permanently added 'mail.server.com' to the list of known hosts.",
-              );
-              newOutput.push(
-                "Instruction: Authentication required. Enter the password 'P@ssw0rd123' (typing will be hidden).",
-              );
-              setStep(1);
-              setInputIsPassword(true);
+              newOutput.push("The authenticity of host 'mail.server.com' can't be established.");
+              newOutput.push("Warning: Permanently added 'mail.server.com' to the list of known hosts.");
+              newOutput.push("Instruction: Authentication required. Enter the password 'P@ssw0rd123' (typing will be hidden).");
+              setStep(1); setInputIsPassword(true);
             } else if (cmd.toLowerCase() === "ssh mail.server.com") {
-              newOutput.push(
-                "Almost! You need to specify the username too. Try: ssh admin@mail.server.com",
-              );
-            } else {
-              newOutput.push(
-                "Incorrect command. Try: ssh admin@mail.server.com",
-              );
-            }
+              newOutput.push("Almost! You need to specify the username too. Try: ssh admin@mail.server.com");
+            } else { newOutput.push("Incorrect command. Try: ssh admin@mail.server.com"); }
           } else if (step === 1) {
             if (cmd === "P@ssw0rd123") {
               setInputIsPassword(false);
               newOutput.push("Authentication successful.");
-              newOutput.push(
-                "Welcome to Ubuntu 20.04.4 LTS (GNU/Linux 5.4.0-122-generic x86_64)",
-              );
+              newOutput.push("Welcome to Ubuntu 20.04.4 LTS (GNU/Linux 5.4.0-122-generic x86_64)");
               newOutput.push("");
-              newOutput.push(
-                "Instruction: You are now remotely logged into the server. Let's make a TCP connection to the local email service on the well-known POP3 port (110) to send application-level commands. Type 'telnet localhost 110'",
-              );
+              newOutput.push("Instruction: You are now remotely logged into the server. Let's make a TCP connection to the local email service on the well-known POP3 port (110) to send application-level commands. Type 'telnet localhost 110'");
               setStep(2);
-            } else {
-              newOutput.push(
-                "Permission denied, please try again. Password is 'P@ssw0rd123'.",
-              );
-            }
+            } else { newOutput.push("Permission denied, please try again. Password is 'P@ssw0rd123'."); }
           } else if (step === 2) {
             if (cmd.toLowerCase() === "telnet localhost 110") {
               newOutput.push("Trying 127.0.0.1...");
               newOutput.push("Connected to localhost.");
-              newOutput.push(
-                "+OK POP3 server ready <1896.69718727@mail.server.com>",
-              );
-              newOutput.push(
-                "Instruction: You are now communicating directly with the POP3 application over the TCP connection. Execute the command to view the status of the mailbox. Type 'STAT'",
-              );
+              newOutput.push("+OK POP3 server ready <1896.69718727@mail.server.com>");
+              newOutput.push("Instruction: You are now communicating directly with the POP3 application over the TCP connection. Execute the command to view the status of the mailbox. Type 'STAT'");
               setStep(3);
-            } else {
-              newOutput.push(
-                "Command not recognized. Type 'telnet localhost 110'.",
-              );
-            }
+            } else { newOutput.push("Command not recognized. Type 'telnet localhost 110'."); }
           } else if (step === 3) {
-            if (cmd.toUpperCase() === "STAT" || cmd.toLowerCase() === "stat") {
+            if (cmd.toUpperCase() === "STAT") {
               newOutput.push("+OK 2 320");
               newOutput.push("Connection closed by foreign host.");
-              newOutput.push(
-                "Simulation Complete! You successfully used SSH to remotely manage a server and executed application-level commands to a specific port.",
-              );
-              setStep(4);
-              setTimeout(onComplete, 3000);
-            } else {
-              newOutput.push("-ERR Unknown command. Try 'STAT'.");
-            }
+              newOutput.push("Simulation Complete! You successfully used SSH to remotely manage a server and executed application-level commands to a specific port.");
+              setStep(4); setTimeout(onComplete, 3000);
+            } else { newOutput.push("-ERR Unknown command. Try 'STAT'."); }
           }
-
           setTerminalOutput(newOutput);
           setCommand("");
         };
-
         return (
-          <div
-            ref={terminalRef}
-            className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 shadow-inner h-64 overflow-y-auto flex flex-col scroll-smooth"
-          >
+          <div ref={terminalRef} className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 shadow-inner h-64 overflow-y-auto flex flex-col scroll-smooth">
             <div className="flex-1 space-y-1">
               {terminalOutput.map((line, i) => (
-                <div
-                  key={i}
-                  className={`mb-1 ${line.startsWith("Instruction:") ? "text-yellow-300 font-bold mt-2" : ""}`}
-                >
-                  {line}
-                </div>
+                <div key={i} className={`mb-1 ${line.startsWith("Instruction:") ? "text-yellow-300 font-bold mt-2" : ""}`}>{line}</div>
               ))}
             </div>
             {step < 4 && (
               <form onSubmit={handleCommand} className="mt-2 flex">
-                <span className="mr-2">
-                  {step === 0
-                    ? "admin@local-pc:~$"
-                    : step === 1
-                      ? "Password:"
-                      : step === 2
-                        ? "admin@mail.server:~$"
-                        : step === 3
-                          ? ""
-                          : ""}
-                </span>
-                <input
-                  type={inputIsPassword ? "password" : "text"}
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  autoFocus
-                  className="flex-1 bg-transparent border-none outline-none text-green-400"
-                  autoComplete="off"
-                />
+                <span className="mr-2">{step === 0 ? "admin@local-pc:~$" : step === 1 ? "Password:" : step === 2 ? "admin@mail.server:~$" : ""}</span>
+                <input type={inputIsPassword ? "password" : "text"} value={command} onChange={(e) => setCommand(e.target.value)} autoFocus className="flex-1 bg-transparent border-none outline-none text-green-400" autoComplete="off" />
               </form>
             )}
           </div>
         );
       };
 
-      // --- MAIN APP COMPONENT ---
-      const App = () => {
-        const [selectedSubtopics, setSelectedSubtopics] = useState([
-          ...SUBTOPICS,
-        ]);
-        const [isFilterOpen, setIsFilterOpen] = useState(false);
+      const FilterDropdown = ({ currentFilters, allSubtopics, onApply, onClose }) => {
+        const [localFilters, setLocalFilters] = useState([...currentFilters]);
+        const toggleFilter = (topic) => {
+          setLocalFilters(localFilters.includes(topic) ? localFilters.filter((t) => t !== topic) : [...localFilters, topic]);
+        };
+        return (
+          <div className="absolute top-12 right-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50 p-4">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-700">
+              <h3 className="font-bold text-gray-800 dark:text-slate-200">Select Topics</h3>
+              <button onClick={onClose} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <div className="space-y-3 max-h-60 overflow-y-auto mb-4">
+              {allSubtopics.map((topic) => (
+                <label key={topic} className="flex items-center space-x-3 cursor-pointer group">
+                  <div className="relative flex items-center justify-center">
+                    <input type="checkbox" className="custom-checkbox opacity-0 absolute h-5 w-5 cursor-pointer" checked={localFilters.includes(topic)} onChange={() => toggleFilter(topic)} />
+                    <div className="bg-white dark:bg-slate-700 border-2 rounded border-gray-300 dark:border-slate-500 w-5 h-5 flex flex-shrink-0 justify-center items-center mr-2 group-hover:border-blue-500 transition-colors">
+                      <svg className="hidden w-3 h-3 text-white pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                  </div>
+                  <span className="text-gray-700 dark:text-slate-300 text-sm font-medium">{topic}</span>
+                </label>
+              ))}
+            </div>
+            <button onClick={() => onApply(localFilters)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">Apply Filters</button>
+          </div>
+        );
+      };
 
-        // Queue state
+      const App = () => {
+        const [theme, setTheme] = useState(() => {
+          const saved = localStorage.getItem("uimode");
+          if (saved) return saved;
+          return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        });
+        useEffect(() => {
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          localStorage.setItem("uimode", theme);
+        }, [theme]);
+        const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
+
+        const [selectedSubtopics, setSelectedSubtopics] = useState([...SUBTOPICS]);
+        const [isFilterOpen, setIsFilterOpen] = useState(false);
         const [questionQueue, setQuestionQueue] = useState([]);
         const [currentQIndex, setCurrentQIndex] = useState(-1);
-
-        // Interaction state
         const [userAnswer, setUserAnswer] = useState("");
         const [hasAnswered, setHasAnswered] = useState(false);
         const [isCorrect, setIsCorrect] = useState(false);
         const [showSolution, setShowSolution] = useState(false);
 
-        // Init questions
-        useEffect(() => {
-          generateQueue(selectedSubtopics);
-        }, []);
+        useEffect(() => { generateQueue(selectedSubtopics); }, []);
 
         const generateQueue = (subtopics) => {
-          let filtered = QUESTION_BANK.filter((q) =>
-            subtopics.includes(q.subtopic),
-          );
-          // Shuffle array (Fisher-Yates)
+          let filtered = QUESTION_BANK.filter((q) => subtopics.includes(q.subtopic));
           for (let i = filtered.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
@@ -932,421 +431,196 @@
           resetInteractionState();
         };
 
-        const resetInteractionState = () => {
-          setUserAnswer("");
-          setHasAnswered(false);
-          setIsCorrect(false);
-          setShowSolution(false);
-        };
+        const resetInteractionState = () => { setUserAnswer(""); setHasAnswered(false); setIsCorrect(false); setShowSolution(false); };
 
-        const handleApplyFilters = (newFilters) => {
-          setSelectedSubtopics(newFilters);
-          generateQueue(newFilters);
-          setIsFilterOpen(false);
-        };
+        const handleApplyFilters = (newFilters) => { setSelectedSubtopics(newFilters); generateQueue(newFilters); setIsFilterOpen(false); };
 
         const nextQuestion = () => {
-          if (currentQIndex < questionQueue.length - 1) {
-            setCurrentQIndex(currentQIndex + 1);
-          } else {
-            // Loop back / recreate queue if all done
-            generateQueue(selectedSubtopics);
-          }
+          if (currentQIndex < questionQueue.length - 1) setCurrentQIndex(currentQIndex + 1);
+          else generateQueue(selectedSubtopics);
           resetInteractionState();
         };
 
         const handleMCQSubmit = (option) => {
-          if (hasAnswered && isCorrect) return; // Prevent changing after correct
+          if (hasAnswered && isCorrect) return;
           setUserAnswer(option);
           setHasAnswered(true);
-          const correct = option === questionQueue[currentQIndex].answer;
-          setIsCorrect(correct);
+          setIsCorrect(option === questionQueue[currentQIndex].answer);
         };
 
         const handleTextSubmit = (e) => {
           e.preventDefault();
           if (!userAnswer.trim()) return;
           setHasAnswered(true);
-          const correct = checkTextAnswer(
-            userAnswer,
-            questionQueue[currentQIndex].answer,
-          );
-          setIsCorrect(correct);
+          setIsCorrect(checkTextAnswer(userAnswer, questionQueue[currentQIndex].answer));
         };
 
         const currentQ = questionQueue[currentQIndex];
 
         return (
-          <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
-            {/* Header & Filter */}
-            <div className="w-full max-w-4xl flex justify-between items-center mb-8 relative">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-extrabold text-blue-900 drop-shadow-sm">
-                  AQA A-Level CS
-                </h1>
-                <h2 className="text-lg text-blue-700 font-medium">
-                  URLs & Sockets Interactive
-                </h2>
-              </div>
-
-              <div className="relative">
-                <button
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className="bg-white border border-gray-300 shadow-sm px-4 py-2 rounded-lg font-medium text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition"
+          <div className="min-h-screen flex flex-col bg-slate-100 dark:bg-slate-900">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
                 >
-                  <span>Filter Subtopics</span>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M19 9l-7 7-7-7"
-                    ></path>
-                  </svg>
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
                 </button>
+              </nav>
+            </header>
 
-                {isFilterOpen && (
-                  <FilterDropdown
-                    currentFilters={selectedSubtopics}
-                    allSubtopics={SUBTOPICS}
-                    onApply={handleApplyFilters}
-                    onClose={() => setIsFilterOpen(false)}
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="w-full max-w-4xl glass-panel rounded-2xl shadow-xl overflow-hidden flex flex-col">
-              {/* Progress Bar */}
-              {questionQueue.length > 0 && (
-                <div className="h-2 bg-gray-200 w-full">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-300"
-                    style={{
-                      width: `${(currentQIndex / questionQueue.length) * 100}%`,
-                    }}
-                  ></div>
+            <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
+              {/* Page Header & Filter */}
+              <div className="w-full max-w-4xl flex justify-between items-center mb-8 relative">
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-blue-900 dark:text-blue-300 drop-shadow-sm">AQA A-Level CS</h1>
+                  <h2 className="text-lg text-blue-700 dark:text-blue-400 font-medium">URLs & Sockets Interactive</h2>
                 </div>
-              )}
+                <div className="relative">
+                  <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 shadow-sm px-4 py-2 rounded-lg font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 flex items-center space-x-2 transition">
+                    <span>Filter Subtopics</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </button>
+                  {isFilterOpen && <FilterDropdown currentFilters={selectedSubtopics} allSubtopics={SUBTOPICS} onApply={handleApplyFilters} onClose={() => setIsFilterOpen(false)} />}
+                </div>
+              </div>
 
-              <div className="p-6 md:p-10">
-                {currentQIndex === -1 ? (
-                  <div className="text-center py-10">
-                    <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                      No Questions Found
-                    </h3>
-                    <p className="text-gray-500">
-                      Please select at least one subtopic from the filter menu.
-                    </p>
+              {/* Main Content */}
+              <div className="w-full max-w-4xl glass-panel rounded-2xl shadow-xl overflow-hidden flex flex-col">
+                {questionQueue.length > 0 && (
+                  <div className="h-2 bg-gray-200 dark:bg-slate-700 w-full">
+                    <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${(currentQIndex / questionQueue.length) * 100}%` }}></div>
                   </div>
-                ) : (
-                  <div className="flex flex-col space-y-6">
-                    {/* Question Metadata */}
-                    <div className="flex items-center space-x-3 mb-2">
-                      <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
-                        {currentQ.subtopic}
-                      </span>
-                      <span className="text-sm text-gray-500 font-medium">
-                        Question {currentQIndex + 1} of {questionQueue.length}
-                      </span>
+                )}
+
+                <div className="p-6 md:p-10">
+                  {currentQIndex === -1 ? (
+                    <div className="text-center py-10">
+                      <h3 className="text-xl font-semibold text-gray-700 dark:text-slate-300 mb-2">No Questions Found</h3>
+                      <p className="text-gray-500 dark:text-slate-400">Please select at least one subtopic from the filter menu.</p>
                     </div>
+                  ) : (
+                    <div className="flex flex-col space-y-6">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">{currentQ.subtopic}</span>
+                        <span className="text-sm text-gray-500 dark:text-slate-400 font-medium">Question {currentQIndex + 1} of {questionQueue.length}</span>
+                      </div>
 
-                    {/* Question Text */}
-                    <h2 className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">
-                      {currentQ.text}
-                    </h2>
+                      <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{currentQ.text}</h2>
 
-                    {/* Question Interactions Based on Type */}
-                    <div className="mt-4">
-                      {/* MCQ */}
-                      {currentQ.type === "mcq" && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {currentQ.options.map((opt, i) => {
-                            const isSelected = userAnswer === opt;
-                            let btnClass =
-                              "bg-white border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-700";
-
-                            if (hasAnswered) {
-                              if (
-                                opt === currentQ.answer &&
-                                (showSolution || isCorrect)
-                              ) {
-                                btnClass =
-                                  "bg-green-100 border-2 border-green-500 text-green-900 font-semibold";
-                              } else if (isSelected && !isCorrect) {
-                                btnClass =
-                                  "bg-red-50 border-2 border-red-400 text-red-800";
-                              } else if (isCorrect) {
-                                btnClass =
-                                  "bg-gray-50 border-2 border-gray-200 text-gray-400 opacity-50 cursor-not-allowed";
+                      <div className="mt-4">
+                        {currentQ.type === "mcq" && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {currentQ.options.map((opt, i) => {
+                              const isSelected = userAnswer === opt;
+                              let btnClass = "bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-700 dark:text-slate-200";
+                              if (hasAnswered) {
+                                if (opt === currentQ.answer && (showSolution || isCorrect)) btnClass = "bg-green-100 dark:bg-green-900/30 border-2 border-green-500 text-green-900 dark:text-green-300 font-semibold";
+                                else if (isSelected && !isCorrect) btnClass = "bg-red-50 dark:bg-red-900/20 border-2 border-red-400 text-red-800 dark:text-red-300";
+                                else if (isCorrect) btnClass = "bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-500 opacity-50 cursor-not-allowed";
                               }
-                            }
-
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => handleMCQSubmit(opt)}
-                                disabled={isCorrect}
-                                className={`sim-item p-4 rounded-xl text-left transition-all ${btnClass}`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <span>{opt}</span>
-                                  {hasAnswered &&
-                                    opt === currentQ.answer &&
-                                    (showSolution || isCorrect) && (
-                                      <CheckIcon />
-                                    )}
-                                  {hasAnswered && isSelected && !isCorrect && (
-                                    <CrossIcon />
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Text Input */}
-                      {currentQ.type === "text" && (
-                        <form
-                          onSubmit={handleTextSubmit}
-                          className="flex flex-col space-y-4 max-w-lg"
-                        >
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={userAnswer}
-                              onChange={(e) => {
-                                setUserAnswer(e.target.value);
-                                if (hasAnswered && !isCorrect)
-                                  setHasAnswered(false); // reset error state on type
-                              }}
-                              disabled={isCorrect}
-                              placeholder={
-                                currentQ.hint
-                                  ? `Hint: ${currentQ.hint}`
-                                  : "Type your answer here..."
-                              }
-                              className={`w-full p-4 border-2 rounded-xl outline-none text-lg transition-colors
-                                                            ${
-                                                              hasAnswered &&
-                                                              isCorrect
-                                                                ? "border-green-500 bg-green-50 text-green-900"
-                                                                : hasAnswered &&
-                                                                    !isCorrect
-                                                                  ? "border-red-400 bg-red-50 text-red-900"
-                                                                  : "border-gray-300 focus:border-blue-500 bg-white"
-                                                            }`}
-                            />
-                            {hasAnswered && isCorrect && (
-                              <div className="absolute right-4 top-4">
-                                <CheckIcon />
-                              </div>
-                            )}
-                            {hasAnswered && !isCorrect && !showSolution && (
-                              <div className="absolute right-4 top-4">
-                                <CrossIcon />
-                              </div>
-                            )}
-                          </div>
-
-                          {!isCorrect && (
-                            <div className="flex space-x-4">
-                              <button
-                                type="submit"
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl shadow transition"
-                              >
-                                Check Answer
-                              </button>
-                              {hasAnswered && !showSolution && (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowSolution(true)}
-                                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-6 rounded-xl transition"
-                                >
-                                  Show Solution
+                              return (
+                                <button key={i} onClick={() => handleMCQSubmit(opt)} disabled={isCorrect} className={`sim-item p-4 rounded-xl text-left transition-all ${btnClass}`}>
+                                  <div className="flex justify-between items-center">
+                                    <span>{opt}</span>
+                                    {hasAnswered && opt === currentQ.answer && (showSolution || isCorrect) && <CheckIcon />}
+                                    {hasAnswered && isSelected && !isCorrect && <CrossIcon />}
+                                  </div>
                                 </button>
-                              )}
-                            </div>
-                          )}
-
-                          {showSolution && !isCorrect && (
-                            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-yellow-800">
-                              <strong>Correct Answer:</strong> {currentQ.answer}
-                            </div>
-                          )}
-                        </form>
-                      )}
-
-                      {/* Simulations */}
-                      {currentQ.type === "sim_url" && (
-                        <SimURL onComplete={() => setIsCorrect(true)} />
-                      )}
-                      {currentQ.type === "sim_socket" && (
-                        <SimSocket onComplete={() => setIsCorrect(true)} />
-                      )}
-                      {currentQ.type === "sim_port_match" && (
-                        <SimPortMatch onComplete={() => setIsCorrect(true)} />
-                      )}
-                      {currentQ.type === "sim_ssh" && (
-                        <SimSSH onComplete={() => setIsCorrect(true)} />
-                      )}
-                    </div>
-
-                    {/* Feedback / Explanation & Next Button */}
-                    {((hasAnswered && isCorrect) ||
-                      showSolution ||
-                      (currentQ.type.startsWith("sim_") && isCorrect)) && (
-                      <div className="mt-8 pt-6 border-t border-gray-200 animate-[fadeIn_0.5s_ease-out]">
-                        {currentQ.explanation && (
-                          <div className="mb-6 p-4 bg-blue-50 rounded-lg text-blue-900 border border-blue-100">
-                            <h4 className="font-bold mb-1 flex items-center">
-                              <svg
-                                className="w-5 h-5 mr-2"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                ></path>
-                              </svg>
-                              Explanation
-                            </h4>
-                            <p>{currentQ.explanation}</p>
+                              );
+                            })}
                           </div>
                         )}
 
-                        <button
-                          onClick={nextQuestion}
-                          className="w-full bg-gray-900 hover:bg-black text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 text-lg flex justify-center items-center"
-                        >
-                          <span>
-                            {currentQIndex < questionQueue.length - 1
-                              ? "Next Question"
-                              : "Restart Topic Pool"}
-                          </span>
-                          <svg
-                            className="w-5 h-5 ml-2"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M14 5l7 7m0 0l-7 7m7-7H3"
-                            ></path>
-                          </svg>
-                        </button>
+                        {currentQ.type === "text" && (
+                          <form onSubmit={handleTextSubmit} className="flex flex-col space-y-4 max-w-lg">
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={userAnswer}
+                                onChange={(e) => { setUserAnswer(e.target.value); if (hasAnswered && !isCorrect) setHasAnswered(false); }}
+                                disabled={isCorrect}
+                                placeholder={currentQ.hint ? `Hint: ${currentQ.hint}` : "Type your answer here..."}
+                                className={`w-full p-4 border-2 rounded-xl outline-none text-lg transition-colors dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-400
+                                  ${hasAnswered && isCorrect ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-300" :
+                                    hasAnswered && !isCorrect ? "border-red-400 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-300" :
+                                    "border-gray-300 dark:border-slate-600 focus:border-blue-500 bg-white dark:bg-slate-700"}`}
+                              />
+                              {hasAnswered && isCorrect && <div className="absolute right-4 top-4"><CheckIcon /></div>}
+                              {hasAnswered && !isCorrect && !showSolution && <div className="absolute right-4 top-4"><CrossIcon /></div>}
+                            </div>
+                            {!isCorrect && (
+                              <div className="flex space-x-4">
+                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl shadow transition">Check Answer</button>
+                                {hasAnswered && !showSolution && (
+                                  <button type="button" onClick={() => setShowSolution(true)} className="bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-semibold py-3 px-6 rounded-xl transition">Show Solution</button>
+                                )}
+                              </div>
+                            )}
+                            {showSolution && !isCorrect && (
+                              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-yellow-800 dark:text-yellow-300">
+                                <strong>Correct Answer:</strong> {currentQ.answer}
+                              </div>
+                            )}
+                          </form>
+                        )}
+
+                        {currentQ.type === "sim_url" && <SimURL onComplete={() => setIsCorrect(true)} />}
+                        {currentQ.type === "sim_socket" && <SimSocket onComplete={() => setIsCorrect(true)} />}
+                        {currentQ.type === "sim_port_match" && <SimPortMatch onComplete={() => setIsCorrect(true)} />}
+                        {currentQ.type === "sim_ssh" && <SimSSH onComplete={() => setIsCorrect(true)} />}
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      {((hasAnswered && isCorrect) || showSolution || (currentQ.type.startsWith("sim_") && isCorrect)) && (
+                        <div className="mt-8 pt-6 border-t border-gray-200 dark:border-slate-700">
+                          {currentQ.explanation && (
+                            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-900 dark:text-blue-300 border border-blue-100 dark:border-blue-900/40">
+                              <h4 className="font-bold mb-1 flex items-center">
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Explanation
+                              </h4>
+                              <p>{currentQ.explanation}</p>
+                            </div>
+                          )}
+                          <button onClick={nextQuestion} className="w-full bg-gray-900 dark:bg-slate-700 hover:bg-black dark:hover:bg-slate-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 text-lg flex justify-center items-center">
+                            <span>{currentQIndex < questionQueue.length - 1 ? "Next Question" : "Restart Topic Pool"}</span>
+                            <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         );
       };
 
-      // --- SUBTOPIC FILTER DROPDOWN COMPONENT ---
-      const FilterDropdown = ({
-        currentFilters,
-        allSubtopics,
-        onApply,
-        onClose,
-      }) => {
-        const [localFilters, setLocalFilters] = useState([...currentFilters]);
-
-        const toggleFilter = (topic) => {
-          if (localFilters.includes(topic)) {
-            setLocalFilters(localFilters.filter((t) => t !== topic));
-          } else {
-            setLocalFilters([...localFilters, topic]);
-          }
-        };
-
-        return (
-          <div className="absolute top-12 right-0 w-72 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 p-4">
-            <div className="flex justify-between items-center mb-4 pb-2 border-b">
-              <h3 className="font-bold text-gray-800">Select Topics</h3>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  ></path>
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-3 max-h-60 overflow-y-auto mb-4">
-              {allSubtopics.map((topic) => (
-                <label
-                  key={topic}
-                  className="flex items-center space-x-3 cursor-pointer group"
-                >
-                  <div className="relative flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      className="custom-checkbox opacity-0 absolute h-5 w-5 cursor-pointer"
-                      checked={localFilters.includes(topic)}
-                      onChange={() => toggleFilter(topic)}
-                    />
-                    <div className="bg-white border-2 rounded border-gray-300 w-5 h-5 flex flex-shrink-0 justify-center items-center mr-2 group-hover:border-blue-500 transition-colors">
-                      <svg
-                        className="hidden w-3 h-3 text-white pointer-events-none"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="3"
-                          d="M5 13l4 4L19 7"
-                        ></path>
-                      </svg>
-                    </div>
-                  </div>
-                  <span className="text-gray-700 text-sm font-medium">
-                    {topic}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <button
-              onClick={() => onApply(localFilters)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition"
-            >
-              Apply Filters
-            </button>
-          </div>
-        );
-      };
-
-      // Render the app
       const root = ReactDOM.createRoot(document.getElementById("root"));
       root.render(<App />);
     </script>

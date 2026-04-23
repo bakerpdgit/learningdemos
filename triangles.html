@@ -4,157 +4,322 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Triangle Types Quiz</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style>
+      :root {
+        --bg: #f1f5f9;
+        --panel: #ffffff;
+        --text: #1e293b;
+        --text-muted: #64748b;
+        --border: #e2e8f0;
+        --accent: #0ea5e9;
+        --accent-hover: #0284c7;
+        --header-bg: #0f172a;
+        --header-accent: #38bdf8;
+        --header-bracket: #475569;
+        --header-link: #94a3b8;
+        --btn-bg: #ffffff;
+        --btn-text: #0ea5e9;
+        --btn-border: #0ea5e9;
+        --btn-hover-bg: #0ea5e9;
+        --btn-hover-text: #ffffff;
+        --correct-bg: #16a34a;
+        --incorrect-bg: #dc2626;
+        --streak-color: #16a34a;
+        --svg-fill: #38bdf8;
+        --svg-stroke: #1e293b;
+      }
+      html.dark {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --accent: #38bdf8;
+        --accent-hover: #7dd3fc;
+        --btn-bg: #1e293b;
+        --btn-text: #38bdf8;
+        --btn-border: #38bdf8;
+        --btn-hover-bg: #38bdf8;
+        --btn-hover-text: #0f172a;
+        --correct-bg: #15803d;
+        --incorrect-bg: #b91c1c;
+        --streak-color: #34d399;
+        --svg-fill: #1d4ed8;
+        --svg-stroke: #94a3b8;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
       body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        transition: background-color 0.2s, color 0.2s;
+      }
+
+      /* ── Header ── */
+      #cs-header {
+        background: var(--header-bg);
+        padding: 0 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 58px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+        flex-shrink: 0;
+      }
+      #site-title {
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--header-accent);
+        text-decoration: none;
+        letter-spacing: 0.04em;
+      }
+      #site-title .bracket { color: #475569; }
+      #cs-header nav { display: flex; align-items: center; gap: 1.5rem; }
+      #home-link {
+        color: var(--header-link);
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        transition: color 0.15s;
+      }
+      #home-link:hover { color: var(--header-accent); }
+      #theme-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--header-link);
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        transition: color 0.15s;
+      }
+      #theme-btn:hover { color: var(--header-accent); }
+      #theme-btn svg { width: 20px; height: 20px; }
+
+      /* ── Main content ── */
+      .page-content {
+        flex: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
-        margin: 0;
-        padding: 20px;
-        background-color: #f0f4f8;
-        color: #333;
+        padding: 2rem 1rem;
+        gap: 1.5rem;
       }
       h1 {
-        color: #0066cc;
-        margin-bottom: 10px;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--accent);
       }
       .streak-counter {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #27ae60;
-        margin-bottom: 20px;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--streak-color);
       }
       .container {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 20px;
-        max-width: 800px;
+        gap: 1.5rem;
         width: 100%;
+        max-width: 640px;
       }
       .triangle-panel {
-        background-color: #ffffff;
-        border: 3px solid #0066cc;
+        background: var(--panel);
+        border: 2px solid var(--border);
         border-radius: 12px;
-        padding: 40px;
+        padding: 2rem;
         width: 100%;
-        max-width: 600px;
-        min-height: 400px;
+        min-height: 360px;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
       }
-      #triangleSvg {
-        max-width: 100%;
-        max-height: 100%;
+      html.dark .triangle-panel {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
       }
+      #triangleSvg { max-width: 100%; max-height: 360px; }
       .buttons {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 15px;
+        gap: 12px;
         width: 100%;
-        max-width: 600px;
       }
-      button {
-        padding: 20px;
-        font-size: 1.2rem;
-        font-weight: bold;
-        border: 2px solid #0066cc;
+      button.answer-btn {
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border: 2px solid var(--btn-border);
         border-radius: 8px;
-        background-color: #ffffff;
-        color: #0066cc;
+        background: var(--btn-bg);
+        color: var(--btn-text);
         cursor: pointer;
-        transition: all 0.3s ease;
+        transition: background 0.2s, color 0.2s, transform 0.1s, box-shadow 0.2s;
       }
-      button:hover {
-        background-color: #0066cc;
-        color: #ffffff;
+      button.answer-btn:hover:not(:disabled) {
+        background: var(--btn-hover-bg);
+        color: var(--btn-hover-text);
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 102, 204, 0.3);
+        box-shadow: 0 4px 12px rgba(14,165,233,0.25);
       }
-      button:active {
-        transform: translateY(0);
+      button.answer-btn:active { transform: translateY(0); }
+      button.answer-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+      button.answer-btn.correct {
+        background: var(--correct-bg);
+        color: #fff;
+        border-color: var(--correct-bg);
       }
-      button.correct {
-        background-color: #27ae60;
-        color: white;
-        border-color: #27ae60;
-      }
-      button.incorrect {
-        background-color: #e74c3c;
-        color: white;
-        border-color: #e74c3c;
+      button.answer-btn.incorrect {
+        background: var(--incorrect-bg);
+        color: #fff;
+        border-color: var(--incorrect-bg);
       }
       .feedback {
-        font-size: 1.5rem;
-        font-weight: bold;
+        font-size: 1.4rem;
+        font-weight: 700;
         min-height: 2rem;
         text-align: center;
       }
-      .feedback.correct {
-        color: #27ae60;
-      }
-      .feedback.incorrect {
-        color: #e74c3c;
-      }
-      .next-button-container {
-        display: flex;
-        justify-content: center;
-        min-height: 60px;
-      }
+      .feedback.correct { color: var(--correct-bg); }
+      .feedback.incorrect { color: var(--incorrect-bg); }
+      .next-btn-wrap { min-height: 56px; display: flex; justify-content: center; }
       #nextButton {
-        background-color: #27ae60;
-        color: white;
-        border-color: #27ae60;
+        background: var(--correct-bg);
+        color: #fff;
+        border: 2px solid var(--correct-bg);
+        border-radius: 8px;
+        padding: 0.75rem 2rem;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
         display: none;
+        transition: opacity 0.2s;
       }
-      #nextButton:hover {
-        background-color: #229954;
-        border-color: #229954;
-      }
+      #nextButton:hover { opacity: 0.9; }
     </style>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+      <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
   <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+    <!-- CS Learning Header -->
+    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
-    <h1>Triangle Types Quiz</h1>
-    <div class="streak-counter">Streak: <span id="streakCount">0</span></div>
-    <div class="container">
-      <div class="triangle-panel">
-        <svg id="triangleSvg" width="400" height="400" viewBox="0 0 400 400">
-          <polygon id="triangle" points="" fill="#3498db" stroke="#2c3e50" stroke-width="3" />
-        </svg>
-      </div>
-      <div class="feedback" id="feedback"></div>
-      <div class="buttons">
-        <button id="equilateralBtn" onclick="checkAnswer('equilateral')">Equilateral</button>
-        <button id="isoscelesBtn" onclick="checkAnswer('isosceles')">Isosceles</button>
-        <button id="scaleneBtn" onclick="checkAnswer('scalene')">Scalene</button>
-        <button id="rightBtn" onclick="checkAnswer('right')">Right-Angled</button>
-      </div>
-      <div class="next-button-container">
-        <button id="nextButton" onclick="nextTriangle()">Next Triangle</button>
+    <div class="page-content">
+      <h1>Triangle Types Quiz</h1>
+      <div class="streak-counter">Streak: <span id="streakCount">0</span></div>
+      <div class="container">
+        <div class="triangle-panel">
+          <svg id="triangleSvg" width="400" height="400" viewBox="0 0 400 400">
+            <polygon id="triangle" points="" fill="var(--svg-fill)" stroke="var(--svg-stroke)" stroke-width="3" />
+          </svg>
+        </div>
+        <div class="feedback" id="feedback"></div>
+        <div class="buttons">
+          <button class="answer-btn" id="equilateralBtn" onclick="checkAnswer('equilateral')">Equilateral</button>
+          <button class="answer-btn" id="isoscelesBtn" onclick="checkAnswer('isosceles')">Isosceles</button>
+          <button class="answer-btn" id="scaleneBtn" onclick="checkAnswer('scalene')">Scalene</button>
+          <button class="answer-btn" id="rightBtn" onclick="checkAnswer('right')">Right-Angled</button>
+        </div>
+        <div class="next-btn-wrap">
+          <button id="nextButton" onclick="nextTriangle()">Next Triangle</button>
+        </div>
       </div>
     </div>
 
     <script>
+      // ── Theme Management ──
+      function applyTheme(mode) {
+        const html = document.documentElement;
+        const sun = document.getElementById('icon-sun');
+        const moon = document.getElementById('icon-moon');
+        if (mode === 'dark') {
+          html.classList.add('dark');
+          sun.style.display = 'block';
+          moon.style.display = 'none';
+        } else {
+          html.classList.remove('dark');
+          sun.style.display = 'none';
+          moon.style.display = 'block';
+        }
+      }
+
+      function toggleTheme() {
+        const isDark = document.documentElement.classList.contains('dark');
+        const next = isDark ? 'light' : 'dark';
+        localStorage.setItem('uimode', next);
+        applyTheme(next);
+      }
+
+      (function initTheme() {
+        const saved = localStorage.getItem('uimode');
+        const mode = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        applyTheme(mode);
+      })();
+
+      // ── Quiz Logic ──
       let currentTriangleType = '';
       let streak = 0;
       let answered = false;
@@ -162,29 +327,23 @@
       const triangleTypes = ['equilateral', 'isosceles', 'scalene', 'right'];
 
       function generateTriangle() {
-        // Select random triangle type
         currentTriangleType = triangleTypes[Math.floor(Math.random() * triangleTypes.length)];
-        
-        // Generate triangle coordinates based on type
+
         let points;
-        const centerX = 200;
-        const centerY = 200;
-        // Add random size variation up to 30% bigger
+        const centerX = 200, centerY = 200;
         const baseSize = 120 * (1 + Math.random() * 0.3);
-        
+
         switch(currentTriangleType) {
-          case 'equilateral':
-            // All sides equal - fixed formula
+          case 'equilateral': {
             const height = baseSize * Math.sqrt(3) / 2;
             points = [
-              { x: 0, y: -height / 2 },           // Top vertex
-              { x: -baseSize / 2, y: height / 2 }, // Bottom left
-              { x: baseSize / 2, y: height / 2 }   // Bottom right
+              { x: 0, y: -height / 2 },
+              { x: -baseSize / 2, y: height / 2 },
+              { x: baseSize / 2, y: height / 2 }
             ];
             break;
-          
-          case 'isosceles':
-            // Two sides equal, but not equilateral
+          }
+          case 'isosceles': {
             const isoHeight = baseSize * 1.3;
             points = [
               { x: 0, y: isoHeight / 2 },
@@ -192,19 +351,15 @@
               { x: baseSize / 2, y: -isoHeight / 2 }
             ];
             break;
-          
+          }
           case 'scalene':
-            // All sides different - ensure sufficiently different lengths
-            // Use more varied multipliers to make it clearly scalene
             points = [
               { x: -baseSize * 0.2, y: baseSize * 0.7 },
               { x: -baseSize * 0.8, y: -baseSize * 0.3 },
               { x: baseSize * 0.5, y: 0 }
             ];
             break;
-          
           case 'right':
-            // One 90-degree angle
             points = [
               { x: -baseSize / 2, y: baseSize / 2 },
               { x: -baseSize / 2, y: -baseSize / 2 },
@@ -212,84 +367,62 @@
             ];
             break;
         }
-        
-        // Apply random rotation
+
         const rotation = Math.random() * 360;
         const rotatedPoints = points.map(p => {
           const angle = rotation * Math.PI / 180;
-          const cos = Math.cos(angle);
-          const sin = Math.sin(angle);
+          const cos = Math.cos(angle), sin = Math.sin(angle);
           return {
             x: centerX + p.x * cos - p.y * sin,
             y: centerY + p.x * sin + p.y * cos
           };
         });
-        
-        // Set the polygon points
-        const pointsStr = rotatedPoints.map(p => `${p.x},${p.y}`).join(' ');
-        document.getElementById('triangle').setAttribute('points', pointsStr);
-        
-        // Reset UI
+
+        document.getElementById('triangle').setAttribute('points',
+          rotatedPoints.map(p => `${p.x},${p.y}`).join(' '));
+
         answered = false;
         document.getElementById('feedback').textContent = '';
         document.getElementById('feedback').className = 'feedback';
         document.getElementById('nextButton').style.display = 'none';
-        
-        // Reset button styles
-        ['equilateralBtn', 'isoscelesBtn', 'scaleneBtn', 'rightBtn'].forEach(id => {
+
+        ['equilateralBtn','isoscelesBtn','scaleneBtn','rightBtn'].forEach(id => {
           const btn = document.getElementById(id);
-          btn.className = '';
+          btn.className = 'answer-btn';
           btn.disabled = false;
         });
       }
 
       function checkAnswer(selectedType) {
         if (answered) return;
-        
         answered = true;
         const feedback = document.getElementById('feedback');
-        const buttons = document.querySelectorAll('.buttons button');
-        
-        // Map internal type names to display names
-        const typeDisplayNames = {
-          'equilateral': 'Equilateral',
-          'isosceles': 'Isosceles',
-          'scalene': 'Scalene',
-          'right': 'Right-Angled'
-        };
-        
-        // Disable all buttons
+        const buttons = document.querySelectorAll('.answer-btn');
+        const typeNames = { equilateral:'Equilateral', isosceles:'Isosceles', scalene:'Scalene', right:'Right-Angled' };
+
         buttons.forEach(btn => btn.disabled = true);
-        
+
         if (selectedType === currentTriangleType) {
-          // Correct answer
           streak++;
           document.getElementById('streakCount').textContent = streak;
           feedback.textContent = '✓ Correct!';
           feedback.className = 'feedback correct';
           document.getElementById(`${selectedType}Btn`).classList.add('correct');
         } else {
-          // Incorrect answer
           streak = 0;
           document.getElementById('streakCount').textContent = streak;
-          feedback.textContent = `✗ Incorrect! It was ${typeDisplayNames[currentTriangleType]}.`;
+          feedback.textContent = `✗ Incorrect! It was ${typeNames[currentTriangleType]}.`;
           feedback.className = 'feedback incorrect';
           document.getElementById(`${selectedType}Btn`).classList.add('incorrect');
           document.getElementById(`${currentTriangleType}Btn`).classList.add('correct');
         }
-        
-        // Show next button
+
         document.getElementById('nextButton').style.display = 'block';
       }
 
-      function nextTriangle() {
-        generateTriangle();
-      }
+      function nextTriangle() { generateTriangle(); }
 
-      // Initialize with first triangle
-      window.onload = () => {
-        generateTriangle();
-      };
+      window.onload = () => { generateTriangle(); };
     </script>
   </body>
 </html>

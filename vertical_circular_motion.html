@@ -4,348 +4,430 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vertical Circular Motion with Energy Conservation</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+    <!-- Prevent FOUC -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style>
-        body {
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f0f0;
-            font-family: 'Inter', Arial, sans-serif;
-            color: #333;
-        }
-        canvas {
-            border: 1px solid #ccc;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        #infoPanel {
-            margin-bottom: 15px; /* Added margin below info panel */
-            padding: 15px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-width: 600px; 
-            text-align: left; 
-        }
-        #infoPanel h2 {
-            margin-top: 0;
-            color: #007bff; 
-            text-align: center; 
-        }
-        #infoPanel p {
-            margin-bottom: 8px; 
-            line-height: 1.6;
-        }
-        .value-display {
-            font-weight: bold;
-            color: #28a745; 
-        }
-        .description-list {
-            padding-left: 20px; 
-            margin-top: 5px;
-        }
-        /* Basic button styling if Tailwind doesn't fully apply in iframe */
-        .button {
-            padding: 10px 15px;
-            margin: 0 5px;
-            border-radius: 5px;
-            border: none;
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .play-pause-button {
-            background-color: #28a745; /* Green */
-        }
-        .play-pause-button:hover {
-            background-color: #218838;
-        }
-        .step-button {
-            background-color: #007bff; /* Blue */
-        }
-        .step-button:hover {
-            background-color: #0056b3;
-        }
+      :root {
+        --bg: #f1f5f9;
+        --panel: #ffffff;
+        --text: #1e293b;
+        --text-muted: #64748b;
+        --border: #e2e8f0;
+        --accent: #0ea5e9;
+        --value-color: #16a34a;
+        --header-bg: #0f172a;
+        --header-accent: #38bdf8;
+        --header-link: #94a3b8;
+        --canvas-bg: #ffffff;
+        --canvas-border: #cbd5e1;
+      }
+      html.dark {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --accent: #38bdf8;
+        --value-color: #34d399;
+        --canvas-bg: #1e293b;
+        --canvas-border: #334155;
+      }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        transition: background-color 0.2s, color 0.2s;
+      }
+
+      /* ── Header ── */
+      #cs-header {
+        background: var(--header-bg);
+        padding: 0 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 58px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+        flex-shrink: 0;
+      }
+      #site-title {
+        font-family: "Consolas","Courier New",monospace;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--header-accent);
+        text-decoration: none;
+        letter-spacing: 0.04em;
+      }
+      #site-title .bracket { color: #475569; }
+      #cs-header nav { display: flex; align-items: center; gap: 1.5rem; }
+      #home-link {
+        color: var(--header-link);
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        transition: color 0.15s;
+      }
+      #home-link:hover { color: var(--header-accent); }
+      #theme-btn {
+        background: none; border: none; cursor: pointer;
+        color: var(--header-link); padding: 4px;
+        display: flex; align-items: center; transition: color 0.15s;
+      }
+      #theme-btn:hover { color: var(--header-accent); }
+      #theme-btn svg { width: 20px; height: 20px; }
+
+      /* ── Main content ── */
+      .page-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 1.5rem 1rem;
+        gap: 1rem;
+      }
+      #infoPanel {
+        padding: 1rem 1.25rem;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        max-width: 600px;
+        width: 100%;
+      }
+      html.dark #infoPanel { box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
+      #infoPanel h2 {
+        margin-bottom: 0.75rem;
+        color: var(--accent);
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+      #infoPanel p {
+        margin-bottom: 0.5rem;
+        line-height: 1.6;
+        font-size: 0.9rem;
+        color: var(--text);
+      }
+      .value-display { font-weight: 700; color: var(--value-color); }
+      .description-list { padding-left: 1.25rem; margin-top: 0.25rem; }
+      .description-list li { font-size: 0.875rem; color: var(--text-muted); }
+
+      #controls { display: flex; gap: 0.75rem; justify-content: center; }
+      .sim-btn {
+        padding: 0.5rem 1.25rem;
+        border-radius: 6px;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: opacity 0.15s, background-color 0.2s;
+      }
+      .sim-btn:hover { opacity: 0.88; }
+      #playPauseButton { background: #16a34a; }
+      #playPauseButton.paused { background: #ca8a04; }
+      #stepButton { background: #0ea5e9; }
+
+      canvas {
+        border: 1px solid var(--canvas-border);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        max-width: 100%;
+      }
+      html.dark canvas { box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
-
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
 <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+  <!-- CS Learning Header -->
+  <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
+  <div class="page-main">
     <div id="infoPanel">
-        <h2>Vertical Circular Motion (Energy Conservation)</h2>
-        <p id="simulationDescription">Calculating description...</p>
-        <p>The <span style="color: red; font-weight:bold;">red arrow</span> on the string indicates the tension. Its thickness changes:
-            <ul class="description-list">
-                <li><strong>Thickest</strong> at the bottom (maximum tension).</li>
-                <li><strong>Thinnest</strong> at the top (minimum tension).</li>
-            </ul>
-        </p>
-        <p>Current Linear Speed: <span id="speedValueDisplay" class="value-display">N/A</span></p>
-        <p>Current Angular Velocity: <span id="angularVelocityDisplay" class="value-display">N/A</span></p>
-        <p>Current Tension: <span id="tensionValueDisplay" class="value-display">N/A</span></p>
-        <p>Weight Component (towards centre): <span id="weightComponentValueDisplay" class="value-display">N/A</span></p>
-        <p>Total Force (towards centre / Centripetal): <span id="totalForceValueDisplay" class="value-display">N/A</span></p>
+      <h2>Vertical Circular Motion (Energy Conservation)</h2>
+      <p id="simulationDescription">Calculating description...</p>
+      <p>The <span style="color:#ef4444;font-weight:bold;">red arrow</span> on the string indicates the tension. Its thickness changes:
+        <ul class="description-list">
+          <li><strong>Thickest</strong> at the bottom (maximum tension).</li>
+          <li><strong>Thinnest</strong> at the top (minimum tension).</li>
+        </ul>
+      </p>
+      <p>Current Linear Speed: <span id="speedValueDisplay" class="value-display">N/A</span></p>
+      <p>Current Angular Velocity: <span id="angularVelocityDisplay" class="value-display">N/A</span></p>
+      <p>Current Tension: <span id="tensionValueDisplay" class="value-display">N/A</span></p>
+      <p>Weight Component (towards centre): <span id="weightComponentValueDisplay" class="value-display">N/A</span></p>
+      <p>Total Force (towards centre / Centripetal): <span id="totalForceValueDisplay" class="value-display">N/A</span></p>
     </div>
 
-    <div id="controls" class="mb-4 text-center"> <button id="playPauseButton" class="button play-pause-button bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mr-2">PAUSE</button>
-        <button id="stepButton" class="button step-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">STEP (+12°)</button>
+    <div id="controls">
+      <button id="playPauseButton" class="sim-btn">PAUSE</button>
+      <button id="stepButton" class="sim-btn">STEP (+12°)</button>
     </div>
 
     <canvas id="motionCanvas"></canvas>
+  </div>
 
-    <script>
-        window.onload = function() {
-            const canvas = document.getElementById('motionCanvas');
-            const ctx = canvas.getContext('2d');
-            // Info panel elements
-            const descriptionDisplay = document.getElementById('simulationDescription');
-            const speedValueDisplay = document.getElementById('speedValueDisplay');
-            const angularVelocityDisplay = document.getElementById('angularVelocityDisplay');
-            const tensionValueDisplay = document.getElementById('tensionValueDisplay');
-            const weightComponentValueDisplay = document.getElementById('weightComponentValueDisplay');
-            const totalForceValueDisplay = document.getElementById('totalForceValueDisplay');
-            // Control buttons
-            const playPauseButton = document.getElementById('playPauseButton');
-            const stepButton = document.getElementById('stepButton');
+  <script>
+    // ── Theme ──
+    function getCanvasColors() {
+      const dark = document.documentElement.classList.contains('dark');
+      return {
+        bg: dark ? '#1e293b' : '#ffffff',
+        pivot: dark ? '#94a3b8' : '#555555',
+        pivotStroke: dark ? '#cbd5e1' : '#333333',
+        ball: dark ? '#38bdf8' : '#007bff',
+        ballStroke: dark ? '#0284c7' : '#0056b3',
+        string: dark ? '#94a3b8' : '#000000',
+        tension: '#ef4444'
+      };
+    }
 
-            // --- Canvas Configuration ---
-            const canvasWidth = 600;
-            const canvasHeight = 400; // Adjusted height slightly for buttons
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
+    function applyTheme(mode) {
+      const html = document.documentElement;
+      const sun = document.getElementById('icon-sun');
+      const moon = document.getElementById('icon-moon');
+      if (mode === 'dark') {
+        html.classList.add('dark');
+        sun.style.display = 'block';
+        moon.style.display = 'none';
+      } else {
+        html.classList.remove('dark');
+        sun.style.display = 'none';
+        moon.style.display = 'block';
+      }
+    }
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      const next = isDark ? 'light' : 'dark';
+      localStorage.setItem('uimode', next);
+      applyTheme(next);
+    }
+    (function initTheme() {
+      const saved = localStorage.getItem('uimode');
+      const mode = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      applyTheme(mode);
+    })();
 
-            const centerX = canvasWidth / 2;
-            const r_pixels = 120; 
-            const centerY = r_pixels + 60; // Adjusted centerY for new canvas height
+    // ── Simulation ──
+    window.onload = function() {
+      const canvas = document.getElementById('motionCanvas');
+      const ctx = canvas.getContext('2d');
+      const descriptionDisplay = document.getElementById('simulationDescription');
+      const speedValueDisplay = document.getElementById('speedValueDisplay');
+      const angularVelocityDisplay = document.getElementById('angularVelocityDisplay');
+      const tensionValueDisplay = document.getElementById('tensionValueDisplay');
+      const weightComponentValueDisplay = document.getElementById('weightComponentValueDisplay');
+      const totalForceValueDisplay = document.getElementById('totalForceValueDisplay');
+      const playPauseButton = document.getElementById('playPauseButton');
+      const stepButton = document.getElementById('stepButton');
 
-            const ballRadius = 12;    
-            const pivotRadius = 6;     
+      const canvasWidth = 600, canvasHeight = 400;
+      canvas.width = canvasWidth; canvas.height = canvasHeight;
+      const centerX = canvasWidth / 2;
+      const r_pixels = 120;
+      const centerY = r_pixels + 60;
+      const ballRadius = 12, pivotRadius = 6;
 
-            // --- Physics Parameters ---
-            const mass_kg = 1.0; 
-            const gravity_m_s2 = 9.8; 
-            const r_m = r_pixels / 100.0; 
+      const mass_kg = 1.0, gravity_m_s2 = 9.8;
+      const r_m = r_pixels / 100.0;
+      const initial_speed_at_bottom_m_s = 8;
+      const E_total_J = 0.5 * mass_kg * Math.pow(initial_speed_at_bottom_m_s, 2);
 
-            const initial_speed_at_bottom_m_s = 8; 
-            const E_total_J = 0.5 * mass_kg * Math.pow(initial_speed_at_bottom_m_s, 2);
+      descriptionDisplay.textContent = `A ${mass_kg}kg ball on a ${r_m.toFixed(r_m)}m string (initially ${initial_speed_at_bottom_m_s.toFixed(1)}m/s at bottom). Energy is conserved.`;
 
-            descriptionDisplay.textContent = `A ${mass_kg}kg ball on a ${r_m.toFixed(r_m)}m string (initially ${initial_speed_at_bottom_m_s.toFixed(1)}m/s at bottom). Energy is conserved.`;
+      const v_bottom_m_s = initial_speed_at_bottom_m_s;
+      const ke_top_J = E_total_J - (mass_kg * gravity_m_s2 * 2 * r_m);
+      let v_top_m_s = ke_top_J > 0 ? Math.sqrt((2 * ke_top_J) / mass_kg) : 0;
 
-            const v_bottom_m_s = initial_speed_at_bottom_m_s;
-            const ke_top_J = E_total_J - (mass_kg * gravity_m_s2 * 2 * r_m);
-            let v_top_m_s = 0;
-            if (ke_top_J > 0) {
-                v_top_m_s = Math.sqrt((2 * ke_top_J) / mass_kg);
-            } else {
-                console.warn("Initial energy may not be enough for a full circle with a taut string.");
-            }
-            
-            const T_actual_max_at_bottom = (mass_kg * v_bottom_m_s**2 / r_m) + mass_kg * gravity_m_s2;
-            let T_actual_min_at_top = (ke_top_J > 0 ? (mass_kg * v_top_m_s**2 / r_m) : 0) - mass_kg * gravity_m_s2;
-             if (ke_top_J <= 0) T_actual_min_at_top = -mass_kg * gravity_m_s2; // Theoretical if v_top is effectively 0 or less
+      const T_actual_max_at_bottom = (mass_kg * v_bottom_m_s**2 / r_m) + mass_kg * gravity_m_s2;
+      let T_actual_min_at_top = (ke_top_J > 0 ? (mass_kg * v_top_m_s**2 / r_m) : 0) - mass_kg * gravity_m_s2;
+      if (ke_top_J <= 0) T_actual_min_at_top = -mass_kg * gravity_m_s2;
+      const tensionRange_actual = T_actual_max_at_bottom - T_actual_min_at_top;
 
-            const tensionRange_actual = T_actual_max_at_bottom - T_actual_min_at_top;
-            
-            // --- Animation State ---
-            let angle_rad = 0; 
-            let lastTime = 0;
-            let paused = false; // Animation starts playing
-            const stepAngleIncrement = (2 * Math.PI) / 30; // 12 degrees
-            const epsilon = 1e-6; // Small value for floating point comparisons
+      let angle_rad = 0, lastTime = 0, paused = false;
+      const stepAngleIncrement = (2 * Math.PI) / 30;
+      const epsilon = 1e-6;
+      const minArrowThickness = 2, maxArrowThickness = 10, arrowSegmentLengthRatio = 0.7;
 
-            // --- Drawing Configuration ---
-            const stringBaseColor = "black"; 
-            const tensionArrowColor = "red"; 
-            const minArrowThickness = 2;  
-            const maxArrowThickness = 10; 
-            const arrowSegmentLengthRatio = 0.7; 
+      function drawPivot(c) {
+        ctx.beginPath(); ctx.arc(centerX, centerY, pivotRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = c.pivot; ctx.fill();
+        ctx.strokeStyle = c.pivotStroke; ctx.lineWidth = 1; ctx.stroke();
+      }
+      function drawBall(ballX, ballY, c) {
+        ctx.beginPath(); ctx.arc(ballX, ballY, ballRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = c.ball; ctx.fill();
+        ctx.strokeStyle = c.ballStroke; ctx.lineWidth = 2; ctx.stroke();
+      }
+      function drawStaticString(ballX, ballY, c) {
+        ctx.beginPath(); ctx.moveTo(centerX, centerY); ctx.lineTo(ballX, ballY);
+        ctx.strokeStyle = c.string; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      function drawDynamicTensionArrow(ballX, ballY, normalizedTension, c) {
+        const actualArrowThickness = minArrowThickness + normalizedTension * (maxArrowThickness - minArrowThickness);
+        const dxToCenter = centerX - ballX, dyToCenter = centerY - ballY;
+        const currentStringPixelLength = Math.sqrt(dxToCenter**2 + dyToCenter**2);
+        const unitDx = dxToCenter / currentStringPixelLength, unitDy = dyToCenter / currentStringPixelLength;
+        const arrowBodyEndX = ballX + unitDx * (currentStringPixelLength * arrowSegmentLengthRatio);
+        const arrowBodyEndY = ballY + unitDy * (currentStringPixelLength * arrowSegmentLengthRatio);
+        ctx.beginPath(); ctx.moveTo(ballX, ballY); ctx.lineTo(arrowBodyEndX, arrowBodyEndY);
+        ctx.strokeStyle = c.tension; ctx.lineWidth = Math.max(0.1, actualArrowThickness); ctx.lineCap = "butt"; ctx.stroke();
+        const arrowHeadBaseSize = 6;
+        const arrowHeadLength = arrowHeadBaseSize + actualArrowThickness * 1.5;
+        const arrowHeadWidth = arrowHeadBaseSize / 1.5 + actualArrowThickness;
+        const angleToCenterRad = Math.atan2(dyToCenter, dxToCenter);
+        ctx.save(); ctx.translate(arrowBodyEndX, arrowBodyEndY); ctx.rotate(angleToCenterRad);
+        ctx.beginPath(); ctx.moveTo(0, 0);
+        ctx.lineTo(-arrowHeadLength, -arrowHeadWidth / 2);
+        ctx.lineTo(-arrowHeadLength * 0.7, 0);
+        ctx.lineTo(-arrowHeadLength, arrowHeadWidth / 2);
+        ctx.closePath(); ctx.fillStyle = c.tension; ctx.fill();
+        ctx.restore();
+      }
 
-            // --- Drawing Functions ---
-            function drawPivot() { /* ... (same as before) ... */ 
-                ctx.beginPath(); ctx.arc(centerX, centerY, pivotRadius, 0, 2 * Math.PI);
-                ctx.fillStyle = "#555"; ctx.fill(); ctx.strokeStyle = "#333";
-                ctx.lineWidth = 1; ctx.stroke();
-            }
-            function drawBall(ballX, ballY) { /* ... (same as before) ... */ 
-                ctx.beginPath(); ctx.arc(ballX, ballY, ballRadius, 0, 2 * Math.PI);
-                ctx.fillStyle = "#007bff"; ctx.fill(); ctx.strokeStyle = "#0056b3";
-                ctx.lineWidth = 2; ctx.stroke();
-            }
-            function drawStaticString(ballX, ballY) { /* ... (same as before) ... */
-                ctx.beginPath(); ctx.moveTo(centerX, centerY); ctx.lineTo(ballX, ballY);
-                ctx.strokeStyle = stringBaseColor; ctx.lineWidth = 1.5; ctx.stroke();
-            }
-            function drawDynamicTensionArrow(ballX, ballY, normalizedTension) { /* ... (same as before) ... */
-                const actualArrowThickness = minArrowThickness + normalizedTension * (maxArrowThickness - minArrowThickness);
-                const dxToCenter = centerX - ballX; const dyToCenter = centerY - ballY;
-                const currentStringPixelLength = Math.sqrt(dxToCenter**2 + dyToCenter**2);
-                const unitDx = dxToCenter / currentStringPixelLength; const unitDy = dyToCenter / currentStringPixelLength;
-                const arrowBodyStartX = ballX; const arrowBodyStartY = ballY;
-                const arrowBodyEndX = ballX + unitDx * (currentStringPixelLength * arrowSegmentLengthRatio);
-                const arrowBodyEndY = ballY + unitDy * (currentStringPixelLength * arrowSegmentLengthRatio);
-                ctx.beginPath(); ctx.moveTo(arrowBodyStartX, arrowBodyStartY); ctx.lineTo(arrowBodyEndX, arrowBodyEndY);
-                ctx.strokeStyle = tensionArrowColor; ctx.lineWidth = Math.max(0.1, actualArrowThickness);
-                ctx.lineCap = "butt"; ctx.stroke();
-                const arrowHeadBaseSize = 6; 
-                const arrowHeadLength = arrowHeadBaseSize + actualArrowThickness * 1.5; 
-                const arrowHeadWidth = arrowHeadBaseSize / 1.5 + actualArrowThickness;   
-                const angleToCenterRad = Math.atan2(dyToCenter, dxToCenter); 
-                ctx.save(); ctx.translate(arrowBodyEndX, arrowBodyEndY); ctx.rotate(angleToCenterRad); 
-                ctx.beginPath(); ctx.moveTo(0, 0); 
-                ctx.lineTo(-arrowHeadLength, -arrowHeadWidth / 2);
-                ctx.lineTo(-arrowHeadLength * 0.7, 0); 
-                ctx.lineTo(-arrowHeadLength, arrowHeadWidth / 2);
-                ctx.closePath(); ctx.fillStyle = tensionArrowColor; ctx.fill();
-                ctx.restore(); 
-            }
+      function calculateCurrentPhysics(currentAngle) {
+        const h_m = r_m * (1.0 - Math.cos(currentAngle));
+        const gpe_J = mass_kg * gravity_m_s2 * h_m;
+        let ke_J = E_total_J - gpe_J;
+        if (ke_J < 0) ke_J = 0;
+        const current_v_m_s = Math.sqrt((2 * ke_J) / mass_kg);
+        const current_omega_rad_s = r_m > 1e-6 ? current_v_m_s / r_m : 0;
+        const ballX = centerX + r_pixels * Math.sin(currentAngle);
+        const ballY = centerY + r_pixels * Math.cos(currentAngle);
+        const current_centripetal_force_N = r_m > 1e-6 ? mass_kg * current_v_m_s**2 / r_m : 0;
+        const current_tension_N = current_centripetal_force_N + mass_kg * gravity_m_s2 * Math.cos(currentAngle);
+        const weight_comp_towards_center_N = -mass_kg * gravity_m_s2 * Math.cos(currentAngle);
+        return { current_v_m_s, current_omega_rad_s, ballX, ballY, current_tension_N, weight_comp_towards_center_N, current_centripetal_force_N };
+      }
 
-            // --- Physics Calculation Function ---
-            function calculateCurrentPhysics(currentAngle) {
-                const h_m = r_m * (1.0 - Math.cos(currentAngle));
-                const gpe_J = mass_kg * gravity_m_s2 * h_m;
-                let ke_J = E_total_J - gpe_J;
-                if (ke_J < 0) ke_J = 0;
+      function updateDisplayAndDraw(physicsState) {
+        speedValueDisplay.textContent = physicsState.current_v_m_s.toFixed(2) + " m/s";
+        angularVelocityDisplay.textContent = physicsState.current_omega_rad_s.toFixed(2) + " rad/s";
+        tensionValueDisplay.textContent = physicsState.current_tension_N.toFixed(2) + " N";
+        weightComponentValueDisplay.textContent = physicsState.weight_comp_towards_center_N.toFixed(2) + " N";
+        totalForceValueDisplay.textContent = physicsState.current_centripetal_force_N.toFixed(2) + " N";
 
-                const current_v_m_s = Math.sqrt((2 * ke_J) / mass_kg);
-                let current_omega_rad_s = (r_m > 1e-6) ? (current_v_m_s / r_m) : 0;
+        let normalizedTension = 0;
+        if (tensionRange_actual > 1e-6) {
+          normalizedTension = (physicsState.current_tension_N - T_actual_min_at_top) / tensionRange_actual;
+        } else if (T_actual_max_at_bottom > 0) {
+          normalizedTension = physicsState.current_tension_N / T_actual_max_at_bottom;
+        }
+        normalizedTension = Math.max(0, Math.min(1, normalizedTension));
 
-                const ballX = centerX + r_pixels * Math.sin(currentAngle);
-                const ballY = centerY + r_pixels * Math.cos(currentAngle);
+        const c = getCanvasColors();
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        ctx.fillStyle = c.bg;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        drawPivot(c);
+        drawStaticString(physicsState.ballX, physicsState.ballY, c);
+        if (physicsState.current_tension_N > 1e-6) {
+          drawDynamicTensionArrow(physicsState.ballX, physicsState.ballY, normalizedTension, c);
+        }
+        drawBall(physicsState.ballX, physicsState.ballY, c);
+      }
 
-                const current_centripetal_force_N = (r_m > 1e-6) ? (mass_kg * current_v_m_s**2 / r_m) : 0;
-                const current_tension_N = current_centripetal_force_N + mass_kg * gravity_m_s2 * Math.cos(currentAngle);
-                const weight_comp_towards_center_N = -mass_kg * gravity_m_s2 * Math.cos(currentAngle);
-                
-                return {
-                    current_v_m_s, current_omega_rad_s, ballX, ballY,
-                    current_tension_N, weight_comp_towards_center_N,
-                    current_centripetal_force_N // Using this for Total Force display
-                };
-            }
+      function animate(timestamp) {
+        if (!paused) {
+          if (lastTime === 0) lastTime = timestamp;
+          const deltaTime_s = (timestamp - lastTime) / 1000.0;
+          lastTime = timestamp;
+          const tempState = calculateCurrentPhysics(angle_rad);
+          if (Math.abs(tempState.current_omega_rad_s) > epsilon || deltaTime_s === 0) {
+            angle_rad += tempState.current_omega_rad_s * deltaTime_s;
+          }
+          if (angle_rad > 2 * Math.PI) angle_rad -= 2 * Math.PI;
+          else if (angle_rad < 0) angle_rad += 2 * Math.PI;
+        }
+        const currentPhysicsState = calculateCurrentPhysics(angle_rad);
+        updateDisplayAndDraw(currentPhysicsState);
+        requestAnimationFrame(animate);
+      }
 
-            // --- Update Display and Drawing Function ---
-            function updateDisplayAndDraw(physicsState) {
-                speedValueDisplay.textContent = physicsState.current_v_m_s.toFixed(2) + " m/s";
-                angularVelocityDisplay.textContent = physicsState.current_omega_rad_s.toFixed(2) + " rad/s";
-                tensionValueDisplay.textContent = physicsState.current_tension_N.toFixed(2) + " N";
-                weightComponentValueDisplay.textContent = physicsState.weight_comp_towards_center_N.toFixed(2) + " N";
-                totalForceValueDisplay.textContent = physicsState.current_centripetal_force_N.toFixed(2) + " N";
+      playPauseButton.addEventListener('click', () => {
+        paused = !paused;
+        if (paused) {
+          playPauseButton.textContent = 'PLAY';
+          playPauseButton.classList.add('paused');
+        } else {
+          playPauseButton.textContent = 'PAUSE';
+          playPauseButton.classList.remove('paused');
+          lastTime = performance.now();
+        }
+      });
 
-                let normalizedTension = 0;
-                if (tensionRange_actual > 1e-6) {
-                    normalizedTension = (physicsState.current_tension_N - T_actual_min_at_top) / tensionRange_actual;
-                } else if (T_actual_max_at_bottom > 0) {
-                    normalizedTension = physicsState.current_tension_N / T_actual_max_at_bottom; 
-                }
-                normalizedTension = Math.max(0, Math.min(1, normalizedTension)); 
+      stepButton.addEventListener('click', () => {
+        if (!paused) {
+          paused = true;
+          playPauseButton.textContent = 'PLAY';
+          playPauseButton.classList.add('paused');
+        }
+        let numStepsSoFar = Math.floor(angle_rad / stepAngleIncrement + epsilon);
+        angle_rad = (numStepsSoFar + 1) * stepAngleIncrement;
+        if (angle_rad >= (2 * Math.PI - epsilon)) angle_rad = 0;
+        else if (angle_rad > 2 * Math.PI) angle_rad = angle_rad % (2 * Math.PI);
+        const currentPhysicsState = calculateCurrentPhysics(angle_rad);
+        updateDisplayAndDraw(currentPhysicsState);
+      });
 
-                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-                drawPivot();
-                drawStaticString(physicsState.ballX, physicsState.ballY); 
-                if (physicsState.current_tension_N > 1e-6) { 
-                    drawDynamicTensionArrow(physicsState.ballX, physicsState.ballY, normalizedTension);
-                }
-                drawBall(physicsState.ballX, physicsState.ballY); 
-            }
-
-            // --- Main Animation Loop ---
-            function animate(timestamp) {
-                if (!paused) {
-                    if (lastTime === 0) lastTime = timestamp;
-                    const deltaTime_s = (timestamp - lastTime) / 1000.0;
-                    lastTime = timestamp;
-
-                    const tempPhysicsStateForOmega = calculateCurrentPhysics(angle_rad);
-                    const omegaForUpdate = tempPhysicsStateForOmega.current_omega_rad_s;
-                    
-                    // Only advance angle if omega is not zero (e.g. if ball can't reach higher)
-                    if (Math.abs(omegaForUpdate) > epsilon || deltaTime_s === 0) { 
-                        angle_rad += omegaForUpdate * deltaTime_s;
-                    }
-
-
-                    if (angle_rad > 2 * Math.PI) angle_rad -= 2 * Math.PI; // More robust: angle_rad %= (2 * Math.PI)
-                    else if (angle_rad < 0) angle_rad += 2 * Math.PI; // Ensure positive angle
-                }
-                
-                const currentPhysicsState = calculateCurrentPhysics(angle_rad);
-                updateDisplayAndDraw(currentPhysicsState);
-                
-                requestAnimationFrame(animate);
-            }
-
-            // --- Event Listeners for Controls ---
-            playPauseButton.addEventListener('click', () => {
-                paused = !paused;
-                if (paused) {
-                    playPauseButton.textContent = 'PLAY';
-                    playPauseButton.classList.remove('bg-green-500', 'hover:bg-green-700');
-                    playPauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
-                } else {
-                    playPauseButton.textContent = 'PAUSE';
-                    playPauseButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
-                    playPauseButton.classList.add('bg-green-500', 'hover:bg-green-700');
-                    lastTime = performance.now(); // Reset time to prevent jump
-                }
-            });
-
-            stepButton.addEventListener('click', () => {
-                if (!paused) { // If playing, pause it first
-                    paused = true;
-                    playPauseButton.textContent = 'PLAY';
-                    playPauseButton.classList.remove('bg-green-500', 'hover:bg-green-700');
-                    playPauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
-                }
-                
-                // Calculate the number of full steps already passed, considering floating point inaccuracies
-                let numStepsSoFar = Math.floor(angle_rad / stepAngleIncrement + epsilon);
-                
-                // Set the angle to the next exact step increment
-                angle_rad = (numStepsSoFar + 1) * stepAngleIncrement;
-                
-                // Normalize angle to be within [0, 2*PI)
-                // Using modulo for cleaner wrap-around, especially if angle_rad could be exactly 2*PI
-                // angle_rad = angle_rad % (2 * Math.PI); 
-                // However, to match the main loop's normalization and ensure 2*PI becomes 0 for the next step calculation:
-                if (angle_rad >= (2 * Math.PI - epsilon)) { // If it's 2*PI or very close
-                     angle_rad = 0; // Snap to 0 for the next cycle start
-                } else if (angle_rad > 2 * Math.PI) { // General case if it overshoots by more
-                     angle_rad = angle_rad % (2 * Math.PI);
-                }
-
-
-                // Manually update for the new stepped angle. The main animation loop will continue from this state.
-                const currentPhysicsState = calculateCurrentPhysics(angle_rad);
-                updateDisplayAndDraw(currentPhysicsState);
-            });
-
-            // Initial calculation and draw
-            const initialPhysicsState = calculateCurrentPhysics(angle_rad);
-            updateDisplayAndDraw(initialPhysicsState);
-            
-            // Start the animation loop
-            requestAnimationFrame(animate);
-        };
-    </script>
+      const initialState = calculateCurrentPhysics(angle_rad);
+      updateDisplayAndDraw(initialState);
+      requestAnimationFrame(animate);
+    };
+  </script>
 </body>
 </html>

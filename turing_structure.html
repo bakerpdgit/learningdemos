@@ -4,12 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A-Level CS: Turing Machines Interactive</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <!-- React & Babel for standalone execution -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
     <style>
       /* Custom styles for animations and Drag&Drop elements */
       .fade-in {
@@ -49,26 +73,27 @@
         fill: #1f2937;
         font-weight: bold;
       }
+      html.dark .state-circle { fill: #1e293b; stroke: #94a3b8; }
+      html.dark .state-text { fill: #e2e8f0; }
+      html.dark .transition-line { stroke: #94a3b8; }
+      html.dark .transition-text { fill: #cbd5e1; }
     </style>
-    <style id="global-home-link-style">
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
-    </style>
-  </head>
-  <body class="bg-gray-100 text-gray-800 antialiased min-h-screen">
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
+      <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+</head>
+  <body class="antialiased">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -225,17 +250,17 @@
         revealText = "Reveal Solution",
       }) => {
         let fbClass = isCorrect
-          ? "bg-green-50 text-green-800 border-green-200"
-          : "bg-red-50 text-red-800 border-red-200";
+          ? "bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800"
+          : "bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800";
         if (feedbackType === "info")
-          fbClass = "bg-blue-50 text-blue-800 border-blue-200";
+          fbClass = "bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800";
         else if (feedbackType === "success")
-          fbClass = "bg-green-50 text-green-800 border-green-200";
+          fbClass = "bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800";
         else if (feedbackType === "error")
-          fbClass = "bg-red-50 text-red-800 border-red-200";
+          fbClass = "bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800";
 
         return (
-          <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-slate-600">
             <div className="flex flex-wrap gap-3 items-center">
               <button
                 onClick={onCheck}
@@ -248,7 +273,7 @@
               <button
                 onClick={onReveal}
                 disabled={showSolution || isCorrect}
-                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded shadow transition disabled:opacity-50 ml-auto"
+                className="px-6 py-2.5 bg-gray-200 dark:bg-slate-600 hover:bg-gray-300 dark:hover:bg-slate-500 text-gray-800 dark:text-slate-200 font-semibold rounded shadow transition disabled:opacity-50 ml-auto"
               >
                 {revealText}
               </button>
@@ -367,13 +392,13 @@
             height="60"
           >
             <div
-              className={`w-full h-full border-2 border-dashed ${placements[zone] ? "border-blue-500 bg-blue-50 hover:bg-red-50" : "border-gray-400 bg-gray-50/90 hover:bg-white"} flex items-center justify-center rounded-lg cursor-pointer transition relative group shadow-sm px-2 py-1 select-none`}
+              className={`w-full h-full border-2 border-dashed ${placements[zone] ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 hover:bg-red-50 dark:hover:bg-red-900/20" : "border-gray-400 dark:border-slate-500 bg-gray-50/90 dark:bg-slate-600/80 hover:bg-white dark:hover:bg-slate-600"} flex items-center justify-center rounded-lg cursor-pointer transition relative group shadow-sm px-2 py-1 select-none`}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => handleDrop(e, zone)}
               onClick={() => handleRemove(zone)}
             >
               {placements[zone] ? (
-                <span className="font-bold text-blue-800 text-center text-sm leading-tight group-hover:opacity-10 transition">
+                <span className="font-bold text-blue-800 dark:text-blue-300 text-center text-sm leading-tight group-hover:opacity-10 transition">
                   {drags.find((d) => d.id === placements[zone]).label}
                 </span>
               ) : (
@@ -392,12 +417,12 @@
 
         return (
           <div className="fade-in">
-            <p className="mb-6 text-gray-700">
+            <p className="mb-6 text-gray-700 dark:text-slate-300">
               Drag and drop the labels to correctly identify the structural
               components of a Turing Machine model.
             </p>
 
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm mb-8 overflow-hidden w-full relative aspect-[2.13]">
+            <div className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl shadow-sm mb-8 overflow-hidden w-full relative aspect-[2.13]">
               {/* Unified SVG coordinate space (960x450) */}
               <svg
                 viewBox="0 0 960 450"
@@ -752,13 +777,13 @@
             </div>
 
             {/* Word Bank */}
-            <div className="flex gap-3 justify-center mt-6 p-5 bg-gray-200 rounded-xl min-h-[5rem] flex-wrap shadow-inner">
+            <div className="flex gap-3 justify-center mt-6 p-5 bg-gray-200 dark:bg-slate-700 rounded-xl min-h-[5rem] flex-wrap shadow-inner">
               {availableDrags.map((d) => (
                 <div
                   key={d.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, d.id)}
-                  className="bg-white border-2 border-gray-300 px-4 py-2.5 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 hover:text-blue-700 cursor-grab active:cursor-grabbing font-bold text-gray-700 transition"
+                  className="bg-white dark:bg-slate-600 border-2 border-gray-300 dark:border-slate-500 px-4 py-2.5 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 hover:text-blue-700 cursor-grab active:cursor-grabbing font-bold text-gray-700 dark:text-slate-200 transition"
                 >
                   {d.label}
                 </div>
@@ -821,7 +846,7 @@
 
         return (
           <div className="fade-in">
-            <p className="mb-6 text-gray-700">
+            <p className="mb-6 text-gray-700 dark:text-slate-300">
               Convert the visual state transition below into{" "}
               <strong>Transition Function</strong> notation.
             </p>
@@ -829,7 +854,7 @@
             {/* Mini Diagram */}
             <svg
               viewBox="0 0 300 120"
-              className="w-full max-w-md mx-auto bg-white border border-gray-300 rounded-lg shadow-sm mb-8"
+              className="w-full max-w-md mx-auto bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-500 rounded-lg shadow-sm mb-8"
             >
               <defs>
                 <marker
@@ -866,8 +891,8 @@
               </text>
             </svg>
 
-            <div className="flex items-center justify-center gap-2 text-2xl font-mono my-8 flex-wrap bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-inner">
-              <span className="font-bold text-gray-800">δ (</span>
+            <div className="flex items-center justify-center gap-2 text-2xl font-mono my-8 flex-wrap bg-gray-50 dark:bg-slate-700 p-6 rounded-lg border border-gray-200 dark:border-slate-600 shadow-inner">
+              <span className="font-bold text-gray-800 dark:text-slate-200">δ (</span>
               <input
                 type="text"
                 value={vals[0]}
@@ -876,7 +901,7 @@
                 placeholder="State"
                 className="w-16 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
               />
-              <span className="font-bold text-gray-800">,</span>
+              <span className="font-bold text-gray-800 dark:text-slate-200">,</span>
               <input
                 type="text"
                 value={vals[1]}
@@ -885,7 +910,7 @@
                 placeholder="In"
                 className="w-12 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
               />
-              <span className="font-bold text-gray-800">) = (</span>
+              <span className="font-bold text-gray-800 dark:text-slate-200">) = (</span>
               <input
                 type="text"
                 value={vals[2]}
@@ -894,7 +919,7 @@
                 placeholder="State"
                 className="w-16 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
               />
-              <span className="font-bold text-gray-800">,</span>
+              <span className="font-bold text-gray-800 dark:text-slate-200">,</span>
               <input
                 type="text"
                 value={vals[3]}
@@ -903,7 +928,7 @@
                 placeholder="Out"
                 className="w-12 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
               />
-              <span className="font-bold text-gray-800">,</span>
+              <span className="font-bold text-gray-800 dark:text-slate-200">,</span>
               <input
                 type="text"
                 value={vals[4]}
@@ -912,7 +937,7 @@
                 placeholder="Move"
                 className="w-14 border-b-4 border-gray-400 text-center focus:outline-none focus:border-blue-500 bg-transparent text-blue-700 font-bold"
               />
-              <span className="font-bold text-gray-800">)</span>
+              <span className="font-bold text-gray-800 dark:text-slate-200">)</span>
             </div>
 
             <QuestionActions
@@ -966,39 +991,39 @@
 
         return (
           <div className="fade-in">
-            <p className="mb-6 text-gray-700">
+            <p className="mb-6 text-gray-700 dark:text-slate-300">
               Given the transition function rule{" "}
               <strong>δ(S2, 1) = (S3, 0, L)</strong>, complete the corresponding
               row in the state transition table.
             </p>
 
-            <div className="overflow-x-auto shadow rounded-lg border border-gray-300 mb-8">
+            <div className="overflow-x-auto shadow rounded-lg border border-gray-300 dark:border-slate-600 mb-8">
               <table className="w-full text-center">
-                <thead className="bg-gray-800 text-white font-semibold">
+                <thead className="bg-gray-800 dark:bg-slate-700 text-white font-semibold">
                   <tr>
-                    <th className="p-3 border-r border-gray-600">
+                    <th className="p-3 border-r border-gray-600 dark:border-slate-600">
                       Current State
                     </th>
-                    <th className="p-3 border-r border-gray-600">
+                    <th className="p-3 border-r border-gray-600 dark:border-slate-600">
                       Input Symbol
                     </th>
-                    <th className="p-3 border-r border-gray-600">Next State</th>
-                    <th className="p-3 border-r border-gray-600">
+                    <th className="p-3 border-r border-gray-600 dark:border-slate-600">Next State</th>
+                    <th className="p-3 border-r border-gray-600 dark:border-slate-600">
                       Output Symbol
                     </th>
                     <th className="p-3">Head Move</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white">
+                <tbody className="bg-white dark:bg-slate-800">
                   <tr>
                     {[0, 1, 2, 3, 4].map((i) => (
-                      <td key={i} className="p-2 border-r border-gray-200">
+                      <td key={i} className="p-2 border-r border-gray-200 dark:border-slate-600">
                         <input
                           type="text"
                           value={vals[i]}
                           onChange={(e) => setVal(i, e.target.value)}
                           disabled={showSolution || isCorrect}
-                          className="w-full text-center p-2 bg-gray-50 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold text-lg"
+                          className="w-full text-center p-2 bg-gray-50 dark:bg-slate-700 dark:text-slate-100 dark:border-slate-500 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold text-lg"
                         />
                       </td>
                     ))}
@@ -1064,9 +1089,9 @@
 
         return (
           <div className="fade-in">
-            <p className="mb-6 text-gray-700">{question.instructions}</p>
+            <p className="mb-6 text-gray-700 dark:text-slate-300">{question.instructions}</p>
 
-            <div className="text-lg leading-loose bg-white p-6 rounded-lg shadow border border-gray-200">
+            <div className="text-lg leading-loose bg-white dark:bg-slate-700 p-6 rounded-lg shadow border border-gray-200 dark:border-slate-600 dark:text-slate-200">
               {question.segments.map((seg, idx) => {
                 if (seg.type === "text")
                   return <span key={idx}>{seg.content}</span>;
@@ -1077,15 +1102,15 @@
                     val.trim().toLowerCase() ===
                       seg.answer.toLowerCase().substring(1);
                   const colorClass = showSolution
-                    ? "text-green-700 border-green-500"
+                    ? "text-green-700 dark:text-green-400 border-green-500"
                     : isCorrect
-                      ? "text-green-700"
-                      : "text-blue-800";
+                      ? "text-green-700 dark:text-green-400"
+                      : "text-blue-800 dark:text-blue-400";
 
                   return (
                     <span
                       key={idx}
-                      className="inline-flex items-baseline border-b-2 border-gray-400 bg-gray-50 px-1 mx-1 rounded-t shadow-sm"
+                      className="inline-flex items-baseline border-b-2 border-gray-400 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 px-1 mx-1 rounded-t shadow-sm"
                     >
                       <span className={`font-bold ${colorClass}`}>
                         {seg.hint}
@@ -1159,14 +1184,14 @@
 
         return (
           <div className="fade-in">
-            <p className="mb-6 text-gray-800 text-lg font-medium">
+            <p className="mb-6 text-gray-800 dark:text-slate-100 text-lg font-medium">
               {question.text}
             </p>
             <div className="space-y-3 mb-6">
               {opts.map((opt) => (
                 <label
                   key={opt.id}
-                  className={`block p-4 border-2 rounded-lg cursor-pointer transition ${selected === opt.id ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"} ${(showSolution || isCorrect) && opt.isCorrect ? "border-green-500 bg-green-50 font-bold" : ""}`}
+                  className={`block p-4 border-2 rounded-lg cursor-pointer transition ${selected === opt.id ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30" : "border-gray-200 dark:border-slate-600 dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"} ${(showSolution || isCorrect) && opt.isCorrect ? "border-green-500 bg-green-50 dark:bg-green-900/30 font-bold" : ""}`}
                 >
                   <div className="flex items-center gap-3">
                     <input
@@ -1176,7 +1201,7 @@
                       disabled={showSolution || isCorrect}
                       className="w-5 h-5 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-gray-700">{opt.text}</span>
+                    <span className="text-gray-700 dark:text-slate-200">{opt.text}</span>
                   </div>
                 </label>
               ))}
@@ -1290,13 +1315,13 @@
 
         return (
           <div className="fade-in">
-            <p className="mb-4 text-gray-700">
+            <p className="mb-4 text-gray-700 dark:text-slate-300">
               The Turing machine below is designed to shift a contiguous block
-              of <code className="bg-gray-200 px-1 rounded">0</code>s to the
+              of <code className="bg-gray-200 dark:bg-slate-600 px-1 rounded">0</code>s to the
               right side of a single{" "}
-              <code className="bg-gray-200 px-1 rounded">1</code>.
+              <code className="bg-gray-200 dark:bg-slate-600 px-1 rounded">1</code>.
             </p>
-            <p className="mb-6 text-sm bg-blue-50 border-l-4 border-blue-500 p-3 text-blue-800">
+            <p className="mb-6 text-sm bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-3 text-blue-800 dark:text-blue-300">
               <strong>Task:</strong> Trace the execution row by row. Indicate
               the current position of the read/write head by appending an
               asterisk (<code>*</code>) to the cell's symbol (e.g.,{" "}
@@ -1307,7 +1332,7 @@
               width="100%"
               height="auto"
               viewBox="0 0 700 380"
-              className="bg-white border rounded shadow-sm mb-6 max-w-2xl mx-auto block"
+              className="bg-white dark:bg-slate-700 border dark:border-slate-600 rounded shadow-sm mb-6 max-w-2xl mx-auto block"
             >
               <defs>
                 <marker
@@ -1448,13 +1473,13 @@
               </g>
             </svg>
 
-            <div className="overflow-x-auto shadow rounded-lg border border-gray-300">
+            <div className="overflow-x-auto shadow rounded-lg border border-gray-300 dark:border-slate-600">
               <table className="w-full text-center font-mono text-sm">
-                <thead className="bg-gray-800 text-white font-sans">
+                <thead className="bg-gray-800 dark:bg-slate-700 text-white font-sans">
                   <tr>
-                    <th className="p-2 border-r border-gray-600">State</th>
+                    <th className="p-2 border-r border-gray-600 dark:border-slate-600">State</th>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                      <th key={i} className="p-2 border-r border-gray-600 w-10">
+                      <th key={i} className="p-2 border-r border-gray-600 dark:border-slate-600 w-10">
                         C{i}
                       </th>
                     ))}
@@ -1464,12 +1489,12 @@
                   {history.map((row, rIdx) => (
                     <tr
                       key={rIdx}
-                      className={rIdx === 0 ? "bg-gray-50" : "bg-green-50"}
+                      className={rIdx === 0 ? "bg-gray-50 dark:bg-slate-700" : "bg-green-50 dark:bg-green-900/20"}
                     >
                       {row.map((cell, cIdx) => (
                         <td
                           key={cIdx}
-                          className="border border-gray-200 p-2 font-bold text-gray-700"
+                          className="border border-gray-200 dark:border-slate-600 p-2 font-bold text-gray-700 dark:text-slate-200"
                         >
                           {cell}
                         </td>
@@ -1477,9 +1502,9 @@
                     </tr>
                   ))}
                   {!showSolution && !isCorrect && (
-                    <tr className="bg-white relative shadow-inner ring-2 ring-blue-400 inset-0">
+                    <tr className="bg-white dark:bg-slate-700 relative shadow-inner ring-2 ring-blue-400 inset-0">
                       {currentRowInput.map((val, cIdx) => (
-                        <td key={cIdx} className="border border-gray-200 p-0">
+                        <td key={cIdx} className="border border-gray-200 dark:border-slate-600 p-0">
                           <input
                             type="text"
                             value={val}
@@ -1488,7 +1513,7 @@
                               newRow[cIdx] = e.target.value;
                               setCurrentRowInput(newRow);
                             }}
-                            className="w-full h-full p-2 text-center focus:outline-none bg-transparent font-bold text-blue-700"
+                            className="w-full h-full p-2 text-center focus:outline-none bg-transparent font-bold text-blue-700 dark:text-blue-400"
                             placeholder="?"
                           />
                         </td>
@@ -1538,6 +1563,17 @@
 
       // --- MAIN APP AND LOGIC ---
 
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      );
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      );
+
       const FilterMenu = ({ activeTopics, onApply }) => {
         const [isOpen, setIsOpen] = useState(false);
         const [local, setLocal] = useState(activeTopics);
@@ -1564,8 +1600,8 @@
               Filter Sub-topics
             </button>
             {isOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 p-5">
-                <h4 className="font-bold mb-4 text-gray-800 border-b pb-2">
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-700 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 z-50 p-5">
+                <h4 className="font-bold mb-4 text-gray-800 dark:text-slate-100 border-b dark:border-slate-600 pb-2">
                   Select Sub-topics
                 </h4>
                 {Object.keys(local).map((topic) => (
@@ -1581,7 +1617,7 @@
                       }
                       className="rounded text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer"
                     />
-                    <span className="text-gray-700 group-hover:text-blue-600 transition font-medium">
+                    <span className="text-gray-700 dark:text-slate-200 group-hover:text-blue-600 transition font-medium">
                       {topic}
                     </span>
                   </label>
@@ -1602,6 +1638,14 @@
       };
 
       const App = () => {
+        const [isDark, setIsDark] = useState(() => {
+          try { return localStorage.getItem("uimode") === "dark" || (!localStorage.getItem("uimode") && window.matchMedia("(prefers-color-scheme: dark)").matches); } catch(e) { return false; }
+        });
+        useEffect(() => {
+          document.documentElement.classList.toggle("dark", isDark);
+          try { localStorage.setItem("uimode", isDark ? "dark" : "light"); } catch(e) {}
+        }, [isDark]);
+
         const defaultTopics = {
           Structure: true,
           Notation: true,
@@ -1659,17 +1703,45 @@
         };
 
         return (
-          <div className="flex flex-col min-h-screen">
-            <header className="bg-gray-900 text-white p-5 shadow-lg border-b-4 border-indigo-500">
+          <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-slate-900">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={() => setIsDark(d => !d)}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {isDark ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+            <header className="bg-gray-800 dark:bg-slate-800 text-white p-4 shadow-lg border-b-4 border-indigo-500 sticky top-[58px] z-40">
               <div className="max-w-5xl mx-auto flex justify-between items-center">
-                <div>
-                  <h1 className="text-2xl font-bold tracking-wide uppercase">
-                    AQA A-Level CS
-                  </h1>
-                  <h2 className="text-indigo-300 font-medium mt-1">
-                    Interactive Turing Machines
-                  </h2>
-                </div>
+                <h2 className="text-indigo-300 font-medium">
+                  Interactive Turing Machines
+                </h2>
                 <FilterMenu
                   activeTopics={activeTopics}
                   onApply={handleApplyFilter}
@@ -1679,12 +1751,12 @@
 
             <main className="flex-grow max-w-5xl mx-auto w-full p-6 py-10">
               {currentQuestion ? (
-                <div className="bg-white rounded-2xl shadow-xl p-8 relative border border-gray-200">
-                  <div className="absolute -top-4 -right-4 bg-indigo-100 text-indigo-800 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-md border border-indigo-200">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 relative border border-gray-200 dark:border-slate-700">
+                  <div className="absolute -top-4 -right-4 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-md border border-indigo-200 dark:border-indigo-700">
                     {currentQuestion.topic}
                   </div>
 
-                  <h2 className="text-2xl font-bold text-gray-800 border-b-2 border-gray-100 pb-4 mb-6 flex items-center gap-3">
+                  <h2 className="text-2xl font-bold text-gray-800 dark:text-slate-100 border-b-2 border-gray-100 dark:border-slate-600 pb-4 mb-6 flex items-center gap-3">
                     <span className="bg-blue-600 w-2 h-8 rounded-full"></span>
                     {currentQuestion.title}
                   </h2>
@@ -1696,7 +1768,7 @@
                   />
 
                   {canNext && (
-                    <div className="mt-8 text-right border-t border-gray-100 pt-6 fade-in">
+                    <div className="mt-8 text-right border-t border-gray-100 dark:border-slate-600 pt-6 fade-in">
                       <button
                         onClick={() => pickNextQuestion(activeTopics)}
                         className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition transform hover:-translate-y-0.5"
@@ -1707,7 +1779,7 @@
                   )}
                 </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-md p-12 text-center text-gray-500 border border-gray-200">
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-12 text-center text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
                   <svg
                     className="w-16 h-16 mx-auto mb-4 text-gray-300"
                     fill="none"

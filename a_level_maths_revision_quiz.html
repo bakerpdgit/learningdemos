@@ -1,515 +1,498 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>A Level Maths Revision Quiz</title>
-    <script>
-      window.MathJax = {
-        tex: {
-          inlineMath: [["\\(", "\\)"]],
-          displayMath: [["\\[", "\\]"]],
-        },
-        svg: { fontCache: "global" },
-      };
-    </script>
-    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <style>
-      :root {
-        --bg: #f1f5f9;
-        --card: #ffffff;
-        --text: #0f172a;
-        --muted: #475569;
-        --primary: #4f46e5;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        min-height: 100vh;
-      }
-
-      .layout {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 1rem;
-        min-height: 100vh;
-        display: grid;
-        gap: 1rem;
-        align-items: center;
-      }
-
-      @media (min-width: 900px) {
-        .layout {
-          grid-template-columns: 1fr 1fr;
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A Level Maths Revision Quiz</title>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag("js", new Date());
+    gtag("config", "G-DYQESQXT38");
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] },
+      svg: { fontCache: "global" },
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <!-- Prevent FOUC: apply dark class before render -->
+  <script>
+    (function () {
+      try {
+        var mode = localStorage.getItem("uimode");
+        if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
         }
-      }
-
-      .card {
-        background: var(--card);
-        border-radius: 20px;
-        padding: 1.5rem;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-      }
-
-      .meta {
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      .bar {
-        width: 100%;
-        height: 8px;
-        background: #e2e8f0;
-        border-radius: 999px;
-        overflow: hidden;
-        margin: 1rem 0 1.25rem;
-      }
-
-      .bar-fill {
-        height: 100%;
-        background: var(--primary);
-        width: 0%;
-        transition: width 0.35s ease;
-      }
-
-      .question {
-        border: 1px solid #cbd5e1;
-        border-radius: 14px;
-        padding: 1rem;
-        line-height: 1.5;
-        min-height: 130px;
-      }
-
-      .shake {
-        animation: shake 0.4s;
-      }
-
-      @keyframes shake {
-        0%,
-        100% {
-          transform: translateX(0);
-        }
-        25% {
-          transform: translateX(-6px);
-        }
-        75% {
-          transform: translateX(6px);
-        }
-      }
-
-      form {
-        margin-top: 1rem;
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-      }
-
-      input,
-      button {
-        border-radius: 10px;
-        border: 1px solid #cbd5e1;
-        padding: 0.75rem 0.9rem;
-        font-size: 1rem;
-      }
-
-      input {
-        flex: 1;
-        min-width: 220px;
-      }
-
-      button {
-        background: var(--primary);
-        color: #fff;
-        border-color: var(--primary);
-        cursor: pointer;
-        font-weight: 700;
-      }
-
-      .state {
-        border-radius: 14px;
-        padding: 1rem;
-      }
-
-      .state.wrong {
-        border: 1px solid #fda4af;
-        background: #fff1f2;
-      }
-
-      .state.won {
-        border: 1px solid #86efac;
-        background: #f0fdf4;
-      }
-
-      .mountain {
-        background: linear-gradient(180deg, #0b1222 0%, #1e293b 50%, #334155 100%);
-        color: #fff;
-        min-height: 420px;
-        position: relative;
-        overflow: hidden;
-        border: 1px solid #334155;
-      }
-
-      .mountain h2 {
-        position: relative;
-        z-index: 4;
-        margin-top: 0;
-      }
-
-      .path-svg {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-      }
-
-      .route-base {
-        fill: none;
-        stroke: rgba(148, 163, 184, 0.55);
-        stroke-width: 4;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        stroke-dasharray: 7 8;
-      }
-
-      .route-progress {
-        fill: none;
-        stroke: #67e8f9;
-        stroke-width: 6;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        transition: stroke-dashoffset 0.45s ease;
-      }
-
-      #mountain-nodes {
-        position: absolute;
-        inset: 0;
-      }
-
-      .node {
-        position: absolute;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        transform: translate(-50%, -50%);
-        background: #334155;
-        border: 2px solid #64748b;
-        z-index: 2;
-      }
-
-      .node.done {
-        border-color: #67e8f9;
-        background: #06b6d4;
-      }
-
-      .node.active {
-        box-shadow: 0 0 0 4px rgba(103, 232, 249, 0.28);
-      }
-
-      .node.peak {
-        width: 22px;
-        height: 22px;
-        background: #f59e0b;
-        border-color: #fde68a;
-      }
-
-      .player {
-        position: absolute;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        transform: translate(-50%, -50%);
-        background: #ecfeff;
-        box-shadow: 0 0 0 3px rgba(236, 254, 255, 0.3);
-        z-index: 3;
-        transition:
-          left 0.35s ease,
-          top 0.35s ease;
-      }
-
-      .player::before {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        transform: translate(-50%, -50%);
-        background: #0891b2;
-      }
-    </style>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --border: #cbd5e1;
+      --track-bg: #e2e8f0;
+      --input-bg: #ffffff;
+      --input-color: #0f172a;
+      --wrong-border: #fda4af;
+      --wrong-bg: #fff1f2;
+      --wrong-text: #9f1239;
+      --won-border: #86efac;
+      --won-bg: #f0fdf4;
+      --won-text: #14532d;
+      --btn-text: #ffffff;
+      --header-bg: #0f172a;
+      --header-accent: #38bdf8;
+    }
+    html.dark {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --primary: #818cf8;
+      --primary-hover: #6366f1;
+      --border: #334155;
+      --track-bg: #334155;
+      --input-bg: #0f172a;
+      --input-color: #f1f5f9;
+      --wrong-border: #f87171;
+      --wrong-bg: #1c0a0a;
+      --wrong-text: #fca5a5;
+      --won-border: #4ade80;
+      --won-bg: #052e16;
+      --won-text: #86efac;
+      --btn-text: #0f172a;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      transition: background 0.2s, color 0.2s;
+    }
+    /* CS Learning Header */
+    .cs-header {
+      width: 100%;
+      background-color: var(--header-bg);
+      padding: 0 1.5rem;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .cs-header-brand {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--header-accent);
       text-decoration: none;
     }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
+    .cs-header-nav { display: flex; align-items: center; gap: 1.25rem; }
+    .cs-header-nav a {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.15s;
+    }
+    .cs-header-nav a:hover { color: #f1f5f9; }
+    #theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    #theme-toggle:hover { color: #f1f5f9; }
+
+    .layout {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1rem;
+      min-height: calc(100vh - 58px);
+      display: grid;
+      gap: 1rem;
+      align-items: center;
+    }
+    @media (min-width: 900px) {
+      .layout { grid-template-columns: 1fr 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+      border: 1px solid var(--border);
+    }
+    .meta { color: var(--muted); font-size: 0.95rem; }
+    .bar {
+      width: 100%;
+      height: 8px;
+      background: var(--track-bg);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 1rem 0 1.25rem;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.35s ease;
+    }
+    .question {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1rem;
+      line-height: 1.5;
+      min-height: 130px;
+    }
+    .shake { animation: shake 0.4s; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    form {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    input, button {
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 0.75rem 0.9rem;
+      font-size: 1rem;
+    }
+    input {
+      flex: 1;
+      min-width: 220px;
+      background: var(--input-bg);
+      color: var(--input-color);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    button {
+      background: var(--primary);
+      color: var(--btn-text);
+      border-color: var(--primary);
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 0.15s;
+    }
+    button:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .state { border-radius: 14px; padding: 1rem; }
+    .state.wrong {
+      border: 1px solid var(--wrong-border);
+      background: var(--wrong-bg);
+      color: var(--wrong-text);
+    }
+    .state.won {
+      border: 1px solid var(--won-border);
+      background: var(--won-bg);
+      color: var(--won-text);
+    }
+    .state h2 { margin-top: 0; }
+    /* Mountain card is always dark — intentional visual */
+    .mountain {
+      background: linear-gradient(180deg, #0b1222 0%, #1e293b 50%, #334155 100%);
+      color: #fff;
+      min-height: 420px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #334155 !important;
+    }
+    .mountain h2 { position: relative; z-index: 4; margin-top: 0; }
+    .path-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .route-base {
+      fill: none;
+      stroke: rgba(148, 163, 184, 0.55);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 7 8;
+    }
+    .route-progress {
+      fill: none;
+      stroke: #67e8f9;
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: stroke-dashoffset 0.45s ease;
+    }
+    #mountain-nodes { position: absolute; inset: 0; }
+    .node {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: #334155;
+      border: 2px solid #64748b;
+      z-index: 2;
+    }
+    .node.done { border-color: #67e8f9; background: #06b6d4; }
+    .node.active { box-shadow: 0 0 0 4px rgba(103, 232, 249, 0.28); }
+    .node.peak { width: 22px; height: 22px; background: #f59e0b; border-color: #fde68a; }
+    .player {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: #ecfeff;
+      box-shadow: 0 0 0 3px rgba(236, 254, 255, 0.3);
+      z-index: 3;
+      transition: left 0.35s ease, top 0.35s ease;
+    }
+    .player::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: #0891b2;
     }
   </style>
-</head>
-  <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
-
-    <div class="layout">
-      <section class="card">
-        <h1>A Level Maths Revision Quiz</h1>
-        <p class="meta">Answer all 12 recap questions correctly in sequence.</p>
-
-        <div id="quiz-area"></div>
-      </section>
-
-      <section class="card mountain">
-        <h2>Mountain Progress</h2>
-        <svg class="path-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="skyFadeMaths" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stop-color="#0f172a"></stop>
-              <stop offset="100%" stop-color="#1e293b"></stop>
-            </linearGradient>
-            <linearGradient id="mountainShadeBackMaths" x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0%" stop-color="#334155"></stop>
-              <stop offset="100%" stop-color="#1e293b"></stop>
-            </linearGradient>
-            <linearGradient id="mountainShadeFrontMaths" x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0%" stop-color="#475569"></stop>
-              <stop offset="100%" stop-color="#334155"></stop>
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width="100" height="100" fill="url(#skyFadeMaths)"></rect>
-          <circle cx="80" cy="14" r="6" fill="#cffafe" opacity="0.8"></circle>
-          <polygon points="0,92 26,54 43,72 59,35 80,66 100,92" fill="url(#mountainShadeBackMaths)" opacity="0.95"></polygon>
-          <polygon points="0,92 18,66 33,84 56,30 74,70 100,92" fill="url(#mountainShadeFrontMaths)" opacity="0.98"></polygon>
-          <path d="M12 90 C 18 84, 21 83, 24 78 C 28 74, 31 72, 35 66 C 40 61, 46 57, 51 50 C 56 44, 60 41, 65 35 C 70 29, 74 25, 78 20 C 82 16, 86 14, 89 12" class="route-base"></path>
-          <path id="route-progress" d="M12 90 C 18 84, 21 83, 24 78 C 28 74, 31 72, 35 66 C 40 61, 46 57, 51 50 C 56 44, 60 41, 65 35 C 70 29, 74 25, 78 20 C 82 16, 86 14, 89 12" class="route-progress"></path>
-        </svg>
-        <div id="mountain-nodes"></div>
-        <div class="player" id="player" aria-hidden="true"></div>
-      </section>
-    </div>
-
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      const questions = [
-        {
-          topic: "Straight Lines",
-          text: "The line \\( L \\) is perpendicular to the line with equation \\( 2x - 5y + 7 = 0 \\). What is the gradient of \\( L \\)? (Give your answer as a decimal).",
-          answer: -2.5,
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
         },
-        {
-          topic: "Circles",
-          text: "What is the radius of the circle with equation \\( x^2 + y^2 - 6x + 8y = 0 \\)?",
-          answer: 5,
-        },
-        {
-          topic: "Trig Identities & Equations",
-          text: "Solve the equation \\( \\sin^2(\\theta) = \\cos^2(\\theta) \\) in the interval \\( 0^\\circ \\le \\theta \\le 180^\\circ \\). What is the largest value of \\( \\theta \\) in degrees?",
-          answer: 135,
-        },
-        {
-          topic: "Radians (Area)",
-          text: "A sector of a circle has a radius of \\( 6\\text{ cm} \\) and an angle of \\( 1.5\\text{ radians} \\). What is the area of the sector in \\( \\text{cm}^2 \\)?",
-          answer: 27,
-        },
-        {
-          topic: "Factor Theorem",
-          text: "Given that \\( (x - 2) \\) is a factor of \\( f(x) = x^3 - 4x^2 + kx + 6 \\), find the value of the constant \\( k \\).",
-          answer: 1,
-        },
-        {
-          topic: "Parametric Equations",
-          text: "A curve has parametric equations \\( x = t^2 + 1 \\) and \\( y = t^3 - t \\). Find the value of \\( \\frac{dy}{dx} \\) when \\( t = 2 \\). (Give your answer as a decimal).",
-          answer: 2.75,
-        },
-        {
-          topic: "Reciprocal Trig Equations",
-          text: "Solve the equation \\( \\sec(\\theta) = 2 \\) for \\( 0^\\circ \\le \\theta \\le 360^\\circ \\). What is the largest solution in degrees?",
-          answer: 300,
-        },
-        {
-          topic: "Remainder Theorem",
-          text: "Find the remainder when the polynomial \\( P(x) = 2x^3 - 3x^2 + 4x - 5 \\) is divided by \\( (x + 1) \\).",
-          answer: -14,
-        },
-        {
-          topic: "Addition Formulae",
-          text: "The angles \\( A \\) and \\( B \\) are acute. Given that \\( \\sin(A) = \\frac{3}{5} \\) and \\( \\cos(B) = \\frac{5}{13} \\), the exact value of \\( \\sin(A+B) \\) can be written as \\( \\frac{k}{65} \\). What is the value of \\( k \\)?",
-          answer: 63,
-        },
-        {
-          topic: "Radians (Arc-length)",
-          text: "An arc of a circle has a length of \\( 12\\text{ cm} \\) and subtends an angle of \\( 0.8\\text{ radians} \\) at the centre. Find the radius of the circle in cm.",
-          answer: 15,
-        },
-        {
-          topic: "Straight Lines (Distance)",
-          text: "The distance between the points \\( (2, a) \\) and \\( (5, 7) \\) is \\( 5 \\). Given that \\( a > 7 \\), find the value of \\( a \\).",
-          answer: 11,
-        },
-        {
-          topic: "Double-Angle Formulae",
-          text: "Solve the equation \\( \\cos(2\\theta) + 3\\sin(\\theta) = 2 \\) for \\( 0^\\circ < \\theta < 90^\\circ \\). What is the value of \\( \\theta \\) in degrees?",
-          answer: 30,
-        },
-      ];
-
-      const quizArea = document.getElementById("quiz-area");
-      const mountainNodes = document.getElementById("mountain-nodes");
-      const player = document.getElementById("player");
-      const routeProgress = document.getElementById("route-progress");
-
-      const routePoints = [
-        { x: 12, y: 90 },
-        { x: 24, y: 78 },
-        { x: 35, y: 66 },
-        { x: 51, y: 50 },
-        { x: 65, y: 35 },
-        { x: 78, y: 20 },
-        { x: 89, y: 12 },
-      ];
-
-      let currentIndex = 0;
-      let gameState = "playing";
-
-      function getPathPosition(index) {
-        const progress = Math.max(0, Math.min(index / questions.length, 1));
-        const scaled = progress * (routePoints.length - 1);
-        const segment = Math.min(Math.floor(scaled), routePoints.length - 2);
-        const localProgress = scaled - segment;
-        const from = routePoints[segment];
-        const to = routePoints[segment + 1];
-        const x = from.x + (to.x - from.x) * localProgress;
-        const y = from.y + (to.y - from.y) * localProgress;
-
-        return {
-          left: `${x}%`,
-          top: `${y}%`,
-        };
-      }
-
-      function restartQuiz() {
-        currentIndex = 0;
-        gameState = "playing";
-        render();
-      }
-
-      function handleSubmit(event) {
-        event.preventDefault();
-        if (gameState !== "playing") return;
-
-        const input = document.getElementById("answer-input");
-        const userAnswer = Number.parseFloat(input.value);
-        if (Number.isNaN(userAnswer)) return;
-
-        const correctAnswer = questions[currentIndex].answer;
-        if (Math.abs(userAnswer - correctAnswer) < 0.001) {
-          if (currentIndex === questions.length - 1) {
-            gameState = "won";
-            currentIndex = questions.length;
-          } else {
-            currentIndex += 1;
-          }
-        } else {
-          gameState = "wrong";
-        }
-
-        render();
-      }
-
-      function renderQuestion() {
-        const q = questions[currentIndex];
-        const progress = (currentIndex / questions.length) * 100;
-
-        quizArea.innerHTML = `
-          <div class="meta"><strong>${q.topic}</strong> • Question ${currentIndex + 1}/${questions.length}</div>
-          <div class="bar"><div class="bar-fill" style="width:${progress}%"></div></div>
-          <div id="question-box" class="question">${q.text}</div>
-          <form id="answer-form">
-            <input id="answer-input" type="number" step="any" placeholder="Enter your answer" aria-label="Answer input" required />
-            <button type="submit">Submit</button>
-          </form>
-        `;
-
-        const form = document.getElementById("answer-form");
-        form.addEventListener("submit", handleSubmit);
-      }
-
-      function renderEndState() {
-        if (gameState === "wrong") {
-          quizArea.innerHTML = `
-            <div class="state wrong shake">
-              <h2>Not this time!</h2>
-              <p>You slipped on question ${currentIndex + 1}. Restart and climb again.</p>
-              <button id="restart-btn">Restart Quiz</button>
-            </div>
-          `;
-        }
-
-        if (gameState === "won") {
-          quizArea.innerHTML = `
-            <div class="state won">
-              <h2>Summit reached! 🎉</h2>
-              <p>You answered all ${questions.length} questions correctly.</p>
-              <button id="restart-btn">Play Again</button>
-            </div>
-          `;
-        }
-
-        document.getElementById("restart-btn").addEventListener("click", restartQuiz);
-      }
-
-      function renderMountain() {
-        mountainNodes.innerHTML = "";
-
-        const completion = currentIndex / questions.length;
-        const routeLength = routeProgress.getTotalLength();
-        routeProgress.style.strokeDasharray = `${routeLength}`;
-        routeProgress.style.strokeDashoffset = `${routeLength * (1 - completion)}`;
-
-        for (let i = 0; i <= questions.length; i += 1) {
-          const position = getPathPosition(i);
-          const done = currentIndex >= i;
-          const active = gameState === "playing" && currentIndex === i;
-          const isPeak = i === questions.length;
-
-          const node = document.createElement("div");
-          node.className = `node${done ? " done" : ""}${active ? " active" : ""}${isPeak ? " peak" : ""}`;
-          node.style.left = position.left;
-          node.style.top = position.top;
-          mountainNodes.appendChild(node);
-        }
-
-        Object.assign(player.style, getPathPosition(currentIndex));
-      }
-
-      function render() {
-        if (gameState === "playing") {
-          renderQuestion();
-        } else {
-          renderEndState();
-        }
-
-        renderMountain();
-
-        if (window.MathJax?.typesetPromise) {
-          window.MathJax.typesetPromise().catch(() => {});
-        }
-      }
-
-      render();
+      };
     </script>
-  </body>
+</head>
+<body>
+
+<header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
+
+<div class="layout">
+  <section class="card">
+    <h1>A Level Maths Revision Quiz</h1>
+    <p class="meta">Answer all 12 recap questions correctly in sequence.</p>
+    <div id="quiz-area"></div>
+  </section>
+
+  <section class="card mountain">
+    <h2>Mountain Progress</h2>
+    <svg class="path-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="skyFadeMaths" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#0f172a"></stop>
+          <stop offset="100%" stop-color="#1e293b"></stop>
+        </linearGradient>
+        <linearGradient id="mountainShadeBackMaths" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#334155"></stop>
+          <stop offset="100%" stop-color="#1e293b"></stop>
+        </linearGradient>
+        <linearGradient id="mountainShadeFrontMaths" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#475569"></stop>
+          <stop offset="100%" stop-color="#334155"></stop>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="100" height="100" fill="url(#skyFadeMaths)"></rect>
+      <circle cx="80" cy="14" r="6" fill="#cffafe" opacity="0.8"></circle>
+      <polygon points="0,92 26,54 43,72 59,35 80,66 100,92" fill="url(#mountainShadeBackMaths)" opacity="0.95"></polygon>
+      <polygon points="0,92 18,66 33,84 56,30 74,70 100,92" fill="url(#mountainShadeFrontMaths)" opacity="0.98"></polygon>
+      <path d="M12 90 C 18 84, 21 83, 24 78 C 28 74, 31 72, 35 66 C 40 61, 46 57, 51 50 C 56 44, 60 41, 65 35 C 70 29, 74 25, 78 20 C 82 16, 86 14, 89 12" class="route-base"></path>
+      <path id="route-progress" d="M12 90 C 18 84, 21 83, 24 78 C 28 74, 31 72, 35 66 C 40 61, 46 57, 51 50 C 56 44, 60 41, 65 35 C 70 29, 74 25, 78 20 C 82 16, 86 14, 89 12" class="route-progress"></path>
+    </svg>
+    <div id="mountain-nodes"></div>
+    <div class="player" id="player" aria-hidden="true"></div>
+  </section>
+</div>
+
+<script>
+  const questions = [
+    { topic: "Straight Lines", text: "The line \\( L \\) is perpendicular to the line with equation \\( 2x - 5y + 7 = 0 \\). What is the gradient of \\( L \\)? (Give your answer as a decimal).", answer: -2.5 },
+    { topic: "Circles", text: "What is the radius of the circle with equation \\( x^2 + y^2 - 6x + 8y = 0 \\)?", answer: 5 },
+    { topic: "Trig Identities & Equations", text: "Solve the equation \\( \\sin^2(\\theta) = \\cos^2(\\theta) \\) in the interval \\( 0^\\circ \\le \\theta \\le 180^\\circ \\). What is the largest value of \\( \\theta \\) in degrees?", answer: 135 },
+    { topic: "Radians (Area)", text: "A sector of a circle has a radius of \\( 6\\text{ cm} \\) and an angle of \\( 1.5\\text{ radians} \\). What is the area of the sector in \\( \\text{cm}^2 \\)?", answer: 27 },
+    { topic: "Factor Theorem", text: "Given that \\( (x - 2) \\) is a factor of \\( f(x) = x^3 - 4x^2 + kx + 6 \\), find the value of the constant \\( k \\).", answer: 1 },
+    { topic: "Parametric Equations", text: "A curve has parametric equations \\( x = t^2 + 1 \\) and \\( y = t^3 - t \\). Find the value of \\( \\frac{dy}{dx} \\) when \\( t = 2 \\). (Give your answer as a decimal).", answer: 2.75 },
+    { topic: "Reciprocal Trig Equations", text: "Solve the equation \\( \\sec(\\theta) = 2 \\) for \\( 0^\\circ \\le \\theta \\le 360^\\circ \\). What is the largest solution in degrees?", answer: 300 },
+    { topic: "Remainder Theorem", text: "Find the remainder when the polynomial \\( P(x) = 2x^3 - 3x^2 + 4x - 5 \\) is divided by \\( (x + 1) \\).", answer: -14 },
+    { topic: "Addition Formulae", text: "The angles \\( A \\) and \\( B \\) are acute. Given that \\( \\sin(A) = \\frac{3}{5} \\) and \\( \\cos(B) = \\frac{5}{13} \\), the exact value of \\( \\sin(A+B) \\) can be written as \\( \\frac{k}{65} \\). What is the value of \\( k \\)?", answer: 63 },
+    { topic: "Radians (Arc-length)", text: "An arc of a circle has a length of \\( 12\\text{ cm} \\) and subtends an angle of \\( 0.8\\text{ radians} \\) at the centre. Find the radius of the circle in cm.", answer: 15 },
+    { topic: "Straight Lines (Distance)", text: "The distance between the points \\( (2, a) \\) and \\( (5, 7) \\) is \\( 5 \\). Given that \\( a > 7 \\), find the value of \\( a \\).", answer: 11 },
+    { topic: "Double-Angle Formulae", text: "Solve the equation \\( \\cos(2\\theta) + 3\\sin(\\theta) = 2 \\) for \\( 0^\\circ < \\theta < 90^\\circ \\). What is the value of \\( \\theta \\) in degrees?", answer: 30 },
+  ];
+
+  const quizArea = document.getElementById("quiz-area");
+  const mountainNodes = document.getElementById("mountain-nodes");
+  const player = document.getElementById("player");
+  const routeProgress = document.getElementById("route-progress");
+
+  const routePoints = [
+    { x: 12, y: 90 }, { x: 24, y: 78 }, { x: 35, y: 66 },
+    { x: 51, y: 50 }, { x: 65, y: 35 }, { x: 78, y: 20 }, { x: 89, y: 12 },
+  ];
+
+  let currentIndex = 0;
+  let gameState = "playing";
+
+  function getPathPosition(index) {
+    const progress = Math.max(0, Math.min(index / questions.length, 1));
+    const scaled = progress * (routePoints.length - 1);
+    const segment = Math.min(Math.floor(scaled), routePoints.length - 2);
+    const localProgress = scaled - segment;
+    const from = routePoints[segment];
+    const to = routePoints[segment + 1];
+    return { left: `${from.x + (to.x - from.x) * localProgress}%`, top: `${from.y + (to.y - from.y) * localProgress}%` };
+  }
+
+  function restartQuiz() {
+    currentIndex = 0;
+    gameState = "playing";
+    render();
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (gameState !== "playing") return;
+    const input = document.getElementById("answer-input");
+    const userAnswer = Number.parseFloat(input.value);
+    if (Number.isNaN(userAnswer)) return;
+    const correctAnswer = questions[currentIndex].answer;
+    if (Math.abs(userAnswer - correctAnswer) < 0.001) {
+      if (currentIndex === questions.length - 1) {
+        gameState = "won";
+        currentIndex = questions.length;
+      } else {
+        currentIndex += 1;
+      }
+    } else {
+      gameState = "wrong";
+    }
+    render();
+  }
+
+  function renderQuestion() {
+    const q = questions[currentIndex];
+    const progress = (currentIndex / questions.length) * 100;
+    quizArea.innerHTML = `
+      <div class="meta"><strong>${q.topic}</strong> • Question ${currentIndex + 1}/${questions.length}</div>
+      <div class="bar"><div class="bar-fill" style="width:${progress}%"></div></div>
+      <div id="question-box" class="question">${q.text}</div>
+      <form id="answer-form">
+        <input id="answer-input" type="number" step="any" placeholder="Enter your answer" aria-label="Answer input" required />
+        <button type="submit">Submit</button>
+      </form>
+    `;
+    document.getElementById("answer-form").addEventListener("submit", handleSubmit);
+  }
+
+  function renderEndState() {
+    if (gameState === "wrong") {
+      quizArea.innerHTML = `
+        <div class="state wrong shake">
+          <h2>Not this time!</h2>
+          <p>You slipped on question ${currentIndex + 1}. Restart and climb again.</p>
+          <button id="restart-btn">Restart Quiz</button>
+        </div>
+      `;
+    }
+    if (gameState === "won") {
+      quizArea.innerHTML = `
+        <div class="state won">
+          <h2>Summit reached!</h2>
+          <p>You answered all ${questions.length} questions correctly.</p>
+          <button id="restart-btn">Play Again</button>
+        </div>
+      `;
+    }
+    document.getElementById("restart-btn").addEventListener("click", restartQuiz);
+  }
+
+  function renderMountain() {
+    mountainNodes.innerHTML = "";
+    const completion = currentIndex / questions.length;
+    const routeLength = routeProgress.getTotalLength();
+    routeProgress.style.strokeDasharray = `${routeLength}`;
+    routeProgress.style.strokeDashoffset = `${routeLength * (1 - completion)}`;
+    for (let i = 0; i <= questions.length; i++) {
+      const position = getPathPosition(i);
+      const done = currentIndex >= i;
+      const active = gameState === "playing" && currentIndex === i;
+      const isPeak = i === questions.length;
+      const node = document.createElement("div");
+      node.className = `node${done ? " done" : ""}${active ? " active" : ""}${isPeak ? " peak" : ""}`;
+      node.style.left = position.left;
+      node.style.top = position.top;
+      mountainNodes.appendChild(node);
+    }
+    Object.assign(player.style, getPathPosition(currentIndex));
+  }
+
+  function render() {
+    if (gameState === "playing") renderQuestion();
+    else renderEndState();
+    renderMountain();
+    if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise().catch(() => {});
+  }
+
+  function applyTheme(mode) {
+    if (mode === "dark") document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+    try { localStorage.setItem("uimode", mode); } catch(e) {}
+    document.getElementById("icon-moon").style.display = mode === "dark" ? "none" : "";
+    document.getElementById("icon-sun").style.display  = mode === "dark" ? "" : "none";
+  }
+
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    applyTheme(document.documentElement.classList.contains("dark") ? "light" : "dark");
+  });
+
+  (function() {
+    const isDark = document.documentElement.classList.contains("dark");
+    document.getElementById("icon-moon").style.display = isDark ? "none" : "";
+    document.getElementById("icon-sun").style.display  = isDark ? "" : "none";
+  })();
+
+  render();
+</script>
+</body>
 </html>

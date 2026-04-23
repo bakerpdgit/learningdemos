@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DHCP Interactive – AQA A Level Computer Science</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <style>
       :root {
         --primary: #1565c0;
@@ -35,20 +46,20 @@
       }
 
       header {
-        background: var(--primary);
-        color: white;
-        padding: 1rem 2rem;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        background: #0f172a;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        padding: 0 1.5rem;
+        gap: 0.75rem;
+        flex-shrink: 0;
       }
-      header h1 {
-        font-size: 1.75rem;
-        margin-bottom: 0.2rem;
+      .header-brand { color: #38bdf8; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em; }
+      #theme-toggle {
+        margin-left: auto; background: none; border: none; cursor: pointer;
+        padding: 6px; border-radius: 6px; color: #94a3b8; display: flex; align-items: center;
       }
-      header p {
-        font-size: 0.9rem;
-        opacity: 0.85;
-      }
+      #theme-toggle:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; }
 
       /* ── Tabs ── */
       .tabs {
@@ -481,41 +492,95 @@
       }
 
       @media (max-width: 600px) {
-        header h1 {
-          font-size: 1.3rem;
-        }
-        .tab-btn {
-          padding: 0.45rem 0.8rem;
-          font-size: 0.82rem;
-        }
-        .dora-step .step-label {
-          font-size: 0.68rem;
-        }
+        .tab-btn { padding: 0.45rem 0.8rem; font-size: 0.82rem; }
+        .dora-step .step-label { font-size: 0.68rem; }
       }
+
+      /* Dark mode overrides */
+      html.dark { --primary: #38bdf8; --primary-light: #7dd3fc; --bg: #0f172a; --card-bg: #1e293b; --border: #334155; --text-muted: #94a3b8; }
+      html.dark body { color: #f1f5f9; }
+      html.dark .tabs { background: #1e293b; border-bottom-color: #334155; }
+      html.dark .tab-btn { background: #1e293b; border-color: #334155; color: #94a3b8; }
+      html.dark .tab-btn:hover:not(.active) { background: #1e3a5f; border-color: #38bdf8; color: #38bdf8; }
+      html.dark .info-card code { background: #0f172a; color: #bfdbfe; }
+      html.dark .key-term { background: #1e3a5f; color: #38bdf8; }
+      html.dark .sim-wrapper > p { color: #94a3b8; }
+      html.dark .step-label { color: #94a3b8; }
+      html.dark .step-info { background: #283548; border-left-color: #334155; }
+      html.dark .step-info.discover { background: #2a1800; }
+      html.dark .step-info.offer { background: #1e3a5f; }
+      html.dark .step-info.request { background: #2e1a4a; }
+      html.dark .step-info.ack { background: #052e16; }
+      html.dark .step-info h3 { color: #f1f5f9; }
+      html.dark .step-info p { color: #cbd5e1; }
+      html.dark .mode-card { background: #1e293b; }
+      html.dark .mode-card p { color: #94a3b8; }
+      html.dark .mode-tag.pro { background: #052e16; color: #86efac; }
+      html.dark .mode-tag.con { background: #450a0a; color: #fca5a5; }
+      html.dark .cmp-table th, html.dark .cmp-table td { border-color: #334155; }
+      html.dark .cmp-table thead tr { background: #1e3a5f; color: #f1f5f9; }
+      html.dark .cmp-table tbody tr:nth-child(even) { background: #1a2535; }
+      html.dark .quiz-card h2 { border-bottom-color: #334155; }
+      html.dark .quiz-card > p { color: #94a3b8; }
+      html.dark .question { background: #283548; border-color: #334155; }
+      html.dark .question input[type="text"] { background: #1e293b; color: #f1f5f9; border-color: #475569; }
+      html.dark .question input.correct { background: #052e16; border-color: #34d399; color: #86efac; }
+      html.dark .question input.wrong { background: #450a0a; border-color: #f87171; color: #fca5a5; }
+      html.dark .hint { color: #64748b; }
+      html.dark .sim-btn.secondary { background: #283548; color: #f1f5f9; border-color: #334155; }
+      html.dark .sim-btn.secondary:hover { background: #334155; }
+      html.dark #stepCounter { color: #94a3b8; }
+      html.dark .score-display { background: #1e3a5f; color: #38bdf8; }
+      html.dark #doraCanvas { border-color: #334155; }
     </style>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
   <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
 
-    <header>
-      <h1>DHCP Interactive</h1>
-      <p>AQA A Level Computer Science — Dynamic Host Configuration Protocol</p>
-    </header>
+    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
     <nav class="tabs">
       <button class="tab-btn active" id="tabBtn0" onclick="showTab(0)">
@@ -1425,21 +1490,22 @@
       function draw(step, pkt) {
         if (!ctx2d) return;
         const c = ctx2d;
+        const dark = document.documentElement.classList.contains('dark');
         c.clearRect(0, 0, W, H);
 
         // Background
-        c.fillStyle = "#f8fbff";
+        c.fillStyle = dark ? '#1e293b' : '#f8fbff';
         c.fillRect(0, 0, W, H);
 
         // ── Bus ──
-        c.strokeStyle = "#546e7a";
+        c.strokeStyle = dark ? '#64748b' : '#546e7a';
         c.lineWidth = 5;
         c.beginPath();
         c.moveTo(CLIENT_X, BUS_Y);
         c.lineTo(SERVER_X, BUS_Y);
         c.stroke();
 
-        c.fillStyle = "#78909c";
+        c.fillStyle = dark ? '#94a3b8' : '#78909c';
         c.font = "11px Segoe UI";
         c.textAlign = "center";
         c.fillText("Network (Bus)", W / 2, BUS_Y + 20);
@@ -1451,7 +1517,7 @@
           Math.round(W * 0.67),
         ];
         extras.forEach((ex) => {
-          c.strokeStyle = "#b0bec5";
+          c.strokeStyle = dark ? '#475569' : '#b0bec5';
           c.lineWidth = 1.5;
           c.beginPath();
           c.moveTo(ex, BUS_Y);
@@ -1461,7 +1527,7 @@
         });
 
         // ── Stubs for client and server ──
-        c.strokeStyle = "#546e7a";
+        c.strokeStyle = dark ? '#64748b' : '#546e7a';
         c.lineWidth = 2.5;
         c.beginPath();
         c.moveTo(CLIENT_X, BUS_Y);
@@ -1491,15 +1557,15 @@
 
       function drawSmallDevice(cx, cy) {
         const c = ctx2d;
-        const w = 22,
-          h = 16;
-        c.fillStyle = "#eceff1";
-        c.strokeStyle = "#90a4ae";
+        const dark = document.documentElement.classList.contains('dark');
+        const w = 22, h = 16;
+        c.fillStyle = dark ? '#283548' : '#eceff1';
+        c.strokeStyle = dark ? '#475569' : '#90a4ae';
         c.lineWidth = 1;
         rRect(cx - w / 2, cy, w, h, 2);
         c.fill();
         c.stroke();
-        c.fillStyle = "#b0bec5";
+        c.fillStyle = dark ? '#64748b' : '#b0bec5';
         c.font = "7px Segoe UI";
         c.textAlign = "center";
         c.fillText("device", cx, cy + h + 9);
@@ -1753,6 +1819,27 @@
         if (document.getElementById("panel1").classList.contains("active"))
           setupCanvas();
       });
+
+      function applyTheme(mode) {
+        const html = document.documentElement;
+        const sun = document.getElementById('icon-sun');
+        const moon = document.getElementById('icon-moon');
+        if (mode === 'dark') {
+          html.classList.add('dark');
+          if (sun) sun.style.display = 'block';
+          if (moon) moon.style.display = 'none';
+        } else {
+          html.classList.remove('dark');
+          if (sun) sun.style.display = 'none';
+          if (moon) moon.style.display = 'block';
+        }
+        try { localStorage.setItem('uimode', mode); } catch(e) {}
+        if (cvs) draw(simStep, null);
+      }
+      (function() {
+        const m = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        applyTheme(m);
+      })();
     </script>
   </body>
 </html>

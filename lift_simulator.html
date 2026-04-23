@@ -4,373 +4,460 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lift Mechanics Simulator</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { dataLayer.push(arguments); }
+  gtag("js", new Date());
+  gtag("config", "G-DYQESQXT38");
+</script>
+<!-- Prevent FOUC -->
+<script>
+  (function () {
+    try {
+      var mode = localStorage.getItem("uimode");
+      if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        document.documentElement.classList.add("dark");
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
+  :root {
+    --bg: #f1f5f9;
+    --panel: #ffffff;
+    --text: #1e293b;
+    --text-label: #475569;
+    --border: #e2e8f0;
+    --accent: #0ea5e9;
+    --header-bg: #0f172a;
+    --header-accent: #38bdf8;
+    --header-link: #94a3b8;
+    --ctrl-bg: #f8fafc;
+    --ctrl-border: #cbd5e1;
+    --val-bg: #ffffff;
+    --btn-primary: #3b82f6;
+    --btn-primary-hover: #2563eb;
+    --btn-simulate: #16a34a;
+    --btn-simulate-hover: #15803d;
+    --btn-reset: #d97706;
+    --btn-reset-hover: #b45309;
+  }
+  html.dark {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --text: #f1f5f9;
+    --text-label: #94a3b8;
+    --border: #334155;
+    --accent: #38bdf8;
+    --ctrl-bg: #1e293b;
+    --ctrl-border: #334155;
+    --val-bg: #0f172a;
+    --btn-primary: #3b82f6;
+    --btn-primary-hover: #2563eb;
+    --btn-simulate: #16a34a;
+    --btn-simulate-hover: #15803d;
+    --btn-reset: #d97706;
+    --btn-reset-hover: #b45309;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  /* ── Header ── */
+  #cs-header {
+    background: var(--header-bg);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 58px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+    flex-shrink: 0;
+  }
+  #site-title {
+    font-family: "Consolas","Courier New",monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--header-accent);
+    text-decoration: none;
+    letter-spacing: 0.04em;
+  }
+  #site-title .bracket { color: #475569; }
+  #cs-header nav { display: flex; align-items: center; gap: 1.5rem; }
+  #home-link {
+    color: var(--header-link);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: color 0.15s;
+  }
+  #home-link:hover { color: var(--header-accent); }
+  #theme-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--header-link); padding: 4px;
+    display: flex; align-items: center; transition: color 0.15s;
+  }
+  #theme-btn:hover { color: var(--header-accent); }
+  #theme-btn svg { width: 20px; height: 20px; }
+
+  /* ── Page layout ── */
+  .page-main {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin: 0;
-    padding: 20px;
-    background-color: #f0f0f0;
-    color: #333;
+    padding: 1.5rem 1rem;
+    gap: 1rem;
   }
   h1 {
-    color: #2c3e50;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
   }
   .container {
     display: flex;
-    gap: 20px;
+    gap: 1.25rem;
     width: 100%;
     max-width: 1000px;
+    align-items: flex-start;
   }
   #liftCanvas {
-    border: 1px solid #2c3e50;
-    background-color: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
     flex-grow: 1;
+    background: var(--panel);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   }
+  html.dark #liftCanvas { box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
+
   .controls {
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    padding: 20px;
-    background-color: #ecf0f1;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    width: 260px;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--ctrl-bg);
+    border: 1px solid var(--ctrl-border);
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    width: 240px;
+    flex-shrink: 0;
   }
-  .control-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+  html.dark .controls { box-shadow: 0 2px 6px rgba(0,0,0,0.35); }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
   .control-group label {
-    font-weight: bold;
-    color: #34495e;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-label);
   }
-  .control-group div {
+  .control-group .row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
-  .control-group button {
-    padding: 8px 12px;
-    background-color: #3498db;
+  .control-group select {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--val-bg);
+    color: var(--text);
+    border: 1px solid var(--ctrl-border);
+    border-radius: 5px;
+    font-size: 0.9rem;
+  }
+  .ctrl-btn {
+    padding: 6px 12px;
+    background: var(--btn-primary);
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 5px;
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: background 0.15s;
   }
-  .control-group button:hover {
-    background-color: #2980b9;
-  }
-  .control-group button:active {
-    background-color: #1f618d;
-  }
-  .control-group span {
-    min-width: 50px;
+  .ctrl-btn:hover { background: var(--btn-primary-hover); }
+  .val-display {
+    min-width: 60px;
     text-align: center;
-    font-size: 1em;
-    background-color: #fff;
-    padding: 5px 8px;
+    font-size: 0.9rem;
+    background: var(--val-bg);
+    color: var(--text);
+    padding: 4px 8px;
     border-radius: 4px;
-    border: 1px solid #bdc3c7;
+    border: 1px solid var(--ctrl-border);
+    font-weight: 600;
   }
+  .main-buttons { gap: 8px; }
   .main-buttons button {
     width: 100%;
-    padding: 10px;
-    font-size: 1.1em;
+    padding: 0.6rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: white;
+    transition: opacity 0.15s;
   }
-  #simulateButton {
-    background-color: #2ecc71;
-  }
-  #simulateButton:hover {
-    background-color: #27ae60;
-  }
-  #resetButton {
-    background-color: #f39c12;
-  }
-  #resetButton:hover {
-    background-color: #e67e22;
-  }
+  .main-buttons button:hover { opacity: 0.9; }
+  #simulateButton { background: var(--btn-simulate); }
+  #resetButton { background: var(--btn-reset); }
 </style>
-
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
 <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+  <!-- CS Learning Header -->
+  <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
-<h1>Lift Mechanics Simulator</h1>
-<div class="container">
-  <canvas id="liftCanvas"></canvas>
-  <div class="controls">
-    <div class="control-group">
-      <label>Mass (kg):</label>
-      <div>
-        <button onclick="changeMass(-1)">-</button>
-        <span id="massDisplay">20</span>
-        <button onclick="changeMass(1)">+</button>
+  <div class="page-main">
+    <h1>Lift Mechanics Simulator</h1>
+    <div class="container">
+      <canvas id="liftCanvas"></canvas>
+      <div class="controls">
+        <div class="control-group">
+          <label>Mass (kg):</label>
+          <div class="row">
+            <button class="ctrl-btn" onclick="changeMass(-1)">−</button>
+            <span class="val-display" id="massDisplay">20</span>
+            <button class="ctrl-btn" onclick="changeMass(1)">+</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <label>Direction:</label>
+          <select id="directionSelect" onchange="changeDirection()">
+            <option value="up">Up</option>
+            <option value="down">Down</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Acceleration (m/s²):</label>
+          <div class="row">
+            <button class="ctrl-btn" onclick="changeAccel(-1)">−</button>
+            <span class="val-display" id="accelDisplay">0</span>
+            <button class="ctrl-btn" onclick="changeAccel(1)">+</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <label>Speed (m/s):</label>
+          <div class="row">
+            <button class="ctrl-btn" onclick="changeSpeed(-1)">−</button>
+            <span class="val-display" id="speedDisplay">0</span>
+            <button class="ctrl-btn" onclick="changeSpeed(1)">+</button>
+          </div>
+        </div>
+        <div class="control-group main-buttons">
+          <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
+          <button id="resetButton" onclick="resetSimulationState()">Reset</button>
+        </div>
       </div>
-    </div>
-    <div class="control-group">
-      <label>Direction:</label>
-      <div>
-        <select id="directionSelect" onchange="changeDirection()">
-          <option value="up">Up</option>
-          <option value="down">Down</option>
-        </select>
-      </div>
-    </div>
-    <div class="control-group">
-      <label>Acceleration (m/s²):</label>
-      <div>
-        <button onclick="changeAccel(-1)">-</button>
-        <span id="accelDisplay">0</span>
-        <button onclick="changeAccel(1)">+</button>
-      </div>
-    </div>
-    <div class="control-group">
-      <label>Speed (m/s):</label>
-      <div>
-        <button onclick="changeSpeed(-1)">-</button>
-        <span id="speedDisplay">0</span>
-        <button onclick="changeSpeed(1)">+</button>
-      </div>
-    </div>
-    <div class="control-group main-buttons">
-      <button id="simulateButton" onclick="toggleSimulation()">Simulate</button>
-      <button id="resetButton" onclick="resetSimulationState()">Reset</button>
     </div>
   </div>
-</div>
+
 <script>
-const canvas = document.getElementById('liftCanvas');
-const ctx = canvas.getContext('2d');
-const massDisplay = document.getElementById('massDisplay');
-const accelDisplay = document.getElementById('accelDisplay');
-const speedDisplay = document.getElementById('speedDisplay');
-const directionSelect = document.getElementById('directionSelect');
-const simulateButton = document.getElementById('simulateButton');
-
-// Parameters
-let mass = 20; // kg
-let accel = 0; // m/s^2 (positive is up)
-let direction = 'up';
-let speed = 0; // m/s
-let liftPos = 0; // m (0 at center)
-let liftVel = 0; // m/s
-let isPaused = true;
-let animationFrameId = null;
-
-// Constants
-const g = 9.8; // m/s^2
-const MIN_MASS = 5;
-const MAX_MASS = 100;
-const MASS_STEP = 5;
-const MAX_ACCEL = 10;
-const ACCEL_STEP = 1;
-const MIN_SPEED = 0;
-const MAX_SPEED = 5;
-const SPEED_STEP = 1;
-const PIXELS_PER_METER = 50;
-const LIFT_HEIGHT = 3; // m
-const LIFT_WIDTH = 2; // m
-const BOX_SIZE = 0.6; // m
-const TIME_STEP = 1/60;
-const ARROW_SCALE = 5; // pixels per Newton
-
-function setupCanvas() {
-  const containerWidth = canvas.parentElement.offsetWidth - 280;
-  const canvasHeight = window.innerHeight - 160;
-  canvas.width = Math.max(300, containerWidth);
-  canvas.height = Math.max(400, canvasHeight);
-  draw();
-}
-
-function changeMass(dir) {
-  if (!isPaused) return;
-  mass = Math.min(MAX_MASS, Math.max(MIN_MASS, mass + dir * MASS_STEP));
-  massDisplay.textContent = mass;
-  draw();
-}
-
-function changeSpeed(dir) {
-  if (!isPaused) return;
-  speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, speed + dir * SPEED_STEP));
-  speedDisplay.textContent = speed;
-  draw();
-}
-
-function updateAccelDisplay() {
-  if (accel === 0) {
-    accelDisplay.textContent = '0';
-  } else {
-    const word = accel > 0 ? 'up' : 'down';
-    accelDisplay.textContent = Math.abs(accel) + ' ' + word;
+  // ── Theme ──
+  function getColors() {
+    const dark = document.documentElement.classList.contains('dark');
+    return {
+      shaft: dark ? '#475569' : '#7f8c8d',
+      liftFill: dark ? '#334155' : '#bdc3c7',
+      liftStroke: dark ? '#94a3b8' : '#2c3e50',
+      boxFill: dark ? '#38bdf8' : '#3498db',
+      arrowColor: dark ? '#f87171' : '#e74c3c',
+      textColor: dark ? '#e2e8f0' : '#333333',
+      canvasBg: dark ? '#1e293b' : '#ffffff',
+      pauseCircle: 'rgba(100,100,100,0.5)',
+      pauseBar: 'rgba(255,255,255,0.9)'
+    };
   }
-}
-
-function changeAccel(dir) {
-  if (!isPaused) return;
-  accel = Math.min(MAX_ACCEL, Math.max(-MAX_ACCEL, accel + dir * ACCEL_STEP));
-  updateAccelDisplay();
-  draw();
-}
-
-function changeDirection() {
-  if (!isPaused) return;
-  direction = directionSelect.value;
-  draw();
-}
-
-function toggleSimulation() {
-  isPaused = !isPaused;
-  simulateButton.textContent = isPaused ? 'Simulate' : 'Pause';
-  if (!isPaused) {
-    if (animationFrameId == null) {
-      liftVel = direction === 'up' ? speed : -speed;
-    }
-    animate();
-  } else {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
+  function applyTheme(mode) {
+    const html = document.documentElement;
+    if (mode === 'dark') { html.classList.add('dark'); document.getElementById('icon-sun').style.display='block'; document.getElementById('icon-moon').style.display='none'; }
+    else { html.classList.remove('dark'); document.getElementById('icon-sun').style.display='none'; document.getElementById('icon-moon').style.display='block'; }
+  }
+  function toggleTheme() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const next = isDark ? 'light' : 'dark';
+    localStorage.setItem('uimode', next);
+    applyTheme(next);
     draw();
   }
-}
+  (function initTheme() {
+    const saved = localStorage.getItem('uimode');
+    applyTheme(saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  })();
 
-function resetSimulationState() {
-  isPaused = true;
-  simulateButton.textContent = 'Simulate';
-  cancelAnimationFrame(animationFrameId);
-  animationFrameId = null;
-  liftPos = 0;
-  liftVel = direction === 'up' ? speed : -speed;
-  massDisplay.textContent = mass;
-  speedDisplay.textContent = speed;
-  updateAccelDisplay();
-  draw();
-}
+  // ── Simulation ──
+  const canvas = document.getElementById('liftCanvas');
+  const ctx = canvas.getContext('2d');
+  const massDisplay = document.getElementById('massDisplay');
+  const accelDisplay = document.getElementById('accelDisplay');
+  const speedDisplay = document.getElementById('speedDisplay');
+  const directionSelect = document.getElementById('directionSelect');
+  const simulateButton = document.getElementById('simulateButton');
 
-function updatePhysics() {
-  liftVel += accel * TIME_STEP;
-  liftPos += liftVel * TIME_STEP;
-}
+  let mass = 20, accel = 0, direction = 'up', speed = 0, liftPos = 0, liftVel = 0;
+  let isPaused = true, animationFrameId = null;
 
-function drawArrowUp(x, yStart, length, label) {
-  ctx.strokeStyle = '#e74c3c';
-  ctx.fillStyle = '#e74c3c';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x, yStart);
-  ctx.lineTo(x, yStart - length);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x, yStart - length);
-  ctx.lineTo(x - 5, yStart - length + 10);
-  ctx.lineTo(x + 5, yStart - length + 10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#333';
-  ctx.textAlign = 'center';
-  ctx.fillText(label + 'N', x, yStart - length - 12);
-}
+  const g = 9.8, MIN_MASS = 5, MAX_MASS = 100, MASS_STEP = 5;
+  const MAX_ACCEL = 10, ACCEL_STEP = 1, MIN_SPEED = 0, MAX_SPEED = 5, SPEED_STEP = 1;
+  const PIXELS_PER_METER = 50, LIFT_HEIGHT = 3, LIFT_WIDTH = 2, BOX_SIZE = 0.6;
+  const TIME_STEP = 1/60, ARROW_SCALE = 5;
 
-function drawArrowDown(x, yStart, length, label) {
-  ctx.strokeStyle = '#e74c3c';
-  ctx.fillStyle = '#e74c3c';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x, yStart);
-  ctx.lineTo(x, yStart + length);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x, yStart + length);
-  ctx.lineTo(x - 5, yStart + length - 10);
-  ctx.lineTo(x + 5, yStart + length - 10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#333';
-  ctx.textAlign = 'center';
-  ctx.fillText(label + 'N', x, yStart + length + 12);
-}
-
-function drawPauseIcon() {
-  const iconX = canvas.width / 2;
-  const iconY = canvas.height / 3;
-  const r = 25;
-  ctx.fillStyle = 'rgba(100,100,100,0.5)';
-  ctx.beginPath();
-  ctx.arc(iconX, iconY, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillRect(iconX - 10, iconY - 12, 6, 24);
-  ctx.fillRect(iconX + 4, iconY - 12, 6, 24);
-}
-
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const shaftLeft = canvas.width / 2 - (LIFT_WIDTH * PIXELS_PER_METER) / 2 - 20;
-  const shaftTop = 20;
-  const shaftWidth = LIFT_WIDTH * PIXELS_PER_METER + 40;
-  const shaftHeight = canvas.height - 40;
-  ctx.strokeStyle = '#7f8c8d';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(shaftLeft, shaftTop, shaftWidth, shaftHeight);
-
-  const liftX = canvas.width / 2 - (LIFT_WIDTH * PIXELS_PER_METER) / 2;
-  const liftY = canvas.height / 2 - liftPos * PIXELS_PER_METER - (LIFT_HEIGHT * PIXELS_PER_METER) / 2;
-
-  ctx.fillStyle = '#bdc3c7';
-  ctx.fillRect(liftX, liftY, LIFT_WIDTH * PIXELS_PER_METER, LIFT_HEIGHT * PIXELS_PER_METER);
-  ctx.strokeStyle = '#2c3e50';
-  ctx.strokeRect(liftX, liftY, LIFT_WIDTH * PIXELS_PER_METER, LIFT_HEIGHT * PIXELS_PER_METER);
-
-  const boxSizePx = BOX_SIZE * PIXELS_PER_METER;
-  const boxX = liftX + (LIFT_WIDTH * PIXELS_PER_METER - boxSizePx) / 2;
-  const boxY = liftY + LIFT_HEIGHT * PIXELS_PER_METER - boxSizePx - 4;
-  ctx.fillStyle = '#3498db';
-  ctx.fillRect(boxX, boxY, boxSizePx, boxSizePx);
-
-  const reaction = Math.max(0, mass * (g + accel));
-  const arrowLength = reaction * ARROW_SCALE / 50; // scale down
-  drawArrowUp(boxX + boxSizePx/2, boxY, arrowLength, reaction.toFixed(1));
-  drawArrowDown(boxX + boxSizePx/2, liftY + LIFT_HEIGHT * PIXELS_PER_METER, arrowLength, reaction.toFixed(1));
-
-  const weight = mass * g;
-  const weightLength = weight * ARROW_SCALE / 50;
-  drawArrowDown(boxX + boxSizePx/2, boxY + boxSizePx/2, weightLength, weight.toFixed(1));
-
-  if (isPaused) {
-    drawPauseIcon();
+  function setupCanvas() {
+    const containerWidth = canvas.parentElement.offsetWidth - 260;
+    canvas.width = Math.max(300, containerWidth);
+    canvas.height = Math.max(400, window.innerHeight - 220);
+    draw();
   }
-}
+  function changeMass(dir) {
+    if (!isPaused) return;
+    mass = Math.min(MAX_MASS, Math.max(MIN_MASS, mass + dir * MASS_STEP));
+    massDisplay.textContent = mass; draw();
+  }
+  function changeSpeed(dir) {
+    if (!isPaused) return;
+    speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, speed + dir * SPEED_STEP));
+    speedDisplay.textContent = speed; draw();
+  }
+  function updateAccelDisplay() {
+    if (accel === 0) accelDisplay.textContent = '0';
+    else accelDisplay.textContent = Math.abs(accel) + ' ' + (accel > 0 ? 'up' : 'down');
+  }
+  function changeAccel(dir) {
+    if (!isPaused) return;
+    accel = Math.min(MAX_ACCEL, Math.max(-MAX_ACCEL, accel + dir * ACCEL_STEP));
+    updateAccelDisplay(); draw();
+  }
+  function changeDirection() {
+    if (!isPaused) return;
+    direction = directionSelect.value; draw();
+  }
+  function toggleSimulation() {
+    isPaused = !isPaused;
+    simulateButton.textContent = isPaused ? 'Simulate' : 'Pause';
+    if (!isPaused) {
+      if (animationFrameId == null) liftVel = direction === 'up' ? speed : -speed;
+      animate();
+    } else {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null; draw();
+    }
+  }
+  function resetSimulationState() {
+    isPaused = true; simulateButton.textContent = 'Simulate';
+    cancelAnimationFrame(animationFrameId); animationFrameId = null;
+    liftPos = 0; liftVel = direction === 'up' ? speed : -speed;
+    massDisplay.textContent = mass; speedDisplay.textContent = speed;
+    updateAccelDisplay(); draw();
+  }
+  function updatePhysics() {
+    liftVel += accel * TIME_STEP;
+    liftPos += liftVel * TIME_STEP;
+  }
+  function drawArrowUp(x, yStart, length, label, c) {
+    ctx.strokeStyle = c.arrowColor; ctx.fillStyle = c.arrowColor; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, yStart); ctx.lineTo(x, yStart - length); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, yStart - length);
+    ctx.lineTo(x - 5, yStart - length + 10); ctx.lineTo(x + 5, yStart - length + 10);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = c.textColor; ctx.textAlign = 'center';
+    ctx.fillText(label + 'N', x, yStart - length - 12);
+  }
+  function drawArrowDown(x, yStart, length, label, c) {
+    ctx.strokeStyle = c.arrowColor; ctx.fillStyle = c.arrowColor; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, yStart); ctx.lineTo(x, yStart + length); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, yStart + length);
+    ctx.lineTo(x - 5, yStart + length - 10); ctx.lineTo(x + 5, yStart + length - 10);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = c.textColor; ctx.textAlign = 'center';
+    ctx.fillText(label + 'N', x, yStart + length + 12);
+  }
+  function drawPauseIcon(c) {
+    const iconX = canvas.width / 2, iconY = canvas.height / 3;
+    ctx.fillStyle = c.pauseCircle; ctx.beginPath();
+    ctx.arc(iconX, iconY, 25, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = c.pauseBar;
+    ctx.fillRect(iconX - 10, iconY - 12, 6, 24);
+    ctx.fillRect(iconX + 4, iconY - 12, 6, 24);
+  }
+  function draw() {
+    const c = getColors();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = c.canvasBg; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-function animate() {
-  if (isPaused) return;
-  updatePhysics();
-  draw();
-  animationFrameId = requestAnimationFrame(animate);
-}
+    const shaftLeft = canvas.width / 2 - (LIFT_WIDTH * PIXELS_PER_METER) / 2 - 20;
+    const shaftTop = 20, shaftWidth = LIFT_WIDTH * PIXELS_PER_METER + 40, shaftHeight = canvas.height - 40;
+    ctx.strokeStyle = c.shaft; ctx.lineWidth = 3;
+    ctx.strokeRect(shaftLeft, shaftTop, shaftWidth, shaftHeight);
 
-window.onload = () => {
-  setupCanvas();
-  resetSimulationState();
-};
-window.onresize = setupCanvas;
+    const liftX = canvas.width / 2 - (LIFT_WIDTH * PIXELS_PER_METER) / 2;
+    const liftY = canvas.height / 2 - liftPos * PIXELS_PER_METER - (LIFT_HEIGHT * PIXELS_PER_METER) / 2;
+    ctx.fillStyle = c.liftFill; ctx.fillRect(liftX, liftY, LIFT_WIDTH * PIXELS_PER_METER, LIFT_HEIGHT * PIXELS_PER_METER);
+    ctx.strokeStyle = c.liftStroke; ctx.strokeRect(liftX, liftY, LIFT_WIDTH * PIXELS_PER_METER, LIFT_HEIGHT * PIXELS_PER_METER);
+
+    const boxSizePx = BOX_SIZE * PIXELS_PER_METER;
+    const boxX = liftX + (LIFT_WIDTH * PIXELS_PER_METER - boxSizePx) / 2;
+    const boxY = liftY + LIFT_HEIGHT * PIXELS_PER_METER - boxSizePx - 4;
+    ctx.fillStyle = c.boxFill; ctx.fillRect(boxX, boxY, boxSizePx, boxSizePx);
+
+    const reaction = Math.max(0, mass * (g + accel));
+    const arrowLength = reaction * ARROW_SCALE / 50;
+    drawArrowUp(boxX + boxSizePx/2, boxY, arrowLength, reaction.toFixed(1), c);
+    drawArrowDown(boxX + boxSizePx/2, liftY + LIFT_HEIGHT * PIXELS_PER_METER, arrowLength, reaction.toFixed(1), c);
+
+    const weight = mass * g;
+    const weightLength = weight * ARROW_SCALE / 50;
+    drawArrowDown(boxX + boxSizePx/2, boxY + boxSizePx/2, weightLength, weight.toFixed(1), c);
+
+    if (isPaused) drawPauseIcon(c);
+  }
+  function animate() {
+    if (isPaused) return;
+    updatePhysics(); draw();
+    animationFrameId = requestAnimationFrame(animate);
+  }
+  window.onload = () => { setupCanvas(); resetSimulationState(); };
+  window.onresize = setupCanvas;
 </script>
 </body>
 </html>

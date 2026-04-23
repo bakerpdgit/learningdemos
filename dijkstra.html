@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A Level CS: Dijkstra Algorithm Tracer</title>
 
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
     <!-- React & ReactDOM -->
     <script
       crossorigin
@@ -18,46 +32,42 @@
     <!-- Babel for standalone JSX compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS & Dark Mode Config -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- Pre-load Dark Mode Script to Prevent FOUC -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <style>
       body {
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
           Arial, sans-serif;
-        background-color: #f3f4f6;
-      }
-      .table-input {
-        width: 100%;
-        height: 100%;
-        min-width: 40px;
-        text-align: center;
-        border: 1px solid #d1d5db;
-        border-radius: 4px;
-        padding: 4px;
-        outline: none;
-      }
-      .table-input:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
-      }
-      .table-cell-locked {
-        background-color: #f9fafb;
-        color: #374151;
-        text-align: center;
-      }
-      .pseudocode-line {
-        padding: 2px 8px;
-        font-family: monospace;
-        font-size: 0.85rem;
-        border-left: 4px solid transparent;
-      }
-      .pseudocode-line.active {
-        background-color: #e0f2fe;
-        border-left-color: #0284c7;
-        font-weight: bold;
-        color: #0369a1;
       }
 
       /* Custom Scrollbar */
@@ -68,20 +78,33 @@
       ::-webkit-scrollbar-track {
         background: #f1f1f1;
       }
+      .dark ::-webkit-scrollbar-track {
+        background: #0f172a;
+      }
       ::-webkit-scrollbar-thumb {
         background: #c1c1c1;
         border-radius: 4px;
       }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
       ::-webkit-scrollbar-thumb:hover {
         background: #a8a8a8;
       }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
 
-      /* SVG Graph Styles */
+      /* SVG Graph Styles - Integrated with Dark Mode */
       .node-circle {
         fill: white;
         stroke: #4b5563;
         stroke-width: 2;
         transition: all 0.3s;
+      }
+      .dark .node-circle {
+        fill: #1e293b;
+        stroke: #94a3b8;
       }
       .node-text {
         fill: #1f2937;
@@ -91,12 +114,21 @@
         text-anchor: middle;
         dominant-baseline: central;
       }
+      .dark .node-text {
+        fill: #f8fafc;
+      }
       .edge-line {
         stroke: #9ca3af;
         stroke-width: 2;
       }
+      .dark .edge-line {
+        stroke: #475569;
+      }
       .edge-weight-bg {
         fill: white;
+      }
+      .dark .edge-weight-bg {
+        fill: #1e293b;
       }
       .edge-weight {
         fill: #374151;
@@ -105,20 +137,37 @@
         text-anchor: middle;
         dominant-baseline: central;
       }
+      .dark .edge-weight {
+        fill: #cbd5e1;
+      }
 
+      /* State Highlight Nodes */
       .node-start {
         stroke: #10b981;
         stroke-width: 4;
       }
+      .dark .node-start {
+        stroke: #34d399;
+      }
+
       .node-target {
         stroke: #8b5cf6;
         stroke-width: 4;
       }
+      .dark .node-target {
+        stroke: #a78bfa;
+      }
+
       .node-current {
         stroke: #f59e0b;
         stroke-width: 4;
         fill: #fef3c7;
       }
+      .dark .node-current {
+        stroke: #fbbf24;
+        fill: #78350f;
+      }
+
       .node-evaluating {
         stroke: #3b82f6;
         stroke-width: 3;
@@ -128,54 +177,12 @@
         stroke-width: 3;
         stroke-dasharray: 5, 5;
       }
-
-      .dropdown-content {
-        display: none;
-        position: absolute;
-        right: 0;
-        background-color: white;
-        min-width: 160px;
-        box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-        z-index: 10;
-        border-radius: 6px;
-        padding: 8px;
-        border: 1px solid #e5e7eb;
-      }
-      .dropdown:hover .dropdown-content {
-        display: block;
+      .dark .node-evaluating,
+      .dark .edge-evaluating {
+        stroke: #60a5fa;
       }
 
-      /* Resizer Styles */
-      .resizer-h {
-        width: 8px;
-        cursor: col-resize;
-        background-color: #f8fafc;
-        border-left: 1px solid #e2e8f0;
-        border-right: 1px solid #e2e8f0;
-        flex-shrink: 0;
-        z-index: 30;
-        transition: background-color 0.2s;
-      }
-      .resizer-h:hover,
-      .resizer-h:active {
-        background-color: #cbd5e1;
-      }
-      .resizer-v {
-        height: 8px;
-        cursor: row-resize;
-        background-color: #f8fafc;
-        border-top: 1px solid #e2e8f0;
-        border-bottom: 1px solid #e2e8f0;
-        flex-shrink: 0;
-        z-index: 30;
-        transition: background-color 0.2s;
-      }
-      .resizer-v:hover,
-      .resizer-v:active {
-        background-color: #cbd5e1;
-      }
-
-      /* Applied to body during drag to prevent text selection and keep cursor strict */
+      /* Drag Handlers */
       .dragging-h * {
         cursor: col-resize !important;
         user-select: none !important;
@@ -184,32 +191,11 @@
         cursor: row-resize !important;
         user-select: none !important;
       }
-    
-      .global-home-link {
-        position: fixed;
-        top: 14px;
-        left: 14px;
-        z-index: 1000;
-        background: rgba(255, 255, 255, 0.95);
-        color: #1d4ed8;
-        border: 1px solid rgba(37, 99, 235, 0.25);
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        text-decoration: none;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        backdrop-filter: blur(2px);
-      }
-      .global-home-link:hover {
-        background: #dbeafe;
-        border-color: rgba(37, 99, 235, 0.45);
-      }
     </style>
   </head>
-  <body>
-    <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
-
+  <body
+    class="bg-gray-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors"
+  >
     <div id="root"></div>
 
     <script type="text/babel">
@@ -350,7 +336,6 @@
       ];
 
       // --- ORACLE FUNCTION ---
-      // Runs Dijkstra internally to generate the correct trace table answers
       function generateOracle(graph) {
         let rows = [];
         let dist = {};
@@ -361,7 +346,6 @@
         });
         dist[graph.start] = 0;
 
-        // Helper to strictly order PQ by distance, then alphabetically
         const getSortedQueue = (qArray, distObj) => {
           return [...qArray].sort((a, b) => {
             if (distObj[a] < distObj[b]) return -1;
@@ -373,7 +357,6 @@
         let q = [...graph.nodes];
         q = getSortedQueue(q, dist);
 
-        // Row 0: Initialization
         rows.push({
           visited: "-",
           q_pre: [...q],
@@ -384,9 +367,8 @@
         });
 
         while (q.length > 0) {
-          // Front of queue is always min distance now due to sorting
           let u = q[0];
-          if (dist[u] === Infinity) break; // Remaining are disconnected
+          if (dist[u] === Infinity) break;
 
           let newQ_pre = q.filter((n) => n !== u);
 
@@ -414,12 +396,11 @@
                 stepDist[v] = alt;
                 stepPrev[v] = u;
                 dist[v] = alt;
-                prev[v] = u; // Update global for next iteration
+                prev[v] = u;
               }
             }
           });
 
-          // Calculate reordered PQ for the UPDATE command phase
           let newQ_post = getSortedQueue(newQ_pre, stepDist);
 
           rows.push({
@@ -450,7 +431,6 @@
         if (s === "" || s === "-" || s === "NULL" || s === "NONE") return null;
         return s;
       };
-      // parseQueue no longer auto-sorts alphabetically; it enforces the strict string sequence given
       const parseQueue = (val) =>
         String(val)
           .toUpperCase()
@@ -460,6 +440,28 @@
 
       // --- MAIN APP COMPONENT ---
       function App() {
+        // Theme State Setup
+        const [theme, setTheme] = useState(() => {
+          const saved = localStorage.getItem("uimode");
+          if (saved) return saved;
+          return window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        });
+
+        useEffect(() => {
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+          localStorage.setItem("uimode", theme);
+        }, [theme]);
+
+        const toggleTheme = () =>
+          setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+
         // Configuration State
         const [selectedDifficulties, setSelectedDifficulties] = useState([
           "Easy",
@@ -472,14 +474,6 @@
         const [oracle, setOracle] = useState([]);
         const [userTable, setUserTable] = useState([]);
         const [currentRowIdx, setCurrentRowIdx] = useState(0);
-        /* Phases: 
-               INIT: Filling first row (dist, prev, q)
-               DEQUEUE: Filling visited node
-               EVAL: Filling dist, prev, q for current row
-               DONE: Target dequeued
-               BACKTRACK: Entering final path backwards
-               FINAL_PATH: Entering final path forwards
-            */
         const [phase, setPhase] = useState("INIT");
         const [feedback, setFeedback] = useState({
           type: "info",
@@ -490,24 +484,21 @@
         const [forwardPathAnswer, setForwardPathAnswer] = useState("");
 
         // --- Panel Resizing State ---
-        const [leftWidth, setLeftWidth] = useState(33.33); // 1/3 default
-        const [topHeight, setTopHeight] = useState(50); // 1/2 default
+        const [leftWidth, setLeftWidth] = useState(33.33);
+        const [topHeight, setTopHeight] = useState(50);
 
         const startHorizDrag = (e) => {
           e.preventDefault();
           document.body.classList.add("dragging-h");
-
           const onMouseMove = (moveEvent) => {
             const newWidthPct = (moveEvent.clientX / window.innerWidth) * 100;
-            setLeftWidth(Math.max(20, Math.min(newWidthPct, 80))); // Clamp 20% to 80%
+            setLeftWidth(Math.max(20, Math.min(newWidthPct, 80)));
           };
-
           const onMouseUp = () => {
             document.body.classList.remove("dragging-h");
             document.removeEventListener("mousemove", onMouseMove);
             document.removeEventListener("mouseup", onMouseUp);
           };
-
           document.addEventListener("mousemove", onMouseMove);
           document.addEventListener("mouseup", onMouseUp);
         };
@@ -518,29 +509,24 @@
           const leftPane = document.getElementById("left-pane-container");
           if (!leftPane) return;
           const rect = leftPane.getBoundingClientRect();
-
           const onMouseMove = (moveEvent) => {
             const y = moveEvent.clientY - rect.top;
             const newHeightPct = (y / rect.height) * 100;
-            setTopHeight(Math.max(20, Math.min(newHeightPct, 80))); // Clamp 20% to 80%
+            setTopHeight(Math.max(20, Math.min(newHeightPct, 80)));
           };
-
           const onMouseUp = () => {
             document.body.classList.remove("dragging-v");
             document.removeEventListener("mousemove", onMouseMove);
             document.removeEventListener("mouseup", onMouseUp);
           };
-
           document.addEventListener("mousemove", onMouseMove);
           document.addEventListener("mouseup", onMouseUp);
         };
 
-        // Initialize Graph
         useEffect(() => {
           const correctOracle = generateOracle(activeGraph);
           setOracle(correctOracle);
 
-          // Setup empty first row for user
           let initDist = {};
           let initPrev = {};
           activeGraph.nodes.forEach((n) => {
@@ -562,7 +548,6 @@
           });
         }, [activeGraph]);
 
-        // Handlers for Input Changes
         const handleCellChange = (node, field, value) => {
           let newTable = [...userTable];
           newTable[currentRowIdx][field][node] = value;
@@ -574,7 +559,6 @@
           setUserTable(newTable);
         };
 
-        // Validation Engine
         const checkStep = () => {
           const uRow = userTable[currentRowIdx];
           const oRow = oracle[currentRowIdx];
@@ -593,11 +577,10 @@
             }
 
             if (errors.length === 0) {
-              handleRowChange("visited", oRow.visited); // format nicely
-              handleRowChange("q", oRow.q_pre.join(", ")); // format nicely
+              handleRowChange("visited", oRow.visited);
+              handleRowChange("q", oRow.q_pre.join(", "));
 
               if (oRow.isTarget) {
-                // Target reached, automatically complete final row
                 let cleanRow = {
                   ...uRow,
                   visited: oRow.visited,
@@ -625,14 +608,12 @@
               return;
             }
           } else if (phase === "EVAL") {
-            // Check Prevs first so we complain about missing prevs before distances
             activeGraph.nodes.forEach((n) => {
               if (parsePrev(uRow.prev[n]) !== oRow.prev[n])
                 errors.push(`Previous node for Node ${n} is incorrect.`);
               if (parseDist(uRow.dist[n]) !== oRow.dist[n])
                 errors.push(`Distance for Node ${n} is incorrect.`);
             });
-
             if (errors.length === 0) {
               setPhase("UPDATE_PQ");
               setFeedback({
@@ -663,7 +644,6 @@
             }
 
             if (errors.length === 0) {
-              // Format clean row for locked state
               let cleanRow = { ...uRow, q: oRow.q.join(", ") };
               activeGraph.nodes.forEach((n) => {
                 cleanRow.dist[n] = formatDist(oRow.dist[n]);
@@ -672,7 +652,6 @@
               let newTable = [...userTable];
               newTable[currentRowIdx] = cleanRow;
 
-              // Setup next row pre-filled with current values (AQA copy-down style)
               let nextDist = {};
               let nextPrev = {};
               activeGraph.nodes.forEach((n) => {
@@ -698,13 +677,11 @@
               return;
             }
           }
-
-          if (errors.length > 0) {
+          if (errors.length > 0)
             setFeedback({
               type: "error",
               msg: errors[0] + (errors.length > 1 ? " (And other errors)" : ""),
             });
-          }
         };
 
         const checkMinDist = () => {
@@ -729,7 +706,7 @@
           let path = [];
           let curr = activeGraph.target;
           while (curr !== null) {
-            path.push(curr); // Push appends to end, resulting in Target -> Start
+            path.push(curr);
             curr = oracle[oracle.length - 1].prev[curr];
           }
           const backwardStr = path.join("");
@@ -739,7 +716,7 @@
 
           if (userPathStr === backwardStr) {
             setPhase("FINAL_PATH");
-            setBacktrackPath(path.join(" ← ")); // Format beautifully to show direction
+            setBacktrackPath(path.join(" ← "));
             setFeedback({
               type: "success",
               msg: `Correct! You have backtracked successfully. Now state the final path from Start to Target.`,
@@ -756,7 +733,7 @@
           let path = [];
           let curr = activeGraph.target;
           while (curr !== null) {
-            path.unshift(curr); // Unshift prepends, resulting in Start -> Target
+            path.unshift(curr);
             curr = oracle[oracle.length - 1].prev[curr];
           }
           const forwardStr = path.join("");
@@ -766,7 +743,7 @@
 
           if (userPathStr === forwardStr) {
             setPhase("DONE");
-            setForwardPathAnswer(path.join(" → ")); // Format beautifully
+            setForwardPathAnswer(path.join(" → "));
             setFeedback({
               type: "success",
               msg: `Perfect! You found the shortest path: ${path.join(" → ")} with total weight ${oracle[oracle.length - 1].dist[activeGraph.target]}.`,
@@ -820,25 +797,19 @@
           }
         };
 
-        // Calculate active pseudocode line
         let activeLine = 0;
-        if (phase === "INIT")
-          activeLine = 2; // Init loop
-        else if (phase === "DEQUEUE")
-          activeLine = 9; // Dequeue
-        else if (phase === "EVAL")
-          activeLine = 11; // Neighbor eval
-        else if (phase === "UPDATE_PQ")
-          activeLine = 20; // PQ Update
+        if (phase === "INIT") activeLine = 2;
+        else if (phase === "DEQUEUE") activeLine = 9;
+        else if (phase === "EVAL") activeLine = 11;
+        else if (phase === "UPDATE_PQ") activeLine = 20;
         else if (
           phase === "MIN_DIST" ||
           phase === "BACKTRACK" ||
           phase === "FINAL_PATH" ||
           phase === "DONE"
         )
-          activeLine = 10; // Return
+          activeLine = 10;
 
-        // Dropdown filter logic
         const toggleDifficulty = (diff) => {
           if (selectedDifficulties.includes(diff)) {
             if (selectedDifficulties.length > 1)
@@ -853,32 +824,94 @@
           selectedDifficulties.includes(g.difficulty),
         );
 
+        const PseudocodeLine = ({ num, text, lineId }) => (
+          <div
+            className={`px-2 py-0.5 font-mono text-[0.85rem] border-l-4 transition-colors ${activeLine === lineId ? "bg-sky-100 dark:bg-sky-900/40 border-sky-600 dark:border-sky-400 font-bold text-sky-800 dark:text-sky-300" : "border-transparent text-slate-800 dark:text-slate-300"}`}
+          >
+            {num}: &nbsp;{text}
+          </div>
+        );
+
         return (
           <div className="flex flex-col h-screen overflow-hidden">
-            {/* TOP NAVBAR */}
-            <header className="bg-white shadow px-6 py-3 flex justify-between items-center z-20">
+            {/* Global CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                      />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+
+            {/* App Toolbar */}
+            <div className="bg-white dark:bg-slate-800 shadow-sm px-6 py-3 flex justify-between items-center z-20 shrink-0 border-b border-gray-200 dark:border-slate-700">
               <div>
-                <h1 className="text-xl font-bold text-gray-800">
+                <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">
                   Dijkstra's Algorithm Tracer
                 </h1>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-slate-400">
                   AQA A-Level Computer Science
                 </p>
               </div>
               <div className="flex items-center space-x-4">
-                <div className="dropdown relative">
-                  <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center">
+                <div className="relative group">
+                  <button className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
                     Filter Topics (Difficulty) <span className="ml-2">▼</span>
                   </button>
-                  <div className="dropdown-content">
+                  <div className="absolute right-0 mt-1 bg-white dark:bg-slate-800 min-w-[160px] shadow-lg rounded border border-gray-200 dark:border-slate-700 z-10 hidden group-hover:block overflow-hidden">
                     {["Easy", "Medium", "Hard"].map((diff) => (
                       <label
                         key={diff}
-                        className="flex items-center p-2 cursor-pointer hover:bg-gray-50"
+                        className="flex items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200"
                       >
                         <input
                           type="checkbox"
-                          className="mr-2"
+                          className="mr-3"
                           checked={selectedDifficulties.includes(diff)}
                           onChange={() => toggleDifficulty(diff)}
                         />
@@ -888,7 +921,7 @@
                   </div>
                 </div>
                 <select
-                  className="bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded shadow font-semibold"
+                  className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 py-2 px-4 rounded shadow font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500"
                   value={activeGraph.id}
                   onChange={(e) =>
                     setActiveGraph(
@@ -903,20 +936,20 @@
                   ))}
                 </select>
               </div>
-            </header>
+            </div>
 
             {/* MAIN CONTENT */}
             <div className="flex flex-1 overflow-hidden">
-              {/* LEFT PANE: Graph & Pseudocode */}
+              {/* LEFT PANE */}
               <div
                 id="left-pane-container"
                 style={{ width: `${leftWidth}%`, minWidth: "20%" }}
-                className="bg-white flex flex-col relative z-10 shadow-lg shrink-0"
+                className="flex flex-col relative z-10 shrink-0 border-r border-gray-200 dark:border-slate-700"
               >
                 {/* SVG Graph Visualizer */}
                 <div
                   style={{ height: `${topHeight}%`, minHeight: "20%" }}
-                  className="bg-gray-50 flex items-center justify-center p-4 relative overflow-hidden shrink-0"
+                  className="bg-gray-50 dark:bg-slate-800/50 flex items-center justify-center p-4 relative overflow-hidden shrink-0"
                 >
                   <svg
                     width="100%"
@@ -924,7 +957,6 @@
                     viewBox="0 0 450 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
-                    {/* Edges */}
                     {activeGraph.edges.map((edge, i) => {
                       const posU = activeGraph.layout[edge.u];
                       const posV = activeGraph.layout[edge.v];
@@ -960,7 +992,6 @@
                       );
                     })}
 
-                    {/* Nodes */}
                     {activeGraph.nodes.map((n) => {
                       const pos = activeGraph.layout[n];
                       let nodeClass = "node-circle";
@@ -980,184 +1011,262 @@
                             r="18"
                             className={nodeClass}
                           />
-                          <text x={pos.x} y={pos.y} className="node-text" dominantBaseline="central" textAnchor="middle">{n}</text>
+                          <text x={pos.x} y={pos.y} className="node-text">
+                            {n}
+                          </text>
                         </g>
                       );
                     })}
-                    {/* Legend inside SVG */}
+
+                    {/* Legend */}
                     <g transform="translate(10, 10)">
                       <rect
                         width="130"
                         height="65"
-                        fill="rgba(255,255,255,0.8)"
                         rx="4"
+                        className="fill-white/80 dark:fill-slate-800/80"
                       />
-                      <circle cx="20" cy="20" r="6" className="node-start" fill="white" />
-                      <text x="35" y="24" fontSize="10">Start Node</text>
-                      <circle cx="20" cy="35" r="6" className="node-target" fill="white" />
-                      <text x="35" y="39" fontSize="10">Target Node</text>
-                      <circle cx="20" cy="50" r="6" className="node-current" fill="white" />
-                      <text x="35" y="54" fontSize="10">Current Node</text>
+                      <circle
+                        cx="20"
+                        cy="20"
+                        r="6"
+                        className="node-start dark:fill-slate-900"
+                        fill="white"
+                      />
+                      <text
+                        x="35"
+                        y="24"
+                        fontSize="10"
+                        className="fill-gray-700 dark:fill-slate-300 font-sans font-medium"
+                      >
+                        Start Node
+                      </text>
+                      <circle
+                        cx="20"
+                        cy="35"
+                        r="6"
+                        className="node-target dark:fill-slate-900"
+                        fill="white"
+                      />
+                      <text
+                        x="35"
+                        y="39"
+                        fontSize="10"
+                        className="fill-gray-700 dark:fill-slate-300 font-sans font-medium"
+                      >
+                        Target Node
+                      </text>
+                      <circle
+                        cx="20"
+                        cy="50"
+                        r="6"
+                        className="node-current dark:fill-slate-900"
+                        fill="white"
+                      />
+                      <text
+                        x="35"
+                        y="54"
+                        fontSize="10"
+                        className="fill-gray-700 dark:fill-slate-300 font-sans font-medium"
+                      >
+                        Current Node
+                      </text>
                     </g>
                   </svg>
                 </div>
 
                 {/* Vertical Resizer */}
                 <div
-                  className="resizer-v flex items-center justify-center group"
+                  className="h-2 cursor-row-resize bg-gray-100 dark:bg-slate-800 border-y border-gray-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 z-30 transition-colors hover:bg-gray-200 dark:hover:bg-slate-700"
                   onMouseDown={startVertDrag}
                 >
-                  <div className="w-8 h-1 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+                  <div className="w-8 h-0.5 bg-gray-400 dark:bg-slate-500 rounded"></div>
                 </div>
 
                 {/* Pseudocode Panel */}
-                <div className="flex-1 overflow-y-auto bg-[#f8fafc] p-4 font-mono text-sm">
-                  <h3 className="font-bold text-gray-700 mb-2 uppercase text-xs tracking-wider">
+                <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900 p-4">
+                  <h3 className="font-bold text-gray-700 dark:text-slate-400 mb-3 uppercase text-xs tracking-wider">
                     AQA Pseudocode Trace
                   </h3>
-                  <div
-                    className={`pseudocode-line ${activeLine === 1 ? "active" : ""}`}
-                  >
-                    01: SUBROUTINE Dijkstra(Graph, Start, Target)
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
-                  >
-                    02: &nbsp;&nbsp;FOR each Node in Graph
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
-                  >
-                    03: &nbsp;&nbsp;&nbsp;&nbsp;Distance[Node] &larr; INFINITY
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
-                  >
-                    04: &nbsp;&nbsp;&nbsp;&nbsp;Previous[Node] &larr; NULL
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
-                  >
-                    05: &nbsp;&nbsp;&nbsp;&nbsp;ENQUEUE Node in PriorityQueue
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
-                  >
-                    06: &nbsp;&nbsp;ENDFOR
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 2 ? "active" : ""}`}
-                  >
-                    07: &nbsp;&nbsp;Distance[Start] &larr; 0
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 8 ? "active" : ""}`}
-                  >
-                    08: &nbsp;&nbsp;WHILE PriorityQueue is not empty
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 9 ? "active" : ""}`}
-                  >
-                    09: &nbsp;&nbsp;&nbsp;&nbsp;CurrentNode &larr; DEQUEUE
-                    PriorityQueue
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 10 ? "active" : ""}`}
-                  >
-                    10: &nbsp;&nbsp;&nbsp;&nbsp;IF CurrentNode == Target THEN
-                    RETURN
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    11: &nbsp;&nbsp;&nbsp;&nbsp;FOR each Neighbor of CurrentNode
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    12: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IF Neighbor in
-                    PriorityQueue THEN
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    13: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NewDist
-                    &larr; Dist[Current] + Weight
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    14: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IF
-                    NewDist &lt; Dist[Neighbor] THEN
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    15:
-                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dist[Neighbor]
-                    &larr; NewDist
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    16:
-                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Prev[Neighbor]
-                    &larr; CurrentNode
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    17: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ENDIF
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    18: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ENDIF
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 11 ? "active" : ""}`}
-                  >
-                    19: &nbsp;&nbsp;&nbsp;&nbsp;ENDFOR
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 20 ? "active" : ""}`}
-                  >
-                    20: &nbsp;&nbsp;&nbsp;&nbsp;UPDATE PriorityQueue
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 8 ? "active" : ""}`}
-                  >
-                    21: &nbsp;&nbsp;ENDWHILE
-                  </div>
-                  <div
-                    className={`pseudocode-line ${activeLine === 1 ? "active" : ""}`}
-                  >
-                    22: ENDSUBROUTINE
-                  </div>
+                  <PseudocodeLine
+                    num="01"
+                    lineId={1}
+                    text="SUBROUTINE Dijkstra(Graph, Start, Target)"
+                  />
+                  <PseudocodeLine
+                    num="02"
+                    lineId={2}
+                    text={<>&nbsp;&nbsp;FOR each Node in Graph</>}
+                  />
+                  <PseudocodeLine
+                    num="03"
+                    lineId={2}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;Distance[Node] &larr; INFINITY
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="04"
+                    lineId={2}
+                    text={
+                      <>&nbsp;&nbsp;&nbsp;&nbsp;Previous[Node] &larr; NULL</>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="05"
+                    lineId={2}
+                    text={
+                      <>&nbsp;&nbsp;&nbsp;&nbsp;ENQUEUE Node in PriorityQueue</>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="06"
+                    lineId={2}
+                    text={<>&nbsp;&nbsp;ENDFOR</>}
+                  />
+                  <PseudocodeLine
+                    num="07"
+                    lineId={2}
+                    text={<>&nbsp;&nbsp;Distance[Start] &larr; 0</>}
+                  />
+                  <PseudocodeLine
+                    num="08"
+                    lineId={8}
+                    text={<>&nbsp;&nbsp;WHILE PriorityQueue is not empty</>}
+                  />
+                  <PseudocodeLine
+                    num="09"
+                    lineId={9}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;CurrentNode &larr; DEQUEUE
+                        PriorityQueue
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="10"
+                    lineId={10}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;IF CurrentNode == Target THEN
+                        RETURN
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="11"
+                    lineId={11}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;FOR each Neighbor of CurrentNode
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="12"
+                    lineId={11}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IF Neighbor in
+                        PriorityQueue THEN
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="13"
+                    lineId={11}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NewDist
+                        &larr; Dist[Current] + Weight
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="14"
+                    lineId={11}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IF
+                        NewDist &lt; Dist[Neighbor] THEN
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="15"
+                    lineId={11}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dist[Neighbor]
+                        &larr; NewDist
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="16"
+                    lineId={11}
+                    text={
+                      <>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Prev[Neighbor]
+                        &larr; CurrentNode
+                      </>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="17"
+                    lineId={11}
+                    text={
+                      <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ENDIF</>
+                    }
+                  />
+                  <PseudocodeLine
+                    num="18"
+                    lineId={11}
+                    text={<>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ENDIF</>}
+                  />
+                  <PseudocodeLine
+                    num="19"
+                    lineId={11}
+                    text={<>&nbsp;&nbsp;&nbsp;&nbsp;ENDFOR</>}
+                  />
+                  <PseudocodeLine
+                    num="20"
+                    lineId={20}
+                    text={<>&nbsp;&nbsp;&nbsp;&nbsp;UPDATE PriorityQueue</>}
+                  />
+                  <PseudocodeLine
+                    num="21"
+                    lineId={8}
+                    text={<>&nbsp;&nbsp;ENDWHILE</>}
+                  />
+                  <PseudocodeLine num="22" lineId={1} text="ENDSUBROUTINE" />
                 </div>
               </div>
 
               {/* Horizontal Resizer */}
               <div
-                className="resizer-h flex flex-col items-center justify-center group"
+                className="w-2 cursor-col-resize bg-gray-100 dark:bg-slate-800 border-x border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center flex-shrink-0 z-30 transition-colors hover:bg-gray-200 dark:hover:bg-slate-700"
                 onMouseDown={startHorizDrag}
               >
-                <div className="w-1 h-8 bg-gray-300 rounded group-hover:bg-gray-400"></div>
+                <div className="w-0.5 h-8 bg-gray-400 dark:bg-slate-500 rounded"></div>
               </div>
 
-              {/* RIGHT PANE: Interactive Trace Table */}
-              <div className="flex-1 flex flex-col bg-white overflow-hidden">
+              {/* RIGHT PANE */}
+              <div className="flex-1 flex flex-col bg-white dark:bg-[#1e293b] overflow-hidden">
                 {/* Feedback Banner */}
                 <div
-                  className={`p-4 border-b font-semibold flex items-center shadow-sm z-10 ${
+                  className={`p-4 border-b font-semibold flex items-center shadow-sm z-10 shrink-0 ${
                     feedback.type === "error"
-                      ? "bg-red-50 text-red-700 border-red-200"
+                      ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
                       : feedback.type === "success"
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-blue-50 text-blue-700 border-blue-200"
+                        ? "bg-green-50 dark:bg-emerald-900/30 text-green-700 dark:text-emerald-300 border-green-200 dark:border-emerald-800"
+                        : "bg-blue-50 dark:bg-sky-900/30 text-blue-700 dark:text-sky-300 border-blue-200 dark:border-sky-800"
                   }`}
                 >
-                  <span className="mr-2 text-xl">
+                  <span className="mr-3 text-xl">
                     {feedback.type === "error"
                       ? "❌"
                       : feedback.type === "success"
@@ -1168,32 +1277,38 @@
                 </div>
 
                 {/* Table Area */}
-                <div className="flex-1 overflow-auto p-4 bg-gray-50">
-                  <table className="w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden text-sm">
-                    <thead className="bg-gray-200 text-gray-700">
+                <div className="flex-1 overflow-auto p-4 bg-gray-50 dark:bg-[#0f172a]">
+                  <table className="w-full border-collapse bg-white dark:bg-slate-800 shadow-sm rounded-lg overflow-hidden text-sm border-hidden">
+                    <thead className="bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-b border-gray-300 dark:border-slate-600">
                       <tr>
-                        <th className="border p-2 min-w-[80px]" rowSpan="2">
+                        <th
+                          className="border border-gray-300 dark:border-slate-600 p-2 min-w-[80px]"
+                          rowSpan="2"
+                        >
                           Node Visited
                           <br />
-                          <span className="font-normal text-xs">
+                          <span className="font-normal text-xs text-gray-500 dark:text-slate-400">
                             (Dequeued)
                           </span>
                         </th>
-                        <th className="border p-2 min-w-[120px]" rowSpan="2">
+                        <th
+                          className="border border-gray-300 dark:border-slate-600 p-2 min-w-[120px]"
+                          rowSpan="2"
+                        >
                           Priority Queue
                           <br />
-                          <span className="font-normal text-xs">
+                          <span className="font-normal text-xs text-gray-500 dark:text-slate-400">
                             (Unvisited)
                           </span>
                         </th>
                         <th
-                          className="border p-2 text-center"
+                          className="border border-gray-300 dark:border-slate-600 p-2 text-center"
                           colSpan={activeGraph.nodes.length}
                         >
                           Distance
                         </th>
                         <th
-                          className="border p-2 text-center"
+                          className="border border-gray-300 dark:border-slate-600 p-2 text-center"
                           colSpan={activeGraph.nodes.length}
                         >
                           Previous
@@ -1203,7 +1318,7 @@
                         {activeGraph.nodes.map((n) => (
                           <th
                             key={`th-dist-${n}`}
-                            className="border p-1 bg-gray-100 font-medium"
+                            className="border border-gray-300 dark:border-slate-600 p-1 bg-gray-100 dark:bg-slate-700/80 font-medium"
                           >
                             Node {n}
                           </th>
@@ -1211,14 +1326,14 @@
                         {activeGraph.nodes.map((n) => (
                           <th
                             key={`th-prev-${n}`}
-                            className="border p-1 bg-gray-100 font-medium"
+                            className="border border-gray-300 dark:border-slate-600 p-1 bg-gray-100 dark:bg-slate-700/80 font-medium"
                           >
                             Node {n}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="text-gray-800 dark:text-slate-300">
                       {userTable.map((row, rIdx) => {
                         const isActiveRow = rIdx === currentRowIdx;
                         const canEditVisited =
@@ -1233,23 +1348,31 @@
                         const canEditPrev =
                           isActiveRow && (phase === "EVAL" || phase === "INIT");
 
+                        const inputClass =
+                          "w-full h-full min-w-[40px] text-center border border-gray-300 dark:border-slate-600 rounded py-1 px-1 outline-none bg-transparent focus:bg-blue-50 dark:focus:bg-slate-700 focus:border-blue-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-blue-500/30 transition-all font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500";
+                        const lockedClass =
+                          "border border-gray-300 dark:border-slate-600 p-2 bg-gray-50 dark:bg-slate-800/80 text-center";
+
                         return (
                           <tr
                             key={`row-${rIdx}`}
                             className={
                               isActiveRow
-                                ? "bg-blue-50"
-                                : "hover:bg-gray-50 transition-colors"
+                                ? "bg-blue-50/50 dark:bg-sky-900/20"
+                                : "hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
                             }
                           >
-                            {/* Node Visited Cell */}
                             <td
-                              className={`border p-1 ${!canEditVisited ? "table-cell-locked font-bold" : ""}`}
+                              className={
+                                canEditVisited
+                                  ? "border border-gray-300 dark:border-slate-600 p-1"
+                                  : `${lockedClass} font-bold text-gray-900 dark:text-white`
+                              }
                             >
                               {canEditVisited ? (
                                 <input
                                   type="text"
-                                  className="table-input font-bold"
+                                  className={`${inputClass} font-bold`}
                                   maxLength="1"
                                   value={row.visited}
                                   onChange={(e) =>
@@ -1265,15 +1388,17 @@
                                 row.visited
                               )}
                             </td>
-
-                            {/* Priority Queue Cell */}
                             <td
-                              className={`border p-1 ${!canEditQ ? "table-cell-locked text-xs" : ""}`}
+                              className={
+                                canEditQ
+                                  ? "border border-gray-300 dark:border-slate-600 p-1"
+                                  : `${lockedClass} text-xs tracking-wider`
+                              }
                             >
                               {canEditQ ? (
                                 <input
                                   type="text"
-                                  className="table-input text-xs"
+                                  className={`${inputClass} text-xs`}
                                   value={row.q}
                                   onChange={(e) =>
                                     handleRowChange("q", e.target.value)
@@ -1281,20 +1406,23 @@
                                   placeholder="e.g. A, B, C"
                                 />
                               ) : (
-                                <span className="tracking-wider">{row.q}</span>
+                                row.q
                               )}
                             </td>
 
-                            {/* Distance Cells */}
                             {activeGraph.nodes.map((n) => (
                               <td
                                 key={`td-dist-${rIdx}-${n}`}
-                                className={`border p-1 ${!canEditDist ? "table-cell-locked" : ""}`}
+                                className={
+                                  canEditDist
+                                    ? "border border-gray-300 dark:border-slate-600 p-1"
+                                    : lockedClass
+                                }
                               >
                                 {canEditDist ? (
                                   <input
                                     type="text"
-                                    className="table-input"
+                                    className={inputClass}
                                     value={row.dist[n]}
                                     onChange={(e) =>
                                       handleCellChange(
@@ -1309,7 +1437,7 @@
                                   <span
                                     className={
                                       row.dist[n] === "∞"
-                                        ? "text-gray-400 font-serif text-lg leading-none"
+                                        ? "text-gray-400 dark:text-slate-500 font-serif text-lg leading-none"
                                         : ""
                                     }
                                   >
@@ -1319,16 +1447,19 @@
                               </td>
                             ))}
 
-                            {/* Previous Cells */}
                             {activeGraph.nodes.map((n) => (
                               <td
                                 key={`td-prev-${rIdx}-${n}`}
-                                className={`border p-1 ${!canEditPrev ? "table-cell-locked text-gray-500" : ""}`}
+                                className={
+                                  canEditPrev
+                                    ? "border border-gray-300 dark:border-slate-600 p-1"
+                                    : `${lockedClass} text-gray-500 dark:text-slate-400`
+                                }
                               >
                                 {canEditPrev ? (
                                   <input
                                     type="text"
-                                    className="table-input"
+                                    className={inputClass}
                                     maxLength="1"
                                     value={row.prev[n]}
                                     onChange={(e) =>
@@ -1358,13 +1489,13 @@
                       <div className="mt-6 flex gap-4 justify-end">
                         <button
                           onClick={showHint}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-100 font-medium transition-colors"
+                          className="px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded hover:bg-gray-100 dark:hover:bg-slate-700 font-medium transition-colors"
                         >
                           Reveal Step Answer
                         </button>
                         <button
                           onClick={checkStep}
-                          className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold shadow-md transition-colors"
+                          className="px-6 py-2 bg-blue-600 dark:bg-sky-600 text-white rounded hover:bg-blue-700 dark:hover:bg-sky-500 font-bold shadow-md transition-colors"
                         >
                           {phase === "DEQUEUE"
                             ? "Verify Priority Dequeue"
@@ -1382,21 +1513,21 @@
                     phase === "BACKTRACK" ||
                     phase === "FINAL_PATH" ||
                     phase === "DONE") && (
-                    <div className="mt-8 bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm">
-                      <h3 className="text-lg font-bold text-purple-800 mb-4">
+                    <div className="mt-8 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6 shadow-sm">
+                      <h3 className="text-lg font-bold text-purple-800 dark:text-purple-300 mb-4">
                         Final Algorithm Outputs
                       </h3>
 
                       {/* Min Distance Question */}
                       <div className="mb-6">
-                        <p className="text-purple-700 mb-2 font-semibold">
+                        <p className="text-purple-700 dark:text-purple-400 mb-2 font-semibold">
                           1. What is the minimum distance from Start (
                           {activeGraph.start}) to Target ({activeGraph.target})?
                         </p>
                         <div className="flex items-center gap-4">
                           <input
                             type="number"
-                            className="w-32 p-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg text-center bg-white"
+                            className="w-32 p-2 border border-purple-300 dark:border-purple-700 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg text-center bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                             value={minDistAnswer}
                             onChange={(e) => setMinDistAnswer(e.target.value)}
                             disabled={phase !== "MIN_DIST"}
@@ -1405,7 +1536,7 @@
                             <>
                               <button
                                 onClick={checkMinDist}
-                                className="px-4 py-2 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 transition-colors shadow"
+                                className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded font-bold hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors shadow"
                               >
                                 Check Distance
                               </button>
@@ -1417,7 +1548,7 @@
                                     ].toString(),
                                   )
                                 }
-                                className="px-4 py-2 border border-purple-300 text-purple-700 rounded hover:bg-purple-100 font-medium transition-colors bg-white"
+                                className="px-4 py-2 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded hover:bg-purple-100 dark:hover:bg-purple-900/50 font-medium transition-colors bg-white dark:bg-slate-800"
                               >
                                 Reveal
                               </button>
@@ -1431,7 +1562,7 @@
                         phase === "FINAL_PATH" ||
                         phase === "DONE") && (
                         <div className="mb-6">
-                          <p className="text-purple-700 mb-2 font-semibold">
+                          <p className="text-purple-700 dark:text-purple-400 mb-2 font-semibold">
                             2. Backtrack to find the route. Read backwards using
                             the 'Prev' column from Target ({activeGraph.target})
                             to Start ({activeGraph.start}).
@@ -1439,7 +1570,7 @@
                           <div className="flex items-center gap-4">
                             <input
                               type="text"
-                              className="flex-1 p-3 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg uppercase tracking-widest bg-white"
+                              className="flex-1 p-3 border border-purple-300 dark:border-purple-700 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-purple-300 dark:placeholder-purple-800"
                               placeholder={`e.g. ${activeGraph.target}-...-${activeGraph.start}`}
                               value={backtrackPath}
                               onChange={(e) => setBacktrackPath(e.target.value)}
@@ -1449,7 +1580,7 @@
                               <>
                                 <button
                                   onClick={checkBacktrack}
-                                  className="px-6 py-3 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 transition-colors shadow"
+                                  className="px-6 py-3 bg-purple-600 dark:bg-purple-500 text-white rounded font-bold hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors shadow"
                                 >
                                   Check Backtrack
                                 </button>
@@ -1464,7 +1595,7 @@
                                     }
                                     setBacktrackPath(path.join("-"));
                                   }}
-                                  className="px-4 py-3 border border-purple-300 text-purple-700 rounded hover:bg-purple-100 font-medium transition-colors bg-white"
+                                  className="px-4 py-3 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded hover:bg-purple-100 dark:hover:bg-purple-900/50 font-medium transition-colors bg-white dark:bg-slate-800"
                                 >
                                   Reveal Solution
                                 </button>
@@ -1477,7 +1608,7 @@
                       {/* Forward Path Question */}
                       {(phase === "FINAL_PATH" || phase === "DONE") && (
                         <div>
-                          <p className="text-purple-700 mb-2 font-semibold">
+                          <p className="text-purple-700 dark:text-purple-400 mb-2 font-semibold">
                             3. State the shortest path from Start (
                             {activeGraph.start}) to Target ({activeGraph.target}
                             ).
@@ -1485,7 +1616,7 @@
                           <div className="flex items-center gap-4">
                             <input
                               type="text"
-                              className="flex-1 p-3 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg uppercase tracking-widest bg-white"
+                              className="flex-1 p-3 border border-purple-300 dark:border-purple-700 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-purple-300 dark:placeholder-purple-800"
                               placeholder={`e.g. ${activeGraph.start}-...-${activeGraph.target}`}
                               value={forwardPathAnswer}
                               onChange={(e) =>
@@ -1497,7 +1628,7 @@
                               <>
                                 <button
                                   onClick={checkForwardPath}
-                                  className="px-6 py-3 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 transition-colors shadow"
+                                  className="px-6 py-3 bg-purple-600 dark:bg-purple-500 text-white rounded font-bold hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors shadow"
                                 >
                                   Check Path
                                 </button>
@@ -1512,7 +1643,7 @@
                                     }
                                     setForwardPathAnswer(path.join("-"));
                                   }}
-                                  className="px-4 py-3 border border-purple-300 text-purple-700 rounded hover:bg-purple-100 font-medium transition-colors bg-white"
+                                  className="px-4 py-3 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded hover:bg-purple-100 dark:hover:bg-purple-900/50 font-medium transition-colors bg-white dark:bg-slate-800"
                                 >
                                   Reveal Solution
                                 </button>
@@ -1540,7 +1671,7 @@
                                     ]);
                                   }
                                 }}
-                                className="px-6 py-3 bg-green-600 text-white rounded font-bold hover:bg-green-700 transition-colors shadow"
+                                className="px-6 py-3 bg-emerald-600 dark:bg-emerald-500 text-white rounded font-bold hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors shadow"
                               >
                                 Try Next Graph
                               </button>

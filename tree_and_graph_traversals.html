@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A-Level CS: Graph & Tree Traversals</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
 
     <!-- React & ReactDOM -->
     <script
@@ -20,156 +31,102 @@
 
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
 </head>
-  <body class="bg-slate-50">
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
+  <body>
 
     <div id="root"></div>
 
     <script type="text/babel">
       const { useState, useEffect, useRef } = React;
 
-      // --- ICON COMPONENTS (Replacing lucide-react for standalone usage) ---
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      );
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      );
+
+      // --- ICON COMPONENTS ---
       const Settings = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
       );
       const ChevronDown = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       );
       const CheckCircle = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
       );
       const XCircle = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="15" y1="9" x2="9" y2="15"></line>
           <line x1="9" y1="9" x2="15" y2="15"></line>
         </svg>
       );
       const RefreshCw = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="23 4 23 10 17 10"></polyline>
           <polyline points="1 20 1 14 7 14"></polyline>
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
         </svg>
       );
       const Eye = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
           <circle cx="12" cy="12" r="3"></circle>
         </svg>
       );
       const Undo = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 7v6h6"></path>
           <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3l-3 2.7"></path>
         </svg>
       );
       const Trash2 = ({ size = 24 }) => (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="3 6 5 6 21 6"></polyline>
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
           <line x1="10" y1="11" x2="10" y2="17"></line>
@@ -214,34 +171,13 @@
       };
 
       const APPS_QUESTIONS = [
-        {
-          q: "Which traversal algorithm is typically used for copying a tree?",
-          a: "Pre-order",
-        },
-        {
-          q: "Which traversal algorithm is used to output the contents of a Binary Search Tree in ascending order?",
-          a: "In-order",
-        },
-        {
-          q: "Which traversal algorithm is used for Infix to Reverse Polish Notation (RPN) conversions?",
-          a: "Post-order",
-        },
-        {
-          q: "Which traversal algorithm is used to produce a postfix expression from an expression tree?",
-          a: "Post-order",
-        },
-        {
-          q: "Which traversal algorithm is typically used for emptying or deleting a tree?",
-          a: "Post-order",
-        },
-        {
-          q: "Which search algorithm is guaranteed to find the shortest path in an unweighted graph?",
-          a: "Breadth-First Search (BFS)",
-        },
-        {
-          q: "Which search algorithm is typically used for navigating a maze?",
-          a: "Depth-First Search (DFS)",
-        },
+        { q: "Which traversal algorithm is typically used for copying a tree?", a: "Pre-order" },
+        { q: "Which traversal algorithm is used to output the contents of a Binary Search Tree in ascending order?", a: "In-order" },
+        { q: "Which traversal algorithm is used for Infix to Reverse Polish Notation (RPN) conversions?", a: "Post-order" },
+        { q: "Which traversal algorithm is used to produce a postfix expression from an expression tree?", a: "Post-order" },
+        { q: "Which traversal algorithm is typically used for emptying or deleting a tree?", a: "Post-order" },
+        { q: "Which search algorithm is guaranteed to find the shortest path in an unweighted graph?", a: "Breadth-First Search (BFS)" },
+        { q: "Which search algorithm is typically used for navigating a maze?", a: "Depth-First Search (DFS)" },
       ];
 
       const TRAVERSAL_TYPES = [
@@ -255,7 +191,6 @@
       // Generator: BFS Graph
       const generateBFSProblem = () => {
         const nodeLetters = ["A", "B", "C", "D", "E", "F", "G"];
-        // Arranged roughly as a hexagon around a central node (G)
         const nodes = [
           { id: "A", x: 150, y: 40 },
           { id: "B", x: 260, y: 100 },
@@ -272,31 +207,19 @@
 
         for (let i = 0; i < 7; i++) {
           for (let j = i + 1; j < 7; j++) {
-            // PREVENT VISUAL BUG: Prevent edges that draw straight through the center node G (index 6)
-            if (
-              (i === 0 && j === 3) ||
-              (i === 1 && j === 4) ||
-              (i === 2 && j === 5)
-            )
-              continue;
+            if ((i === 0 && j === 3) || (i === 1 && j === 4) || (i === 2 && j === 5)) continue;
             allPossibleEdges.push([i, j]);
           }
         }
         const shuffledEdges = shuffleArray(allPossibleEdges);
 
-        // Spanning tree to ensure connectivity
         for (let [u, v] of shuffledEdges) {
           if (uf.union(u, v)) edges.push([u, v]);
         }
-        // Add 2-3 random extra edges for loops
         let extra = 2 + Math.floor(Math.random() * 2);
         for (let [u, v] of shuffledEdges) {
           if (extra === 0) break;
-          if (
-            !edges.some(
-              (e) => (e[0] === u && e[1] === v) || (e[0] === v && e[1] === u),
-            )
-          ) {
+          if (!edges.some((e) => (e[0] === u && e[1] === v) || (e[0] === v && e[1] === u))) {
             edges.push([u, v]);
             extra--;
           }
@@ -311,14 +234,11 @@
 
         const startIdx = Math.floor(Math.random() * 7);
         let targetIdx;
-        do {
-          targetIdx = Math.floor(Math.random() * 7);
-        } while (targetIdx === startIdx);
+        do { targetIdx = Math.floor(Math.random() * 7); } while (targetIdx === startIdx);
 
         const start = nodeLetters[startIdx];
         const target = nodeLetters[targetIdx];
 
-        // BFS Trace Logic (AQA standard: alphabetical tie-breaking)
         let visited = [start];
         let queue = [start];
         let trace = [start];
@@ -326,38 +246,22 @@
 
         while (queue.length > 0 && !found) {
           let curr = queue.shift();
-          let neighbors = adjList[curr]
-            .filter((n) => !visited.includes(n))
-            .sort();
+          let neighbors = adjList[curr].filter((n) => !visited.includes(n)).sort();
           for (let n of neighbors) {
             visited.push(n);
             queue.push(n);
             trace.push(n);
-            if (n === target) {
-              found = true;
-              break;
-            }
+            if (n === target) { found = true; break; }
           }
         }
 
-        const edgeStrings = edges.map(
-          ([u, v]) => `${nodeLetters[u]}-${nodeLetters[v]}`,
-        );
-        return {
-          type: "bfs",
-          nodes,
-          edges: edgeStrings,
-          start,
-          target,
-          solution: trace,
-          adjList,
-        };
+        const edgeStrings = edges.map(([u, v]) => `${nodeLetters[u]}-${nodeLetters[v]}`);
+        return { type: "bfs", nodes, edges: edgeStrings, start, target, solution: trace, adjList };
       };
 
       // Generator: DFS Maze
       const generateDFSProblem = () => {
         const letters = "ABCDEFGHI";
-        // 3x3 Grid pattern
         const nodes = letters.split("").map((l, i) => ({
           id: l,
           x: 50 + (i % 3) * 100,
@@ -365,25 +269,14 @@
         }));
 
         const allGridEdges = [
-          [0, 1],
-          [1, 2],
-          [3, 4],
-          [4, 5],
-          [6, 7],
-          [7, 8], // Horizontal
-          [0, 3],
-          [1, 4],
-          [2, 5],
-          [3, 6],
-          [4, 7],
-          [5, 8], // Vertical
-        ]; // Will never cross nodes due to 3x3 layout
+          [0,1],[1,2],[3,4],[4,5],[6,7],[7,8],
+          [0,3],[1,4],[2,5],[3,6],[4,7],[5,8],
+        ];
 
         const shuffledEdges = shuffleArray(allGridEdges);
         const uf = new UnionFind(9);
         const mazeEdges = [];
 
-        // Perfect maze (spanning tree)
         for (let [u, v] of shuffledEdges) {
           if (uf.union(u, v)) mazeEdges.push([u, v]);
         }
@@ -396,23 +289,15 @@
         });
 
         const start = "A";
-        const target =
-          Math.random() > 0.5 ? "I" : Math.random() > 0.5 ? "G" : "C";
+        const target = Math.random() > 0.5 ? "I" : Math.random() > 0.5 ? "G" : "C";
 
-        // DFS Trace Logic (AQA standard: recursive, alphabetical tie-breaking)
         let trace = [];
         let found = false;
-
         const dfs = (node) => {
           if (found) return;
           trace.push(node);
-          if (node === target) {
-            found = true;
-            return;
-          }
-          let neighbors = adjList[node]
-            .filter((n) => !trace.includes(n))
-            .sort();
+          if (node === target) { found = true; return; }
+          let neighbors = adjList[node].filter((n) => !trace.includes(n)).sort();
           for (let n of neighbors) {
             if (found) break;
             dfs(n);
@@ -420,105 +305,80 @@
         };
         dfs(start);
 
-        const edgeStrings = mazeEdges.map(
-          ([u, v]) => `${letters[u]}-${letters[v]}`,
-        );
-        return {
-          type: "dfs",
-          nodes,
-          edges: edgeStrings,
-          start,
-          target,
-          solution: trace,
-          adjList,
-        };
+        const edgeStrings = mazeEdges.map(([u, v]) => `${letters[u]}-${letters[v]}`);
+        return { type: "dfs", nodes, edges: edgeStrings, start, target, solution: trace, adjList };
       };
 
       // Generator: Tree
       const generateTreeProblem = () => {
-        const type = ["Pre-order", "In-order", "Post-order"][
-          Math.floor(Math.random() * 3)
-        ];
+        const type = ["Pre-order", "In-order", "Post-order"][Math.floor(Math.random() * 3)];
         const letters = shuffleArray("ABCDEFG".split(""));
 
         const shapes = [
-          [
-            { left: 1, right: 2 },
-            { left: 3, right: 4 },
-            { left: 5, right: 6 },
-            {},
-            {},
-            {},
-            {},
-          ], // Full
-          [
-            { left: 1, right: 2 },
-            { left: 3, right: 4 },
-            { left: 5 },
-            {},
-            {},
-            {},
-          ], // Left heavy
-          [
-            { left: 1, right: 2 },
-            { right: 3 },
-            { left: 4, right: 5 },
-            {},
-            {},
-            {},
-          ], // Right heavy
+          [{ left:1, right:2 }, { left:3, right:4 }, { left:5, right:6 }, {}, {}, {}, {}],
+          [{ left:1, right:2 }, { left:3, right:4 }, { left:5 }, {}, {}, {}],
+          [{ left:1, right:2 }, { right:3 }, { left:4, right:5 }, {}, {}, {}],
         ];
 
         const shape = shapes[Math.floor(Math.random() * shapes.length)];
         const nNodes = shape.length;
         const currentLetters = letters.slice(0, nNodes);
 
-        const nodes = currentLetters.map((id, i) => ({ id, originalIdx: i }));
+        const nodes = currentLetters.map((id) => ({ id }));
         const edges = [];
 
-        const coords = [
-          { x: 150, y: 40 },
-          { x: 75, y: 120 },
-          { x: 225, y: 120 },
-          { x: 40, y: 200 },
-          { x: 110, y: 200 },
-          { x: 190, y: 200 },
-          { x: 260, y: 200 },
-        ];
-
         nodes.forEach((n, i) => {
-          n.x = coords[i].x;
-          n.y = coords[i].y;
           const s = shape[i];
-          if (s.left !== undefined) {
-            n.left = currentLetters[s.left];
-            edges.push(`${n.id}-${currentLetters[s.left]}`);
-          }
-          if (s.right !== undefined) {
-            n.right = currentLetters[s.right];
-            edges.push(`${n.id}-${currentLetters[s.right]}`);
-          }
+          if (s.left !== undefined) { n.left = currentLetters[s.left]; edges.push(`${n.id}-${currentLetters[s.left]}`); }
+          if (s.right !== undefined) { n.right = currentLetters[s.right]; edges.push(`${n.id}-${currentLetters[s.right]}`); }
+        });
+
+        const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+        let inOrderIndex = 0;
+        let maxDepth = 0;
+
+        const assignLayout = (nodeId, depth) => {
+          if (!nodeId) return;
+          const node = nodeMap.get(nodeId);
+          if (!node) return;
+          assignLayout(node.left, depth + 1);
+          node.layoutOrder = inOrderIndex;
+          node.depth = depth;
+          maxDepth = Math.max(maxDepth, depth);
+          inOrderIndex++;
+          assignLayout(node.right, depth + 1);
+        };
+
+        assignLayout(nodes[0].id, 0);
+
+        const minX = 40, maxX = 260, minY = 40, maxY = 220;
+        const xStep = inOrderIndex > 1 ? (maxX - minX) / (inOrderIndex - 1) : 0;
+        const yStep = maxDepth > 0 ? (maxY - minY) / maxDepth : 0;
+
+        nodes.forEach((node) => {
+          node.x = minX + node.layoutOrder * xStep;
+          node.y = minY + node.depth * yStep;
+          delete node.layoutOrder;
+          delete node.depth;
         });
 
         const getPreOrder = (nodeId, arr) => {
           if (!nodeId) return;
           arr.push(nodeId);
-          const node = nodes.find((n) => n.id === nodeId);
+          const node = nodeMap.get(nodeId);
           getPreOrder(node.left, arr);
           getPreOrder(node.right, arr);
         };
-
         const getInOrder = (nodeId, arr) => {
           if (!nodeId) return;
-          const node = nodes.find((n) => n.id === nodeId);
+          const node = nodeMap.get(nodeId);
           getInOrder(node.left, arr);
           arr.push(nodeId);
           getInOrder(node.right, arr);
         };
-
         const getPostOrder = (nodeId, arr) => {
           if (!nodeId) return;
-          const node = nodes.find((n) => n.id === nodeId);
+          const node = nodeMap.get(nodeId);
           getPostOrder(node.left, arr);
           getPostOrder(node.right, arr);
           arr.push(nodeId);
@@ -534,30 +394,40 @@
 
       // Generator: Applications
       const generateAppProblem = () => {
-        const q =
-          APPS_QUESTIONS[Math.floor(Math.random() * APPS_QUESTIONS.length)];
-        return {
-          type: "apps",
-          question: q.q,
-          solution: q.a,
-          options: shuffleArray(TRAVERSAL_TYPES),
-        };
+        const q = APPS_QUESTIONS[Math.floor(Math.random() * APPS_QUESTIONS.length)];
+        return { type: "apps", question: q.q, solution: q.a, options: shuffleArray(TRAVERSAL_TYPES) };
       };
 
       // --- MAIN COMPONENT ---
       function App() {
+        const [theme, setTheme] = useState(() => {
+          try {
+            return localStorage.getItem("uimode") ||
+              (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          } catch { return "light"; }
+        });
+
+        useEffect(() => {
+          const root = document.documentElement;
+          if (theme === "dark") { root.classList.add("dark"); }
+          else { root.classList.remove("dark"); }
+          try { localStorage.setItem("uimode", theme); } catch {}
+        }, [theme]);
+
+        const toggleTheme = () => setTheme((t) => t === "dark" ? "light" : "dark");
+        const isDark = theme === "dark";
+
         const [activeTopics, setActiveTopics] = useState(Object.keys(TOPICS));
         const [showTopicsMenu, setShowTopicsMenu] = useState(false);
         const [question, setQuestion] = useState(null);
 
         const [userPath, setUserPath] = useState([]);
         const [userChoice, setUserChoice] = useState(null);
-        const [status, setStatus] = useState("playing"); // playing, correct, incorrect, solution
-        const [viewMode, setViewMode] = useState("graphical"); // 'graphical', 'list', 'matrix'
+        const [status, setStatus] = useState("playing");
+        const [viewMode, setViewMode] = useState("graphical");
 
         const menuRef = useRef(null);
 
-        // Close dropdown on outside click
         useEffect(() => {
           const handleClickOutside = (event) => {
             if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -565,8 +435,7 @@
             }
           };
           document.addEventListener("mousedown", handleClickOutside);
-          return () =>
-            document.removeEventListener("mousedown", handleClickOutside);
+          return () => document.removeEventListener("mousedown", handleClickOutside);
         }, []);
 
         useEffect(() => {
@@ -575,8 +444,7 @@
 
         const handleNextQuestion = () => {
           if (activeTopics.length === 0) return;
-          const topic =
-            activeTopics[Math.floor(Math.random() * activeTopics.length)];
+          const topic = activeTopics[Math.floor(Math.random() * activeTopics.length)];
           let q;
           if (topic === "bfs") q = generateBFSProblem();
           else if (topic === "dfs") q = generateDFSProblem();
@@ -605,21 +473,14 @@
         };
 
         const undoLastNode = () => {
-          if (userPath.length > 0) {
-            setUserPath(userPath.slice(0, -1));
-            setStatus("playing");
-          }
+          if (userPath.length > 0) { setUserPath(userPath.slice(0, -1)); setStatus("playing"); }
         };
 
-        const clearPath = () => {
-          setUserPath([]);
-          setStatus("playing");
-        };
+        const clearPath = () => { setUserPath([]); setStatus("playing"); };
 
         const checkAnswer = () => {
           if (!question) return;
           let isCorrect = false;
-
           if (question.type === "apps") {
             isCorrect = userChoice === question.solution;
           } else {
@@ -627,34 +488,32 @@
               userPath.length === question.solution.length &&
               userPath.every((val, index) => val === question.solution[index]);
           }
-
           setStatus(isCorrect ? "correct" : "incorrect");
         };
 
         const showSolution = () => {
           setStatus("solution");
-          if (question.type !== "apps") {
-            setUserPath([...question.solution]);
-          } else {
-            setUserChoice(question.solution);
-          }
+          if (question.type !== "apps") { setUserPath([...question.solution]); }
+          else { setUserChoice(question.solution); }
         };
 
-        // --- Render Alternate Views ---
+        // SVG dynamic colors
+        const svgEdgeColor = isDark ? "#475569" : "#cbd5e1";
+        const svgNodeFill = isDark ? "#1e293b" : "white";
+        const svgNodeStroke = isDark ? "#64748b" : "#64748b";
+        const svgTextFill = isDark ? "#e2e8f0" : "#334155";
+
         const renderAdjList = () => {
           const nodes = Object.keys(question.adjList).sort();
           return (
             <div className="p-6 w-full flex justify-center items-center">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
                 {nodes.map((node) => (
-                  <div
-                    key={node}
-                    className="flex border rounded-md overflow-hidden shadow-sm bg-white"
-                  >
-                    <div className="bg-blue-100 text-blue-800 font-bold px-4 py-3 border-r border-blue-200 flex items-center justify-center w-16">
+                  <div key={node} className="flex border border-slate-200 dark:border-slate-600 rounded-md overflow-hidden shadow-sm bg-white dark:bg-slate-700">
+                    <div className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-bold px-4 py-3 border-r border-blue-200 dark:border-blue-800 flex items-center justify-center w-16">
                       {node}
                     </div>
-                    <div className="px-4 py-3 text-slate-700 flex-1 flex items-center">
+                    <div className="px-4 py-3 text-slate-700 dark:text-slate-200 flex-1 flex items-center">
                       {question.adjList[node].sort().join(", ") || "-"}
                     </div>
                   </div>
@@ -668,46 +527,24 @@
           const nodes = Object.keys(question.adjList).sort();
           return (
             <div className="p-6 w-full overflow-x-auto flex justify-center items-center">
-              <table className="border-collapse bg-white shadow-sm rounded-lg overflow-hidden text-sm sm:text-base">
+              <table className="border-collapse bg-white dark:bg-slate-700 shadow-sm rounded-lg overflow-hidden text-sm sm:text-base">
                 <thead>
                   <tr>
-                    <th className="border-b border-r p-3 bg-slate-100 text-slate-500 font-bold">
-                      Node
-                    </th>
+                    <th className="border-b border-r border-slate-200 dark:border-slate-600 p-3 bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-300 font-bold">Node</th>
                     {nodes.map((n) => (
-                      <th
-                        key={n}
-                        className="border-b p-3 bg-slate-100 text-slate-700 font-bold w-12"
-                      >
-                        {n}
-                      </th>
+                      <th key={n} className="border-b border-slate-200 dark:border-slate-600 p-3 bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold w-12">{n}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {nodes.map((rowNode, i) => (
-                    <tr
-                      key={rowNode}
-                      className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-                    >
-                      <th className="border-r p-3 bg-slate-100 text-slate-700 font-bold">
-                        {rowNode}
-                      </th>
+                    <tr key={rowNode} className={i % 2 === 0 ? "bg-white dark:bg-slate-700" : "bg-slate-50 dark:bg-slate-750"}>
+                      <th className="border-r border-slate-200 dark:border-slate-600 p-3 bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold">{rowNode}</th>
                       {nodes.map((colNode) => {
-                        const hasEdge =
-                          question.adjList[rowNode].includes(colNode);
+                        const hasEdge = question.adjList[rowNode].includes(colNode);
                         return (
-                          <td
-                            key={colNode}
-                            className="p-3 text-center border-slate-200 border-b"
-                          >
-                            <span
-                              className={
-                                hasEdge
-                                  ? "text-blue-600 font-bold"
-                                  : "text-slate-300"
-                              }
-                            >
+                          <td key={colNode} className="p-3 text-center border-slate-200 dark:border-slate-600 border-b">
+                            <span className={hasEdge ? "text-blue-600 dark:text-blue-400 font-bold" : "text-slate-300 dark:text-slate-600"}>
                               {hasEdge ? "1" : "0"}
                             </span>
                           </td>
@@ -722,26 +559,56 @@
         };
 
         if (!question && activeTopics.length > 0)
-          return <div className="p-8 text-center">Loading...</div>;
+          return <div className="p-8 text-center dark:text-slate-100">Loading...</div>;
 
         return (
-          <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-12">
-            {/* Header */}
-            <header className="bg-blue-700 text-white p-4 shadow-md relative z-20">
+          <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans pb-12">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+
+            {/* Sub-header */}
+            <header className="bg-blue-700 dark:bg-slate-800 text-white p-4 shadow-md relative z-20">
               <div className="max-w-5xl mx-auto flex justify-between items-center">
                 <div>
-                  <h1 className="text-xl font-bold">
-                    AQA A-Level CS: Graph & Tree Traversals
-                  </h1>
-                  <p className="text-sm text-blue-100">
-                    Interactive Algorithm Tracing
-                  </p>
+                  <h1 className="text-xl font-bold">AQA A-Level CS: Graph & Tree Traversals</h1>
+                  <p className="text-sm text-blue-100 dark:text-slate-400">Interactive Algorithm Tracing</p>
                 </div>
 
                 <div className="relative" ref={menuRef}>
                   <button
                     onClick={() => setShowTopicsMenu(!showTopicsMenu)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded transition"
+                    className="flex items-center gap-2 bg-blue-600 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-slate-600 px-4 py-2 rounded transition"
                   >
                     <Settings size={18} />
                     <span className="hidden sm:inline">Sub-topics</span>
@@ -749,15 +616,10 @@
                   </button>
 
                   {showTopicsMenu && (
-                    <div className="absolute right-0 mt-2 w-72 bg-white rounded shadow-xl text-slate-800 p-3 border border-slate-200 z-50">
-                      <h3 className="font-bold text-sm mb-2 border-b pb-1">
-                        Filter Topics
-                      </h3>
+                    <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded shadow-xl text-slate-800 dark:text-slate-100 p-3 border border-slate-200 dark:border-slate-600 z-50">
+                      <h3 className="font-bold text-sm mb-2 border-b border-slate-200 dark:border-slate-600 pb-1">Filter Topics</h3>
                       {Object.entries(TOPICS).map(([key, label]) => (
-                        <label
-                          key={key}
-                          className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 rounded px-1"
-                        >
+                        <label key={key} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 rounded px-1">
                           <input
                             type="checkbox"
                             checked={activeTopics.includes(key)}
@@ -768,15 +630,10 @@
                         </label>
                       ))}
                       {activeTopics.length === 0 && (
-                        <p className="text-xs text-red-500 mt-2">
-                          Please select at least one topic.
-                        </p>
+                        <p className="text-xs text-red-500 mt-2">Please select at least one topic.</p>
                       )}
                       <button
-                        onClick={() => {
-                          setShowTopicsMenu(false);
-                          if (activeTopics.length > 0) handleNextQuestion();
-                        }}
+                        onClick={() => { setShowTopicsMenu(false); if (activeTopics.length > 0) handleNextQuestion(); }}
                         className="mt-3 w-full bg-blue-600 text-white text-sm py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
                         disabled={activeTopics.length === 0}
                       >
@@ -791,48 +648,34 @@
             {/* Main Content */}
             <main className="max-w-5xl mx-auto p-4 mt-6">
               {activeTopics.length === 0 ? (
-                <div className="text-center p-12 bg-white rounded-xl shadow border">
-                  <h2 className="text-2xl font-bold text-slate-700 mb-2">
-                    No Topics Selected
-                  </h2>
-                  <p className="text-slate-500">
-                    Please open the settings menu in the top right to select
-                    sub-topics.
-                  </p>
+                <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl shadow border border-slate-200 dark:border-slate-700">
+                  <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">No Topics Selected</h2>
+                  <p className="text-slate-500 dark:text-slate-400">Please open the settings menu in the top right to select sub-topics.</p>
                 </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                   {/* Instructions Banner */}
-                  <div className="bg-slate-100 border-b border-slate-200 p-5">
-                    <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                  <div className="bg-slate-100 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600 p-5">
+                    <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1 flex items-center gap-2">
                       Task:
                       {question.type === "bfs" && " Trace Breadth-First Search"}
-                      {question.type === "dfs" &&
-                        " Trace Depth-First Search (Maze)"}
-                      {question.type === "tree" &&
-                        ` Trace ${question.traversalType} Traversal`}
-                      {question.type === "apps" &&
-                        " Match Application to Algorithm"}
+                      {question.type === "dfs" && " Trace Depth-First Search (Maze)"}
+                      {question.type === "tree" && ` Trace ${question.traversalType} Traversal`}
+                      {question.type === "apps" && " Match Application to Algorithm"}
                     </h2>
-
-                    <p className="text-slate-600">
-                      {question.type === "bfs" &&
-                        `Starting at node [${question.start}], find the shortest path to node [${question.target}]. Add nodes to your trace in the exact order they are added to the Visited list. Assume alphabetical tie-breaking. Stop as soon as the target is added.`}
-                      {question.type === "dfs" &&
-                        `Starting at node [${question.start}], navigate the maze to find node [${question.target}]. Add nodes to your trace in the exact order they are visited by a standard recursive DFS. Assume alphabetical tie-breaking. Stop as soon as the target is reached.`}
-                      {question.type === "tree" &&
-                        `Add all the nodes to your trace in the correct order for a ${question.traversalType} traversal of this binary tree.`}
-                      {question.type === "apps" &&
-                        "Read the scenario and select the most appropriate algorithm from the list below."}
+                    <p className="text-slate-600 dark:text-slate-300">
+                      {question.type === "bfs" && `Starting at node [${question.start}], find the shortest path to node [${question.target}]. Add nodes to your trace in the exact order they are added to the Visited list. Assume alphabetical tie-breaking. Stop as soon as the target is added.`}
+                      {question.type === "dfs" && `Starting at node [${question.start}], navigate the maze to find node [${question.target}]. Add nodes to your trace in the exact order they are visited by a standard recursive DFS. Assume alphabetical tie-breaking. Stop as soon as the target is reached.`}
+                      {question.type === "tree" && `Add all the nodes to your trace in the correct order for a ${question.traversalType} traversal of this binary tree.`}
+                      {question.type === "apps" && "Read the scenario and select the most appropriate algorithm from the list below."}
                     </p>
                   </div>
 
                   {/* Interactive Area */}
                   <div className="p-6">
                     {question.type === "apps" ? (
-                      // Application Multiple Choice
                       <div className="max-w-2xl mx-auto">
-                        <div className="text-xl font-medium text-center p-8 bg-blue-50 rounded-lg text-blue-900 border border-blue-100 mb-6 shadow-inner">
+                        <div className="text-xl font-medium text-center p-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-900 dark:text-blue-100 border border-blue-100 dark:border-blue-900 mb-6 shadow-inner">
                           "{question.question}"
                         </div>
                         <div className="grid gap-3">
@@ -840,28 +683,20 @@
                             <button
                               key={opt}
                               onClick={() => {
-                                if (
-                                  status === "playing" ||
-                                  status === "incorrect"
-                                ) {
+                                if (status === "playing" || status === "incorrect") {
                                   setUserChoice(opt);
                                   setStatus("playing");
                                 }
                               }}
-                              disabled={
-                                status === "solution" || status === "correct"
-                              }
+                              disabled={status === "solution" || status === "correct"}
                               className={`p-4 text-left rounded border-2 transition-all ${
                                 userChoice === opt
                                   ? status === "correct"
-                                    ? "bg-green-100 border-green-500 text-green-800"
-                                    : status === "solution"
-                                      ? "bg-blue-100 border-blue-500 text-blue-800"
-                                      : "bg-blue-100 border-blue-500 text-blue-800"
-                                  : status === "solution" &&
-                                      opt === question.solution
-                                    ? "bg-green-100 border-green-500 text-green-800 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
-                                    : "bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50 disabled:opacity-50"
+                                    ? "bg-green-100 dark:bg-green-900/30 border-green-500 text-green-800 dark:text-green-300"
+                                    : "bg-blue-100 dark:bg-blue-900/30 border-blue-500 text-blue-800 dark:text-blue-300"
+                                  : status === "solution" && opt === question.solution
+                                    ? "bg-green-100 dark:bg-green-900/30 border-green-500 text-green-800 dark:text-green-300 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                                    : "bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 dark:text-slate-100"
                               }`}
                             >
                               {opt}
@@ -870,30 +705,24 @@
                         </div>
                       </div>
                     ) : (
-                      // Graph / Tree Visualizer
                       <div className="flex flex-col md:flex-row gap-8">
                         {/* Left Column: Canvas/Text View */}
-                        <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg flex flex-col p-4 min-h-[350px]">
-                          {/* View Mode Selector (Only for Graphs/Mazes) */}
-                          {(question.type === "bfs" ||
-                            question.type === "dfs") && (
+                        <div className="flex-1 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg flex flex-col p-4 min-h-[350px]">
+                          {/* View Mode Selector */}
+                          {(question.type === "bfs" || question.type === "dfs") && (
                             <div className="flex justify-end mb-2">
-                              <div className="inline-flex bg-slate-200 p-1 rounded-md">
+                              <div className="inline-flex bg-slate-200 dark:bg-slate-600 p-1 rounded-md">
                                 {["graphical", "list", "matrix"].map((mode) => (
                                   <button
                                     key={mode}
                                     onClick={() => setViewMode(mode)}
                                     className={`px-3 py-1.5 text-xs font-semibold rounded transition ${
                                       viewMode === mode
-                                        ? "bg-white shadow-sm text-blue-700"
-                                        : "text-slate-600 hover:text-slate-800 hover:bg-slate-300"
+                                        ? "bg-white dark:bg-slate-800 shadow-sm text-blue-700 dark:text-blue-400"
+                                        : "text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-500"
                                     }`}
                                   >
-                                    {mode === "graphical"
-                                      ? "Graphical View"
-                                      : mode === "list"
-                                        ? "Adjacency List"
-                                        : "Adjacency Matrix"}
+                                    {mode === "graphical" ? "Graphical View" : mode === "list" ? "Adjacency List" : "Adjacency Matrix"}
                                   </button>
                                 ))}
                               </div>
@@ -901,34 +730,19 @@
                           )}
 
                           <div className="flex-1 flex items-center justify-center relative">
-                            {viewMode === "graphical" ||
-                            question.type === "tree" ? (
-                              <svg
-                                viewBox="0 0 300 300"
-                                className="w-full max-w-[400px] h-auto drop-shadow-sm"
-                              >
+                            {viewMode === "graphical" || question.type === "tree" ? (
+                              <svg viewBox="0 0 300 300" className="w-full max-w-[400px] h-auto drop-shadow-sm">
                                 {/* Edges */}
                                 {question.edges.map((e, i) => {
                                   const [uId, vId] = e.split("-");
-                                  const u = question.nodes.find(
-                                    (n) => n.id === uId,
-                                  );
-                                  const v = question.nodes.find(
-                                    (n) => n.id === vId,
-                                  );
-                                  const isTraversed =
-                                    userPath.includes(uId) &&
-                                    userPath.includes(vId);
+                                  const u = question.nodes.find((n) => n.id === uId);
+                                  const v = question.nodes.find((n) => n.id === vId);
+                                  const isTraversed = userPath.includes(uId) && userPath.includes(vId);
                                   return (
                                     <line
                                       key={i}
-                                      x1={u.x}
-                                      y1={u.y}
-                                      x2={v.x}
-                                      y2={v.y}
-                                      stroke={
-                                        isTraversed ? "#93c5fd" : "#cbd5e1"
-                                      }
+                                      x1={u.x} y1={u.y} x2={v.x} y2={v.y}
+                                      stroke={isTraversed ? "#93c5fd" : svgEdgeColor}
                                       strokeWidth={isTraversed ? "3" : "2"}
                                     />
                                   );
@@ -941,31 +755,19 @@
                                   const isStart = n.id === question.start;
                                   const isTarget = n.id === question.target;
 
-                                  let fillClass = "white";
-                                  let strokeClass = "#64748b"; // slate-500
+                                  let nodeFill = svgNodeFill;
+                                  let nodeStroke = svgNodeStroke;
                                   let strokeWidth = "2";
 
                                   if (isSelected) {
-                                    fillClass =
-                                      status === "correct"
-                                        ? "#dcfce7"
-                                        : "#dbeafe"; // green/blue
-                                    strokeClass =
-                                      status === "correct"
-                                        ? "#22c55e"
-                                        : "#3b82f6";
+                                    nodeFill = status === "correct" ? "#dcfce7" : "#dbeafe";
+                                    nodeStroke = status === "correct" ? "#22c55e" : "#3b82f6";
                                     strokeWidth = "3";
-                                  } else if (
-                                    isStart &&
-                                    question.type !== "tree"
-                                  ) {
-                                    strokeClass = "#10b981"; // emerald-500
+                                  } else if (isStart && question.type !== "tree") {
+                                    nodeStroke = "#10b981";
                                     strokeWidth = "3";
-                                  } else if (
-                                    isTarget &&
-                                    question.type !== "tree"
-                                  ) {
-                                    strokeClass = "#ef4444"; // red-500
+                                  } else if (isTarget && question.type !== "tree") {
+                                    nodeStroke = "#ef4444";
                                     strokeWidth = "3";
                                   }
 
@@ -973,86 +775,30 @@
                                     <g
                                       key={n.id}
                                       onClick={() => handleNodeClick(n.id)}
-                                      className={
-                                        status === "playing" ||
-                                        status === "incorrect"
-                                          ? "cursor-pointer hover:opacity-80 transition-opacity"
-                                          : ""
-                                      }
+                                      className={status === "playing" || status === "incorrect" ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}
                                     >
-                                      <circle
-                                        cx={n.x}
-                                        cy={n.y}
-                                        r="18"
-                                        fill={fillClass}
-                                        stroke={strokeClass}
-                                        strokeWidth={strokeWidth}
-                                      />
-                                      <text
-                                        x={n.x}
-                                        y={n.y}
-                                        textAnchor="middle"
-                                        dy=".3em"
-                                        className="text-sm font-bold fill-slate-700 pointer-events-none"
-                                      >
+                                      <circle cx={n.x} cy={n.y} r="18" fill={nodeFill} stroke={nodeStroke} strokeWidth={strokeWidth} />
+                                      <text x={n.x} y={n.y} textAnchor="middle" dy=".3em" className="text-sm font-bold pointer-events-none" fill={svgTextFill} style={{fontSize:"12px",fontWeight:"bold"}}>
                                         {n.id}
                                       </text>
 
                                       {/* Sequence Badge */}
                                       {isSelected && (
-                                        <g
-                                          transform={`translate(${n.x + 12}, ${n.y - 12})`}
-                                        >
-                                          <circle
-                                            r="8"
-                                            fill={
-                                              status === "correct"
-                                                ? "#22c55e"
-                                                : "#2563eb"
-                                            }
-                                          />
-                                          <text
-                                            textAnchor="middle"
-                                            dy=".3em"
-                                            fontSize="10"
-                                            fontWeight="bold"
-                                            fill="white"
-                                            className="pointer-events-none"
-                                          >
+                                        <g transform={`translate(${n.x + 12}, ${n.y - 12})`}>
+                                          <circle r="8" fill={status === "correct" ? "#22c55e" : "#2563eb"} />
+                                          <text textAnchor="middle" dy=".3em" fontSize="10" fontWeight="bold" fill="white" className="pointer-events-none">
                                             {pathIdx + 1}
                                           </text>
                                         </g>
                                       )}
 
                                       {/* Start/Target Labels */}
-                                      {isStart &&
-                                        !isSelected &&
-                                        question.type !== "tree" && (
-                                          <text
-                                            x={n.x}
-                                            y={n.y - 24}
-                                            textAnchor="middle"
-                                            fontSize="10"
-                                            fill="#10b981"
-                                            fontWeight="bold"
-                                          >
-                                            START
-                                          </text>
-                                        )}
-                                      {isTarget &&
-                                        !isSelected &&
-                                        question.type !== "tree" && (
-                                          <text
-                                            x={n.x}
-                                            y={n.y - 24}
-                                            textAnchor="middle"
-                                            fontSize="10"
-                                            fill="#ef4444"
-                                            fontWeight="bold"
-                                          >
-                                            TARGET
-                                          </text>
-                                        )}
+                                      {isStart && !isSelected && question.type !== "tree" && (
+                                        <text x={n.x} y={n.y - 24} textAnchor="middle" fontSize="10" fill="#10b981" fontWeight="bold">START</text>
+                                      )}
+                                      {isTarget && !isSelected && question.type !== "tree" && (
+                                        <text x={n.x} y={n.y - 24} textAnchor="middle" fontSize="10" fill="#ef4444" fontWeight="bold">TARGET</text>
+                                      )}
                                     </g>
                                   );
                                 })}
@@ -1067,39 +813,30 @@
 
                         {/* Sidebar Controls */}
                         <div className="w-full md:w-64 flex flex-col gap-4">
-                          {/* NEW Node Input Palette - Allows input even when visual graph is hidden */}
                           {question.type !== "apps" && (
-                            <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                              <h3 className="font-bold text-sm mb-3 text-slate-700 uppercase tracking-wide border-b pb-2">
+                            <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
+                              <h3 className="font-bold text-sm mb-3 text-slate-700 dark:text-slate-200 uppercase tracking-wide border-b border-slate-200 dark:border-slate-600 pb-2">
                                 Select Node
                               </h3>
                               <div className="flex flex-wrap gap-2">
                                 {question.nodes.map((n) => {
                                   const isSelected = userPath.includes(n.id);
-                                  const isStart =
-                                    n.id === question.start &&
-                                    question.type !== "tree";
-                                  const isTarget =
-                                    n.id === question.target &&
-                                    question.type !== "tree";
+                                  const isStart = n.id === question.start && question.type !== "tree";
+                                  const isTarget = n.id === question.target && question.type !== "tree";
 
                                   return (
                                     <button
                                       key={n.id}
                                       onClick={() => handleNodeClick(n.id)}
-                                      disabled={
-                                        isSelected ||
-                                        status === "correct" ||
-                                        status === "solution"
-                                      }
+                                      disabled={isSelected || status === "correct" || status === "solution"}
                                       className={`w-10 h-10 rounded-full font-bold flex items-center justify-center transition-all ${
                                         isSelected
-                                          ? "bg-slate-100 text-slate-400 border border-slate-200"
+                                          ? "bg-slate-100 dark:bg-slate-600 text-slate-400 dark:text-slate-400 border border-slate-200 dark:border-slate-500"
                                           : isStart
-                                            ? "bg-emerald-50 text-emerald-700 border-2 border-emerald-400 hover:bg-emerald-100 shadow-sm"
+                                            ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-2 border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 shadow-sm"
                                             : isTarget
-                                              ? "bg-red-50 text-red-700 border-2 border-red-400 hover:bg-red-100 shadow-sm"
-                                              : "bg-white text-blue-600 border border-blue-300 hover:bg-blue-50 hover:border-blue-400 shadow-sm"
+                                              ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-2 border-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 shadow-sm"
+                                              : "bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 border border-blue-300 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-500 hover:border-blue-400 shadow-sm"
                                       }`}
                                     >
                                       {n.id}
@@ -1110,47 +847,34 @@
                             </div>
                           )}
 
-                          <div className="bg-slate-100 p-4 rounded-lg border border-slate-200 flex-1 flex flex-col">
-                            <h3 className="font-bold text-sm mb-2 text-slate-700 uppercase tracking-wide border-b pb-2">
+                          <div className="bg-slate-100 dark:bg-slate-700/80 p-4 rounded-lg border border-slate-200 dark:border-slate-600 flex-1 flex flex-col">
+                            <h3 className="font-bold text-sm mb-2 text-slate-700 dark:text-slate-200 uppercase tracking-wide border-b border-slate-200 dark:border-slate-600 pb-2">
                               Your Trace
                             </h3>
                             {userPath.length === 0 ? (
-                              <p className="text-sm text-slate-400 italic">
-                                Select nodes to build your path.
-                              </p>
+                              <p className="text-sm text-slate-400 dark:text-slate-500 italic">Select nodes to build your path.</p>
                             ) : (
                               <div className="flex flex-wrap gap-2 mb-4">
                                 {userPath.map((node, i) => (
-                                  <span
-                                    key={i}
-                                    className="bg-white border border-blue-300 text-blue-700 text-xs font-bold px-2 py-1 rounded shadow-sm"
-                                  >
+                                  <span key={i} className="bg-white dark:bg-slate-600 border border-blue-300 dark:border-blue-500 text-blue-700 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded shadow-sm">
                                     {i + 1}. {node}
                                   </span>
                                 ))}
                               </div>
                             )}
 
-                            <div className="flex gap-2 mt-auto pt-4 border-t border-slate-200">
+                            <div className="flex gap-2 mt-auto pt-4 border-t border-slate-200 dark:border-slate-600">
                               <button
                                 onClick={undoLastNode}
-                                disabled={
-                                  userPath.length === 0 ||
-                                  status === "correct" ||
-                                  status === "solution"
-                                }
-                                className="flex-1 flex items-center justify-center gap-1 bg-white border border-slate-300 text-slate-600 px-2 py-1.5 rounded text-sm hover:bg-slate-50 disabled:opacity-50"
+                                disabled={userPath.length === 0 || status === "correct" || status === "solution"}
+                                className="flex-1 flex items-center justify-center gap-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 text-slate-600 dark:text-slate-200 px-2 py-1.5 rounded text-sm hover:bg-slate-50 dark:hover:bg-slate-500 disabled:opacity-50"
                               >
                                 <Undo size={14} /> Undo
                               </button>
                               <button
                                 onClick={clearPath}
-                                disabled={
-                                  userPath.length === 0 ||
-                                  status === "correct" ||
-                                  status === "solution"
-                                }
-                                className="flex-1 flex items-center justify-center gap-1 bg-white border border-slate-300 text-slate-600 px-2 py-1.5 rounded text-sm hover:bg-slate-50 hover:text-red-600 disabled:opacity-50"
+                                disabled={userPath.length === 0 || status === "correct" || status === "solution"}
+                                className="flex-1 flex items-center justify-center gap-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 text-slate-600 dark:text-slate-200 px-2 py-1.5 rounded text-sm hover:bg-slate-50 dark:hover:bg-slate-500 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
                               >
                                 <Trash2 size={14} /> Clear
                               </button>
@@ -1162,30 +886,25 @@
                   </div>
 
                   {/* Status Banner & Action Buttons */}
-                  <div className="bg-slate-50 border-t border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="bg-slate-50 dark:bg-slate-700/50 border-t border-slate-200 dark:border-slate-600 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex-1 flex items-center">
                       {status === "playing" && (
-                        <p className="text-sm text-slate-500">
-                          Build your answer then click "Check Answer".
-                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Build your answer then click "Check Answer".</p>
                       )}
                       {status === "incorrect" && (
-                        <div className="flex items-center gap-2 text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded border border-red-200">
-                          <XCircle size={18} /> Incorrect. Keep trying or show
-                          the solution.
+                        <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded border border-red-200 dark:border-red-800">
+                          <XCircle size={18} /> Incorrect. Keep trying or show the solution.
                         </div>
                       )}
                       {status === "correct" && (
-                        <div className="flex items-center gap-2 text-green-600 font-medium bg-green-50 px-3 py-1.5 rounded border border-green-200">
+                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-medium bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded border border-green-200 dark:border-green-800">
                           <CheckCircle size={18} /> Correct! Well done.
                         </div>
                       )}
                       {status === "solution" && (
-                        <div className="flex items-center gap-2 text-blue-600 font-medium bg-blue-50 px-3 py-1.5 rounded border border-blue-200">
+                        <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded border border-blue-200 dark:border-blue-800">
                           <Eye size={18} /> Showing Solution:{" "}
-                          {question.type === "apps"
-                            ? question.solution
-                            : question.solution.join(" → ")}
+                          {question.type === "apps" ? question.solution : question.solution.join(" → ")}
                         </div>
                       )}
                     </div>
@@ -1195,11 +914,7 @@
                         <React.Fragment>
                           <button
                             onClick={checkAnswer}
-                            disabled={
-                              question.type === "apps"
-                                ? !userChoice
-                                : userPath.length === 0
-                            }
+                            disabled={question.type === "apps" ? !userChoice : userPath.length === 0}
                             className="flex-1 sm:flex-none bg-blue-600 text-white px-5 py-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
                           >
                             Check Answer
@@ -1207,7 +922,7 @@
                           {status === "incorrect" && (
                             <button
                               onClick={showSolution}
-                              className="flex-1 sm:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded font-medium hover:bg-slate-50 transition"
+                              className="flex-1 sm:flex-none bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 text-slate-700 dark:text-slate-200 px-4 py-2 rounded font-medium hover:bg-slate-50 dark:hover:bg-slate-500 transition"
                             >
                               Show Solution
                             </button>
@@ -1230,7 +945,6 @@
         );
       }
 
-      // Render the React application
       const root = ReactDOM.createRoot(document.getElementById("root"));
       root.render(<App />);
     </script>

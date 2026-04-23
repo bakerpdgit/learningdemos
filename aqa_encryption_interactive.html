@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA Encryption Interactive</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <style>
       :root {
         --bg: #f0f4f8;
@@ -28,6 +36,29 @@
         --bob: #0f766e;
         --ca: #7e22ce;
       }
+      html.dark {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel2: #334155;
+        --accent: #38bdf8;
+        --accent-light: #7dd3fc;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --border: #475569;
+        --pub: #fbbf24;
+        --pub-bg: #422006;
+        --priv: #f87171;
+        --priv-bg: #450a0a;
+        --ok: #4ade80;
+        --ok-bg: #14532d;
+        --err: #f87171;
+        --err-bg: #450a0a;
+        --msg: #a78bfa;
+        --msg-bg: #2e1065;
+        --alice: #60a5fa;
+        --bob: #2dd4bf;
+        --ca: #c084fc;
+      }
       * { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
@@ -36,6 +67,40 @@
         color: var(--text);
         min-height: 100vh;
       }
+
+      /* ── CS Learning Header ── */
+      .cs-header {
+        background: #0f172a;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 1.5rem;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .cs-logo {
+        color: #38bdf8;
+        font-weight: 700;
+        font-size: 1.1rem;
+        text-decoration: none;
+        letter-spacing: -0.01em;
+      }
+      .cs-logo:hover { opacity: 0.8; }
+      #theme-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        padding: 4px;
+        border-radius: 4px;
+        transition: color 0.15s;
+      }
+      #theme-btn:hover { color: #fff; }
 
       header {
         background: linear-gradient(135deg, #1565c0 0%, #0288d1 100%);
@@ -57,9 +122,11 @@
         border-bottom: 2px solid var(--border);
         flex-wrap: wrap;
         position: sticky;
-        top: 0;
+        top: 58px;
         z-index: 10;
       }
+      html.dark .tabs { background: var(--panel); }
+
       .tab-btn {
         padding: 0.48rem 1rem;
         border: 2px solid var(--border);
@@ -71,8 +138,10 @@
         color: var(--muted);
         transition: all 0.18s;
       }
+      html.dark .tab-btn { background: var(--panel); color: var(--muted); }
       .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
       .tab-btn:hover:not(.active) { background: #e3f2fd; border-color: var(--accent-light); color: var(--accent); }
+      html.dark .tab-btn:hover:not(.active) { background: #1e3a5f; border-color: var(--accent); }
 
       /* ── Content ── */
       .tab-content { display: none; }
@@ -99,18 +168,24 @@
         cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.18s;
       }
       .btn-primary { background: var(--accent); color: #fff; }
+      html.dark .btn-primary { color: #0f172a; }
       .btn-primary:hover { background: var(--accent-light); }
-      .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+      .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; color: #fff; }
       .btn-secondary { background: #e2e8f0; color: var(--text); }
+      html.dark .btn-secondary { background: var(--panel2); }
       .btn-secondary:hover { background: #cbd5e1; }
+      html.dark .btn-secondary:hover { background: #475569; }
 
       /* ── Feedback ── */
       .fb {
         padding: 0.7rem 1.1rem; border-radius: 8px; font-weight: 600; margin-top: 0.7rem; font-size: 0.9rem;
       }
       .fb.ok  { background: var(--ok-bg);  color: var(--ok);  border: 1px solid #bbf7d0; }
+      html.dark .fb.ok { border-color: #166534; }
       .fb.err { background: var(--err-bg); color: var(--err); border: 1px solid #fecaca; }
+      html.dark .fb.err { border-color: #7f1d1d; }
       .fb.info{ background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+      html.dark .fb.info { background: #1e3a5f; color: var(--accent); border-color: #1d4ed8; }
 
       /* ── Key legend ── */
       .key-legend { display: flex; gap: 1.2rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
@@ -126,6 +201,8 @@
         padding: 0.38rem 0.85rem; font-size: 0.83rem; font-weight: 700;
         color: #0369a1; margin-bottom: 1rem;
       }
+      html.dark .cipher-badge { background: #1e3a5f; border-color: #38bdf8; color: var(--accent); }
+
       .info-row {
         display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;
       }
@@ -144,28 +221,36 @@
         border-radius: 6px; font-size: 1.2rem; font-weight: 700; font-family: monospace;
       }
       .lb-plain  { background: #dbeafe; border: 2px solid #93c5fd; color: #1d4ed8; }
+      html.dark .lb-plain  { background: #1e3a5f; border-color: #3b82f6; color: #93c5fd; }
       .lb-cipher { background: var(--msg-bg); border: 2px solid #c4b5fd; color: #6d28d9; }
+      html.dark .lb-cipher { border-color: #7c3aed; color: var(--msg); }
       .lb-key    { background: var(--pub-bg); border: 2px solid #fcd34d; color: #92400e; }
+      html.dark .lb-key { border-color: #d97706; color: #fcd34d; }
       .li {
         width: 42px; height: 42px; text-align: center;
         font-size: 1.1rem; font-weight: 700; font-family: monospace; text-transform: uppercase;
         border: 2px solid var(--border); border-radius: 6px;
         outline: none; transition: border-color 0.15s;
+        background: var(--panel); color: var(--text);
       }
       .li:focus  { border-color: var(--accent); }
-      .li.ok     { border-color: var(--ok);  background: var(--ok-bg);  }
-      .li.err    { border-color: var(--err); background: var(--err-bg); }
+      .li.ok     { border-color: var(--ok);  background: var(--ok-bg);  color: var(--ok); }
+      .li.err    { border-color: var(--err); background: var(--err-bg); color: var(--err); }
       .li-bin    { width: 82px; letter-spacing: 0.1em; font-size: 0.88rem; }
       .ll { font-size: 0.68rem; color: var(--muted); font-family: monospace; }
 
       /* binary table */
       .btbl { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 0.83rem; margin: 0.7rem 0; }
       .btbl th { background: #e2e8f0; padding: 0.38rem 0.5rem; text-align: center; font-size: 0.72rem; text-transform: uppercase; color: var(--muted); }
+      html.dark .btbl th { background: var(--panel2); }
       .btbl td { padding: 0.38rem 0.5rem; text-align: center; border-bottom: 1px solid var(--border); }
       .btbl tr:last-child td { border-bottom: none; }
-      .br-plain  td { background: #dbeafe; }
-      .br-key    td { background: var(--pub-bg); }
-      .br-cipher td { background: var(--msg-bg); }
+      .br-plain  td { background: #dbeafe; color: #1d4ed8; }
+      html.dark .br-plain td { background: #1e3a5f; color: #93c5fd; }
+      .br-key    td { background: var(--pub-bg); color: #92400e; }
+      html.dark .br-key td { color: #fcd34d; }
+      .br-cipher td { background: var(--msg-bg); color: #6d28d9; }
+      html.dark .br-cipher td { color: var(--msg); }
 
       /* ── Simulation scene ── */
       .sim-scene {
@@ -173,6 +258,10 @@
         background: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 100%);
         border: 1px solid #bae6fd; border-radius: 12px; overflow: hidden;
         margin-bottom: 1rem;
+      }
+      html.dark .sim-scene {
+        background: linear-gradient(180deg, #0f2847 0%, #0f172a 100%);
+        border-color: #1e3a5f;
       }
       .sim-scene.tall { height: 240px; }
 
@@ -199,7 +288,7 @@
       /* message bubble */
       .sim-msg {
         position: absolute;
-        background: #fff; border: 2px solid var(--msg); border-radius: 8px;
+        background: var(--panel); border: 2px solid var(--msg); border-radius: 8px;
         padding: 0.32rem 0.7rem; font-size: 0.78rem; font-family: monospace; font-weight: 700;
         color: var(--msg); white-space: nowrap;
         box-shadow: 0 2px 8px rgba(124,58,237,0.2);
@@ -213,6 +302,7 @@
         font-size: 0.73rem; font-weight: 600; max-width: 150px; text-align: center;
         line-height: 1.35; transition: opacity 0.3s; top: 12px;
       }
+      html.dark .proc { background: rgba(30,41,59,0.95); }
       .proc.hidden { opacity: 0; pointer-events: none; }
       .proc.a-side { left: 6px;  border-color: var(--alice); color: var(--alice); }
       .proc.b-side { right: 6px; border-color: var(--bob);   color: var(--bob); }
@@ -283,11 +373,13 @@
       .opt-list { display: flex; flex-direction: column; gap: 0.45rem; }
       .opt-btn {
         padding: 0.55rem 0.9rem; border: 2px solid var(--border);
-        border-radius: 8px; background: #fff; cursor: pointer;
+        border-radius: 8px; background: var(--panel); cursor: pointer;
         font-size: 0.88rem; text-align: left; transition: all 0.17s; color: var(--text);
       }
       .opt-btn:hover:not(:disabled) { border-color: var(--accent); background: #eff6ff; }
+      html.dark .opt-btn:hover:not(:disabled) { background: #1e3a5f; }
       .opt-btn.sel   { border-color: var(--accent); background: #dbeafe; }
+      html.dark .opt-btn.sel { background: #1e3a5f; }
       .opt-btn.right { border-color: var(--ok);  background: var(--ok-bg);  color: var(--ok);  font-weight: 700; }
       .opt-btn.wrong { border-color: var(--err); background: var(--err-bg); color: var(--err); font-weight: 700; }
       .opt-btn:disabled { cursor: default; }
@@ -314,29 +406,68 @@
       /* SVG person */
       .psv { width: 52px; height: 86px; }
     </style>
-  
-  <style id="global-home-link-style">
-    .global-home-link {
-      display: inline-block;
-      margin: 0.75rem 0 0 0.75rem;
-      font-size: 0.85rem;
-      color: inherit;
-      opacity: 0.8;
-      text-decoration: none;
-    }
-    .global-home-link:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-  </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 </head>
   <body>
-  <a class="global-home-link" href="index.html">&larr; Back to Learning Demos</a>
 
-    <header>
-      <h1>🔐 Encryption Interactive</h1>
-      <p>AQA A-Level Computer Science — Encryption &amp; Security</p>
-    </header>
+    <!-- CS Learning Header -->
+    <div class="cs-header">
+      <a href="index.html" class="cs-logo">CS Learning</a>
+      <button id="theme-btn" aria-label="Toggle theme">
+        <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </button>
+    </div>
+
+    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
     <nav class="tabs" id="tabs">
       <button class="tab-btn active" data-tab="symmetric">A: Symmetric Ciphers</button>
@@ -373,7 +504,6 @@
           </div>
 
           <div class="sim-scene" id="asym-scene">
-            <!-- Alice -->
             <div class="sp alice" id="asym-alice-div">
               <svg class="psv" id="asym-alice-svg" viewBox="0 0 52 86">
                 <circle cx="26" cy="15" r="13" fill="#bfdbfe" stroke="#1d4ed8" stroke-width="2.5"/>
@@ -387,8 +517,6 @@
               <span class="sp-name" style="color:var(--alice);">Alice</span>
               <div class="sp-keys"><div class="kp">PubA ✓</div><div class="kr">PrivA 🔒</div></div>
             </div>
-
-            <!-- Bob -->
             <div class="sp bob" id="asym-bob-div">
               <svg class="psv" id="asym-bob-svg" viewBox="0 0 52 86">
                 <circle cx="26" cy="15" r="13" fill="#ccfbf1" stroke="#0f766e" stroke-width="2.5"/>
@@ -402,7 +530,6 @@
               <span class="sp-name" style="color:var(--bob);">Bob</span>
               <div class="sp-keys"><div class="kp">PubB ✓</div><div class="kr">PrivB 🔒</div></div>
             </div>
-
             <div class="sim-msg" id="asym-msg">📨 Encrypted</div>
             <div class="proc a-side hidden" id="asym-ap"></div>
             <div class="proc b-side hidden" id="asym-bp"></div>
@@ -495,7 +622,6 @@
           </div>
 
           <div class="sim-scene tall" id="cert-scene">
-            <!-- CA top-centre -->
             <div class="ca-entity" id="cert-ca-ent">
               <svg width="44" height="72" viewBox="0 0 52 86">
                 <circle cx="26" cy="15" r="13" fill="#f3e8ff" stroke="#7e22ce" stroke-width="2.5"/>
@@ -509,8 +635,6 @@
               <div class="ca-name">Certificate Authority</div>
               <div class="ca-keys"><span class="kr">PrivCA 🔒</span> &nbsp; <span class="kp">PubCA ✓</span></div>
             </div>
-
-            <!-- Alice -->
             <div class="sp alice">
               <svg class="psv" id="cert-alice-svg" viewBox="0 0 52 86">
                 <circle cx="26" cy="15" r="13" fill="#bfdbfe" stroke="#1d4ed8" stroke-width="2.5"/>
@@ -524,8 +648,6 @@
               <span class="sp-name" style="color:var(--alice);">Alice (Server)</span>
               <div class="sp-keys"><div class="kp">PubA ✓</div><div class="kr">PrivA 🔒</div></div>
             </div>
-
-            <!-- Bob -->
             <div class="sp bob">
               <svg class="psv" id="cert-bob-svg" viewBox="0 0 52 86">
                 <circle cx="26" cy="15" r="13" fill="#ccfbf1" stroke="#0f766e" stroke-width="2.5"/>
@@ -539,7 +661,6 @@
               <span class="sp-name" style="color:var(--bob);">Bob (Browser)</span>
               <div class="sp-keys"><div class="kp" style="font-size:0.62rem;">PubCA pre-installed ✓</div></div>
             </div>
-
             <div class="sim-msg" id="cert-msg">📜 Certificate</div>
             <div class="proc a-side hidden" id="cert-ap"></div>
             <div class="proc b-side hidden" id="cert-bp"></div>
@@ -596,6 +717,21 @@
     </main>
 
     <script>
+    /* ═══════════════════════════════ THEME TOGGLE ════════════════════════════ */
+    (function() {
+      const isDark = document.documentElement.classList.contains('dark');
+      document.getElementById('theme-icon-moon').style.display = isDark ? 'none' : 'block';
+      document.getElementById('theme-icon-sun').style.display  = isDark ? 'block' : 'none';
+    })();
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      try { localStorage.setItem('uimode', isDark ? 'dark' : 'light'); } catch(e) {}
+      document.getElementById('theme-icon-moon').style.display = isDark ? 'none' : 'block';
+      document.getElementById('theme-icon-sun').style.display  = isDark ? 'block' : 'none';
+    }
+    document.getElementById('theme-btn').addEventListener('click', toggleTheme);
+
     /* ═══════════════════════════════ UTILITIES ═══════════════════════════════ */
     const el = id => document.getElementById(id);
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -645,11 +781,9 @@
         cipher = { type:'caesar', enc, shift, word, coded, src, ans };
         renderCaesar();
       } else {
-        // Vernam using 7-bit ASCII. Key bytes are random 0-127.
         const keyBytes = word.split('').map(() => Math.floor(Math.random() * 128));
         const ptBytes  = word.split('').map(c => c.charCodeAt(0));
         const xorBytes = ptBytes.map((p, i) => p ^ keyBytes[i]);
-        // Pick 3 distinct challenge positions
         const idxs = shuffle(Array.from({length: word.length}, (_, i) => i));
         const [ci_src, ci_key, ci_res] = idxs.slice(0, 3);
         const srcBytes = enc ? ptBytes : xorBytes;
@@ -681,7 +815,7 @@
           </div>
           <div class="info-box">
             <div class="info-label">Shift</div>
-            <div class="info-val" style="color:#92400e;">${shift}</div>
+            <div class="info-val" style="color:var(--pub);">${shift}</div>
           </div>
         </div>
         <p class="hint">${enc
@@ -751,14 +885,14 @@
           </div>
           <div class="info-box">
             <div class="info-label">One-Time Pad (decimal bytes)</div>
-            <div class="info-val" style="font-size:1.1rem;color:#92400e;">${keyBytes.join('  ')}</div>
+            <div class="info-val" style="font-size:1.1rem;color:var(--pub);">${keyBytes.join('  ')}</div>
           </div>
         </div>
         <p class="xor-note">
           The Vernam cipher XORs each byte of the ${enc?'plaintext':'ciphertext'} with the corresponding pad byte (⊕).
           Convert values to <strong>7-bit binary</strong> first.
           XOR rule: <strong>same bits → 0, different bits → 1</strong>.
-          Fill in the three input cells marked <span style="font-family:monospace;background:#dbeafe;padding:0 4px;border-radius:3px;">0000000</span>.
+          Fill in the three input cells marked <span style="font-family:monospace;background:var(--panel2);padding:0 4px;border-radius:3px;">0000000</span>.
         </p>
         <div style="overflow-x:auto;">
           <table class="btbl"><thead>${hRow}</thead><tbody>
@@ -805,7 +939,6 @@
           el('cipher-fb').innerHTML = `<div class="fb err">✗ Not quite. The answer is <strong>${ans}</strong>. ${enc?'Add':'Subtract'} ${shift} from each letter's position (A=0) and apply mod 26.</div>`;
         }
       } else {
-        // Vernam
         const { vn_expected } = cipher;
         for (let i = 0; i < 3; i++) {
           if (!el('vn-inp-'+i) || !el('vn-inp-'+i).value.trim()) {
@@ -840,8 +973,8 @@
     function animMsg(msgId, animClass, text) {
       const m = el(msgId);
       m.textContent = text;
-      m.className = 'sim-msg'; // reset
-      void m.offsetWidth;      // reflow
+      m.className = 'sim-msg';
+      void m.offsetWidth;
       m.classList.add(animClass);
     }
 
@@ -912,76 +1045,15 @@
     const ASYM = {
       step: 0, answered: false, selectFn: 'asymSelect',
       steps: [
-        {
-          title: "Alice prepares a message for Bob",
-          desc: "Alice wants to send a confidential message to Bob. In asymmetric encryption every person has a <strong>key pair</strong>: a <strong>public key</strong> (shared openly) and a mathematically linked <strong>private key</strong> (kept secret). A message encrypted with one key can only be decrypted with the other.",
-          scene: { who:'alice' },
-          question: null
-        },
-        {
-          title: "Alice needs to encrypt her message",
-          desc: "Bob's public key is freely available — anyone can use it. Alice needs to encrypt her message using a key from Bob's key pair so that only Bob can read it.",
-          scene: { who:'alice' },
-          question: {
-            text: "To send an encrypted message to Bob, which key does Alice use to encrypt?",
-            opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"],
-            correct: 2
-          }
-        },
-        {
-          title: "Alice encrypts the message",
-          desc: "Alice encrypts her message using <strong>Bob's public key (PubB)</strong>. The result is unreadable ciphertext. Even Alice cannot decrypt it — only <strong>Bob's private key (PrivB)</strong> can.",
-          scene: { who:'alice', proc:'asym-ap', txt:'🔐 Encrypting\nwith PubB…' },
-          question: null
-        },
-        {
-          title: "Alice sends the encrypted message",
-          desc: "Alice transmits the ciphertext over the network. Even if an attacker intercepts it, they cannot read it without Bob's private key.",
-          scene: { anim:'anim-r', msg:'📨 [Ciphertext]' },
-          question: null
-        },
-        {
-          title: "Bob decrypts the message",
-          desc: "Bob has received the ciphertext. He now needs to decrypt it using a key from his own key pair.",
-          scene: { who:'bob', proc:'asym-bp', txt:'🔓 Decrypting…' },
-          question: {
-            text: "Which key does Bob use to decrypt the message Alice sent?",
-            opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"],
-            correct: 3
-          }
-        },
-        {
-          title: "Bob wants to reply to Alice",
-          desc: "Bob wants to send an encrypted reply that only Alice can read. He must encrypt using a key from Alice's key pair.",
-          scene: { who:'bob' },
-          question: {
-            text: "To encrypt his reply so only Alice can read it, which key does Bob use?",
-            opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"],
-            correct: 0
-          }
-        },
-        {
-          title: "Bob encrypts his reply",
-          desc: "Bob encrypts his reply using <strong>Alice's public key (PubA)</strong>. Only <strong>Alice's private key (PrivA)</strong> can decrypt it.",
-          scene: { who:'bob', proc:'asym-bp', txt:'🔐 Encrypting\nwith PubA…' },
-          question: null
-        },
-        {
-          title: "Bob sends the encrypted reply",
-          desc: "The encrypted reply travels back to Alice over the network.",
-          scene: { anim:'anim-l', msg:'📨 [Encrypted Reply]' },
-          question: null
-        },
-        {
-          title: "Alice decrypts the reply",
-          desc: "Alice has received Bob's encrypted reply. She needs to decrypt it using a key from her own key pair.",
-          scene: { who:'alice', proc:'asym-ap', txt:'🔓 Decrypting…' },
-          question: {
-            text: "Which key does Alice use to decrypt Bob's reply?",
-            opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"],
-            correct: 1
-          }
-        }
+        { title: "Alice prepares a message for Bob", desc: "Alice wants to send a confidential message to Bob. In asymmetric encryption every person has a <strong>key pair</strong>: a <strong>public key</strong> (shared openly) and a mathematically linked <strong>private key</strong> (kept secret). A message encrypted with one key can only be decrypted with the other.", scene: { who:'alice' }, question: null },
+        { title: "Alice needs to encrypt her message", desc: "Bob's public key is freely available — anyone can use it. Alice needs to encrypt her message using a key from Bob's key pair so that only Bob can read it.", scene: { who:'alice' }, question: { text: "To send an encrypted message to Bob, which key does Alice use to encrypt?", opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"], correct: 2 } },
+        { title: "Alice encrypts the message", desc: "Alice encrypts her message using <strong>Bob's public key (PubB)</strong>. The result is unreadable ciphertext. Even Alice cannot decrypt it — only <strong>Bob's private key (PrivB)</strong> can.", scene: { who:'alice', proc:'asym-ap', txt:'🔐 Encrypting\nwith PubB…' }, question: null },
+        { title: "Alice sends the encrypted message", desc: "Alice transmits the ciphertext over the network. Even if an attacker intercepts it, they cannot read it without Bob's private key.", scene: { anim:'anim-r', msg:'📨 [Ciphertext]' }, question: null },
+        { title: "Bob decrypts the message", desc: "Bob has received the ciphertext. He now needs to decrypt it using a key from his own key pair.", scene: { who:'bob', proc:'asym-bp', txt:'🔓 Decrypting…' }, question: { text: "Which key does Bob use to decrypt the message Alice sent?", opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"], correct: 3 } },
+        { title: "Bob wants to reply to Alice", desc: "Bob wants to send an encrypted reply that only Alice can read. He must encrypt using a key from Alice's key pair.", scene: { who:'bob' }, question: { text: "To encrypt his reply so only Alice can read it, which key does Bob use?", opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"], correct: 0 } },
+        { title: "Bob encrypts his reply", desc: "Bob encrypts his reply using <strong>Alice's public key (PubA)</strong>. Only <strong>Alice's private key (PrivA)</strong> can decrypt it.", scene: { who:'bob', proc:'asym-bp', txt:'🔐 Encrypting\nwith PubA…' }, question: null },
+        { title: "Bob sends the encrypted reply", desc: "The encrypted reply travels back to Alice over the network.", scene: { anim:'anim-l', msg:'📨 [Encrypted Reply]' }, question: null },
+        { title: "Alice decrypts the reply", desc: "Alice has received Bob's encrypted reply. She needs to decrypt it using a key from her own key pair.", scene: { who:'alice', proc:'asym-ap', txt:'🔓 Decrypting…' }, question: { text: "Which key does Alice use to decrypt Bob's reply?", opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"], correct: 1 } }
       ]
     };
 
@@ -989,7 +1061,6 @@
       hideProc('asym-ap'); hideProc('asym-bp');
       glowSvg('asym-alice-svg', null); glowSvg('asym-bob-svg', null);
       el('asym-msg').className = 'sim-msg';
-
       const s = ASYM.steps[ASYM.step].scene;
       if (!s) return;
       if (s.proc)  setProc(s.proc, s.txt);
@@ -1001,7 +1072,6 @@
     function asymInit() {
       ASYM.step=0; ASYM.answered=true;
       renderStep(ASYM, 0, 'asym');
-      // Step 0 has no question — ensure next is enabled
       el('asym-next').disabled=false;
       asymSceneUpdate();
     }
@@ -1015,76 +1085,14 @@
     const SIG = {
       step:0, answered:false, selectFn:'sigSelect',
       steps: [
-        {
-          title: "Alice writes her message",
-          desc: "Alice has a message she wants to send to Bob. She wants Bob to be able to verify (a) that it genuinely came from her and (b) that it has not been tampered with. She will use a <strong>digital signature</strong>.",
-          scene: { who:'alice' }, question: null
-        },
-        {
-          title: "Step 1 — Alice hashes the message",
-          desc: "Alice runs her message through a <strong>hash function</strong> (e.g. SHA-256). This produces a fixed-length <strong>hash digest</strong> — a unique fingerprint. Any change to the message, however small, produces a completely different hash.",
-          scene: { who:'alice', proc:'sig-ap', txt:'#️⃣ Hashing\nmessage…' },
-          question: {
-            text: "What is the purpose of hashing the message before signing?",
-            opts: [
-              "It encrypts the message so only Bob can read it",
-              "It creates a fixed-length fingerprint; any change to the message changes the hash",
-              "It compresses the message to reduce bandwidth",
-              "It converts the message to a public key"
-            ],
-            correct: 1
-          }
-        },
-        {
-          title: "Step 2 — Alice signs the hash",
-          desc: "Alice encrypts the hash digest using one key from her key pair. The result is the <strong>digital signature</strong>. Only Alice could have produced it — because only she has access to one specific key.",
-          scene: { who:'alice', proc:'sig-ap', txt:'🔐 Signing…' },
-          question: {
-            text: "Which key does Alice use to create (sign) the digital signature?",
-            opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"],
-            correct: 1
-          }
-        },
-        {
-          title: "Alice transmits: message + digital signature",
-          desc: "Alice sends both the <strong>original message</strong> and the <strong>digital signature</strong>. Note: the message itself is not encrypted here — digital signatures provide <em>authenticity</em> and <em>integrity</em>, not confidentiality.",
-          scene: { anim:'anim-r', msg:'📜 Message + ✍️ Sig' }, question: null
-        },
-        {
-          title: "Bob receives the message and signature",
-          desc: "Bob receives both pieces. He must now verify whether the signature is genuine — that is, whether it really was created by Alice and the message is unchanged.",
-          scene: { who:'bob', proc:'sig-bp', txt:'📥 Received\nmessage + sig' }, question: null
-        },
-        {
-          title: "Step 3 — Bob decrypts the signature",
-          desc: "Bob decrypts the digital signature to recover the hash Alice computed. To verify that Alice created it, he uses a key from Alice's key pair.",
-          scene: { who:'bob', proc:'sig-bp', txt:'🔓 Decrypting sig…' },
-          question: {
-            text: "Which key does Bob use to decrypt Alice's digital signature?",
-            opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"],
-            correct: 0
-          }
-        },
-        {
-          title: "Step 4 — Bob re-hashes the received message",
-          desc: "Bob independently runs the <strong>received message</strong> through the same hash function to produce his own hash digest.",
-          scene: { who:'bob', proc:'sig-bp', txt:'#️⃣ Re-hashing\nreceived msg…' }, question: null
-        },
-        {
-          title: "Step 5 — Bob compares the two hashes",
-          desc: "Bob compares the hash he decrypted from Alice's signature with the hash he computed himself.",
-          scene: { who:'bob', proc:'sig-bp', txt:'🔍 Comparing\nhashes…' },
-          question: {
-            text: "If the two hash values match, what does this confirm?",
-            opts: [
-              "The message was encrypted by Alice",
-              "The message came from Alice and has not been altered since she signed it",
-              "Bob has the correct private key",
-              "The message was sent over a secure channel"
-            ],
-            correct: 1
-          }
-        }
+        { title: "Alice writes her message", desc: "Alice has a message she wants to send to Bob. She wants Bob to be able to verify (a) that it genuinely came from her and (b) that it has not been tampered with. She will use a <strong>digital signature</strong>.", scene: { who:'alice' }, question: null },
+        { title: "Step 1 — Alice hashes the message", desc: "Alice runs her message through a <strong>hash function</strong> (e.g. SHA-256). This produces a fixed-length <strong>hash digest</strong> — a unique fingerprint. Any change to the message, however small, produces a completely different hash.", scene: { who:'alice', proc:'sig-ap', txt:'#️⃣ Hashing\nmessage…' }, question: { text: "What is the purpose of hashing the message before signing?", opts: ["It encrypts the message so only Bob can read it","It creates a fixed-length fingerprint; any change to the message changes the hash","It compresses the message to reduce bandwidth","It converts the message to a public key"], correct: 1 } },
+        { title: "Step 2 — Alice signs the hash", desc: "Alice encrypts the hash digest using one key from her key pair. The result is the <strong>digital signature</strong>. Only Alice could have produced it — because only she has access to one specific key.", scene: { who:'alice', proc:'sig-ap', txt:'🔐 Signing…' }, question: { text: "Which key does Alice use to create (sign) the digital signature?", opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"], correct: 1 } },
+        { title: "Alice transmits: message + digital signature", desc: "Alice sends both the <strong>original message</strong> and the <strong>digital signature</strong>. Note: the message itself is not encrypted here — digital signatures provide <em>authenticity</em> and <em>integrity</em>, not confidentiality.", scene: { anim:'anim-r', msg:'📜 Message + ✍️ Sig' }, question: null },
+        { title: "Bob receives the message and signature", desc: "Bob receives both pieces. He must now verify whether the signature is genuine — that is, whether it really was created by Alice and the message is unchanged.", scene: { who:'bob', proc:'sig-bp', txt:'📥 Received\nmessage + sig' }, question: null },
+        { title: "Step 3 — Bob decrypts the signature", desc: "Bob decrypts the digital signature to recover the hash Alice computed. To verify that Alice created it, he uses a key from Alice's key pair.", scene: { who:'bob', proc:'sig-bp', txt:'🔓 Decrypting sig…' }, question: { text: "Which key does Bob use to decrypt Alice's digital signature?", opts: ["Alice's public key (PubA)","Alice's private key (PrivA)","Bob's public key (PubB)","Bob's private key (PrivB)"], correct: 0 } },
+        { title: "Step 4 — Bob re-hashes the received message", desc: "Bob independently runs the <strong>received message</strong> through the same hash function to produce his own hash digest.", scene: { who:'bob', proc:'sig-bp', txt:'#️⃣ Re-hashing\nreceived msg…' }, question: null },
+        { title: "Step 5 — Bob compares the two hashes", desc: "Bob compares the hash he decrypted from Alice's signature with the hash he computed himself.", scene: { who:'bob', proc:'sig-bp', txt:'🔍 Comparing\nhashes…' }, question: { text: "If the two hash values match, what does this confirm?", opts: ["The message was encrypted by Alice","The message came from Alice and has not been altered since she signed it","Bob has the correct private key","The message was sent over a secure channel"], correct: 1 } }
       ]
     };
 
@@ -1116,76 +1124,14 @@
     const CERT = {
       step:0, answered:false, selectFn:'certSelect',
       steps: [
-        {
-          title: "Alice applies to the Certificate Authority",
-          desc: "Alice (a web server) wants to prove her identity to visitors. She contacts a trusted <strong>Certificate Authority (CA)</strong>, submitting her public key (PubA) and proof of identity.",
-          scene: { anim:'anim-c', msg:'📋 PubA + Identity' }, question: null
-        },
-        {
-          title: "The CA creates a certificate",
-          desc: "The CA verifies Alice's identity and creates a digital certificate. The certificate is a trusted document that will allow visitors to verify they are communicating with Alice and to use her key securely.",
-          scene: { who:'ca', proc:'cert-cp', txt:'📜 Creating\ncertificate…' },
-          question: {
-            text: "Which of the following is included in a digital certificate?",
-            opts: [
-              "Alice's private key and her password",
-              "Alice's public key, her identity, the validity period, and the CA's identity",
-              "A shared symmetric key for bulk encryption",
-              "Bob's public key signed by Alice"
-            ],
-            correct: 1
-          }
-        },
-        {
-          title: "The CA signs the certificate",
-          desc: "The CA creates a digital signature for the certificate: it hashes the certificate contents, then encrypts that hash using one of its keys. This allows anyone to verify the certificate is genuine.",
-          scene: { who:'ca', proc:'cert-cp', txt:'✍️ Signing…' },
-          question: {
-            text: "Which key does the CA use to sign the digital certificate?",
-            opts: ["CA's public key (PubCA)","CA's private key (PrivCA)","Alice's public key (PubA)","Alice's private key (PrivA)"],
-            correct: 1
-          }
-        },
-        {
-          title: "The CA issues the certificate to Alice",
-          desc: "The CA returns the completed, signed certificate to Alice. Alice now holds a trusted certificate — her public key, verified by the CA's signature.",
-          scene: { anim:'anim-fc', msg:'📜 Signed Certificate' }, question: null
-        },
-        {
-          title: "Bob requests a secure connection",
-          desc: "Bob (a browser) wants to connect securely to Alice. Alice responds by sending Bob her <strong>digital certificate</strong>.",
-          scene: { anim:'anim-r', msg:'📜 Certificate' }, question: null
-        },
-        {
-          title: "Bob verifies the certificate signature",
-          desc: "Bob needs to verify the CA's digital signature on the certificate. Bob's browser comes pre-installed with keys from trusted CAs. Bob decrypts the CA's signature using the correct key to recover the hash.",
-          scene: { who:'bob', proc:'cert-bp', txt:'🔓 Verifying…' },
-          question: {
-            text: "Which key does Bob use to verify (authenticate) the certificate?",
-            opts: ["CA's private key (PrivCA)","CA's public key (PubCA)","Alice's private key (PrivA)","Bob's private key (PrivB)"],
-            correct: 1
-          }
-        },
-        {
-          title: "Bob re-hashes the certificate contents",
-          desc: "Bob independently hashes the certificate contents and compares with the hash recovered from the signature. A match proves the certificate is genuine and unaltered.",
-          scene: { who:'bob', proc:'cert-bp', txt:'#️⃣ Re-hashing cert\ncontents…' }, question: null
-        },
-        {
-          title: "Bob trusts Alice's public key",
-          desc: "The hashes match — the certificate is genuine. Bob can now trust the key contained in the certificate and use it to communicate securely with Alice.",
-          scene: { who:'both', proc_a:'cert-ap', txt_a:'🌐 Connection\nestablished!', proc_b:'cert-bp', txt_b:'✅ Key trusted!' },
-          question: {
-            text: "Why can Bob now trust Alice's public key?",
-            opts: [
-              "Alice told Bob directly that it was genuine",
-              "It is in a certificate signed by a trusted CA, and Bob verified that signature",
-              "Bob's browser generated the key pair for Alice",
-              "The certificate was encrypted with Bob's private key"
-            ],
-            correct: 1
-          }
-        }
+        { title: "Alice applies to the Certificate Authority", desc: "Alice (a web server) wants to prove her identity to visitors. She contacts a trusted <strong>Certificate Authority (CA)</strong>, submitting her public key (PubA) and proof of identity.", scene: { anim:'anim-c', msg:'📋 PubA + Identity' }, question: null },
+        { title: "The CA creates a certificate", desc: "The CA verifies Alice's identity and creates a digital certificate. The certificate is a trusted document that will allow visitors to verify they are communicating with Alice and to use her key securely.", scene: { who:'ca', proc:'cert-cp', txt:'📜 Creating\ncertificate…' }, question: { text: "Which of the following is included in a digital certificate?", opts: ["Alice's private key and her password","Alice's public key, her identity, the validity period, and the CA's identity","A shared symmetric key for bulk encryption","Bob's public key signed by Alice"], correct: 1 } },
+        { title: "The CA signs the certificate", desc: "The CA creates a digital signature for the certificate: it hashes the certificate contents, then encrypts that hash using one of its keys. This allows anyone to verify the certificate is genuine.", scene: { who:'ca', proc:'cert-cp', txt:'✍️ Signing…' }, question: { text: "Which key does the CA use to sign the digital certificate?", opts: ["CA's public key (PubCA)","CA's private key (PrivCA)","Alice's public key (PubA)","Alice's private key (PrivA)"], correct: 1 } },
+        { title: "The CA issues the certificate to Alice", desc: "The CA returns the completed, signed certificate to Alice. Alice now holds a trusted certificate — her public key, verified by the CA's signature.", scene: { anim:'anim-fc', msg:'📜 Signed Certificate' }, question: null },
+        { title: "Bob requests a secure connection", desc: "Bob (a browser) wants to connect securely to Alice. Alice responds by sending Bob her <strong>digital certificate</strong>.", scene: { anim:'anim-r', msg:'📜 Certificate' }, question: null },
+        { title: "Bob verifies the certificate signature", desc: "Bob needs to verify the CA's digital signature on the certificate. Bob's browser comes pre-installed with keys from trusted CAs. Bob decrypts the CA's signature using the correct key to recover the hash.", scene: { who:'bob', proc:'cert-bp', txt:'🔓 Verifying…' }, question: { text: "Which key does Bob use to verify (authenticate) the certificate?", opts: ["CA's private key (PrivCA)","CA's public key (PubCA)","Alice's private key (PrivA)","Bob's private key (PrivB)"], correct: 1 } },
+        { title: "Bob re-hashes the certificate contents", desc: "Bob independently hashes the certificate contents and compares with the hash recovered from the signature. A match proves the certificate is genuine and unaltered.", scene: { who:'bob', proc:'cert-bp', txt:'#️⃣ Re-hashing cert\ncontents…' }, question: null },
+        { title: "Bob trusts Alice's public key", desc: "The hashes match — the certificate is genuine. Bob can now trust the key contained in the certificate and use it to communicate securely with Alice.", scene: { who:'both', proc_a:'cert-ap', txt_a:'🌐 Connection\nestablished!', proc_b:'cert-bp', txt_b:'✅ Key trusted!' }, question: { text: "Why can Bob now trust Alice's public key?", opts: ["Alice told Bob directly that it was genuine","It is in a certificate signed by a trusted CA, and Bob verified that signature","Bob's browser generated the key pair for Alice","The certificate was encrypted with Bob's private key"], correct: 1 } }
       ]
     };
 
@@ -1193,16 +1139,13 @@
       hideProc('cert-ap'); hideProc('cert-bp'); hideProc('cert-cp');
       glowSvg('cert-alice-svg',null); glowSvg('cert-bob-svg',null);
       el('cert-msg').className = 'sim-msg';
-
       const s = CERT.steps[CERT.step].scene;
       if (!s) return;
-
       if (s.proc) setProc(s.proc, s.txt);
       if (s.proc_a) { setProc(s.proc_a, s.txt_a); setProc(s.proc_b, s.txt_b); }
       if (s.who==='alice') glowSvg('cert-alice-svg','rgba(29,78,216,0.55)');
       if (s.who==='bob')   glowSvg('cert-bob-svg','rgba(15,118,110,0.55)');
       if (s.who==='ca') {
-        // highlight CA entity
         el('cert-ca-ent').style.filter='drop-shadow(0 0 10px rgba(126,34,206,0.5))';
       } else {
         el('cert-ca-ent').style.filter='';
@@ -1229,177 +1172,22 @@
 
     /* ═══════════════════════════════ E: MULTIPLE CHOICE ═════════════════════ */
     const ALL_Q = [
-      {
-        q: "What is encryption?",
-        opts: [
-          "Converting plaintext into ciphertext using a cipher and key, so only authorised parties can read it",
-          "The process of securely deleting data from a storage device",
-          "Compressing data to reduce file size for transmission",
-          "Verifying a user's identity before granting access"
-        ],
-        correct: 0,
-        exp: "Encryption transforms readable plaintext into unreadable ciphertext using an algorithm (cipher) and a key. Only those with the correct key can decrypt and read the data."
-      },
-      {
-        q: "What is a cipher?",
-        opts: [
-          "A secret message sent between two parties",
-          "An algorithm (set of rules) used to perform encryption and decryption",
-          "A type of key used in asymmetric encryption",
-          "The output of a hash function"
-        ],
-        correct: 1,
-        exp: "A cipher is the algorithm used to encrypt and decrypt. Examples: Caesar cipher, AES, RSA. The cipher itself is not secret — security comes from the key."
-      },
-      {
-        q: "Which of the following correctly defines 'plaintext'?",
-        opts: [
-          "Data that has been encrypted and cannot be read without a key",
-          "The original, readable data before encryption is applied",
-          "A key used to decrypt a ciphertext message",
-          "A digital signature appended to a message"
-        ],
-        correct: 1,
-        exp: "Plaintext is the original, readable message before encryption. After encryption it becomes ciphertext."
-      },
-      {
-        q: "What is ciphertext?",
-        opts: [
-          "The encryption algorithm used to scramble data",
-          "A key that unlocks an encrypted message",
-          "Data that has been encrypted and is unreadable without the correct key",
-          "The original, unencrypted message"
-        ],
-        correct: 2,
-        exp: "Ciphertext is the scrambled output of encryption — unreadable without the correct decryption key."
-      },
-      {
-        q: "In symmetric encryption, which statement is true?",
-        opts: [
-          "A different key is used for encryption than for decryption",
-          "One person has a public key and the other has a private key",
-          "The same shared secret key is used for both encryption and decryption",
-          "No key is needed — security comes from keeping the algorithm secret"
-        ],
-        correct: 2,
-        exp: "Symmetric encryption uses a single shared secret key for both encryption and decryption. Both sender and receiver must possess this same key. Caesar and Vernam ciphers are examples."
-      },
-      {
-        q: "In asymmetric encryption, which statement is true?",
-        opts: [
-          "The same key is used to encrypt and decrypt",
-          "A mathematically linked key pair (public and private) is used — what one encrypts, only the other can decrypt",
-          "Only the sender needs a key",
-          "Keys are generated fresh for every single message"
-        ],
-        correct: 1,
-        exp: "Asymmetric encryption uses a key pair. The public key is freely shared; the private key is kept secret. A message encrypted with the public key can only be decrypted by the matching private key."
-      },
-      {
-        q: "Give two reasons why the Caesar cipher is considered insecure.",
-        opts: [
-          "It uses the same key for encryption and decryption, and the key must be shared over the internet",
-          "There are only 25 possible shift values (very few keys to try), AND each plaintext letter always maps to the same ciphertext letter — making it vulnerable to frequency analysis",
-          "The key must be very long and is difficult to remember, and it cannot encrypt numbers",
-          "It can only encrypt uppercase letters, and ciphertext is always longer than the plaintext"
-        ],
-        correct: 1,
-        exp: "Caesar has only 25 possible keys — trivial to brute-force. Also, because the same letter always encrypts to the same letter, an attacker can use known English letter frequencies (e.g. 'E' is most common) to deduce the key without even trying all shifts."
-      },
-      {
-        q: "Why does frequency analysis break the Caesar cipher?",
-        opts: [
-          "Because there are too many possible keys to test quickly",
-          "Because each plaintext letter always encrypts to the same ciphertext letter, preserving frequency patterns",
-          "Because the Caesar cipher uses a public key that attackers can obtain",
-          "Because the key must be transmitted alongside the ciphertext"
-        ],
-        correct: 1,
-        exp: "Frequency analysis exploits the fact that Caesar substitutes each letter consistently. The frequency distribution of letters in English (e.g. E≈13%, T≈9%) is mirrored in the ciphertext, making the key easy to identify."
-      },
-      {
-        q: "Under which conditions is the Vernam cipher (one-time pad) considered perfectly secure?",
-        opts: [
-          "The key must be at least as long as the message, truly random, and used only once",
-          "The key must be at least 128 bits and distributed using asymmetric encryption",
-          "The message must be at least as long as the key, and the key may be reused for efficiency",
-          "The key must be stored securely in a hardware security module and rotated monthly"
-        ],
-        correct: 0,
-        exp: "All three conditions must hold: (1) key length ≥ message length; (2) key is truly random (not pseudo-random); (3) key is never reused. Violating any one condition breaks the perfect security guarantee."
-      },
-      {
-        q: "Why is the Vernam cipher (one-time pad) perfectly secure when used correctly?",
-        opts: [
-          "Because the key is so long that it is computationally infeasible to guess",
-          "Because the ciphertext reveals no statistical information whatsoever about the plaintext — every possible plaintext is equally likely given the ciphertext",
-          "Because it uses asymmetric keys that require factoring large primes to break",
-          "Because each letter uses a different Caesar shift chosen pseudo-randomly"
-        ],
-        correct: 1,
-        exp: "With a truly random key used once, XOR-ing with the key produces a ciphertext that is statistically independent of the plaintext. An attacker gains zero information — all plaintexts are equally consistent with the ciphertext. This is provably perfect (information-theoretic) security."
-      },
-      {
-        q: "What does a digital signature primarily provide?",
-        opts: [
-          "Confidentiality — ensuring only the recipient can read the message",
-          "Authentication and integrity — confirming who sent the message and that it was not altered",
-          "Compression — reducing message size before transmission",
-          "Anonymity — hiding the identity of the sender from all parties"
-        ],
-        correct: 1,
-        exp: "A digital signature provides Authentication (proof of sender identity) and Integrity (proof the message was not modified). It does NOT by itself provide confidentiality — the message content may still be readable."
-      },
-      {
-        q: "To create a digital signature, the sender encrypts the hash digest with:",
-        opts: [
-          "The sender's public key",
-          "The recipient's public key",
-          "The sender's private key",
-          "A shared symmetric key"
-        ],
-        correct: 2,
-        exp: "The sender encrypts the hash with their own private key. Because only the sender possesses their private key, this proves the signature originated from them."
-      },
-      {
-        q: "To verify a digital signature, the recipient uses:",
-        opts: [
-          "The recipient's own private key",
-          "The sender's private key",
-          "The sender's public key",
-          "The Certificate Authority's private key"
-        ],
-        correct: 2,
-        exp: "The recipient decrypts the signature using the sender's public key. If this reveals a hash matching their own re-computation of the message's hash, the signature is valid."
-      },
-      {
-        q: "What is the main purpose of a digital certificate?",
-        opts: [
-          "To encrypt all data transmitted between two parties using symmetric encryption",
-          "To bind a public key to a verified identity, with that binding signed by a trusted Certificate Authority",
-          "To securely store a user's private key in the cloud",
-          "To provide a shared symmetric key for bulk encryption of web traffic"
-        ],
-        correct: 1,
-        exp: "A digital certificate is issued by a CA and contains the owner's public key alongside their verified identity. The CA's signature on the certificate assures that the public key genuinely belongs to that identity."
-      },
-      {
-        q: "Which key does the Certificate Authority use to sign a digital certificate?",
-        opts: ["The CA's public key","The applicant's public key","The applicant's private key","The CA's private key"],
-        correct: 3,
-        exp: "The CA signs by hashing the certificate contents then encrypting with the CA's own private key — creating a digital signature anyone can verify using the CA's public key."
-      },
-      {
-        q: "How does a browser verify a digital certificate received from a web server?",
-        opts: [
-          "It decrypts the CA's signature using the CA's public key, recovers the hash, re-hashes the certificate contents, and checks they match",
-          "It sends the certificate back to the server and asks for confirmation",
-          "It uses the server's private key to decrypt the certificate contents",
-          "It contacts the CA directly to ask whether the certificate is genuine"
-        ],
-        correct: 0,
-        exp: "Browsers come pre-installed with trusted CA public keys. The browser decrypts the CA's signature using PubCA to recover the original hash, then re-hashes the certificate contents independently. A match confirms the certificate is authentic."
-      }
+      { q: "What is encryption?", opts: ["Converting plaintext into ciphertext using a cipher and key, so only authorised parties can read it","The process of securely deleting data from a storage device","Compressing data to reduce file size for transmission","Verifying a user's identity before granting access"], correct: 0, exp: "Encryption transforms readable plaintext into unreadable ciphertext using an algorithm (cipher) and a key. Only those with the correct key can decrypt and read the data." },
+      { q: "What is a cipher?", opts: ["A secret message sent between two parties","An algorithm (set of rules) used to perform encryption and decryption","A type of key used in asymmetric encryption","The output of a hash function"], correct: 1, exp: "A cipher is the algorithm used to encrypt and decrypt. Examples: Caesar cipher, AES, RSA. The cipher itself is not secret — security comes from the key." },
+      { q: "Which of the following correctly defines 'plaintext'?", opts: ["Data that has been encrypted and cannot be read without a key","The original, readable data before encryption is applied","A key used to decrypt a ciphertext message","A digital signature appended to a message"], correct: 1, exp: "Plaintext is the original, readable message before encryption. After encryption it becomes ciphertext." },
+      { q: "What is ciphertext?", opts: ["The encryption algorithm used to scramble data","A key that unlocks an encrypted message","Data that has been encrypted and is unreadable without the correct key","The original, unencrypted message"], correct: 2, exp: "Ciphertext is the scrambled output of encryption — unreadable without the correct decryption key." },
+      { q: "In symmetric encryption, which statement is true?", opts: ["A different key is used for encryption than for decryption","One person has a public key and the other has a private key","The same shared secret key is used for both encryption and decryption","No key is needed — security comes from keeping the algorithm secret"], correct: 2, exp: "Symmetric encryption uses a single shared secret key for both encryption and decryption. Both sender and receiver must possess this same key. Caesar and Vernam ciphers are examples." },
+      { q: "In asymmetric encryption, which statement is true?", opts: ["The same key is used to encrypt and decrypt","A mathematically linked key pair (public and private) is used — what one encrypts, only the other can decrypt","Only the sender needs a key","Keys are generated fresh for every single message"], correct: 1, exp: "Asymmetric encryption uses a key pair. The public key is freely shared; the private key is kept secret. A message encrypted with the public key can only be decrypted by the matching private key." },
+      { q: "Give two reasons why the Caesar cipher is considered insecure.", opts: ["It uses the same key for encryption and decryption, and the key must be shared over the internet","There are only 25 possible shift values (very few keys to try), AND each plaintext letter always maps to the same ciphertext letter — making it vulnerable to frequency analysis","The key must be very long and is difficult to remember, and it cannot encrypt numbers","It can only encrypt uppercase letters, and ciphertext is always longer than the plaintext"], correct: 1, exp: "Caesar has only 25 possible keys — trivial to brute-force. Also, because the same letter always encrypts to the same letter, an attacker can use known English letter frequencies (e.g. 'E' is most common) to deduce the key without even trying all shifts." },
+      { q: "Why does frequency analysis break the Caesar cipher?", opts: ["Because there are too many possible keys to test quickly","Because each plaintext letter always encrypts to the same ciphertext letter, preserving frequency patterns","Because the Caesar cipher uses a public key that attackers can obtain","Because the key must be transmitted alongside the ciphertext"], correct: 1, exp: "Frequency analysis exploits the fact that Caesar substitutes each letter consistently. The frequency distribution of letters in English (e.g. E≈13%, T≈9%) is mirrored in the ciphertext, making the key easy to identify." },
+      { q: "Under which conditions is the Vernam cipher (one-time pad) considered perfectly secure?", opts: ["The key must be at least as long as the message, truly random, and used only once","The key must be at least 128 bits and distributed using asymmetric encryption","The message must be at least as long as the key, and the key may be reused for efficiency","The key must be stored securely in a hardware security module and rotated monthly"], correct: 0, exp: "All three conditions must hold: (1) key length ≥ message length; (2) key is truly random (not pseudo-random); (3) key is never reused. Violating any one condition breaks the perfect security guarantee." },
+      { q: "Why is the Vernam cipher (one-time pad) perfectly secure when used correctly?", opts: ["Because the key is so long that it is computationally infeasible to guess","Because the ciphertext reveals no statistical information whatsoever about the plaintext — every possible plaintext is equally likely given the ciphertext","Because it uses asymmetric keys that require factoring large primes to break","Because each letter uses a different Caesar shift chosen pseudo-randomly"], correct: 1, exp: "With a truly random key used once, XOR-ing with the key produces a ciphertext that is statistically independent of the plaintext. An attacker gains zero information — all plaintexts are equally consistent with the ciphertext. This is provably perfect (information-theoretic) security." },
+      { q: "What does a digital signature primarily provide?", opts: ["Confidentiality — ensuring only the recipient can read the message","Authentication and integrity — confirming who sent the message and that it was not altered","Compression — reducing message size before transmission","Anonymity — hiding the identity of the sender from all parties"], correct: 1, exp: "A digital signature provides Authentication (proof of sender identity) and Integrity (proof the message was not modified). It does NOT by itself provide confidentiality — the message content may still be readable." },
+      { q: "To create a digital signature, the sender encrypts the hash digest with:", opts: ["The sender's public key","The recipient's public key","The sender's private key","A shared symmetric key"], correct: 2, exp: "The sender encrypts the hash with their own private key. Because only the sender possesses their private key, this proves the signature originated from them." },
+      { q: "To verify a digital signature, the recipient uses:", opts: ["The recipient's own private key","The sender's private key","The sender's public key","The Certificate Authority's private key"], correct: 2, exp: "The recipient decrypts the signature using the sender's public key. If this reveals a hash matching their own re-computation of the message's hash, the signature is valid." },
+      { q: "What is the main purpose of a digital certificate?", opts: ["To encrypt all data transmitted between two parties using symmetric encryption","To bind a public key to a verified identity, with that binding signed by a trusted Certificate Authority","To securely store a user's private key in the cloud","To provide a shared symmetric key for bulk encryption of web traffic"], correct: 1, exp: "A digital certificate is issued by a CA and contains the owner's public key alongside their verified identity. The CA's signature on the certificate assures that the public key genuinely belongs to that identity." },
+      { q: "Which key does the Certificate Authority use to sign a digital certificate?", opts: ["The CA's public key","The applicant's public key","The applicant's private key","The CA's private key"], correct: 3, exp: "The CA signs by hashing the certificate contents then encrypting with the CA's own private key — creating a digital signature anyone can verify using the CA's public key." },
+      { q: "How does a browser verify a digital certificate received from a web server?", opts: ["It decrypts the CA's signature using the CA's public key, recovers the hash, re-hashes the certificate contents, and checks they match","It sends the certificate back to the server and asks for confirmation","It uses the server's private key to decrypt the certificate contents","It contacts the CA directly to ask whether the certificate is genuine"], correct: 0, exp: "Browsers come pre-installed with trusted CA public keys. The browser decrypts the CA's signature using PubCA to recover the original hash, then re-hashes the certificate contents independently. A match confirms the certificate is authentic." }
     ];
 
     let QS = { qs:[], idx:0, ok:0, err:0, answered:false, sel:null };

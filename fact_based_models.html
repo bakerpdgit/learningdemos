@@ -4,21 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Graph Schema Editor — AQA Computer Science</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <style>
       :root {
-        --bg: #1b1e2e;
-        --panel: #242840;
-        --surface: #2c3255;
-        --border: #3a4068;
-        --accent: #7c6ff7;
-        --accent2: #a78bfa;
+        --bg: #f3f6fb;
+        --panel: #ffffff;
+        --surface: #f1f5f9;
+        --border: #e2e8f0;
+        --accent: #6366f1;
+        --accent2: #8b5cf6;
         --success: #22c55e;
         --danger: #ef4444;
-        --warn: #f59e0b;
-        --text: #e2e4f0;
-        --dim: #8590b8;
-        --canvas-bg: #f7f8fe;
-        --dot: #cdd0e3;
+        --warn: #d97706;
+        --text: #1e293b;
+        --dim: #64748b;
+        --canvas-bg: #ffffff;
+        --dot: #e2e8f0;
         --oval-bg: #fff;
         --oval-bd: #374151;
         --oval-new-bg: #f0fdf4;
@@ -29,6 +40,19 @@
         --rect-new-bd: #16a34a;
         --edge: #1e293b;
         --edge-new: #16a34a;
+      }
+      html.dark {
+        --bg: #1b1e2e;
+        --panel: #242840;
+        --surface: #2c3255;
+        --border: #3a4068;
+        --accent: #7c6ff7;
+        --accent2: #a78bfa;
+        --warn: #f59e0b;
+        --text: #e2e4f0;
+        --dim: #8590b8;
+        --canvas-bg: #f7f8fe;
+        --dot: #cdd0e3;
       }
       * {
         box-sizing: border-box;
@@ -48,38 +72,34 @@
 
       /* HEADER */
       .hdr {
-        background: var(--panel);
-        border-bottom: 1px solid var(--border);
-        padding: 0 1rem;
-        height: 48px;
+        background: #0f172a;
+        border-bottom: none;
+        padding: 0 1.5rem;
+        height: 58px;
         display: flex;
         align-items: center;
         gap: 0.75rem;
         flex-shrink: 0;
         z-index: 100;
       }
-      .hdr-back {
-        color: var(--dim);
-        text-decoration: none;
-        font-size: 0.78rem;
-        padding: 3px 9px;
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        transition: 0.15s;
+      .hdr-brand {
+        color: #38bdf8;
+        font-weight: 700;
+        font-size: 1.1rem;
+        letter-spacing: -0.01em;
       }
-      .hdr-back:hover {
-        color: var(--text);
-        border-color: var(--accent);
+      #theme-toggle {
+        margin-left: auto;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 6px;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
       }
-      .hdr h1 {
-        flex: 1;
-        font-size: 1rem;
-        font-weight: 600;
-        background: linear-gradient(120deg, var(--accent), var(--accent2));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
+      #theme-toggle:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; }
       .q-wrap {
         display: flex;
         align-items: center;
@@ -141,8 +161,9 @@
       }
       .btn:hover {
         border-color: var(--accent2);
-        background: #323868;
+        background: #e0e7ff;
       }
+      html.dark .btn:hover { background: #323868; }
       .btn.on {
         background: var(--accent);
         border-color: var(--accent);
@@ -263,7 +284,7 @@
       .cw {
         flex: 1;
         overflow: auto;
-        background: #d8dced;
+        background: #dce3ef;
         display: flex;
         align-items: flex-start;
         justify-content: center;
@@ -532,17 +553,55 @@
         background: var(--border);
         border-radius: 3px;
       }
+      html.dark .cw { background: #d8dced; }
     </style>
-  </head>
+      <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        corePlugins: { preflight: false },
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+</head>
   <body>
-    <header class="hdr">
-      <a href="index.html" class="hdr-back">← Home</a>
-      <h1>Graph Schema Editor</h1>
-      <div class="q-wrap">
-        <label for="qsel">Question:</label>
-        <select id="qsel" onchange="loadQ(+this.value)"></select>
-      </div>
-    </header>
+    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
+  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
+    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
+  </a>
+  <nav class="flex items-center gap-6">
+    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
+    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
+      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </nav>
+</header>
 
     <div class="tb">
       <button
@@ -1608,6 +1667,26 @@
         el.textContent = msg;
         el.className = "sm " + (type || "info");
       }
+
+      function applyTheme(mode) {
+        const html = document.documentElement;
+        const sun = document.getElementById('icon-sun');
+        const moon = document.getElementById('icon-moon');
+        if (mode === 'dark') {
+          html.classList.add('dark');
+          if (sun) sun.style.display = 'block';
+          if (moon) moon.style.display = 'none';
+        } else {
+          html.classList.remove('dark');
+          if (sun) sun.style.display = 'none';
+          if (moon) moon.style.display = 'block';
+        }
+        try { localStorage.setItem('uimode', mode); } catch(e) {}
+      }
+      (function() {
+        const m = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        applyTheme(m);
+      })();
     </script>
   </body>
 </html>

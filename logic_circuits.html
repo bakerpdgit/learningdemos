@@ -4,11 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA Logic Circuits &amp; Truth Tables</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
     />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
     <script
       src="https://unpkg.com/react@18/umd/react.production.min.js"
       crossorigin
@@ -20,27 +44,29 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <style>
-      .global-home-link {
-        display: inline-block;
-        margin: 0.75rem 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: inherit;
-        opacity: 0.8;
-        text-decoration: none;
-      }
-      .global-home-link:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
+      body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
     </style>
-  </head>
-  <body class="bg-slate-50">
-    <a class="global-home-link" href="index.html"
-      >&larr; Back to Learning Demos</a
-    >
+      <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+</head>
+  <body>
     <div id="root"></div>
     <script type="text/babel">
-      const { useState, useEffect, useRef, useCallback, useMemo } = React;
+      const { useState, useEffect, useRef, useCallback, useMemo, useContext, createContext } = React;
+
+      const ThemeContext = createContext(false);
 
       // ── Boolean expression engine ──────────────────────────────────────
 
@@ -1225,28 +1251,12 @@
 
       function Fb({ ok, msg, showSolBtn, onShowSol }) {
         return (
-          <div
-            style={{
-              marginTop: 10,
-              padding: "10px 14px",
-              borderRadius: 8,
-              background: ok ? "#f0fdf4" : "#fef2f2",
-              border: `1px solid ${ok ? "#86efac" : "#fca5a5"}`,
-              color: ok ? "#166534" : "#991b1b",
-              fontWeight: 600,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              {ok ? "✓ " : "✗ "}
-              {msg}
-            </div>
+          <div className={`mt-2 p-3 rounded border flex justify-between items-center font-semibold ${ok ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300" : "bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300"}`}>
+            <div>{ok ? "✓ " : "✗ "}{msg}</div>
             {showSolBtn && !ok && (
               <button
                 onClick={onShowSol}
-                className="ml-4 bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1 rounded text-sm border border-red-300 transition"
+                className="ml-4 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-800 dark:text-red-300 px-3 py-1 rounded text-sm border border-red-300 dark:border-red-700 transition"
               >
                 Show Solution
               </button>
@@ -1358,7 +1368,7 @@
                 dangerouslySetInnerHTML={{ __html: rk(`Q = ${toLaTeX(expr)}`) }}
               />
             </div>
-            <p className="text-slate-600 text-sm mb-3">
+            <p className="text-slate-600 dark:text-slate-300 text-sm mb-3">
               Add gates from the palette. Click an output dot to start a wire,
               then click an input dot to complete it. Click any wire to delete
               it. Drag gates to reposition. Press Delete to remove the selected
@@ -1482,7 +1492,7 @@
 
         return (
           <div>
-            <p className="text-slate-700 font-semibold mb-2">
+            <p className="text-slate-700 dark:text-slate-200 font-semibold mb-2">
               Study the logic circuit below, then write a Boolean expression for
               Q.
             </p>
@@ -1920,6 +1930,7 @@
       // ── Topic D: Truth table ──────────────────────────────────────────
 
       function TopicD() {
+        const isDark = useContext(ThemeContext);
         const [circ, setCirc] = useState(null);
         const [tt, setTT] = useState(null);
         const [cells, setCells] = useState({});
@@ -1982,7 +1993,7 @@
 
         return (
           <div>
-            <p className="text-slate-700 font-semibold mb-2">
+            <p className="text-slate-700 dark:text-slate-200 font-semibold mb-2">
               Study the logic circuit, then complete the truth table. Only the Q
               (shaded) column is marked — use the working columns however you
               like.
@@ -2009,10 +2020,11 @@
                       <th
                         key={l}
                         style={{
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${isDark ? "#475569" : "#cbd5e1"}`,
                           padding: "6px 12px",
-                          background: "#f1f5f9",
+                          background: isDark ? "#334155" : "#f1f5f9",
                           fontWeight: 700,
+                          color: isDark ? "#e2e8f0" : undefined,
                         }}
                       >
                         {l}
@@ -2022,11 +2034,12 @@
                       <th
                         key={wl}
                         style={{
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${isDark ? "#475569" : "#cbd5e1"}`,
                           padding: "5px 6px",
-                          background: "#f8fafc",
+                          background: isDark ? "#1e293b" : "#f8fafc",
                           verticalAlign: "top",
                           minWidth: 96,
+                          color: isDark ? "#e2e8f0" : undefined,
                         }}
                       >
                         <WkgHeader
@@ -2038,12 +2051,13 @@
                     ))}
                     <th
                       style={{
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${isDark ? "#475569" : "#cbd5e1"}`,
                         padding: "6px 12px",
-                        background: "#dbeafe",
+                        background: isDark ? "#1e3a5f" : "#dbeafe",
                         fontWeight: 800,
                         fontSize: 15,
                         minWidth: 58,
+                        color: isDark ? "#93c5fd" : undefined,
                       }}
                     >
                       Q
@@ -2054,17 +2068,18 @@
                   {rows.map((row, ri) => (
                     <tr
                       key={ri}
-                      style={{ background: ri % 2 === 0 ? "#fff" : "#f8fafc" }}
+                      style={{ background: isDark ? (ri % 2 === 0 ? "#1e293b" : "#0f172a") : (ri % 2 === 0 ? "#fff" : "#f8fafc") }}
                     >
                       {["A", "B", "C"].map((l) => (
                         <td
                           key={l}
                           style={{
-                            border: "1px solid #cbd5e1",
+                            border: `1px solid ${isDark ? "#475569" : "#cbd5e1"}`,
                             padding: "6px 12px",
                             textAlign: "center",
                             fontFamily: "monospace",
                             fontWeight: 600,
+                            color: isDark ? "#e2e8f0" : undefined,
                           }}
                         >
                           {row[l]}
@@ -2074,7 +2089,7 @@
                         <td
                           key={wl}
                           style={{
-                            border: "1px solid #cbd5e1",
+                            border: `1px solid ${isDark ? "#475569" : "#cbd5e1"}`,
                             padding: "4px 6px",
                             textAlign: "center",
                           }}
@@ -2091,22 +2106,24 @@
                             style={{
                               width: 34,
                               textAlign: "center",
-                              border: "1px solid #cbd5e1",
+                              border: `1px solid ${isDark ? "#475569" : "#cbd5e1"}`,
                               borderRadius: 4,
                               padding: "4px 0",
                               fontFamily: "monospace",
                               fontWeight: 700,
                               fontSize: 14,
+                              background: isDark ? "#334155" : undefined,
+                              color: isDark ? "#e2e8f0" : undefined,
                             }}
                           />
                         </td>
                       ))}
                       <td
                         style={{
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${isDark ? "#475569" : "#cbd5e1"}`,
                           padding: "4px 6px",
                           textAlign: "center",
-                          background: "#dbeafe",
+                          background: isDark ? "#1e3a5f" : "#dbeafe",
                         }}
                       >
                         <input
@@ -2121,13 +2138,14 @@
                           style={{
                             width: 36,
                             textAlign: "center",
-                            border: "2px solid #93c5fd",
+                            border: `2px solid ${isDark ? "#60a5fa" : "#93c5fd"}`,
                             borderRadius: 5,
                             padding: "4px 0",
                             fontFamily: "monospace",
                             fontWeight: 800,
                             fontSize: 15,
-                            background: "#eff6ff",
+                            background: isDark ? "#1e3a5f" : "#eff6ff",
+                            color: isDark ? "#93c5fd" : undefined,
                           }}
                         />
                       </td>
@@ -2223,21 +2241,21 @@
         const parts = prompt.split(`[${first}]_____`);
 
         return (
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">
               Theory Question
             </h3>
-            <p className="text-slate-700 leading-relaxed text-lg mb-6">
+            <p className="text-slate-700 dark:text-slate-200 leading-relaxed text-lg mb-6">
               {parts[0]}
-              <span className="inline-flex items-center mx-1 bg-slate-100 rounded border border-slate-300 overflow-hidden">
-                <span className="px-2 py-1 bg-slate-200 text-slate-600 font-bold border-r border-slate-300">
+              <span className="inline-flex items-center mx-1 bg-slate-100 dark:bg-slate-700 rounded border border-slate-300 dark:border-slate-500 overflow-hidden">
+                <span className="px-2 py-1 bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 font-bold border-r border-slate-300 dark:border-slate-500">
                   {first}
                 </span>
                 <input
                   type="text"
                   value={val}
                   onChange={(e) => setVal(e.target.value)}
-                  className="w-24 px-2 py-1 outline-none text-blue-700 font-bold"
+                  className="w-24 px-2 py-1 outline-none text-blue-700 dark:text-blue-300 bg-transparent font-bold"
                   autoFocus
                 />
               </span>
@@ -2340,22 +2358,22 @@
         };
 
         return (
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center">
-            <h3 className="text-lg font-bold text-slate-800 mb-2 w-full">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col items-center">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 w-full">
               Interactive Simulation: Black Box
             </h3>
-            <p className="text-slate-600 mb-6 w-full">
+            <p className="text-slate-600 dark:text-slate-300 mb-6 w-full">
               Follow the simulation steps. At each step, predict what the output{" "}
               <strong>Q</strong> will be based on the inputs <strong>D</strong>{" "}
               and <strong>Clock</strong>. Click the Q output terminal to toggle
               its state.
             </p>
 
-            <div className="bg-slate-100 border border-slate-300 rounded p-4 mb-6 w-full max-w-md text-center">
-              <div className="text-sm text-slate-500 uppercase font-bold tracking-wider mb-1">
+            <div className="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded p-4 mb-6 w-full max-w-md text-center">
+              <div className="text-sm text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider mb-1">
                 Step {Math.min(step + 1, fullSeq.length)} of {fullSeq.length}
               </div>
-              <div className="text-lg text-blue-900 font-medium">
+              <div className="text-lg text-blue-900 dark:text-blue-300 font-medium">
                 {current?.msg}
               </div>
             </div>
@@ -2657,11 +2675,11 @@
         );
 
         return (
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-2">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
               Interactive Simulation: Timing Diagram
             </h3>
-            <p className="text-slate-600 mb-6">
+            <p className="text-slate-600 dark:text-slate-300 mb-6">
               Complete the timing diagram for the output <strong>Q</strong>.
               Click on the grid segments in the Q row to toggle the signal HIGH
               (1) or LOW (0) over time.
@@ -2672,7 +2690,7 @@
                 width="600"
                 height="240"
                 viewBox="0 0 600 240"
-                className="mx-auto block bg-slate-50 border border-slate-200"
+                className="mx-auto block bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
               >
                 {/* Grid Lines */}
                 {Array.from({ length: 17 }).map((_, i) => (
@@ -2817,10 +2835,10 @@
         return (
           <div>
             <div className="flex justify-between items-end mb-4">
-              <h2 className="text-xl font-bold text-slate-800">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
                 D-Type Flip-Flop
               </h2>
-              <div className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+              <div className="text-sm font-semibold text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800">
                 Questions left in sequence: {remaining}
               </div>
             </div>
@@ -2845,6 +2863,17 @@
 
       // ── Main App ──────────────────────────────────────────────────────
 
+      const SunIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      );
+      const MoonIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+        </svg>
+      );
+
       const TOPICS = {
         build: "Build Circuit from Expression",
         read: "Read Circuit → Write Expression",
@@ -2854,6 +2883,19 @@
       };
 
       function App() {
+        const [isDark, setIsDark] = useState(() => {
+          try {
+            const stored = localStorage.getItem("uimode");
+            if (stored) return stored === "dark";
+            return window.matchMedia("(prefers-color-scheme: dark)").matches;
+          } catch(e) { return false; }
+        });
+
+        useEffect(() => {
+          document.documentElement.classList.toggle("dark", isDark);
+          try { localStorage.setItem("uimode", isDark ? "dark" : "light"); } catch(e) {}
+        }, [isDark]);
+
         const [active, setActive] = useState(Object.keys(TOPICS));
         const [showMenu, setShowMenu] = useState(false);
         const [topic, setTopic] = useState("dtype");
@@ -2887,21 +2929,55 @@
         );
 
         return (
-          <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-12">
-            <header className="bg-blue-700 text-white p-4 shadow-md relative z-20">
+          <ThemeContext.Provider value={isDark}>
+          <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans pb-12">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={() => setIsDark(d => !d)}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {isDark ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+            <header className="bg-blue-700 dark:bg-slate-800 border-b dark:border-slate-700 text-white p-4 shadow-md relative z-20">
               <div className="max-w-5xl mx-auto flex justify-between items-center">
                 <div>
                   <h1 className="text-xl font-bold">
                     AQA Logic Circuits &amp; Truth Tables
                   </h1>
-                  <p className="text-sm text-blue-100">
+                  <p className="text-sm text-blue-100 dark:text-slate-400">
                     Interactive Circuit Design, Gate Analysis &amp; Truth Tables
                   </p>
                 </div>
                 <div className="relative" ref={menuRef}>
                   <button
                     onClick={() => setShowMenu(!showMenu)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded transition"
+                    className="flex items-center gap-2 bg-blue-600 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-slate-600 px-4 py-2 rounded transition"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -2929,14 +3005,14 @@
                     </svg>
                   </button>
                   {showMenu && (
-                    <div className="absolute right-0 mt-2 w-72 bg-white rounded shadow-xl text-slate-800 p-3 border border-slate-200 z-50">
-                      <h3 className="font-bold text-sm mb-2 border-b pb-1">
+                    <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-700 rounded shadow-xl text-slate-800 dark:text-slate-200 p-3 border border-slate-200 dark:border-slate-600 z-50">
+                      <h3 className="font-bold text-sm mb-2 border-b dark:border-slate-600 pb-1">
                         Filter Topics
                       </h3>
                       {Object.entries(TOPICS).map(([k, l]) => (
                         <label
                           key={k}
-                          className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 rounded px-1"
+                          className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-600 rounded px-1"
                         >
                           <input
                             type="checkbox"
@@ -2966,18 +3042,18 @@
 
             <main className="max-w-5xl mx-auto p-4 mt-6">
               {!active.length ? (
-                <div className="text-center p-12 bg-white rounded-xl shadow border">
-                  <h2 className="text-2xl font-bold text-slate-700 mb-2">
+                <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl shadow border dark:border-slate-700">
+                  <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">
                     No Topics Selected
                   </h2>
-                  <p className="text-slate-500">
+                  <p className="text-slate-500 dark:text-slate-400">
                     Open the settings menu in the top right to select
                     sub-topics.
                   </p>
                 </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="bg-slate-100 border-b border-slate-200 px-4 pt-3 flex gap-1 flex-wrap">
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="bg-slate-100 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600 px-4 pt-3 flex gap-1 flex-wrap">
                     {activeTabs.map(([k, l]) => (
                       <button
                         key={k}
@@ -3025,6 +3101,7 @@
               )}
             </main>
           </div>
+          </ThemeContext.Provider>
         );
       }
 

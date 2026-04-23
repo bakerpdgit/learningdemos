@@ -5,14 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AQA A Level CS: Advanced LAN & TCP/IP Simulator</title>
 
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
     <!-- React & ReactDOM -->
     <script
       crossorigin
-      src="https://unpkg.com/react@18/umd/react.development.js"
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
     ></script>
     <script
       crossorigin
-      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
     ></script>
 
     <!-- Babel for JSX -->
@@ -20,6 +32,19 @@
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
 
     <!-- Custom basic styles for animation and scrollbars -->
     <style>
@@ -107,6 +132,21 @@
         background: rgba(15, 23, 42, 0.5);
       }
     </style>
+
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
@@ -742,7 +782,14 @@
             reply.transportLayer = { ...p.transportLayer };
           } else if (p.appLayer.protocol === "HTTP") {
             reply.appLayer = { protocol: "HTTP", method: "RESPONSE" };
-            reply.payload = `HTTP 200 OK\n\n<html>\n  <body>\n    <h1>Hello from ${node.name}</h1>\n  </body>\n</html>`;
+            const htmlResponseLines = [
+              "<html>",
+              "  <body>",
+              `    <h1>Hello from ${node.name}</h1>`,
+              "  </" + "body>",
+              "</" + "html>",
+            ];
+            reply.payload = `HTTP 200 OK\n\n${htmlResponseLines.join("\n")}`;
             reply.transportLayer = {
               protocol: "TCP",
               srcPort: 80,
@@ -913,6 +960,14 @@
         const [isPlaying, setIsPlaying] = useState(false);
         const [selectedEntity, setSelectedEntity] = useState(null); // { type: 'NODE'|'PACKET', id: string }
         const [speed, setSpeed] = useState(2); // Progress increment per frame
+        const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+        const toggleTheme = () => {
+          const next = !isDark;
+          setIsDark(next);
+          document.documentElement.classList.toggle("dark", next);
+          try { localStorage.setItem("uimode", next ? "dark" : "light"); } catch (e) {}
+        };
 
         const reqRef = useRef();
 
@@ -1167,39 +1222,64 @@
 
         return (
           <div className="flex flex-col h-screen overflow-hidden">
-            {/* Header */}
-            <header className="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center shadow-md z-10">
-              <div>
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <Icons.Router /> LAN & WAN Simulator
-                </h1>
-                <p className="text-slate-400 text-sm mt-1">
-                  AQA A Level Computer Science - Interactive Protocol Tracker
-                </p>
-              </div>
-              <div className="flex gap-4 items-center bg-slate-900 p-2 rounded-lg border border-slate-700">
+            {/* CS Learning Header */}
+            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+              <a
+                href="index.html"
+                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+              >
+                <span className="text-slate-500">&lt;</span>CS
+                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+              </a>
+              <nav className="flex items-center gap-6">
+                <a
+                  href="index.html"
+                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                >
+                  Home
+                </a>
+                <button
+                  onClick={toggleTheme}
+                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {isDark ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </nav>
+            </header>
+
+            {/* Simulation Controls Sub-header */}
+            <div className="bg-slate-800 border-b border-slate-700 px-6 py-2 flex items-center gap-4 shrink-0 z-40">
+              <span className="text-slate-300 text-sm font-semibold flex items-center gap-1">
+                <Icons.Router /> LAN &amp; WAN Simulator
+              </span>
+              <div className="flex gap-3 items-center ml-auto">
                 <button
                   onClick={handlePlayToggle}
-                  className={`flex items-center gap-1 px-4 py-2 rounded font-semibold transition ${isPlaying ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-green-600 hover:bg-green-500 text-white"}`}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded font-semibold text-sm transition ${isPlaying ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-green-600 hover:bg-green-500 text-white"}`}
                 >
                   {isPlaying ? (
-                    <>
-                      <Icons.Pause /> Pause
-                    </>
+                    <><Icons.Pause /> Pause</>
                   ) : (
-                    <>
-                      <Icons.Play /> Play
-                    </>
+                    <><Icons.Play /> Play</>
                   )}
                 </button>
                 <button
                   onClick={manualStep}
                   disabled={isPlaying}
-                  className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold disabled:opacity-50 transition"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold text-sm disabled:opacity-50 transition"
                 >
                   <Icons.StepForward /> Step Forward
                 </button>
-                <div className="flex items-center gap-2 text-sm text-slate-300 ml-4 border-l border-slate-700 pl-4">
+                <div className="flex items-center gap-2 text-sm text-slate-300 border-l border-slate-700 pl-4">
                   <span>Speed:</span>
                   <input
                     type="range"
@@ -1212,7 +1292,7 @@
                   />
                 </div>
               </div>
-            </header>
+            </div>
 
             {/* Main Content */}
             <div className="flex flex-1 overflow-hidden">
