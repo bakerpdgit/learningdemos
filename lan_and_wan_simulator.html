@@ -50,24 +50,37 @@
     <style>
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #0f172a;
-        color: #e2e8f0;
+        background-color: #f8fafc;
+        color: #0f172a;
         margin: 0;
         padding: 0;
         overflow: hidden;
+      }
+      html.dark body {
+        background-color: #0f172a;
+        color: #e2e8f0;
       }
       ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #1e293b;
+        background: #e2e8f0;
       }
       ::-webkit-scrollbar-thumb {
-        background: #475569;
+        background: #94a3b8;
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+      html.dark ::-webkit-scrollbar-track {
+        background: #1e293b;
+      }
+      html.dark ::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
+      html.dark ::-webkit-scrollbar-thumb:hover {
         background: #64748b;
       }
       .blinking {
@@ -125,10 +138,16 @@
         width: 6px;
       }
       .payload-scroll::-webkit-scrollbar-thumb {
-        background: #475569;
+        background: #94a3b8;
         border-radius: 3px;
       }
       .payload-scroll::-webkit-scrollbar-track {
+        background: rgba(226, 232, 240, 0.5);
+      }
+      html.dark .payload-scroll::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
+      html.dark .payload-scroll::-webkit-scrollbar-track {
         background: rgba(15, 23, 42, 0.5);
       }
     </style>
@@ -166,6 +185,7 @@
         "192.168.1.1": "AA:AA:AA:AA:AA:01",
         "192.168.2.2": "02:02:02:02:02:01",
         "192.168.2.3": "02:02:02:02:02:02",
+        "192.168.2.4": "02:02:02:02:02:04",
         "192.168.2.1": "BB:BB:BB:BB:BB:01",
         "10.0.0.1": "AA:AA:AA:AA:AA:02",
         "10.0.0.2": "BB:BB:BB:BB:BB:02",
@@ -180,6 +200,7 @@
         "AA:AA:AA:AA:AA:01": "RT_A",
         "02:02:02:02:02:01": "PC2",
         "02:02:02:02:02:02": "PC3",
+        "02:02:02:02:02:04": "LAP_B",
         "BB:BB:BB:BB:BB:01": "RT_B",
         "AA:AA:AA:AA:AA:02": "RT_A",
         "BB:BB:BB:BB:BB:02": "RT_B",
@@ -306,6 +327,26 @@
           x: 750,
           y: 450,
         },
+        WAP_B: {
+          id: "WAP_B",
+          type: "WAP",
+          name: "Subnet B WAP",
+          x: 920,
+          y: 470,
+        },
+        LAP_B: {
+          id: "LAP_B",
+          type: "Laptop",
+          name: "Client Laptop 1",
+          ip: "192.168.2.4",
+          mac: "02:02:02:02:02:04",
+          gw: "192.168.2.1",
+          subnet: "255.255.255.0",
+          switch: "WAP_B",
+          x: 980,
+          y: 620,
+          browserOutput: "",
+        },
         RT_B: {
           id: "RT_B",
           type: "Router",
@@ -428,6 +469,8 @@
         { id: "L8", source: "SW_B", target: "RT_B" },
         { id: "L9", source: "PC2", target: "SW_B" },
         { id: "L10", source: "PC3", target: "SW_B" },
+        { id: "L11", source: "SW_B", target: "WAP_B" },
+        { id: "L12", source: "WAP_B", target: "LAP_B", wireless: true },
       ];
 
       // ==========================================
@@ -510,12 +553,20 @@
         }
 
         static processSwitch(p, node) {
-          const destNodeId = MAC_NODE_TABLE[p.linkLayer.dstMAC];
+          let destNodeId = MAC_NODE_TABLE[p.linkLayer.dstMAC];
           if (!destNodeId)
             return {
               action: "DROP",
               reason: `Switch ${node.name} dropped packet: Unknown MAC address ${p.linkLayer.dstMAC}`,
             };
+
+          // If the destination is reachable via another L2 device (e.g. a WAP
+          // bridging the wireless segment), hop to that device first instead of
+          // teleporting directly to the endpoint.
+          const destNode = INITIAL_NODES[destNodeId];
+          if (destNode && destNode.switch && destNode.switch !== node.id) {
+            destNodeId = destNode.switch;
+          }
 
           return {
             action: "FORWARD",
@@ -886,6 +937,37 @@
             <polygon points="18 12 15 9 15 15" fill="currentColor"></polygon>
           </svg>
         ),
+        WAP: () => (
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M5 12a10 10 0 0 1 14 0"></path>
+            <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
+            <circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"></circle>
+          </svg>
+        ),
+        Laptop: () => (
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="4" y="5" width="16" height="11" rx="1.5" ry="1.5"></rect>
+            <line x1="2" y1="19" x2="22" y2="19"></line>
+          </svg>
+        ),
         Packet: ({ color = "#f59e0b" }) => (
           <svg
             width="24"
@@ -1002,7 +1084,7 @@
 
                 addLocalLog(`Processing packet at ${activeNode.name}...`);
 
-                if (activeNode.type === "Switch")
+                if (activeNode.type === "Switch" || activeNode.type === "WAP")
                   result = NetworkEngine.processSwitch(p, activeNode);
                 else if (activeNode.type === "Router")
                   result = NetworkEngine.processRouter(p, activeNode);
@@ -1223,24 +1305,24 @@
         return (
           <div className="flex flex-col h-screen overflow-hidden">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
+            <header className="bg-white dark:bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 border-b border-slate-200 dark:border-transparent">
               <a
                 href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
+                className="font-mono text-[1.2rem] font-bold text-sky-700 dark:text-headerAccent tracking-widest no-underline"
               >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
+                <span className="text-slate-400 dark:text-slate-500">&lt;</span>CS
+                <span className="text-slate-400 dark:text-slate-500">&gt;</span>&nbsp;Learning
               </a>
               <nav className="flex items-center gap-6">
                 <a
                   href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
+                  className="text-slate-600 dark:text-slate-400 hover:text-sky-700 dark:hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
                 >
                   Home
                 </a>
                 <button
                   onClick={toggleTheme}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
+                  className="text-slate-600 dark:text-slate-400 hover:text-sky-700 dark:hover:text-headerAccent transition-colors p-1"
                   aria-label="Toggle Dark Mode"
                 >
                   {isDark ? (
@@ -1257,8 +1339,8 @@
             </header>
 
             {/* Simulation Controls Sub-header */}
-            <div className="bg-slate-800 border-b border-slate-700 px-6 py-2 flex items-center gap-4 shrink-0 z-40">
-              <span className="text-slate-300 text-sm font-semibold flex items-center gap-1">
+            <div className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700 px-6 py-2 flex items-center gap-4 shrink-0 z-40">
+              <span className="text-slate-700 dark:text-slate-300 text-sm font-semibold flex items-center gap-1">
                 <Icons.Router /> LAN &amp; WAN Simulator
               </span>
               <div className="flex gap-3 items-center ml-auto">
@@ -1279,7 +1361,7 @@
                 >
                   <Icons.StepForward /> Step Forward
                 </button>
-                <div className="flex items-center gap-2 text-sm text-slate-300 border-l border-slate-700 pl-4">
+                <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 border-l border-slate-300 dark:border-slate-700 pl-4">
                   <span>Speed:</span>
                   <input
                     type="range"
@@ -1297,13 +1379,13 @@
             {/* Main Content */}
             <div className="flex flex-1 overflow-hidden">
               {/* LEFT: Canvas & Logs */}
-              <div className="flex-1 flex flex-col relative bg-slate-900">
+              <div className="flex-1 flex flex-col relative bg-slate-100 dark:bg-slate-900">
                 {/* Canvas area */}
                 <div
                   className="flex-1 relative overflow-hidden"
                   style={{
                     backgroundImage:
-                      "radial-gradient(#334155 1px, transparent 1px)",
+                      `radial-gradient(${isDark ? "#334155" : "#cbd5e1"} 1px, transparent 1px)`,
                     backgroundSize: "30px 30px",
                   }}
                 >
@@ -1316,6 +1398,54 @@
                     {LINKS.map((link) => {
                       const n1 = nodes[link.source];
                       const n2 = nodes[link.target];
+                      if (link.wireless) {
+                        const stroke = isDark ? "#10b981" : "#047857";
+                        // Each fan emanates from its source toward its
+                        // target, sitting just outside the node circle
+                        // (node radius is 30) so the arcs stay visible.
+                        const fan = (src, tgt, k) => {
+                          const angleDeg =
+                            (Math.atan2(tgt.x - src.x, tgt.y - src.y) * 180) /
+                            Math.PI;
+                          return (
+                            <g
+                              key={k}
+                              transform={`translate(${src.x}, ${src.y}) rotate(${angleDeg})`}
+                            >
+                              <path
+                                d="M -31.82 31.82 A 45 45 0 0 0 31.82 31.82"
+                                fill="none"
+                                stroke={stroke}
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                opacity="0.95"
+                              />
+                              <path
+                                d="M -42.43 42.43 A 60 60 0 0 0 42.43 42.43"
+                                fill="none"
+                                stroke={stroke}
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                opacity="0.7"
+                              />
+                              <path
+                                d="M -53.03 53.03 A 75 75 0 0 0 53.03 53.03"
+                                fill="none"
+                                stroke={stroke}
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                opacity="0.45"
+                              />
+                            </g>
+                          );
+                        };
+                        return (
+                          <g key={link.id}>
+                            {fan(n1, n2, `${link.id}-a`)}
+                            {fan(n2, n1, `${link.id}-b`)}
+                          </g>
+                        );
+                      }
                       return (
                         <line
                           key={link.id}
@@ -1323,7 +1453,7 @@
                           y1={n1.y}
                           x2={n2.x}
                           y2={n2.y}
-                          stroke="#475569"
+                          stroke={isDark ? "#475569" : "#94a3b8"}
                           strokeWidth="4"
                           strokeDasharray="6,4"
                         />
@@ -1347,36 +1477,37 @@
                             cx="0"
                             cy="0"
                             r="30"
-                            fill="#1e293b"
-                            stroke={isSelected ? "#fff" : color}
+                            fill={isDark ? "#1e293b" : "#f8fafc"}
+                            stroke={isSelected ? (isDark ? "#fff" : "#0f172a") : color}
                             strokeWidth={isSelected ? 4 : 2}
                           />
                           <g
                             transform="translate(-20, -20)"
                             fill={color}
-                            className="text-white"
                           >
                             {node.type === "PC" && <Icons.PC />}
                             {node.type === "Server" && <Icons.Server />}
                             {node.type === "Switch" && <Icons.Switch />}
                             {node.type === "Router" && <Icons.Router />}
+                            {node.type === "WAP" && <Icons.WAP />}
+                            {node.type === "Laptop" && <Icons.Laptop />}
                           </g>
                           <text
                             x="0"
                             y="48"
                             textAnchor="middle"
-                            fill="#cbd5e1"
+                            fill={isDark ? "#cbd5e1" : "#1e293b"}
                             fontSize="14"
                             fontWeight="bold"
                           >
                             {node.name}
                           </text>
-                          {(node.type === "PC" || node.type === "Server") && (
+                          {(node.type === "PC" || node.type === "Server" || node.type === "Laptop") && (
                             <text
                               x="0"
                               y="66"
                               textAnchor="middle"
-                              fill="#94a3b8"
+                              fill={isDark ? "#94a3b8" : "#475569"}
                               fontSize="13"
                             >
                               {node.ip}
@@ -1424,7 +1555,7 @@
                               cx="0"
                               cy="0"
                               r="14"
-                              fill="#1e293b"
+                              fill={isDark ? "#1e293b" : "#fef2f2"}
                               stroke="#ef4444"
                               strokeWidth="2"
                             />
@@ -1465,7 +1596,7 @@
                             cy="0"
                             r="14"
                             fill="#f59e0b"
-                            stroke={isSelected ? "#fff" : "#b45309"}
+                            stroke={isSelected ? (isDark ? "#fff" : "#0f172a") : "#b45309"}
                             strokeWidth={isSelected ? 3 : 1}
                           />
                           <g transform="translate(-12, -12)">
@@ -1477,8 +1608,8 @@
                   </svg>
 
                   {/* Top-right Legend / Map info */}
-                  <div className="absolute top-4 left-4 bg-slate-800/80 p-3 rounded border border-slate-700 pointer-events-none">
-                    <h3 className="text-white font-bold mb-2">
+                  <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-800/80 p-3 rounded border border-slate-300 dark:border-slate-700 pointer-events-none text-slate-900 dark:text-slate-100">
+                    <h3 className="font-bold mb-2">
                       Network Legend
                     </h3>
                     <div className="flex flex-col gap-1 text-sm">
@@ -1494,20 +1625,28 @@
                         <div className="w-3 h-3 rounded-full bg-red-500"></div>{" "}
                         Internet/WAN
                       </div>
+                      <div className="flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isDark ? "#10b981" : "#047857"} strokeWidth="2.5" strokeLinecap="round">
+                          <path d="M5 12a10 10 0 0 1 14 0"></path>
+                          <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
+                          <circle cx="12" cy="19" r="1" fill={isDark ? "#10b981" : "#047857"} stroke="none"></circle>
+                        </svg>
+                        Wireless link
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Console Logs */}
-                <div className="h-48 bg-black border-t border-slate-700 flex flex-col font-mono text-sm">
-                  <div className="bg-slate-800 px-4 py-1 text-slate-300 font-semibold border-b border-slate-700">
+                <div className="h-48 bg-slate-50 dark:bg-black border-t border-slate-300 dark:border-slate-700 flex flex-col font-mono text-sm">
+                  <div className="bg-slate-200 dark:bg-slate-800 px-4 py-1 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-300 dark:border-slate-700">
                     Simulation Event Log
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
                     {logs.map((log) => (
                       <div
                         key={log.id}
-                        className={`flex gap-3 ${log.type === "error" ? "text-red-400" : log.type === "success" ? "text-green-400" : "text-slate-300"}`}
+                        className={`flex gap-3 ${log.type === "error" ? "text-red-700 dark:text-red-400" : log.type === "success" ? "text-green-700 dark:text-green-400" : "text-slate-700 dark:text-slate-300"}`}
                       >
                         <span className="text-slate-500">[{log.time}]</span>
                         <span>{log.msg}</span>
@@ -1518,11 +1657,11 @@
               </div>
 
               {/* RIGHT: Inspector Panel */}
-              <div className="w-96 bg-slate-800 border-l border-slate-700 flex flex-col">
+              <div className="w-96 bg-slate-100 dark:bg-slate-800 border-l border-slate-300 dark:border-slate-700 flex flex-col">
                 {!selectedEntity ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-8 text-center">
                     <Icons.Router />
-                    <h2 className="text-xl mt-4 font-bold text-slate-300">
+                    <h2 className="text-xl mt-4 font-bold text-slate-700 dark:text-slate-300">
                       Inspector
                     </h2>
                     <p className="mt-2 text-sm">
@@ -1554,12 +1693,15 @@
         const [pingTarget, setPingTarget] = useState("192.168.2.2");
         const [httpTarget, setHttpTarget] = useState("203.0.113.50");
 
-        const hasBrowser = node.type === "PC" || node.type === "Server";
+        const hasBrowser =
+          node.type === "PC" ||
+          node.type === "Server" ||
+          node.type === "Laptop";
 
         return (
           <div className="flex flex-col h-full">
             <div
-              className="p-4 border-b border-slate-700"
+              className="p-4 border-b border-slate-300 dark:border-slate-700"
               style={{ borderTop: `4px solid ${color}` }}
             >
               <div className="flex items-center gap-3">
@@ -1568,25 +1710,27 @@
                   {node.type === "Server" && <Icons.Server />}
                   {node.type === "Switch" && <Icons.Switch />}
                   {node.type === "Router" && <Icons.Router />}
+                  {node.type === "WAP" && <Icons.WAP />}
+                  {node.type === "Laptop" && <Icons.Laptop />}
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white">{node.name}</h2>
-                  <p className="text-sm text-slate-400">{node.type}</p>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">{node.name}</h2>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{node.type}</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex border-b border-slate-700 text-sm font-semibold">
+            <div className="flex border-b border-slate-300 dark:border-slate-700 text-sm font-semibold">
               <button
                 onClick={() => setTab("INFO")}
-                className={`flex-1 py-2 ${tab === "INFO" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-750"}`}
+                className={`flex-1 py-2 ${tab === "INFO" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
               >
                 Info
               </button>
               {hasBrowser && (
                 <button
                   onClick={() => setTab("PING")}
-                  className={`flex-1 py-2 ${tab === "PING" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-750"}`}
+                  className={`flex-1 py-2 ${tab === "PING" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
                 >
                   Ping
                 </button>
@@ -1594,7 +1738,7 @@
               {hasBrowser && (
                 <button
                   onClick={() => setTab("HTTP")}
-                  className={`flex-1 py-2 ${tab === "HTTP" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-750"}`}
+                  className={`flex-1 py-2 ${tab === "HTTP" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
                 >
                   HTTP
                 </button>
@@ -1602,7 +1746,7 @@
               {hasBrowser && (
                 <button
                   onClick={() => setTab("BROWSER")}
-                  className={`flex-1 py-2 ${tab === "BROWSER" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-750"}`}
+                  className={`flex-1 py-2 ${tab === "BROWSER" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
                 >
                   Browser
                 </button>
@@ -1613,25 +1757,25 @@
               {tab === "INFO" && (
                 <div className="flex flex-col gap-4 text-sm">
                   {node.ip && (
-                    <div className="bg-slate-900 p-3 rounded border border-slate-700">
+                    <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700">
                       <div className="text-slate-500 mb-1 font-semibold text-xs uppercase">
                         Network Configuration
                       </div>
                       <div className="grid grid-cols-[80px_1fr] gap-1">
-                        <span className="text-slate-400">IP:</span>
-                        <span className="font-mono text-blue-300">
+                        <span className="text-slate-600 dark:text-slate-400">IP:</span>
+                        <span className="font-mono text-blue-700 dark:text-blue-300">
                           {node.ip}
                         </span>
-                        <span className="text-slate-400">Mask:</span>
-                        <span className="font-mono text-slate-300">
+                        <span className="text-slate-600 dark:text-slate-400">Mask:</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.subnet}
                         </span>
-                        <span className="text-slate-400">Gateway:</span>
-                        <span className="font-mono text-slate-300">
+                        <span className="text-slate-600 dark:text-slate-400">Gateway:</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.gw}
                         </span>
-                        <span className="text-slate-400">MAC:</span>
-                        <span className="font-mono text-slate-300">
+                        <span className="text-slate-600 dark:text-slate-400">MAC:</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.mac}
                         </span>
                       </div>
@@ -1640,16 +1784,16 @@
 
                   {node.type === "Router" && (
                     <>
-                      <div className="bg-slate-900 p-3 rounded border border-slate-700">
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700">
                         <div className="text-slate-500 mb-2 font-semibold text-xs uppercase">
                           Interfaces
                         </div>
                         {node.interfaces.map((iface, i) => (
                           <div
                             key={i}
-                            className="mb-2 last:mb-0 border-b border-slate-800 pb-2 last:border-0 last:pb-0"
+                            className="mb-2 last:mb-0 border-b border-slate-200 dark:border-slate-800 pb-2 last:border-0 last:pb-0"
                           >
-                            <div className="font-bold text-slate-300">
+                            <div className="font-bold text-slate-700 dark:text-slate-300">
                               {iface.name}
                             </div>
                             <div className="grid grid-cols-[40px_1fr] gap-x-1 text-xs mt-1">
@@ -1661,13 +1805,13 @@
                           </div>
                         ))}
                       </div>
-                      <div className="bg-slate-900 p-3 rounded border border-slate-700">
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700">
                         <div className="text-slate-500 mb-2 font-semibold text-xs uppercase">
                           Routing Table
                         </div>
                         <table className="w-full text-xs text-left border-collapse">
                           <thead>
-                            <tr className="text-slate-400 border-b border-slate-700">
+                            <tr className="text-slate-600 dark:text-slate-400 border-b border-slate-300 dark:border-slate-700">
                               <th className="pb-1">Destination</th>
                               <th className="pb-1">Next Hop</th>
                             </tr>
@@ -1676,7 +1820,7 @@
                             {node.routes.map((rt, i) => (
                               <tr
                                 key={i}
-                                className="border-b border-slate-800 last:border-0"
+                                className="border-b border-slate-200 dark:border-slate-800 last:border-0"
                               >
                                 <td className="py-1 font-mono">
                                   {rt.dest}/
@@ -1695,7 +1839,7 @@
                       </div>
 
                       {node.natTable !== undefined && (
-                        <div className="bg-slate-900 p-3 rounded border border-slate-700 mt-4">
+                        <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700 mt-4">
                           <div className="text-slate-500 mb-2 font-semibold text-xs uppercase">
                             NAT Translation Table
                           </div>
@@ -1706,7 +1850,7 @@
                           ) : (
                             <table className="w-full text-[10px] text-left border-collapse">
                               <thead>
-                                <tr className="text-slate-400 border-b border-slate-700">
+                                <tr className="text-slate-600 dark:text-slate-400 border-b border-slate-300 dark:border-slate-700">
                                   <th className="pb-1">Internal Map</th>
                                   <th className="pb-1">External Port</th>
                                   <th className="pb-1">Proto</th>
@@ -1716,15 +1860,15 @@
                                 {node.natTable.map((nat, i) => (
                                   <tr
                                     key={i}
-                                    className="border-b border-slate-800 last:border-0"
+                                    className="border-b border-slate-200 dark:border-slate-800 last:border-0"
                                   >
-                                    <td className="py-1 font-mono text-blue-300">
+                                    <td className="py-1 font-mono text-blue-700 dark:text-blue-300">
                                       {nat.internalIp}:{nat.internalPort}
                                     </td>
-                                    <td className="py-1 font-mono text-emerald-300">
+                                    <td className="py-1 font-mono text-emerald-700 dark:text-emerald-300">
                                       {nat.externalPort}
                                     </td>
-                                    <td className="py-1 font-mono text-slate-300">
+                                    <td className="py-1 font-mono text-slate-700 dark:text-slate-300">
                                       {nat.protocol}
                                     </td>
                                   </tr>
@@ -1738,10 +1882,20 @@
                   )}
 
                   {node.type === "Switch" && (
-                    <div className="bg-slate-900 p-3 rounded border border-slate-700 text-slate-400 italic">
+                    <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 italic">
                       Layer 2 forwarding enabled.
                       <br />
                       MAC table populated automatically in this simulation.
+                    </div>
+                  )}
+
+                  {node.type === "WAP" && (
+                    <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 italic">
+                      Wireless Access Point: bridges associated wireless
+                      clients onto the wired LAN.
+                      <br />
+                      Operates at Layer 2, forwarding by MAC address just like
+                      a switch.
                     </div>
                   )}
                 </div>
@@ -1749,18 +1903,18 @@
 
               {tab === "PING" && (
                 <div className="flex flex-col gap-4">
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
                     Send an ICMP Echo Request to test connectivity.
                   </p>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-1">
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                       Target IP Address
                     </label>
                     <input
                       type="text"
                       value={pingTarget}
                       onChange={(e) => setPingTarget(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 font-mono"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded p-2 font-mono"
                     />
                   </div>
                   <button
@@ -1774,29 +1928,29 @@
 
               {tab === "HTTP" && (
                 <div className="flex flex-col gap-4">
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
                     Simulate a web browser HTTP GET Request.
                   </p>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-1">
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                       Target IP Address
                     </label>
                     <input
                       type="text"
                       value={httpTarget}
                       onChange={(e) => setHttpTarget(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 text-white rounded p-2 font-mono"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded p-2 font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-1">
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                       Destination Port
                     </label>
                     <input
                       type="text"
                       value="80 (HTTP)"
                       disabled
-                      className="w-full bg-slate-800 border border-slate-700 text-slate-500 rounded p-2 font-mono cursor-not-allowed"
+                      className="w-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-500 rounded p-2 font-mono cursor-not-allowed"
                     />
                   </div>
                   <button
@@ -1836,7 +1990,7 @@
                       })}
                     </pre>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-slate-400 italic">
+                    <div className="flex items-center justify-center h-full text-slate-500 italic">
                       Browser Window Empty
                     </div>
                   )}
@@ -1856,21 +2010,21 @@
           );
 
         return (
-          <div className="flex flex-col h-full bg-slate-800">
-            <div className="p-4 border-b border-slate-700 border-t-4 border-t-amber-500 flex justify-between items-center bg-slate-850">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-800">
+            <div className="p-4 border-b border-slate-300 dark:border-slate-700 border-t-4 border-t-amber-500 flex justify-between items-center bg-slate-200 dark:bg-slate-850">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Icons.Packet color="#f59e0b" /> Packet Inspector
               </h2>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-              <p className="text-sm text-slate-400 mb-2">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
                 AQA TCP/IP 4-Layer Model Breakdown:
               </p>
 
               {/* Application Layer */}
-              <div className="border border-blue-800 bg-blue-900/20 rounded overflow-hidden">
-                <div className="bg-blue-900/50 px-3 py-1 text-blue-300 font-bold text-xs uppercase border-b border-blue-800 flex justify-between">
+              <div className="border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded overflow-hidden">
+                <div className="bg-blue-100 dark:bg-blue-900/50 px-3 py-1 text-blue-700 dark:text-blue-300 font-bold text-xs uppercase border-b border-blue-300 dark:border-blue-800 flex justify-between">
                   <span>Layer 1: Application</span>
                   <ChangedValue value={packet.appLayer.protocol} />
                 </div>
@@ -1879,14 +2033,14 @@
                     <>
                       <span className="text-slate-500">Method:</span>
                       <ChangedValue
-                        className="font-mono text-slate-300 break-all"
+                        className="font-mono text-slate-700 dark:text-slate-300 break-all"
                         value={packet.appLayer.method}
                       />
                     </>
                   )}
                   <span className="text-slate-500">Type:</span>
                   <ChangedValue
-                    className="font-mono text-slate-300 break-words"
+                    className="font-mono text-slate-700 dark:text-slate-300 break-words"
                     value={
                       packet.appLayer.protocol === "Ping"
                         ? "ICMP Message"
@@ -1897,96 +2051,96 @@
               </div>
 
               {/* Transport Layer */}
-              <div className="border border-purple-800 bg-purple-900/20 rounded overflow-hidden">
-                <div className="bg-purple-900/50 px-3 py-1 text-purple-300 font-bold text-xs uppercase border-b border-purple-800 flex justify-between">
+              <div className="border border-purple-300 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 rounded overflow-hidden">
+                <div className="bg-purple-100 dark:bg-purple-900/50 px-3 py-1 text-purple-700 dark:text-purple-300 font-bold text-xs uppercase border-b border-purple-300 dark:border-purple-800 flex justify-between">
                   <span>Layer 2: Transport</span>
                   <ChangedValue value={packet.transportLayer.protocol} />
                 </div>
                 <div className="p-3 text-sm grid grid-cols-[110px_1fr] gap-y-1 items-start">
                   <span className="text-slate-500">Source Port:</span>
                   <ChangedValue
-                    className="font-mono text-purple-200 break-all"
+                    className="font-mono text-purple-700 dark:text-purple-200 break-all"
                     value={packet.transportLayer.srcPort}
                   />
                   <span className="text-slate-500">Dest Port:</span>
                   <ChangedValue
-                    className="font-mono text-purple-200 break-all"
+                    className="font-mono text-purple-700 dark:text-purple-200 break-all"
                     value={packet.transportLayer.dstPort}
                   />
                   <span className="text-slate-500">Sequence No:</span>
                   <ChangedValue
-                    className="font-mono text-slate-300 break-all"
+                    className="font-mono text-slate-700 dark:text-slate-300 break-all"
                     value={packet.transportLayer.seq}
                   />
                   <span className="text-slate-500">Total Pkts:</span>
                   <ChangedValue
-                    className="font-mono text-slate-300 break-all"
+                    className="font-mono text-slate-700 dark:text-slate-300 break-all"
                     value={packet.transportLayer.total}
                   />
                   <span className="text-slate-500">Checksum:</span>
                   <ChangedValue
-                    className="font-mono text-slate-300 break-all"
+                    className="font-mono text-slate-700 dark:text-slate-300 break-all"
                     value={packet.transportLayer.checksum}
                   />
                 </div>
               </div>
 
               {/* Network / Internet Layer */}
-              <div className="border border-emerald-800 bg-emerald-900/20 rounded overflow-hidden">
-                <div className="bg-emerald-900/50 px-3 py-1 text-emerald-300 font-bold text-xs uppercase border-b border-emerald-800 flex justify-between">
+              <div className="border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 rounded overflow-hidden">
+                <div className="bg-emerald-100 dark:bg-emerald-900/50 px-3 py-1 text-emerald-700 dark:text-emerald-300 font-bold text-xs uppercase border-b border-emerald-300 dark:border-emerald-800 flex justify-between">
                   <span>Layer 3: Network</span>
                   <ChangedValue value={packet.networkLayer.protocol} />
                 </div>
                 <div className="p-3 text-sm grid grid-cols-[110px_1fr] gap-y-1 items-start">
                   <span className="text-slate-500">Sender IP:</span>
                   <ChangedValue
-                    className="font-mono text-emerald-200 break-all"
+                    className="font-mono text-emerald-700 dark:text-emerald-200 break-all"
                     value={packet.networkLayer.srcIP}
                   />
                   <span className="text-slate-500">Dest IP:</span>
                   <ChangedValue
-                    className="font-mono text-emerald-200 break-all"
+                    className="font-mono text-emerald-700 dark:text-emerald-200 break-all"
                     value={packet.networkLayer.dstIP}
                   />
                   <span className="text-slate-500">TTL (Time To Live):</span>
                   <ChangedValue
-                    className="font-mono text-slate-300 break-all"
+                    className="font-mono text-slate-700 dark:text-slate-300 break-all"
                     value={packet.networkLayer.ttl}
                   />
                 </div>
               </div>
 
               {/* Link / Network Access Layer */}
-              <div className="border border-amber-800 bg-amber-900/20 rounded overflow-hidden">
-                <div className="bg-amber-900/50 px-3 py-1 text-amber-300 font-bold text-xs uppercase border-b border-amber-800 flex justify-between">
+              <div className="border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 rounded overflow-hidden">
+                <div className="bg-amber-100 dark:bg-amber-900/50 px-3 py-1 text-amber-700 dark:text-amber-300 font-bold text-xs uppercase border-b border-amber-300 dark:border-amber-800 flex justify-between">
                   <span>Layer 4: Link</span>
                   <ChangedValue value={packet.linkLayer.protocol} />
                 </div>
                 <div className="p-3 text-sm grid grid-cols-[110px_1fr] gap-y-1 text-xs items-start">
                   <span className="text-slate-500">Protocol:</span>
                   <ChangedValue
-                    className="font-mono text-slate-300 break-all"
+                    className="font-mono text-slate-700 dark:text-slate-300 break-all"
                     value={packet.linkLayer.protocol}
                   />
                   <span className="text-slate-500">Current Hop MAC:</span>
                   <ChangedValue
-                    className="font-mono text-amber-200 break-all"
+                    className="font-mono text-amber-700 dark:text-amber-200 break-all"
                     value={packet.linkLayer.srcMAC}
                   />
                   <span className="text-slate-500">Next Hop MAC:</span>
                   <ChangedValue
-                    className="font-mono text-amber-200 break-all"
+                    className="font-mono text-amber-700 dark:text-amber-200 break-all"
                     value={packet.linkLayer.dstMAC}
                   />
                 </div>
               </div>
 
               {/* Payload */}
-              <div className="border border-slate-600 bg-slate-900/50 rounded overflow-hidden mt-2">
-                <div className="bg-slate-700/50 px-3 py-1 text-slate-300 font-bold text-xs uppercase border-b border-slate-600">
+              <div className="border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 rounded overflow-hidden mt-2">
+                <div className="bg-slate-200 dark:bg-slate-700/50 px-3 py-1 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase border-b border-slate-300 dark:border-slate-600">
                   Packet Payload Data
                 </div>
-                <div className="p-3 text-sm font-mono text-slate-300 whitespace-pre-wrap payload-scroll">
+                <div className="p-3 text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap payload-scroll">
                   <ChangedValue value={packet.payload} />
                 </div>
               </div>
