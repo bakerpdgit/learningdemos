@@ -1399,21 +1399,38 @@
                       const n1 = nodes[link.source];
                       const n2 = nodes[link.target];
                       if (link.wireless) {
+                        // Show both fans whenever there's any traffic on the
+                        // wireless link: even when only one side is sending
+                        // the "main" packet, the other side is acknowledging,
+                        // so both radios are actively in use.
+                        const linkActive = packets.some(
+                          (p) =>
+                            p.state === "TRANSIT" &&
+                            ((p.currentNode === link.source &&
+                              p.nextNode === link.target) ||
+                              (p.currentNode === link.target &&
+                                p.nextNode === link.source)),
+                        );
+                        if (!linkActive) return null;
+
                         const stroke = isDark ? "#10b981" : "#047857";
                         // Each fan emanates from its source toward its
                         // target, sitting just outside the node circle
                         // (node radius is 30) so the arcs stay visible.
-                        const fan = (src, tgt, k) => {
+                        // offsetDeg lets us nudge a fan visually without
+                        // changing the target it's aimed at.
+                        const fan = (src, tgt, k, offsetDeg = 0) => {
                           const angleDeg =
                             (Math.atan2(tgt.x - src.x, tgt.y - src.y) * 180) /
-                            Math.PI;
+                              Math.PI +
+                            offsetDeg;
                           return (
                             <g
                               key={k}
                               transform={`translate(${src.x}, ${src.y}) rotate(${angleDeg})`}
                             >
                               <path
-                                d="M -31.82 31.82 A 45 45 0 0 0 31.82 31.82"
+                                d="M -21 36.37 A 42 42 0 0 0 21 36.37"
                                 fill="none"
                                 stroke={stroke}
                                 strokeWidth="3"
@@ -1421,7 +1438,7 @@
                                 opacity="0.95"
                               />
                               <path
-                                d="M -42.43 42.43 A 60 60 0 0 0 42.43 42.43"
+                                d="M -27 46.77 A 54 54 0 0 0 27 46.77"
                                 fill="none"
                                 stroke={stroke}
                                 strokeWidth="3"
@@ -1429,7 +1446,7 @@
                                 opacity="0.7"
                               />
                               <path
-                                d="M -53.03 53.03 A 75 75 0 0 0 53.03 53.03"
+                                d="M -33 57.16 A 66 66 0 0 0 33 57.16"
                                 fill="none"
                                 stroke={stroke}
                                 strokeWidth="3"
@@ -1441,8 +1458,8 @@
                         };
                         return (
                           <g key={link.id}>
-                            {fan(n1, n2, `${link.id}-a`)}
-                            {fan(n2, n1, `${link.id}-b`)}
+                            {fan(n1, n2, `${link.id}-a`, -40)}
+                            {fan(n2, n1, `${link.id}-b`, -60)}
                           </g>
                         );
                       }
