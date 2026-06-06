@@ -12,7 +12,9 @@
     ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag() { dataLayer.push(arguments); }
+      function gtag() {
+        dataLayer.push(arguments);
+      }
       gtag("js", new Date());
       gtag("config", "G-DYQESQXT38");
     </script>
@@ -95,6 +97,14 @@
       /* SVG Animation Utilities */
       .packet-pulse {
         animation: pulse 1s infinite;
+      }
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
       }
       @keyframes pulse {
         0% {
@@ -179,6 +189,119 @@
 
       const generateId = () => Math.random().toString(36).substring(2, 9);
 
+      // Inline SVG "animal outline" image bodies. Each value is the
+      // *inner* SVG markup so the mini browser can render it directly
+      // and control sizing via the outer <svg> element.
+      const ANIMAL_SVGS = {
+        cat:
+          '<g fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M20 18 L22 6 L34 16 Q50 12 66 16 L78 6 L80 18"/>' +
+          '<path d="M14 38 Q14 60 30 76 Q50 86 70 76 Q86 60 86 38 Q86 20 50 20 Q14 20 14 38 Z"/>' +
+          '<circle cx="38" cy="42" r="3" fill="#475569"/>' +
+          '<circle cx="62" cy="42" r="3" fill="#475569"/>' +
+          '<path d="M44 56 Q50 60 56 56"/>' +
+          '<path d="M50 50 L50 56"/>' +
+          '<path d="M24 54 L8 50 M24 58 L8 60 M24 62 L8 70"/>' +
+          '<path d="M76 54 L92 50 M76 58 L92 60 M76 62 L92 70"/>' +
+          "</g>",
+        rabbit:
+          '<g fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<ellipse cx="36" cy="20" rx="6" ry="16"/>' +
+          '<ellipse cx="64" cy="20" rx="6" ry="16"/>' +
+          '<ellipse cx="50" cy="56" rx="26" ry="22"/>' +
+          '<circle cx="42" cy="52" r="2.5" fill="#475569"/>' +
+          '<circle cx="58" cy="52" r="2.5" fill="#475569"/>' +
+          '<path d="M48 60 Q50 62 52 60"/>' +
+          '<path d="M50 60 L50 64"/>' +
+          '<path d="M44 66 Q50 70 56 66"/>' +
+          '<circle cx="80" cy="80" r="6"/>' +
+          "</g>",
+        dog:
+          '<g fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M22 30 Q14 14 26 12 Q34 18 36 28"/>' +
+          '<path d="M78 30 Q86 14 74 12 Q66 18 64 28"/>' +
+          '<path d="M20 44 Q20 78 50 82 Q80 78 80 44 Q80 22 50 22 Q20 22 20 44 Z"/>' +
+          '<circle cx="40" cy="46" r="3" fill="#475569"/>' +
+          '<circle cx="60" cy="46" r="3" fill="#475569"/>' +
+          '<ellipse cx="50" cy="60" rx="5" ry="3" fill="#475569"/>' +
+          '<path d="M44 68 Q50 74 56 68"/>' +
+          "</g>",
+        gerbil:
+          '<g fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<ellipse cx="50" cy="58" rx="30" ry="20"/>' +
+          '<circle cx="22" cy="50" r="12"/>' +
+          '<circle cx="14" cy="40" r="5"/>' +
+          '<circle cx="16" cy="48" r="2" fill="#475569"/>' +
+          '<path d="M10 52 L4 52 M10 54 L5 56"/>' +
+          '<path d="M78 60 Q92 68 90 80 Q88 84 82 80"/>' +
+          "</g>",
+      };
+
+      // HTML closing tags below are built via the C() helper so the
+      // literal sequences "< / body >" and "< / html >" never appear in
+      // this file. The VS Code Live Server extension scans the served
+      // HTML for that body-close pattern and injects its reload script
+      // there; finding it inside a JS string would prematurely split
+      // this script block. Keeping closing tags out of the raw source
+      // avoids that foot-gun.
+      const C = (t) => "<" + "/" + t + ">";
+      const DEFAULT_INDEX_LOCAL =
+        "<html>\n  <body>\n    <h1>Local Web Server" +
+        C("h1") +
+        "\n    <p>Welcome to the local intranet. Meet our office cat." +
+        C("p") +
+        '\n    <img src="cat.jpg" alt="cat">\n  ' +
+        C("body") +
+        "\n" +
+        C("html");
+
+      const DEFAULT_INDEX_INTERNET =
+        "<html>\n  <body>\n    <h1>Public Web Server" +
+        C("h1") +
+        "\n    <p>You’ve reached the public internet site. Here is our mascot dog." +
+        C("p") +
+        '\n    <img src="dog.jpg" alt="dog">\n  ' +
+        C("body") +
+        "\n" +
+        C("html");
+
+      // Extract <img src="..."> file references from an HTML body. Returns
+      // unique resource names in document order.
+      const extractImageRefs = (html) => {
+        const refs = [];
+        const seen = new Set();
+        const re = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
+        let m;
+        while ((m = re.exec(html)) !== null) {
+          if (!seen.has(m[1])) {
+            seen.add(m[1]);
+            refs.push(m[1]);
+          }
+        }
+        return refs;
+      };
+
+      // Resolve a URL string against a base server IP. Returns { ip, path }
+      // where path is normalised to a leading slash. Absolute http(s):// URLs
+      // route to whatever IP they specify; relative URLs stay on baseIp.
+      const resolveUrl = (urlStr, baseIp) => {
+        if (!urlStr) return null;
+        const absMatch = urlStr.match(
+          /^https?:\/\/([0-9]{1,3}(?:\.[0-9]{1,3}){3})(?::\d+)?(\/.*)?$/i,
+        );
+        if (absMatch) {
+          return { ip: absMatch[1], path: absMatch[2] || "/" };
+        }
+        if (urlStr.startsWith("/")) return { ip: baseIp, path: urlStr };
+        return { ip: baseIp, path: "/" + urlStr };
+      };
+
+      // Convert a resolved path back to the server filesystem key.
+      const pathToFileName = (path) => {
+        if (!path || path === "/" || path === "") return "index.html";
+        return path.replace(/^\//, "");
+      };
+
       const IP_MAC_TABLE = {
         "192.168.1.2": "01:01:01:01:01:01",
         "192.168.1.254": "01:01:01:01:01:80",
@@ -235,6 +358,11 @@
           x: 350,
           y: 550,
           browserOutput: "",
+          files: {
+            "index.html": { type: "html", content: DEFAULT_INDEX_LOCAL },
+            "cat.jpg": { type: "image", animal: "cat" },
+            "rabbit.jpg": { type: "image", animal: "rabbit" },
+          },
         },
         SW_A: {
           id: "SW_A",
@@ -455,6 +583,11 @@
           x: 500,
           y: 50,
           browserOutput: "",
+          files: {
+            "index.html": { type: "html", content: DEFAULT_INDEX_INTERNET },
+            "dog.jpg": { type: "image", animal: "dog" },
+            "gerbil.jpg": { type: "image", animal: "gerbil" },
+          },
         },
       };
 
@@ -489,7 +622,36 @@
       };
 
       class NetworkEngine {
-        static createRequestPacket(srcNode, targetIp, type) {
+        static getLinkProtocol(srcId, dstId) {
+          const link = LINKS.find(
+            (l) =>
+              (l.source === srcId && l.target === dstId) ||
+              (l.target === srcId && l.source === dstId),
+          );
+          return link && link.wireless ? "Wi-Fi (802.11)" : "Ethernet";
+        }
+
+        static getNextL2Hop(currentId, destId) {
+          const directLink = LINKS.find(
+            (l) =>
+              (l.source === currentId && l.target === destId) ||
+              (l.target === currentId && l.source === destId),
+          );
+          if (directLink) return destId;
+
+          const neighbors = LINKS.filter(
+            (l) => l.source === currentId || l.target === currentId,
+          ).map((l) => (l.source === currentId ? l.target : l.source));
+          for (const neighborId of neighbors) {
+            const n = INITIAL_NODES[neighborId];
+            if (n && (n.type === "Switch" || n.type === "WAP")) {
+              return neighborId;
+            }
+          }
+          return destId;
+        }
+
+        static createRequestPacket(srcNode, targetIp, type, options = {}) {
           const isLocal = isIpInSubnet(targetIp, srcNode.ip, srcNode.subnet);
           const nextHopIp = isLocal ? targetIp : srcNode.gw;
           const nextHopMac = IP_MAC_TABLE[nextHopIp];
@@ -501,6 +663,7 @@
 
           let p = {
             id: generateId(),
+            transactionId: options.transactionId || generateId(),
             state: "TRANSIT",
             currentNode: srcNode.id,
             nextNode: srcNode.switch,
@@ -512,7 +675,7 @@
               ttl: 64,
             },
             linkLayer: {
-              protocol: "Ethernet",
+              protocol: this.getLinkProtocol(srcNode.id, srcNode.switch),
               srcMAC: srcNode.mac,
               dstMAC: nextHopMac,
             },
@@ -534,8 +697,9 @@
                   .toUpperCase(),
             };
           } else if (type === "HTTP") {
-            p.appLayer = { protocol: "HTTP", method: "GET" };
-            p.payload = "GET /index.html HTTP/1.1";
+            const path = options.path || "/";
+            p.appLayer = { protocol: "HTTP", method: "GET", path };
+            p.payload = `GET ${path} HTTP/1.1`;
             p.transportLayer = {
               protocol: "TCP",
               srcPort: 49152 + Math.floor(Math.random() * 16000),
@@ -568,6 +732,11 @@
             destNodeId = destNode.switch;
           }
 
+          // If the resolved destination isn't directly linked to this node
+          // (e.g. a WAP forwarding a reply destined for a router beyond its
+          // wired uplink), hop via a neighbouring switch/WAP first.
+          destNodeId = this.getNextL2Hop(node.id, destNodeId);
+
           return {
             action: "FORWARD",
             packet: {
@@ -576,6 +745,10 @@
               nextNode: destNodeId,
               state: "TRANSIT",
               progress: 0,
+              linkLayer: {
+                ...p.linkLayer,
+                protocol: this.getLinkProtocol(node.id, destNodeId),
+              },
             },
           };
         }
@@ -750,7 +923,7 @@
               progress: 0,
               networkLayer: { ...p.networkLayer, ttl: newTtl },
               linkLayer: {
-                protocol: "Ethernet",
+                protocol: this.getLinkProtocol(router.id, outIface.connectedTo),
                 srcMAC: outIface.mac,
                 dstMAC: nextHopMac,
               },
@@ -768,15 +941,19 @@
             };
           }
 
-          if (
+          const isHttpResponse =
+            p.appLayer.protocol === "HTTP" && p.appLayer.method === "RESPONSE";
+          const isPingReply =
+            p.appLayer.protocol === "Ping" &&
             p.payload &&
-            (p.payload.includes("Reply") || p.payload.includes("HTTP 200"))
-          ) {
-            // Response received!
+            p.payload.includes("Reply");
+
+          if (isHttpResponse || isPingReply) {
             return {
               action: "CONSUME",
               message: `${node.name} received response from ${p.networkLayer.srcIP}.`,
               responseData: p.payload,
+              responsePacket: p,
             };
           }
 
@@ -788,10 +965,26 @@
             };
           }
 
-          return this.createReplyPacket(p, node);
+          // Hand the request to the node's service for processing instead
+          // of replying immediately. The simulator will tick down the
+          // processing entry and emit the reply (possibly fragmented) when
+          // the simulated "compute" finishes.
+          return {
+            action: "PROCESSING",
+            request: p,
+            requestType: p.appLayer.protocol,
+            summary:
+              p.appLayer.protocol === "Ping"
+                ? `Ping (seq ${p.transportLayer.seq}/${p.transportLayer.total || 1})`
+                : `${p.appLayer.method || "HTTP"} ${p.appLayer.path || "/"}`,
+          };
         }
 
-        static createReplyPacket(p, node) {
+        // Build one or more reply packets for an incoming request. Image
+        // responses are split into 3 fragments with staggered delayRemaining
+        // so they leave the server one step apart; everything else returns
+        // a single packet.
+        static createReplyPackets(p, node) {
           const isLocal = isIpInSubnet(
             p.networkLayer.srcIP,
             node.ip,
@@ -808,11 +1001,12 @@
               reason: `${node.name} dropped reply: No ARP for return route.`,
             };
 
-          let reply = {
-            id: p.id, // Retain ID so Inspector focus smoothly transitions to the return packet
+          const replyNextNode = node.switch || p.currentNode;
+          const baseReply = {
+            transactionId: p.transactionId,
             state: "TRANSIT",
             currentNode: node.id,
-            nextNode: node.switch || p.currentNode, // If router, returns via where it came from roughly
+            nextNode: replyNextNode,
             progress: 0,
             networkLayer: {
               protocol: "IPv4",
@@ -821,41 +1015,108 @@
               ttl: 64,
             },
             linkLayer: {
-              protocol: "Ethernet",
+              protocol: this.getLinkProtocol(node.id, replyNextNode),
               srcMAC: node.mac,
               dstMAC: nextHopMac,
             },
           };
 
           if (p.appLayer.protocol === "Ping") {
-            reply.appLayer = { protocol: "Ping" };
-            reply.payload = "ICMP Echo Reply Data";
-            reply.transportLayer = { ...p.transportLayer };
-          } else if (p.appLayer.protocol === "HTTP") {
-            reply.appLayer = { protocol: "HTTP", method: "RESPONSE" };
-            const htmlResponseLines = [
-              "<html>",
-              "  <body>",
-              `    <h1>Hello from ${node.name}</h1>`,
-              "  </" + "body>",
-              "</" + "html>",
-            ];
-            reply.payload = `HTTP 200 OK\n\n${htmlResponseLines.join("\n")}`;
-            reply.transportLayer = {
-              protocol: "TCP",
-              srcPort: 80,
-              dstPort: p.transportLayer.srcPort,
-              seq: p.transportLayer.seq + 1,
-              total: 1,
-              checksum:
-                "0x" +
-                Math.floor(Math.random() * 65535)
-                  .toString(16)
-                  .toUpperCase(),
+            const reply = {
+              ...baseReply,
+              id: p.id,
+              appLayer: { protocol: "Ping" },
+              payload: "ICMP Echo Reply Data",
+              transportLayer: { ...p.transportLayer },
             };
+            return { action: "FORWARD", packets: [reply] };
           }
 
-          return { action: "FORWARD", packet: reply };
+          if (p.appLayer.protocol !== "HTTP") {
+            return { action: "DROP", reason: "Unknown protocol" };
+          }
+
+          const requestedPath = (p.appLayer && p.appLayer.path) || "/";
+          const fileName =
+            requestedPath === "/" || requestedPath === ""
+              ? "index.html"
+              : requestedPath.replace(/^\//, "");
+          const files = node.files || {};
+          const file = files[fileName];
+
+          const makeChecksum = () =>
+            "0x" +
+            Math.floor(Math.random() * 65535)
+              .toString(16)
+              .toUpperCase();
+
+          // Determine fragment count: images are 3 fragments, everything
+          // else is a single packet.
+          let kind, resource, payloadText;
+          if (!file) {
+            kind = "error";
+            resource = { kind: "error", message: "Not Found" };
+            payloadText = `HTTP 404 Not Found\n\nThe requested resource ${requestedPath} was not found on ${node.name}.`;
+          } else if (file.type === "image") {
+            kind = "image";
+            resource = {
+              kind: "image",
+              name: fileName,
+              animal: file.animal,
+            };
+            payloadText = `HTTP 200 OK\nContent-Type: image/jpeg\n\n[binary image data: ${fileName}]`;
+          } else {
+            kind = "html";
+            resource = {
+              kind: "html",
+              name: fileName,
+              content: file.content,
+            };
+            payloadText = `HTTP 200 OK\nContent-Type: text/html\n\n${file.content}`;
+          }
+
+          const total = kind === "image" ? 3 : 1;
+          const status = !file ? 404 : 200;
+          const packets = [];
+          for (let i = 0; i < total; i++) {
+            const seq = i + 1;
+            packets.push({
+              ...baseReply,
+              id: generateId(),
+              appLayer: {
+                protocol: "HTTP",
+                method: "RESPONSE",
+                status,
+                path: requestedPath,
+                resource,
+              },
+              payload:
+                total > 1
+                  ? `${payloadText}\n[fragment ${seq}/${total}]`
+                  : payloadText,
+              transportLayer: {
+                protocol: "TCP",
+                srcPort: 80,
+                dstPort: p.transportLayer.srcPort,
+                seq,
+                total,
+                checksum: makeChecksum(),
+              },
+              // Each subsequent fragment starts 200 progress (one full
+              // hop) after the previous so they visibly chase each
+              // other on the wire.
+              delayRemaining: i * 200,
+            });
+          }
+          return { action: "FORWARD", packets };
+        }
+
+        // Backwards-compatible wrapper: returns the first reply packet
+        // only. Used by processRouter for router-replies-to-ping.
+        static createReplyPacket(p, node) {
+          const r = this.createReplyPackets(p, node);
+          if (r.action !== "FORWARD") return r;
+          return { action: "FORWARD", packet: r.packets[0] };
         }
       }
 
@@ -950,7 +1211,13 @@
           >
             <path d="M5 12a10 10 0 0 1 14 0"></path>
             <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
-            <circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"></circle>
+            <circle
+              cx="12"
+              cy="19"
+              r="1.2"
+              fill="currentColor"
+              stroke="none"
+            ></circle>
           </svg>
         ),
         Laptop: () => (
@@ -1040,32 +1307,148 @@
           },
         ]);
         const [isPlaying, setIsPlaying] = useState(false);
-        const [selectedEntity, setSelectedEntity] = useState(null); // { type: 'NODE'|'PACKET', id: string }
+        const [selectedNodeId, setSelectedNodeId] = useState(null);
+        const [selectedPacketId, setSelectedPacketId] = useState(null);
+        const [nodeExpanded, setNodeExpanded] = useState(true);
+        const [packetExpanded, setPacketExpanded] = useState(false);
+        const [autoFetchQueue, setAutoFetchQueue] = useState([]);
+        const [editorState, setEditorState] = useState(null); // { serverId, fileName, content } | null
+        // Active request-processing on target nodes — populated when a
+        // request packet arrives at a server/PC/laptop. Each entry holds
+        // the original request and a progress counter that ticks at the
+        // same rate as packet progress (so 200 progress = 2 hops worth).
+        const [processingEntries, setProcessingEntries] = useState([]);
+        // Per-client transport buffers — fragments accumulate here until
+        // all expected packets of a transmission have arrived.
+        // Shape: { [clientId]: { [bufKey]: { received, total, fragments[], firstPacket } } }
+        const [transportBuffers, setTransportBuffers] = useState({});
+        // Per-client terminals (for ping output).
+        // Shape: { [clientId]: [{ id, text, type }] }
+        const [terminals, setTerminals] = useState({});
+        // Last requested tab focus signal — fires the inspector to
+        // switch tabs when an event (processing, fragment, delivery,
+        // ping reply) wants attention drawn somewhere specific.
+        const [tabSignal, setTabSignal] = useState({
+          nodeId: null,
+          tab: null,
+          n: 0,
+        });
+        // Per-client ping/http target inputs, lifted up to App state so
+        // the IP picker can write into them from the canvas.
+        const [pingTargets, setPingTargets] = useState({});
+        const [httpTargets, setHttpTargets] = useState({});
+        // When set, the next canvas node click feeds that node's IP
+        // back into the selected client's ping or HTTP input rather
+        // than navigating the inspector to that node.
+        const [pickerSlot, setPickerSlot] = useState(null); // 'PING' | 'HTTP' | null
+
+        // Resolve the most useful IP for picker purposes — endpoint
+        // nodes have a single .ip; routers expose their interfaces.
+        const ipForPicker = (node) => {
+          if (!node) return null;
+          if (node.ip) return node.ip;
+          if (node.interfaces && node.interfaces.length > 0)
+            return node.interfaces[0].ip;
+          return null;
+        };
+
+        const startPicker = (kind) => setPickerSlot(kind);
+        const cancelPicker = () => setPickerSlot(null);
+
+        // Cancel picker on Escape.
+        useEffect(() => {
+          if (!pickerSlot) return;
+          const onKey = (e) => {
+            if (e.key === "Escape") setPickerSlot(null);
+          };
+          window.addEventListener("keydown", onKey);
+          return () => window.removeEventListener("keydown", onKey);
+        }, [pickerSlot]);
+
+        // Reset picker if focus moves to a different node (auto-select
+        // from a packet event, or the user manually clicked elsewhere).
+        useEffect(() => {
+          setPickerSlot(null);
+        }, [selectedNodeId]);
         const [speed, setSpeed] = useState(2); // Progress increment per frame
-        const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+        const [isDark, setIsDark] = useState(() =>
+          document.documentElement.classList.contains("dark"),
+        );
+
+        const activePackets = packets.filter(
+          (p) => p.state === "TRANSIT" || p.state === "ARRIVED",
+        );
+        const transactionActive =
+          activePackets.length > 0 ||
+          autoFetchQueue.length > 0 ||
+          processingEntries.length > 0;
+        const inspectedPacket =
+          packets.find((p) => p.id === selectedPacketId) ||
+          activePackets[0] ||
+          null;
+
+        // Map of nodeId -> list of processing entries for fast lookup in UI.
+        const processingByNode = {};
+        processingEntries.forEach((e) => {
+          if (!processingByNode[e.nodeId]) processingByNode[e.nodeId] = [];
+          processingByNode[e.nodeId].push(e);
+        });
+
+        // When a transaction starts, auto-expand packet section and collapse
+        // node section. When it ends, do the reverse. The user may toggle
+        // either section manually in between transitions.
+        useEffect(() => {
+          if (transactionActive) {
+            setNodeExpanded(false);
+            setPacketExpanded(true);
+          } else {
+            setNodeExpanded(true);
+            setPacketExpanded(false);
+          }
+        }, [transactionActive]);
 
         const toggleTheme = () => {
           const next = !isDark;
           setIsDark(next);
           document.documentElement.classList.toggle("dark", next);
-          try { localStorage.setItem("uimode", next ? "dark" : "light"); } catch (e) {}
+          try {
+            localStorage.setItem("uimode", next ? "dark" : "light");
+          } catch (e) {}
         };
 
         const reqRef = useRef();
 
         // Refactored pure state processor to safely execute without side-effect collision during React renders
         const handleProcessStep = useCallback(
-          (currentPackets) => {
+          (currentPackets, currentBuffers) => {
             let nextPackets = [];
             let nodeUpdates = {};
             let logsToAdd = [];
-            let clearSelected = false;
+            let clearSelectedPacket = false;
+            let followUpRequests = []; // [{ clientId, targetIp, path, transactionId }]
+            let processingAdds = []; // new processing entries to enqueue
+            let terminalAdds = []; // [{ clientId, text, type }]
+            let bufferUpdates = {}; // { clientId: { bufKey: bufEntry } }
+            let autoSelectNodeId = null;
+            let autoSelectTab = null;
+            let autoExpandPacket = false;
 
             const addLocalLog = (msg, type = "info") =>
               logsToAdd.push({ msg, type });
 
+            const bufKeyFor = (pkt) =>
+              `${pkt.transactionId}|${pkt.appLayer.protocol}|${pkt.appLayer.path || ""}`;
+
             currentPackets.forEach((p) => {
-              if (p.state === "TRANSIT") {
+              // Only TRANSIT packets that have actually finished their
+              // current hop (progress >= 100, not still in delay)
+              // transition to ARRIVED here. Others are still in flight
+              // and must be preserved untouched.
+              if (
+                p.state === "TRANSIT" &&
+                !(p.delayRemaining > 0) &&
+                p.progress >= 100
+              ) {
                 let np = {
                   ...p,
                   state: "ARRIVED",
@@ -1077,6 +1460,9 @@
                 addLocalLog(
                   `Packet ${p.id.substring(0, 4)} arrived at ${nodes[p.nextNode].name}`,
                 );
+              } else if (p.state === "TRANSIT") {
+                // Still in transit or delay — preserve as-is.
+                nextPackets.push(p);
               } else if (p.state === "ARRIVED") {
                 const node = nodes[p.currentNode];
                 const activeNode = nodeUpdates[node.id] || node;
@@ -1103,18 +1489,184 @@
                     `Packet routed from ${activeNode.name} towards ${nodes[result.packet.nextNode].name}`,
                     "success",
                   );
+                } else if (result.action === "PROCESSING") {
+                  // Request consumed for service-side processing — emit
+                  // a processing entry; reply will be generated after the
+                  // 2-step delay completes.
+                  processingAdds.push({
+                    id: generateId(),
+                    nodeId: activeNode.id,
+                    request: result.request,
+                    requestType: result.requestType,
+                    summary: result.summary,
+                    progress: 0,
+                    totalProgress: 200, // 2 simulation steps worth
+                  });
+                  addLocalLog(
+                    `${activeNode.name} service started processing ${result.summary}`,
+                    "info",
+                  );
+                  // Auto-select the target so students see the service view.
+                  autoSelectNodeId = activeNode.id;
+                  autoSelectTab = "SERVICE";
+                  if (selectedPacketId === p.id) clearSelectedPacket = true;
                 } else if (result.action === "CONSUME") {
                   addLocalLog(result.message, "success");
+                  const rp = result.responsePacket;
+                  const isHttp =
+                    rp &&
+                    rp.appLayer &&
+                    rp.appLayer.protocol === "HTTP" &&
+                    rp.appLayer.method === "RESPONSE";
+                  const isPing =
+                    rp && rp.appLayer && rp.appLayer.protocol === "Ping";
+
                   if (
+                    isHttp &&
+                    (activeNode.type === "PC" || activeNode.type === "Laptop")
+                  ) {
+                    // Accumulate into transport buffer; only deliver once
+                    // every expected fragment has arrived.
+                    const bufKey = bufKeyFor(rp);
+                    const clientBufs = {
+                      ...(currentBuffers[activeNode.id] || {}),
+                      ...(bufferUpdates[activeNode.id] || {}),
+                    };
+                    const prev = clientBufs[bufKey] || {
+                      total: rp.transportLayer.total || 1,
+                      received: 0,
+                      fragments: [],
+                      firstPacket: rp,
+                    };
+                    const fragments = [...prev.fragments, rp];
+                    const received = fragments.length;
+                    const total = prev.total;
+                    const updatedBuf = {
+                      ...prev,
+                      fragments,
+                      received,
+                    };
+                    if (!bufferUpdates[activeNode.id])
+                      bufferUpdates[activeNode.id] = {};
+                    bufferUpdates[activeNode.id][bufKey] = updatedBuf;
+                    addLocalLog(
+                      `${activeNode.name} transport layer: ${received}/${total} fragment${total > 1 ? "s" : ""} received for ${rp.appLayer.path}`,
+                      "info",
+                    );
+
+                    // Focus the student on the receiving client so they
+                    // can watch the transport buffer fill up. The full
+                    // delivery path below will re-focus to ensure the
+                    // browser tab gets attention once the page is whole.
+                    autoSelectNodeId = activeNode.id;
+                    autoSelectTab = received >= total ? "BROWSER" : "TRANSPORT";
+
+                    if (received >= total) {
+                      // Fully assembled — deliver to the browser layer.
+                      const res = rp.appLayer.resource || {};
+                      const serverIp = rp.networkLayer.srcIP;
+                      const prevBrowser = activeNode.browser || {
+                        page: null,
+                        resources: {},
+                      };
+                      let newBrowser;
+                      if (res.kind === "html") {
+                        const imgRefs = extractImageRefs(res.content);
+                        const resources = {};
+                        imgRefs.forEach((ref) => {
+                          const resolved = resolveUrl(ref, serverIp);
+                          const key = ref;
+                          resources[key] = {
+                            status: "loading",
+                            ref,
+                            targetIp: resolved ? resolved.ip : serverIp,
+                            path: resolved ? resolved.path : "/" + ref,
+                          };
+                          followUpRequests.push({
+                            clientId: activeNode.id,
+                            targetIp: resolved ? resolved.ip : serverIp,
+                            path: resolved ? resolved.path : "/" + ref,
+                            resourceKey: key,
+                            transactionId: p.transactionId,
+                          });
+                        });
+                        newBrowser = {
+                          page: {
+                            serverIp,
+                            path: rp.appLayer.path,
+                            html: res.content,
+                            status: 200,
+                          },
+                          resources,
+                        };
+                      } else if (res.kind === "image") {
+                        const resources = { ...(prevBrowser.resources || {}) };
+                        const incomingName = res.name;
+                        let matchedKey = null;
+                        Object.keys(resources).forEach((k) => {
+                          if (
+                            k === incomingName ||
+                            k.endsWith("/" + incomingName)
+                          ) {
+                            matchedKey = k;
+                          }
+                        });
+                        if (matchedKey) {
+                          resources[matchedKey] = {
+                            ...resources[matchedKey],
+                            status: "loaded",
+                            animal: res.animal,
+                          };
+                        }
+                        newBrowser = { ...prevBrowser, resources };
+                      } else {
+                        newBrowser = {
+                          page: {
+                            serverIp,
+                            path: rp.appLayer.path,
+                            html: null,
+                            status: rp.appLayer.status || 500,
+                            message:
+                              (res && res.message) || "Error fetching resource",
+                          },
+                          resources: {},
+                        };
+                      }
+                      nodeUpdates[activeNode.id] = {
+                        ...activeNode,
+                        browser: newBrowser,
+                        browserOutput: result.responseData,
+                      };
+                      // Buffer fully delivered — clear it.
+                      bufferUpdates[activeNode.id][bufKey] = null;
+                      addLocalLog(
+                        `${activeNode.name} delivered ${rp.appLayer.path} to the browser layer.`,
+                        "success",
+                      );
+                      autoSelectNodeId = activeNode.id;
+                    }
+                  } else if (
+                    isPing &&
+                    (activeNode.type === "PC" || activeNode.type === "Laptop")
+                  ) {
+                    // Ping reply → terminal entry on the client.
+                    terminalAdds.push({
+                      clientId: activeNode.id,
+                      text: `Reply from ${rp.networkLayer.srcIP}: bytes=32 seq=${rp.transportLayer.seq}/${rp.transportLayer.total || 1} time<1ms`,
+                      type: "reply",
+                    });
+                    autoSelectNodeId = activeNode.id;
+                    autoSelectTab = "TERMINAL";
+                  } else if (
                     result.responseData &&
-                    (activeNode.type === "PC" || activeNode.type === "Server")
+                    activeNode.type === "Server"
                   ) {
                     nodeUpdates[activeNode.id] = {
                       ...activeNode,
                       browserOutput: result.responseData,
                     };
                   }
-                  if (selectedEntity?.id === p.id) clearSelected = true;
+                  if (selectedPacketId === p.id) clearSelectedPacket = true;
                 } else if (result.action === "DROP") {
                   addLocalLog(result.reason, "error");
                   nextPackets.push({
@@ -1122,27 +1674,42 @@
                     state: "DROPPED",
                     dropTime: performance.now(),
                   });
-                  if (selectedEntity?.id === p.id) clearSelected = true;
+                  if (selectedPacketId === p.id) clearSelectedPacket = true;
                 }
               } else if (p.state === "DROPPED") {
                 nextPackets.push(p);
               }
             });
 
-            return { nextPackets, nodeUpdates, logsToAdd, clearSelected };
+            return {
+              nextPackets,
+              nodeUpdates,
+              logsToAdd,
+              clearSelectedPacket,
+              followUpRequests,
+              processingAdds,
+              terminalAdds,
+              bufferUpdates,
+              autoSelectNodeId,
+              autoSelectTab,
+              autoExpandPacket,
+            };
           },
-          [nodes, selectedEntity],
+          [nodes, selectedPacketId],
         );
 
         // Safe async commit of aggregated side-effects calculated during processing
         const commitUpdates = useCallback((result) => {
-          if (Object.keys(result.nodeUpdates).length > 0) {
+          if (
+            result.nodeUpdates &&
+            Object.keys(result.nodeUpdates).length > 0
+          ) {
             setTimeout(
               () => setNodes((n) => ({ ...n, ...result.nodeUpdates })),
               0,
             );
           }
-          if (result.logsToAdd.length > 0) {
+          if (result.logsToAdd && result.logsToAdd.length > 0) {
             setTimeout(() => {
               setLogs((l) => {
                 const newLogs = result.logsToAdd.map((log) => ({
@@ -1155,10 +1722,230 @@
               });
             }, 0);
           }
-          if (result.clearSelected) {
-            setTimeout(() => setSelectedEntity(null), 0);
+          if (result.clearSelectedPacket) {
+            setTimeout(() => setSelectedPacketId(null), 0);
+          }
+          if (result.followUpRequests && result.followUpRequests.length > 0) {
+            // Sync update so transactionActive doesn't briefly flip false
+            // between the packet being consumed and the queue receiving
+            // its follow-up entries (which would cause the inspector to
+            // flicker collapsed for one frame).
+            setAutoFetchQueue((q) => [...q, ...result.followUpRequests]);
+          }
+          if (result.processingAdds && result.processingAdds.length > 0) {
+            // Sync to keep transactionActive true across the request->reply gap.
+            setProcessingEntries((q) => [...q, ...result.processingAdds]);
+          }
+          if (result.terminalAdds && result.terminalAdds.length > 0) {
+            setTimeout(() => {
+              setTerminals((t) => {
+                const next = { ...t };
+                result.terminalAdds.forEach((ta) => {
+                  const existing = next[ta.clientId] || [];
+                  next[ta.clientId] = [
+                    ...existing,
+                    { id: generateId(), text: ta.text, type: ta.type },
+                  ].slice(-50);
+                });
+                return next;
+              });
+            }, 0);
+          }
+          if (
+            result.bufferUpdates &&
+            Object.keys(result.bufferUpdates).length > 0
+          ) {
+            setTimeout(() => {
+              setTransportBuffers((prev) => {
+                const next = { ...prev };
+                Object.entries(result.bufferUpdates).forEach(
+                  ([clientId, bufs]) => {
+                    const merged = { ...(next[clientId] || {}) };
+                    Object.entries(bufs).forEach(([key, val]) => {
+                      if (val === null) delete merged[key];
+                      else merged[key] = val;
+                    });
+                    next[clientId] = merged;
+                  },
+                );
+                return next;
+              });
+            }, 0);
+          }
+          if (result.autoSelectNodeId) {
+            setTimeout(() => {
+              setSelectedNodeId(result.autoSelectNodeId);
+              setNodeExpanded(true);
+              // Auto-collapse the packet section so the node view
+              // (Service / Browser / Terminal) is the focus until the
+              // next packet appears.
+              setPacketExpanded(false);
+              if (result.autoSelectTab) {
+                setTabSignal((s) => ({
+                  nodeId: result.autoSelectNodeId,
+                  tab: result.autoSelectTab,
+                  n: s.n + 1,
+                }));
+              }
+            }, 0);
           }
         }, []);
+
+        // Stable references so the animation loop can read the latest
+        // buffer/processing state without recreating itself every frame.
+        const buffersRef = useRef(transportBuffers);
+        useEffect(() => {
+          buffersRef.current = transportBuffers;
+        }, [transportBuffers]);
+        const nodesRef = useRef(nodes);
+        useEffect(() => {
+          nodesRef.current = nodes;
+        }, [nodes]);
+        const processingRef = useRef(processingEntries);
+        useEffect(() => {
+          processingRef.current = processingEntries;
+        }, [processingEntries]);
+        const packetsRef = useRef(packets);
+        useEffect(() => {
+          packetsRef.current = packets;
+        }, [packets]);
+        const handleProcessStepRef = useRef(handleProcessStep);
+        useEffect(() => {
+          handleProcessStepRef.current = handleProcessStep;
+        }, [handleProcessStep]);
+
+        // Tick a single simulation step's worth of "time". Used both by
+        // the animation frame loop (small increments) and the manual
+        // step button (one full hop = 100).
+        const tickSimulation = useCallback(
+          (dt, dtProc) => {
+            const procDt = dtProc != null ? dtProc : dt;
+            // 1. Advance processing entries; emit replies when complete.
+            //    We compute the new processing list and new reply packets
+            //    BEFORE dispatching any state update so React can never
+            //    invoke the updater twice with a stale newReplies array.
+            const currentProcessing = processingRef.current || [];
+            const newReplies = [];
+            const remainingProcessing = [];
+            const completedProcessingMsgs = [];
+            for (const entry of currentProcessing) {
+              const newProgress = entry.progress + procDt;
+              if (newProgress >= entry.totalProgress) {
+                const targetNode = nodesRef.current[entry.nodeId];
+                if (!targetNode) continue;
+                const r = NetworkEngine.createReplyPackets(
+                  entry.request,
+                  targetNode,
+                );
+                if (r.action === "FORWARD") {
+                  r.packets.forEach((pkt) => newReplies.push(pkt));
+                  completedProcessingMsgs.push({
+                    msg: `${targetNode.name} sent response (${r.packets.length} packet${r.packets.length > 1 ? "s" : ""})`,
+                    type: "success",
+                  });
+                } else {
+                  completedProcessingMsgs.push({
+                    msg: r.reason || "Reply could not be built",
+                    type: "error",
+                  });
+                }
+              } else {
+                remainingProcessing.push({ ...entry, progress: newProgress });
+              }
+            }
+            if (
+              remainingProcessing.length !== currentProcessing.length ||
+              remainingProcessing.some(
+                (e, i) => e.progress !== currentProcessing[i].progress,
+              )
+            ) {
+              setProcessingEntries(remainingProcessing);
+              processingRef.current = remainingProcessing;
+            }
+
+            if (completedProcessingMsgs.length > 0) {
+              setTimeout(() => {
+                setLogs((l) =>
+                  [
+                    ...completedProcessingMsgs.map((m) => ({
+                      id: generateId(),
+                      time: new Date().toLocaleTimeString(),
+                      msg: m.msg,
+                      type: m.type,
+                    })),
+                    ...l,
+                  ].slice(0, 50),
+                );
+              }, 0);
+            }
+
+            if (newReplies.length > 0) {
+              // Processing finished → focus the student on the return
+              // packet that's about to travel.
+              setTimeout(() => {
+                setSelectedPacketId(newReplies[0].id);
+                setPacketExpanded(true);
+                setNodeExpanded(false);
+              }, 0);
+            }
+
+            // 2. Advance packets (delay countdown first, then progress);
+            //    process arrivals when a packet finishes a hop.
+            //    Compute the new packet list synchronously from refs so
+            //    we never depend on the functional-updater closure.
+            const currentPackets = packetsRef.current || [];
+            let nextPackets = currentPackets.filter(
+              (p) =>
+                !(
+                  p.state === "DROPPED" && performance.now() - p.dropTime > 1500
+                ),
+            );
+
+            let needsProcessing = false;
+            nextPackets = nextPackets.map((p) => {
+              if (p.state === "TRANSIT") {
+                const delay = p.delayRemaining || 0;
+                if (delay > 0) {
+                  return {
+                    ...p,
+                    delayRemaining: Math.max(0, delay - dt),
+                  };
+                }
+                const nextProgress = p.progress + dt;
+                if (nextProgress >= 100) {
+                  needsProcessing = true;
+                  return { ...p, progress: 100 };
+                }
+                return { ...p, progress: nextProgress };
+              } else if (p.state === "ARRIVED") {
+                needsProcessing = true;
+              }
+              return p;
+            });
+
+            if (needsProcessing) {
+              const result = handleProcessStepRef.current(
+                nextPackets,
+                buffersRef.current,
+              );
+              commitUpdates(result);
+              nextPackets = result.nextPackets;
+            }
+
+            // Append newly emitted reply packets AFTER the advance step
+            // so the first packet of a response is visible at its source
+            // (the server) for one tick before it starts moving — same
+            // behaviour the staggered 2nd/3rd fragments exhibit thanks
+            // to their delayRemaining.
+            if (newReplies.length > 0) {
+              nextPackets = [...nextPackets, ...newReplies];
+            }
+
+            setPackets(nextPackets);
+            packetsRef.current = nextPackets;
+          },
+          [commitUpdates],
+        );
 
         // Animation Loop
         useEffect(() => {
@@ -1167,54 +1954,20 @@
           let lastTime = performance.now();
           const animate = (time) => {
             const deltaTime = time - lastTime;
-
             if (deltaTime > 20) {
-              // Limit framerate logic
-              setPackets((prev) => {
-                // Filter out dropped packets older than 1.5 seconds
-                let nextPackets = prev.filter(
-                  (p) =>
-                    !(
-                      p.state === "DROPPED" &&
-                      performance.now() - p.dropTime > 1500
-                    ),
-                );
-                let needsProcessing = false;
-
-                nextPackets = nextPackets.map((p) => {
-                  if (p.state === "TRANSIT") {
-                    const nextProgress = p.progress + speed;
-                    if (nextProgress >= 100) {
-                      needsProcessing = true;
-                      return { ...p, progress: 100 };
-                    }
-                    return { ...p, progress: nextProgress };
-                  } else if (p.state === "ARRIVED") {
-                    needsProcessing = true;
-                  }
-                  return p;
-                });
-
-                if (needsProcessing) {
-                  const result = handleProcessStep(nextPackets);
-                  commitUpdates(result);
-                  return result.nextPackets;
-                }
-                return nextPackets;
-              });
+              // In animation mode, processing ticks at 2x packet speed so
+              // the "constructing response" view doesn't drag out.
+              tickSimulation(speed, speed * 2);
               lastTime = time;
             }
             reqRef.current = requestAnimationFrame(animate);
           };
           reqRef.current = requestAnimationFrame(animate);
           return () => cancelAnimationFrame(reqRef.current);
-        }, [isPlaying, speed, handleProcessStep, commitUpdates]);
+        }, [isPlaying, speed, tickSimulation]);
 
         const handlePlayToggle = () => {
-          const hasActivePackets = packets.some(
-            (p) => p.state === "TRANSIT" || p.state === "ARRIVED",
-          );
-          if (!isPlaying && !hasActivePackets) {
+          if (!isPlaying && !transactionActive) {
             commitUpdates({
               logsToAdd: [
                 {
@@ -1230,10 +1983,7 @@
         };
 
         const manualStep = () => {
-          const hasActivePackets = packets.some(
-            (p) => p.state === "TRANSIT" || p.state === "ARRIVED",
-          );
-          if (!hasActivePackets) {
+          if (!transactionActive) {
             commitUpdates({
               logsToAdd: [
                 {
@@ -1245,20 +1995,11 @@
             });
             return;
           }
-
-          setPackets((prev) => {
-            let np = prev
-              .filter((p) => p.state !== "DROPPED")
-              .map((p) =>
-                p.state === "TRANSIT" ? { ...p, progress: 100 } : p,
-              );
-            const result = handleProcessStep(np);
-            commitUpdates(result);
-            return result.nextPackets;
-          });
+          // One "step" = one full hop = 100 progress units.
+          tickSimulation(100);
         };
 
-        const sendUserRequest = (nodeId, targetIp, type) => {
+        const sendUserRequest = (nodeId, targetIp, type, options = {}) => {
           const node = nodes[nodeId];
           if (!targetIp.match(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/)) {
             commitUpdates({
@@ -1267,25 +2008,177 @@
             });
             return;
           }
-          const res = NetworkEngine.createRequestPacket(node, targetIp, type);
+
+          // Ping emits 4 staggered request packets per Send, mirroring
+          // the default Windows `ping` behaviour. Each subsequent packet
+          // starts one full hop later than the previous so students see
+          // them chase one another along the wire.
+          const pingCount = type === "PING" ? 4 : 1;
+          const txId = generateId();
+          const newPackets = [];
+          let target;
+          for (let i = 0; i < pingCount; i++) {
+            const seq = i + 1;
+            const opts = {
+              ...options,
+              transactionId: txId,
+              ...(type === "PING"
+                ? { pingSeq: seq, pingTotal: pingCount }
+                : {}),
+            };
+            const res = NetworkEngine.createRequestPacket(
+              node,
+              targetIp,
+              type,
+              opts,
+            );
+            if (res.error) {
+              commitUpdates({
+                logsToAdd: [{ msg: res.error, type: "error" }],
+                nodeUpdates: {},
+              });
+              return;
+            }
+            if (type === "PING") {
+              res.packet.transportLayer.seq = seq;
+              res.packet.transportLayer.total = pingCount;
+            }
+            res.packet.delayRemaining = i * 200; // 2-step stagger
+            newPackets.push(res.packet);
+          }
+          target =
+            type === "HTTP" ? `${targetIp}${options.path || "/"}` : targetIp;
+
+          setPackets((prev) => [...prev, ...newPackets]);
+          commitUpdates({
+            logsToAdd: [
+              {
+                msg:
+                  type === "PING"
+                    ? `${node.name} pinging ${target} (${pingCount} packets)`
+                    : `Created ${type} request from ${node.name} to ${target}`,
+                type: "success",
+              },
+            ],
+            nodeUpdates: {},
+          });
+          setSelectedPacketId(newPackets[0].id);
+          setPacketExpanded(true);
+          setNodeExpanded(false);
+        };
+
+        // Drain the auto-fetch queue once the previous transaction fully
+        // completes (no packets in flight and no processing entries left).
+        useEffect(() => {
+          if (activePackets.length > 0) return;
+          if (processingEntries.length > 0) return;
+          if (autoFetchQueue.length === 0) return;
+          const [next, ...rest] = autoFetchQueue;
+          const clientNode = nodes[next.clientId];
+          if (!clientNode) {
+            setAutoFetchQueue(rest);
+            return;
+          }
+          setAutoFetchQueue(rest);
+          const res = NetworkEngine.createRequestPacket(
+            clientNode,
+            next.targetIp,
+            "HTTP",
+            { path: next.path, transactionId: next.transactionId },
+          );
           if (res.error) {
-            commitUpdates({
-              logsToAdd: [{ msg: res.error, type: "error" }],
-              nodeUpdates: {},
-            });
-          } else {
-            setPackets((prev) => [...prev, res.packet]);
             commitUpdates({
               logsToAdd: [
                 {
-                  msg: `Created ${type} request from ${node.name} to ${targetIp}`,
-                  type: "success",
+                  msg: `Auto-fetch failed: ${res.error}`,
+                  type: "error",
                 },
               ],
               nodeUpdates: {},
             });
-            setSelectedEntity({ type: "PACKET", id: res.packet.id });
+            return;
           }
+          setPackets((prev) => [...prev, res.packet]);
+          commitUpdates({
+            logsToAdd: [
+              {
+                msg: `${clientNode.name} auto-fetching ${next.targetIp}${next.path}`,
+                type: "info",
+              },
+            ],
+            nodeUpdates: {},
+          });
+          setSelectedPacketId(res.packet.id);
+          setPacketExpanded(true);
+          setNodeExpanded(false);
+        }, [
+          activePackets.length,
+          processingEntries.length,
+          autoFetchQueue,
+          nodes,
+          commitUpdates,
+        ]);
+
+        // Handler used by the mini browser when the student clicks a link.
+        const handleBrowserNavigate = (clientId, url) => {
+          const client = nodes[clientId];
+          if (!client) return;
+          const baseIp =
+            (client.browser &&
+              client.browser.page &&
+              client.browser.page.serverIp) ||
+            null;
+          const resolved = resolveUrl(url, baseIp);
+          if (!resolved || !resolved.ip) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `Cannot resolve link target: ${url}`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return;
+          }
+          sendUserRequest(clientId, resolved.ip, "HTTP", {
+            path: resolved.path,
+          });
+        };
+
+        // Handlers for editing server filesystems.
+        const openFileEditor = (serverId, fileName) => {
+          const server = nodes[serverId];
+          if (!server) return;
+          const file = (server.files || {})[fileName];
+          if (file && file.type === "image") return;
+          setEditorState({
+            serverId,
+            fileName,
+            content: file ? file.content : "",
+            isNew: !file,
+          });
+        };
+        const closeFileEditor = () => setEditorState(null);
+        const saveFile = (serverId, fileName, content) => {
+          setNodes((prev) => {
+            const server = prev[serverId];
+            if (!server) return prev;
+            const files = { ...(server.files || {}) };
+            files[fileName] = { type: "html", content };
+            return { ...prev, [serverId]: { ...server, files } };
+          });
+          setEditorState(null);
+        };
+        const deleteFile = (serverId, fileName) => {
+          if (fileName === "index.html") return;
+          setNodes((prev) => {
+            const server = prev[serverId];
+            if (!server) return prev;
+            const files = { ...(server.files || {}) };
+            delete files[fileName];
+            return { ...prev, [serverId]: { ...server, files } };
+          });
         };
 
         // Render Helpers
@@ -1310,8 +2203,10 @@
                 href="index.html"
                 className="font-mono text-[1.2rem] font-bold text-sky-700 dark:text-headerAccent tracking-widest no-underline"
               >
-                <span className="text-slate-400 dark:text-slate-500">&lt;</span>CS
-                <span className="text-slate-400 dark:text-slate-500">&gt;</span>&nbsp;Learning
+                <span className="text-slate-400 dark:text-slate-500">&lt;</span>
+                CS
+                <span className="text-slate-400 dark:text-slate-500">&gt;</span>
+                &nbsp;Learning
               </a>
               <nav className="flex items-center gap-6">
                 <a
@@ -1326,12 +2221,32 @@
                   aria-label="Toggle Dark Mode"
                 >
                   {isDark ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                      />
                     </svg>
                   ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                      />
                     </svg>
                   )}
                 </button>
@@ -1346,18 +2261,23 @@
               <div className="flex gap-3 items-center ml-auto">
                 <button
                   onClick={handlePlayToggle}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded font-semibold text-sm transition ${isPlaying ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-green-600 hover:bg-green-500 text-white"}`}
+                  disabled={!isPlaying && !transactionActive}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded font-semibold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${isPlaying ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-green-600 hover:bg-green-500 text-white"}`}
                 >
                   {isPlaying ? (
-                    <><Icons.Pause /> Pause</>
+                    <>
+                      <Icons.Pause /> Pause
+                    </>
                   ) : (
-                    <><Icons.Play /> Play</>
+                    <>
+                      <Icons.Play /> Play
+                    </>
                   )}
                 </button>
                 <button
                   onClick={manualStep}
-                  disabled={isPlaying}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold text-sm disabled:opacity-50 transition"
+                  disabled={isPlaying || !transactionActive}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   <Icons.StepForward /> Step Forward
                 </button>
@@ -1384,8 +2304,7 @@
                 <div
                   className="flex-1 relative overflow-hidden"
                   style={{
-                    backgroundImage:
-                      `radial-gradient(${isDark ? "#334155" : "#cbd5e1"} 1px, transparent 1px)`,
+                    backgroundImage: `radial-gradient(${isDark ? "#334155" : "#cbd5e1"} 1px, transparent 1px)`,
                     backgroundSize: "30px 30px",
                   }}
                 >
@@ -1406,6 +2325,7 @@
                         const linkActive = packets.some(
                           (p) =>
                             p.state === "TRANSIT" &&
+                            !(p.delayRemaining > 0) &&
                             ((p.currentNode === link.source &&
                               p.nextNode === link.target) ||
                               (p.currentNode === link.target &&
@@ -1480,14 +2400,33 @@
                     {/* Nodes */}
                     {Object.values(nodes).map((node) => {
                       const color = getEntityColor(node.id);
-                      const isSelected = selectedEntity?.id === node.id;
+                      const isSelected = selectedNodeId === node.id;
+                      const handleClick = () => {
+                        if (pickerSlot && selectedNodeId) {
+                          const ip = ipForPicker(node);
+                          if (!ip) return;
+                          if (pickerSlot === "PING") {
+                            setPingTargets((m) => ({
+                              ...m,
+                              [selectedNodeId]: ip,
+                            }));
+                          } else if (pickerSlot === "HTTP") {
+                            setHttpTargets((m) => ({
+                              ...m,
+                              [selectedNodeId]: ip,
+                            }));
+                          }
+                          setPickerSlot(null);
+                          return;
+                        }
+                        setSelectedNodeId(node.id);
+                        setNodeExpanded(true);
+                      };
                       return (
                         <g
                           key={node.id}
                           transform={`translate(${node.x}, ${node.y})`}
-                          onClick={() =>
-                            setSelectedEntity({ type: "NODE", id: node.id })
-                          }
+                          onClick={handleClick}
                           className="cursor-pointer"
                         >
                           <circle
@@ -1495,13 +2434,12 @@
                             cy="0"
                             r="30"
                             fill={isDark ? "#1e293b" : "#f8fafc"}
-                            stroke={isSelected ? (isDark ? "#fff" : "#0f172a") : color}
+                            stroke={
+                              isSelected ? (isDark ? "#fff" : "#0f172a") : color
+                            }
                             strokeWidth={isSelected ? 4 : 2}
                           />
-                          <g
-                            transform="translate(-20, -20)"
-                            fill={color}
-                          >
+                          <g transform="translate(-20, -20)" fill={color}>
                             {node.type === "PC" && <Icons.PC />}
                             {node.type === "Server" && <Icons.Server />}
                             {node.type === "Switch" && <Icons.Switch />}
@@ -1519,7 +2457,9 @@
                           >
                             {node.name}
                           </text>
-                          {(node.type === "PC" || node.type === "Server" || node.type === "Laptop") && (
+                          {(node.type === "PC" ||
+                            node.type === "Server" ||
+                            node.type === "Laptop") && (
                             <text
                               x="0"
                               y="66"
@@ -1536,6 +2476,12 @@
 
                     {/* Packets */}
                     {packets.map((p) => {
+                      // Packets still in their delay window haven't left
+                      // their source yet — hide them on the canvas (the
+                      // node icon will gently glow if it has queued
+                      // packets, see node rendering above).
+                      if (p.state === "TRANSIT" && (p.delayRemaining || 0) > 0)
+                        return null;
                       let px, py;
                       const curr = nodes[p.currentNode];
 
@@ -1598,14 +2544,15 @@
                         );
                       }
 
-                      const isSelected = selectedEntity?.id === p.id;
+                      const isSelected = selectedPacketId === p.id;
                       return (
                         <g
                           key={p.id}
                           transform={`translate(${px}, ${py})`}
-                          onClick={() =>
-                            setSelectedEntity({ type: "PACKET", id: p.id })
-                          }
+                          onClick={() => {
+                            setSelectedPacketId(p.id);
+                            setPacketExpanded(true);
+                          }}
                           className="cursor-pointer"
                         >
                           <circle
@@ -1613,7 +2560,13 @@
                             cy="0"
                             r="14"
                             fill="#f59e0b"
-                            stroke={isSelected ? (isDark ? "#fff" : "#0f172a") : "#b45309"}
+                            stroke={
+                              isSelected
+                                ? isDark
+                                  ? "#fff"
+                                  : "#0f172a"
+                                : "#b45309"
+                            }
                             strokeWidth={isSelected ? 3 : 1}
                           />
                           <g transform="translate(-12, -12)">
@@ -1626,9 +2579,7 @@
 
                   {/* Top-right Legend / Map info */}
                   <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-800/80 p-3 rounded border border-slate-300 dark:border-slate-700 pointer-events-none text-slate-900 dark:text-slate-100">
-                    <h3 className="font-bold mb-2">
-                      Network Legend
-                    </h3>
+                    <h3 className="font-bold mb-2">Network Legend</h3>
                     <div className="flex flex-col gap-1 text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-blue-500"></div>{" "}
@@ -1643,10 +2594,24 @@
                         Internet/WAN
                       </div>
                       <div className="flex items-center gap-2">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isDark ? "#10b981" : "#047857"} strokeWidth="2.5" strokeLinecap="round">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={isDark ? "#10b981" : "#047857"}
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                        >
                           <path d="M5 12a10 10 0 0 1 14 0"></path>
                           <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
-                          <circle cx="12" cy="19" r="1" fill={isDark ? "#10b981" : "#047857"} stroke="none"></circle>
+                          <circle
+                            cx="12"
+                            cy="19"
+                            r="1"
+                            fill={isDark ? "#10b981" : "#047857"}
+                            stroke="none"
+                          ></circle>
                         </svg>
                         Wireless link
                       </div>
@@ -1675,51 +2640,603 @@
 
               {/* RIGHT: Inspector Panel */}
               <div className="w-96 bg-slate-100 dark:bg-slate-800 border-l border-slate-300 dark:border-slate-700 flex flex-col">
-                {!selectedEntity ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-8 text-center">
-                    <Icons.Router />
-                    <h2 className="text-xl mt-4 font-bold text-slate-700 dark:text-slate-300">
-                      Inspector
-                    </h2>
-                    <p className="mt-2 text-sm">
-                      Click on any node or active packet in the network map to
-                      view details and perform actions.
-                    </p>
-                  </div>
-                ) : selectedEntity.type === "NODE" ? (
-                  <NodeInspector
-                    node={nodes[selectedEntity.id]}
-                    onSendRequest={sendUserRequest}
-                    color={getEntityColor(selectedEntity.id)}
-                  />
-                ) : (
-                  <PacketInspector
-                    packet={packets.find((p) => p.id === selectedEntity.id)}
-                  />
-                )}
+                <div className="flex-1 overflow-y-auto flex flex-col">
+                  {/* NODE SECTION */}
+                  <CollapsibleSection
+                    title="Node Details"
+                    accent="#0ea5e9"
+                    expanded={nodeExpanded}
+                    onToggle={() => setNodeExpanded((e) => !e)}
+                    subtitle={
+                      selectedNodeId
+                        ? nodes[selectedNodeId].name
+                        : "No node selected"
+                    }
+                  >
+                    {selectedNodeId ? (
+                      <NodeInspector
+                        key={selectedNodeId}
+                        node={nodes[selectedNodeId]}
+                        processing={processingByNode[selectedNodeId] || []}
+                        terminal={terminals[selectedNodeId] || []}
+                        transportBuffer={transportBuffers[selectedNodeId] || {}}
+                        tabSignal={tabSignal}
+                        pingTarget={
+                          pingTargets[selectedNodeId] ?? "192.168.2.2"
+                        }
+                        httpTarget={
+                          httpTargets[selectedNodeId] ?? "203.0.113.50"
+                        }
+                        onPingTargetChange={(ip) =>
+                          setPingTargets((m) => ({
+                            ...m,
+                            [selectedNodeId]: ip,
+                          }))
+                        }
+                        onHttpTargetChange={(ip) =>
+                          setHttpTargets((m) => ({
+                            ...m,
+                            [selectedNodeId]: ip,
+                          }))
+                        }
+                        pickerSlot={pickerSlot}
+                        onStartPicker={startPicker}
+                        onCancelPicker={cancelPicker}
+                        onSendRequest={sendUserRequest}
+                        onNavigate={handleBrowserNavigate}
+                        onOpenFileEditor={openFileEditor}
+                        onDeleteFile={deleteFile}
+                        color={getEntityColor(selectedNodeId)}
+                        transactionActive={transactionActive}
+                      />
+                    ) : (
+                      <div className="p-6 text-center text-slate-500 text-sm">
+                        Click any node on the network map to inspect its details
+                        and (for PCs / Laptops / Servers) send pings or HTTP
+                        requests.
+                      </div>
+                    )}
+                  </CollapsibleSection>
+
+                  {/* PACKET SECTION (tabbed across all in-flight packets) */}
+                  <CollapsibleSection
+                    title="Packet Details"
+                    accent="#f59e0b"
+                    expanded={packetExpanded}
+                    onToggle={() => setPacketExpanded((e) => !e)}
+                    subtitle={
+                      activePackets.length > 0
+                        ? `${activePackets.length} live packet${activePackets.length === 1 ? "" : "s"}`
+                        : "No active packets"
+                    }
+                  >
+                    {activePackets.length > 0 ? (
+                      <MultiPacketInspector
+                        packets={activePackets}
+                        selectedPacketId={selectedPacketId}
+                        onSelectPacket={setSelectedPacketId}
+                      />
+                    ) : (
+                      <div className="p-6 text-center text-slate-500 text-sm">
+                        No active packet in the simulator. Send a Ping or HTTP
+                        request from a node to populate this view.
+                      </div>
+                    )}
+                  </CollapsibleSection>
+                </div>
               </div>
             </div>
+
+            {editorState && (
+              <FileEditorModal
+                state={editorState}
+                onClose={closeFileEditor}
+                onSave={saveFile}
+              />
+            )}
           </div>
         );
       };
 
       // --- SUB-COMPONENTS ---
 
-      const NodeInspector = ({ node, onSendRequest, color }) => {
-        const [tab, setTab] = useState("INFO");
-        const [pingTarget, setPingTarget] = useState("192.168.2.2");
-        const [httpTarget, setHttpTarget] = useState("203.0.113.50");
+      const CollapsibleSection = ({
+        title,
+        subtitle,
+        accent,
+        expanded,
+        onToggle,
+        children,
+      }) => {
+        return (
+          <div className="border-b border-slate-300 dark:border-slate-700">
+            <button
+              onClick={onToggle}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left bg-slate-200/70 dark:bg-slate-900/40 hover:bg-slate-200 dark:hover:bg-slate-900/70 transition"
+              style={{ borderLeft: `4px solid ${accent}` }}
+            >
+              <span
+                className="text-slate-700 dark:text-slate-200 text-xs"
+                style={{
+                  display: "inline-block",
+                  transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+                  transition: "transform 0.15s",
+                }}
+              >
+                ▶
+              </span>
+              <span className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                {title}
+              </span>
+              <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 truncate max-w-[55%] text-right">
+                {subtitle}
+              </span>
+            </button>
+            {expanded && <div>{children}</div>}
+          </div>
+        );
+      };
 
-        const hasBrowser =
-          node.type === "PC" ||
-          node.type === "Server" ||
-          node.type === "Laptop";
+      const FileEditorModal = ({ state, onClose, onSave }) => {
+        const [fileName, setFileName] = useState(state.fileName || "");
+        const [content, setContent] = useState(state.content || "");
+        const handleSave = () => {
+          let name = (fileName || "").trim();
+          if (!name) return;
+          if (!/\.html?$/i.test(name)) name = name + ".html";
+          if (/[\s\/\\?#]/.test(name.replace(/\.html?$/i, ""))) return;
+          onSave(state.serverId, name, content);
+        };
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 className="font-bold text-lg">
+                  {state.isNew ? "New HTML file" : `Edit ${state.fileName}`}
+                </h3>
+                <button
+                  onClick={onClose}
+                  className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xl leading-none px-2"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-4 flex flex-col gap-3 overflow-y-auto">
+                {state.isNew && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      File name (must end in .html)
+                    </label>
+                    <input
+                      type="text"
+                      value={fileName}
+                      onChange={(e) => setFileName(e.target.value)}
+                      placeholder="page1.html"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 font-mono text-sm"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
+                    HTML content
+                  </label>
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    spellCheck={false}
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 font-mono text-xs h-72 resize-vertical"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Supported tags include &lt;h1-h3&gt;, &lt;p&gt;, &lt;a
+                    href&gt;, &lt;img src&gt;. Use a filename like &lt;img
+                    src=&quot;cat.jpg&quot;&gt; or an absolute URL like &lt;a
+                    href=&quot;http://203.0.113.50/index.html&quot;&gt;.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex gap-2 justify-end">
+                <button
+                  onClick={onClose}
+                  className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded font-semibold text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold text-sm"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // Tiny in-browser HTML renderer scaled for the preview window. Only a
+      // small whitelist of tags is honoured; anything else is stripped so a
+      // page can't break the layout. Links and images are rendered as
+      // React elements so we can wire clicks and placeholder loading.
+      const MiniBrowserRenderer = ({ html, resources, onNavigate, baseIp }) => {
+        if (!html) return null;
+        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        const source = bodyMatch ? bodyMatch[1] : html;
+
+        const handleAnchor = (e, href) => {
+          e.preventDefault();
+          if (onNavigate) onNavigate(href);
+        };
+
+        // Tokenise the HTML body into a flat sequence of elements/text.
+        const tokens = [];
+        const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9]*)([^>]*)>|([^<]+)/g;
+        const openStack = [];
+        let m;
+        let key = 0;
+        while ((m = tagRe.exec(source)) !== null) {
+          if (m[3]) {
+            // text
+            const txt = m[3].replace(/\s+/g, " ");
+            if (txt.trim().length) {
+              tokens.push({ type: "text", text: txt, key: key++ });
+            }
+            continue;
+          }
+          const raw = m[0];
+          const tag = m[1].toLowerCase();
+          const closing = raw.startsWith("</");
+          const attrs = m[2] || "";
+          const VOID_TAGS = new Set([
+            "img",
+            "br",
+            "hr",
+            "input",
+            "meta",
+            "link",
+          ]);
+          if (closing) {
+            tokens.push({ type: "close", tag, key: key++ });
+          } else if (VOID_TAGS.has(tag) || /\/\s*$/.test(attrs)) {
+            tokens.push({
+              type: "self",
+              tag,
+              attrs,
+              key: key++,
+            });
+          } else {
+            tokens.push({ type: "open", tag, attrs, key: key++ });
+          }
+        }
+
+        // Flatten tokens into block-ish React elements.
+        const renderTokens = () => {
+          const out = [];
+          // Maintain a stack of open tags so anchor/heading wrappers can
+          // close at the right time. For simplicity we render each
+          // top-level block separately and inline tags wrap their text.
+          let i = 0;
+          const getAttr = (attrs, name) => {
+            const re = new RegExp(name + '\\s*=\\s*"([^"]*)"', "i");
+            const r = attrs.match(re);
+            if (r) return r[1];
+            const re2 = new RegExp(name + "\\s*=\\s*'([^']*)'", "i");
+            const r2 = attrs.match(re2);
+            return r2 ? r2[1] : null;
+          };
+          const consumeUntilClose = (openTag) => {
+            const children = [];
+            while (i < tokens.length) {
+              const t = tokens[i];
+              if (t.type === "close" && t.tag === openTag) {
+                i++;
+                return children;
+              }
+              children.push(renderOne());
+            }
+            return children;
+          };
+          const renderOne = () => {
+            const t = tokens[i++];
+            if (!t) return null;
+            if (t.type === "text") {
+              return <React.Fragment key={t.key}>{t.text}</React.Fragment>;
+            }
+            if (t.type === "self") {
+              if (t.tag === "img") {
+                const src = getAttr(t.attrs, "src") || "";
+                const alt = getAttr(t.attrs, "alt") || src;
+                const resource = (resources || {})[src];
+                if (
+                  resource &&
+                  resource.status === "loaded" &&
+                  resource.animal
+                ) {
+                  const svg = ANIMAL_SVGS[resource.animal];
+                  return (
+                    <span
+                      key={t.key}
+                      className="inline-block align-middle my-1"
+                      style={{ lineHeight: 0 }}
+                    >
+                      <svg
+                        width="60"
+                        height="60"
+                        viewBox="0 0 100 100"
+                        dangerouslySetInnerHTML={{ __html: svg }}
+                      />
+                    </span>
+                  );
+                }
+                return (
+                  <span
+                    key={t.key}
+                    className="inline-flex flex-col items-center justify-center align-middle border border-dashed border-slate-400 text-slate-500 my-1 mr-1"
+                    style={{
+                      width: 60,
+                      height: 60,
+                      fontSize: 7,
+                      lineHeight: 1.1,
+                      textAlign: "center",
+                      padding: 2,
+                    }}
+                  >
+                    <span
+                      className="inline-block w-2 h-2 rounded-full border-2 border-slate-400 border-t-slate-200 mb-1"
+                      style={{ animation: "spin 1s linear infinite" }}
+                    />
+                    <span>{alt}</span>
+                  </span>
+                );
+              }
+              // <br/> and others
+              if (t.tag === "br") return <br key={t.key} />;
+              return null;
+            }
+            if (t.type === "open") {
+              const children = consumeUntilClose(t.tag);
+              if (t.tag === "h1")
+                return (
+                  <div
+                    key={t.key}
+                    style={{ fontSize: 14, fontWeight: 700, margin: "4px 0" }}
+                  >
+                    {children}
+                  </div>
+                );
+              if (t.tag === "h2")
+                return (
+                  <div
+                    key={t.key}
+                    style={{ fontSize: 12, fontWeight: 700, margin: "3px 0" }}
+                  >
+                    {children}
+                  </div>
+                );
+              if (t.tag === "h3")
+                return (
+                  <div
+                    key={t.key}
+                    style={{ fontSize: 11, fontWeight: 700, margin: "2px 0" }}
+                  >
+                    {children}
+                  </div>
+                );
+              if (t.tag === "p")
+                return (
+                  <div
+                    key={t.key}
+                    style={{ fontSize: 9, margin: "2px 0", lineHeight: 1.3 }}
+                  >
+                    {children}
+                  </div>
+                );
+              if (t.tag === "a") {
+                const href = getAttr(t.attrs, "href") || "#";
+                return (
+                  <a
+                    key={t.key}
+                    href={href}
+                    onClick={(e) => handleAnchor(e, href)}
+                    style={{
+                      color: "#1d4ed8",
+                      textDecoration: "underline",
+                      fontSize: 9,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {children}
+                  </a>
+                );
+              }
+              if (t.tag === "b" || t.tag === "strong")
+                return (
+                  <strong key={t.key} style={{ fontSize: 9 }}>
+                    {children}
+                  </strong>
+                );
+              if (t.tag === "i" || t.tag === "em")
+                return (
+                  <em key={t.key} style={{ fontSize: 9 }}>
+                    {children}
+                  </em>
+                );
+              if (t.tag === "ul")
+                return (
+                  <ul
+                    key={t.key}
+                    style={{
+                      fontSize: 9,
+                      paddingLeft: 14,
+                      margin: "2px 0",
+                      listStyle: "disc",
+                    }}
+                  >
+                    {children}
+                  </ul>
+                );
+              if (t.tag === "li")
+                return (
+                  <li key={t.key} style={{ fontSize: 9 }}>
+                    {children}
+                  </li>
+                );
+              // Generic wrapper for body/html/div/span etc.
+              return (
+                <div key={t.key} style={{ fontSize: 9 }}>
+                  {children}
+                </div>
+              );
+            }
+            // stray close
+            return null;
+          };
+          while (i < tokens.length) {
+            const piece = renderOne();
+            if (piece) out.push(piece);
+          }
+          return out;
+        };
 
         return (
-          <div className="flex flex-col h-full">
+          <div
+            className="text-slate-900"
+            style={{ fontSize: 9, lineHeight: 1.3 }}
+          >
+            {renderTokens()}
+          </div>
+        );
+      };
+
+      // IP text input with a small "[ip]" picker button. When the
+      // picker is active, the input is replaced by an instruction to
+      // click a node on the canvas (the App-level node onClick handler
+      // pipes the chosen IP back into the same input via callback).
+      const IpInputWithPicker = ({
+        value,
+        onChange,
+        picking,
+        onStartPicker,
+        onCancelPicker,
+      }) => {
+        return (
+          <div className="flex items-stretch gap-1">
+            {picking ? (
+              <div className="flex-1 bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-400 dark:border-slate-600 rounded p-2 text-[11px] italic text-slate-500 dark:text-slate-400 font-sans">
+                Click a node on the network to use its IP
+                <span className="block text-[10px] mt-0.5 not-italic">
+                  (or press <span className="font-mono">Esc</span> to cancel)
+                </span>
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded p-2 font-mono text-sm"
+              />
+            )}
+            <button
+              type="button"
+              onClick={picking ? onCancelPicker : onStartPicker}
+              title={picking ? "Cancel picker" : "Pick IP from a node"}
+              className={`px-2 rounded font-mono text-xs border transition ${picking ? "bg-amber-100 dark:bg-amber-900/40 border-amber-400 text-amber-800 dark:text-amber-200" : "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 hover:bg-slate-300 dark:hover:bg-slate-600"}`}
+            >
+              &gt;ip
+            </button>
+          </div>
+        );
+      };
+
+      const NodeInspector = ({
+        node,
+        processing,
+        terminal,
+        transportBuffer,
+        tabSignal,
+        pingTarget,
+        httpTarget,
+        onPingTargetChange,
+        onHttpTargetChange,
+        pickerSlot,
+        onStartPicker,
+        onCancelPicker,
+        onSendRequest,
+        onNavigate,
+        onOpenFileEditor,
+        onDeleteFile,
+        color,
+        transactionActive,
+      }) => {
+        const isClient = node.type === "PC" || node.type === "Laptop";
+        const isServer = node.type === "Server";
+
+        const hasProcessing = processing && processing.length > 0;
+        const hasTerminal = terminal && terminal.length > 0;
+        const pendingBuffers = Object.values(transportBuffer || {}).filter(
+          (b) => b && b.received < b.total,
+        );
+        const hasBuffer = pendingBuffers.length > 0;
+
+        const tabs = [{ id: "INFO", label: "Info" }];
+        if (hasProcessing) tabs.push({ id: "SERVICE", label: "Service" });
+        if (isClient) {
+          tabs.push({ id: "PING", label: "Ping" });
+          tabs.push({ id: "HTTP", label: "HTTP" });
+          if (hasBuffer) tabs.push({ id: "TRANSPORT", label: "Transport" });
+          tabs.push({ id: "BROWSER", label: "Browser" });
+          if (hasTerminal) tabs.push({ id: "TERMINAL", label: "Terminal" });
+        }
+        if (isServer) {
+          tabs.push({ id: "FILES", label: "Files" });
+        }
+        const validTabIds = tabs.map((t) => t.id);
+
+        // Decide the most relevant initial tab when the inspector first
+        // mounts for this node, based on the current state.
+        const computeBestTab = () => {
+          if (hasProcessing) return "SERVICE";
+          if (hasBuffer) return "TRANSPORT";
+          if (hasTerminal && !node.browser?.page) return "TERMINAL";
+          if (node.browser?.page) return "BROWSER";
+          return "INFO";
+        };
+        const [tab, setTab] = useState(computeBestTab);
+
+        // React to App-driven tab signals (auto-switch when processing
+        // starts, fragments arrive, full delivery completes, etc.). We
+        // only obey signals targeted at this node so other auto-selects
+        // don't yank a manually navigated user away.
+        useEffect(() => {
+          if (
+            tabSignal &&
+            tabSignal.nodeId === node.id &&
+            tabSignal.tab &&
+            validTabIds.includes(tabSignal.tab) &&
+            tabSignal.tab !== tab
+          ) {
+            setTab(tabSignal.tab);
+          }
+        }, [tabSignal && tabSignal.n]);
+
+        // If the current tab disappears (e.g. SERVICE removed when
+        // processing completes), fall back to the best available.
+        useEffect(() => {
+          if (!validTabIds.includes(tab)) {
+            setTab(computeBestTab());
+          }
+        }, [validTabIds.join(",")]);
+
+        return (
+          <div className="flex flex-col">
             <div
-              className="p-4 border-b border-slate-300 dark:border-slate-700"
-              style={{ borderTop: `4px solid ${color}` }}
+              className="p-3 border-b border-slate-300 dark:border-slate-700"
+              style={{ borderTop: `3px solid ${color}` }}
             >
               <div className="flex items-center gap-3">
                 <div style={{ color }}>
@@ -1731,46 +3248,29 @@
                   {node.type === "Laptop" && <Icons.Laptop />}
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">{node.name}</h2>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{node.type}</p>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                    {node.name}
+                  </h2>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    {node.type}
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex border-b border-slate-300 dark:border-slate-700 text-sm font-semibold">
-              <button
-                onClick={() => setTab("INFO")}
-                className={`flex-1 py-2 ${tab === "INFO" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
-              >
-                Info
-              </button>
-              {hasBrowser && (
+            <div className="flex border-b border-slate-300 dark:border-slate-700 text-xs font-semibold">
+              {tabs.map((tb) => (
                 <button
-                  onClick={() => setTab("PING")}
-                  className={`flex-1 py-2 ${tab === "PING" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
+                  key={tb.id}
+                  onClick={() => setTab(tb.id)}
+                  className={`flex-1 py-2 ${tab === tb.id ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
                 >
-                  Ping
+                  {tb.label}
                 </button>
-              )}
-              {hasBrowser && (
-                <button
-                  onClick={() => setTab("HTTP")}
-                  className={`flex-1 py-2 ${tab === "HTTP" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
-                >
-                  HTTP
-                </button>
-              )}
-              {hasBrowser && (
-                <button
-                  onClick={() => setTab("BROWSER")}
-                  className={`flex-1 py-2 ${tab === "BROWSER" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"}`}
-                >
-                  Browser
-                </button>
-              )}
+              ))}
             </div>
 
-            <div className="flex-1 p-4 overflow-y-auto">
+            <div className="p-4">
               {tab === "INFO" && (
                 <div className="flex flex-col gap-4 text-sm">
                   {node.ip && (
@@ -1779,19 +3279,27 @@
                         Network Configuration
                       </div>
                       <div className="grid grid-cols-[80px_1fr] gap-1">
-                        <span className="text-slate-600 dark:text-slate-400">IP:</span>
+                        <span className="text-slate-600 dark:text-slate-400">
+                          IP:
+                        </span>
                         <span className="font-mono text-blue-700 dark:text-blue-300">
                           {node.ip}
                         </span>
-                        <span className="text-slate-600 dark:text-slate-400">Mask:</span>
+                        <span className="text-slate-600 dark:text-slate-400">
+                          Mask:
+                        </span>
                         <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.subnet}
                         </span>
-                        <span className="text-slate-600 dark:text-slate-400">Gateway:</span>
+                        <span className="text-slate-600 dark:text-slate-400">
+                          Gateway:
+                        </span>
                         <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.gw}
                         </span>
-                        <span className="text-slate-600 dark:text-slate-400">MAC:</span>
+                        <span className="text-slate-600 dark:text-slate-400">
+                          MAC:
+                        </span>
                         <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.mac}
                         </span>
@@ -1908,55 +3416,64 @@
 
                   {node.type === "WAP" && (
                     <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 italic">
-                      Wireless Access Point: bridges associated wireless
-                      clients onto the wired LAN.
+                      Wireless Access Point: bridges associated wireless clients
+                      onto the wired LAN.
                       <br />
-                      Operates at Layer 2, forwarding by MAC address just like
-                      a switch.
+                      Operates at Layer 2, forwarding by MAC address just like a
+                      switch.
                     </div>
                   )}
                 </div>
               )}
 
               {tab === "PING" && (
-                <div className="flex flex-col gap-4">
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-700 dark:text-slate-300">
                     Send an ICMP Echo Request to test connectivity.
                   </p>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                       Target IP Address
                     </label>
-                    <input
-                      type="text"
+                    <IpInputWithPicker
                       value={pingTarget}
-                      onChange={(e) => setPingTarget(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded p-2 font-mono"
+                      onChange={onPingTargetChange}
+                      picking={pickerSlot === "PING"}
+                      onStartPicker={() => onStartPicker("PING")}
+                      onCancelPicker={onCancelPicker}
                     />
                   </div>
                   <button
                     onClick={() => onSendRequest(node.id, pingTarget, "PING")}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition"
+                    disabled={transactionActive || pickerSlot === "PING"}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition text-sm"
                   >
                     Send Ping Request
                   </button>
+                  {transactionActive && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded px-2 py-1">
+                      Finish simulating the current packet before starting a new
+                      one.
+                    </p>
+                  )}
                 </div>
               )}
 
               {tab === "HTTP" && (
-                <div className="flex flex-col gap-4">
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    Simulate a web browser HTTP GET Request.
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                    Simulate a web browser HTTP GET request.
                   </p>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                       Target IP Address
                     </label>
-                    <input
-                      type="text"
+                    <IpInputWithPicker
                       value={httpTarget}
-                      onChange={(e) => setHttpTarget(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded p-2 font-mono"
+                      onChange={onHttpTargetChange}
+                      picking={pickerSlot === "HTTP"}
+                      onStartPicker={() => onStartPicker("HTTP")}
+                      onCancelPicker={onCancelPicker}
                     />
                   </div>
                   <div>
@@ -1967,50 +3484,219 @@
                       type="text"
                       value="80 (HTTP)"
                       disabled
-                      className="w-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-500 rounded p-2 font-mono cursor-not-allowed"
+                      className="w-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-500 rounded p-2 font-mono text-sm cursor-not-allowed"
                     />
                   </div>
                   <button
-                    onClick={() => onSendRequest(node.id, httpTarget, "HTTP")}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded transition"
+                    onClick={() =>
+                      onSendRequest(node.id, httpTarget, "HTTP", { path: "/" })
+                    }
+                    disabled={transactionActive || pickerSlot === "HTTP"}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition text-sm"
                   >
                     Send HTTP Request
                   </button>
+                  {transactionActive && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded px-2 py-1">
+                      Finish simulating the current packet before starting a new
+                      one.
+                    </p>
+                  )}
                 </div>
               )}
 
               {tab === "BROWSER" && (
-                <div className="bg-white text-black p-4 rounded h-64 border border-slate-400 overflow-auto font-sans shadow-inner">
-                  {node.browserOutput ? (
-                    <pre className="whitespace-pre-wrap font-sans">
-                      {node.browserOutput.split("\n").map((line, i) => {
-                        if (line.includes("HTTP 200"))
-                          return (
-                            <div
-                              key={i}
-                              className="text-green-700 font-mono text-xs mb-2 pb-2 border-b"
-                            >
-                              {line}
-                            </div>
-                          );
-                        if (line.includes("<h1>"))
-                          return (
-                            <h1 key={i} className="text-2xl font-bold my-2">
-                              {line.replace(/<\/?h1>/g, "")}
-                            </h1>
-                          );
-                        return (
-                          <span key={i}>
-                            {line.replace(/<\/?(html|body)>/g, "")}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-mono text-slate-700 dark:text-slate-300">
+                    <span className="text-slate-500">URL:</span>
+                    <span className="truncate">
+                      {node.browser && node.browser.page
+                        ? `http://${node.browser.page.serverIp}${node.browser.page.path}`
+                        : "(blank)"}
+                    </span>
+                  </div>
+                  <div
+                    className="bg-white text-black rounded border border-slate-400 overflow-auto shadow-inner"
+                    style={{ height: 220, padding: 8 }}
+                  >
+                    {node.browser && node.browser.page ? (
+                      node.browser.page.status === 200 ? (
+                        <MiniBrowserRenderer
+                          html={node.browser.page.html}
+                          resources={node.browser.resources}
+                          baseIp={node.browser.page.serverIp}
+                          onNavigate={(href) => onNavigate(node.id, href)}
+                        />
+                      ) : (
+                        <div className="text-red-700 font-mono text-xs">
+                          {node.browser.page.status}{" "}
+                          {node.browser.page.message || "Error"}
+                        </div>
+                      )
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-400 italic text-xs">
+                        Browser window empty — use the HTTP tab to load a page.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {tab === "SERVICE" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    OS service on this device is handling incoming requests.
+                    While processing, no reply has been sent yet — when the bar
+                    fills, the response packet(s) will be emitted.
+                  </p>
+                  {(processing || []).map((entry) => {
+                    const pct = Math.min(
+                      100,
+                      Math.round((entry.progress / entry.totalProgress) * 100),
+                    );
+                    const req = entry.request;
+                    return (
+                      <div
+                        key={entry.id}
+                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-slate-800 dark:text-slate-100">
+                            {entry.requestType === "Ping"
+                              ? "ICMP Echo Service"
+                              : "HTTP Service (port 80)"}
                           </span>
-                        );
-                      })}
-                    </pre>
+                          <span className="text-[10px] uppercase text-slate-500">
+                            from {req.networkLayer.srcIP}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-300 mb-1">
+                          Handling:{" "}
+                          <span className="font-mono">{entry.summary}</span>
+                        </div>
+                        <div className="bg-slate-100 dark:bg-slate-800 rounded p-1.5 mb-2 font-mono text-[10px] whitespace-pre-wrap break-all max-h-24 overflow-auto">
+                          {req.payload}
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-amber-500 h-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-1">
+                          Constructing response ({pct}%)
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {tab === "TERMINAL" && (
+                <div
+                  className="bg-black text-emerald-300 font-mono text-[11px] rounded p-2 overflow-auto"
+                  style={{ height: 220 }}
+                >
+                  {(terminal || []).length === 0 ? (
+                    <span className="text-slate-500 italic">
+                      Terminal is empty — send a ping to populate output.
+                    </span>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-slate-500 italic">
-                      Browser Window Empty
-                    </div>
+                    (terminal || []).map((line) => (
+                      <div key={line.id}>{line.text}</div>
+                    ))
                   )}
+                </div>
+              )}
+
+              {tab === "TRANSPORT" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    OS transport layer assembling multi-packet transmissions.
+                    Resources are released to the application (browser) only
+                    when every fragment has arrived.
+                  </p>
+                  {pendingBuffers.length === 0 ? (
+                    <div className="text-xs italic text-slate-500">
+                      No partial transmissions buffered.
+                    </div>
+                  ) : (
+                    pendingBuffers.map((buf, idx) => {
+                      const path =
+                        buf.firstPacket && buf.firstPacket.appLayer.path;
+                      const pct = Math.round((buf.received / buf.total) * 100);
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-xs"
+                        >
+                          <div className="flex justify-between mb-1">
+                            <span className="font-mono text-slate-800 dark:text-slate-100">
+                              {path}
+                            </span>
+                            <span className="text-[10px] uppercase text-slate-500">
+                              {buf.received}/{buf.total} packets
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="bg-blue-500 h-full transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {tab === "FILES" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                    Files served by this web server (root is{" "}
+                    <span className="font-mono">/</span>):
+                  </p>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded divide-y divide-slate-200 dark:divide-slate-800">
+                    {Object.entries(node.files || {}).map(([name, file]) => (
+                      <div
+                        key={name}
+                        className="flex items-center gap-2 px-2 py-1.5 text-xs"
+                      >
+                        <span
+                          className={`inline-block w-1.5 h-1.5 rounded-full ${file.type === "image" ? "bg-purple-500" : "bg-emerald-500"}`}
+                        />
+                        <span className="font-mono text-slate-800 dark:text-slate-200 flex-1 truncate">
+                          {name}
+                        </span>
+                        <span className="text-[10px] uppercase text-slate-500">
+                          {file.type}
+                        </span>
+                        {file.type === "html" && (
+                          <button
+                            onClick={() => onOpenFileEditor(node.id, name)}
+                            className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded text-[10px] font-semibold"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {file.type === "html" && name !== "index.html" && (
+                          <button
+                            onClick={() => onDeleteFile(node.id, name)}
+                            className="px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 rounded text-[10px] font-semibold"
+                          >
+                            Del
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => onOpenFileEditor(node.id, "")}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1.5 px-3 rounded self-start"
+                  >
+                    + New HTML file
+                  </button>
                 </div>
               )}
             </div>
@@ -2018,24 +3704,56 @@
         );
       };
 
+      const MultiPacketInspector = ({
+        packets,
+        selectedPacketId,
+        onSelectPacket,
+      }) => {
+        if (!packets || packets.length === 0) return null;
+        // Make sure the chosen tab is one of the active packets;
+        // otherwise show the first.
+        const activeTabId = packets.find((p) => p.id === selectedPacketId)
+          ? selectedPacketId
+          : packets[0].id;
+        const current = packets.find((p) => p.id === activeTabId) || packets[0];
+        const label = (p) => {
+          const proto = p.appLayer?.protocol || "Pkt";
+          const seq = p.transportLayer?.seq;
+          const total = p.transportLayer?.total;
+          if (total && total > 1) return `${proto} ${seq}/${total}`;
+          return `${proto} ${p.id.substring(0, 3)}`;
+        };
+        return (
+          <div className="flex flex-col bg-slate-100 dark:bg-slate-800">
+            <div className="flex overflow-x-auto border-b border-slate-300 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-900/60 text-[11px] font-semibold">
+              {packets.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => onSelectPacket(p.id)}
+                  className={`px-2 py-1.5 whitespace-nowrap border-r border-slate-300 dark:border-slate-700 ${p.id === activeTabId ? "bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"}`}
+                  title={p.id}
+                >
+                  {label(p)}
+                </button>
+              ))}
+            </div>
+            <PacketInspector packet={current} />
+          </div>
+        );
+      };
+
       const PacketInspector = ({ packet }) => {
         if (!packet)
           return (
-            <div className="p-8 text-center text-slate-500">
+            <div className="p-6 text-center text-slate-500 text-sm">
               Packet no longer exists.
             </div>
           );
 
         return (
-          <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-800">
-            <div className="p-4 border-b border-slate-300 dark:border-slate-700 border-t-4 border-t-amber-500 flex justify-between items-center bg-slate-200 dark:bg-slate-850">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Icons.Packet color="#f59e0b" /> Packet Inspector
-              </h2>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+          <div className="bg-slate-100 dark:bg-slate-800">
+            <div className="p-4 flex flex-col gap-3">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
                 AQA TCP/IP 4-Layer Model Breakdown:
               </p>
 
