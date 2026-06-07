@@ -1,0 +1,1487 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: REST CRUD Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+      .code-pane {
+        font-family: "Consolas", "Courier New", monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .browser-chrome {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.7),
+          0 12px 26px rgba(15, 23, 42, 0.08);
+      }
+      .db-grid input {
+        min-width: 0;
+      }
+      @keyframes flash-green {
+        0% {
+          background-color: #bbf7d0;
+        }
+        100% {
+          background-color: transparent;
+        }
+      }
+      @keyframes flash-blue {
+        0% {
+          background-color: #bfdbfe;
+        }
+        100% {
+          background-color: transparent;
+        }
+      }
+      @keyframes flash-red {
+        0% {
+          background-color: #fecaca;
+        }
+        100% {
+          background-color: transparent;
+        }
+      }
+      @keyframes flash-yellow {
+        0% {
+          background-color: #fef08a;
+        }
+        100% {
+          background-color: transparent;
+        }
+      }
+      .flash-create {
+        animation: flash-green 1.2s ease-out;
+      }
+      .flash-update {
+        animation: flash-blue 1.2s ease-out;
+      }
+      .flash-delete {
+        animation: flash-red 1.2s ease-out;
+      }
+      .flash-read {
+        animation: flash-yellow 1.2s ease-out;
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+
+  <body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useMemo, useState } = React;
+
+      const STARTING_CONTACTS = [
+        { id: 1, contact_name: "Alice", contact_phone: "07111222333" },
+        { id: 2, contact_name: "Charlie", contact_phone: "07444555666" },
+        { id: 3, contact_name: "Maya", contact_phone: "07777888999" },
+      ];
+
+      const cloneRows = (rows) => rows.map((row) => ({ ...row }));
+      const nextId = (rows) =>
+        rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
+      const normaliseId = (value) => {
+        const parsed = Number.parseInt(String(value), 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const apiRow = (row) => ({
+        id: row.id,
+        contact_name: row.contact_name,
+        contact_phone: row.contact_phone,
+      });
+      const json = (value) => JSON.stringify(value, null, 2);
+      const routeName = (method) => {
+        if (method === "POST") return "createContact()";
+        if (method === "GET_ALL") return "getAllContacts()";
+        if (method === "GET_ONE") return "getContactById()";
+        if (method === "PUT") return "updateContact()";
+        if (method === "DELETE") return "deleteContact()";
+        return "notFoundHandler()";
+      };
+
+      function parseContactsPath(address) {
+        const trimmed = address.trim();
+        if (!trimmed) return "/";
+        try {
+          if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return new URL(trimmed).pathname || "/";
+          }
+        } catch (e) {
+          return "/invalid-url";
+        }
+        if (trimmed.startsWith("/")) return trimmed;
+        if (trimmed.startsWith("contactsapp.local")) {
+          return trimmed.replace("contactsapp.local", "") || "/";
+        }
+        return "/" + trimmed;
+      }
+
+      function requestBlock(method, path, payload) {
+        const header = [
+          `${method} ${path} HTTP/1.1`,
+          "Host: contactsapp.local",
+        ];
+        if (payload) header.push("Content-Type: application/json");
+        return payload ? `${header.join("\n")}\n\n${json(payload)}` : header.join("\n");
+      }
+
+      function responseBlock(statusLine, payload) {
+        if (payload === null) return statusLine;
+        return `${statusLine}\nContent-Type: application/json\n\n${json(payload)}`;
+      }
+
+      function buildPostPipeline(form, dbRows, clientRows) {
+        const dbBefore = cloneRows(dbRows);
+        const clientBefore = cloneRows(clientRows);
+        const payload = {
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+        };
+        const missingField = !payload.name
+          ? "Name is required."
+          : !payload.phone
+            ? "Phone number is required."
+            : "";
+
+        if (missingField) {
+          return {
+            title: "CREATE via REST POST - validation failure",
+            badge: "400 Bad Request",
+            method: "POST",
+            path: "/api/contacts",
+            dbBefore,
+            dbAfter: dbBefore,
+            clientBefore,
+            clientAfter: clientBefore,
+            request: requestBlock("POST", "/api/contacts", payload),
+            server:
+              "[Server] POST request received at endpoint: /api/contacts\n" +
+              "[Server] Routing to controllers/contactController.js -> function createContact()\n" +
+              `[Server] Validation failed: ${missingField} Aborting DB execution.`,
+            sql: "[SKIPPED]\nThe database layer is bypassed because validation failed.",
+            skippedDb: true,
+            response: responseBlock("HTTP/1.1 400 Bad Request", {
+              error: "Validation Failed",
+              message: missingField,
+            }),
+            clientLog:
+              "[Browser] fetch() receives status 400.\n" +
+              "[Browser] The form stays visible and the invalid input is highlighted.\n" +
+              `[Browser] Message displayed: ${missingField}`,
+            notice: "",
+            formError: missingField,
+            highlight: { type: "none" },
+          };
+        }
+
+        const id = nextId(dbBefore);
+        const inserted = {
+          id,
+          contact_name: payload.name,
+          contact_phone: payload.phone,
+        };
+        const dbAfter = [...dbBefore, inserted];
+        const clientAfter = [...clientBefore, inserted];
+        return {
+          title: "CREATE via REST POST - successful insert",
+          badge: "201 Created",
+          method: "POST",
+          path: "/api/contacts",
+          dbBefore,
+          dbAfter,
+          clientBefore,
+          clientAfter,
+          request: requestBlock("POST", "/api/contacts", payload),
+          server:
+            "[Server] POST request received at endpoint: /api/contacts\n" +
+            "[Server] Routing to controllers/contactController.js -> function createContact()\n" +
+            "[Server] Sanitizing inputs and generating SQL query...",
+          sql:
+            "INSERT INTO tbl_contacts (contact_name, contact_phone)\n" +
+            `VALUES ('${payload.name}', '${payload.phone}');\n\n` +
+            `[MySQL] 1 row inserted. New id: ${id}`,
+          skippedDb: false,
+          response: responseBlock("HTTP/1.1 201 Created", {
+            success: true,
+            insertedId: id,
+          }),
+          clientLog:
+            "[Browser] fetch() resolves without a full page reload.\n" +
+            "[Browser] The returned id is added to the local contacts array.\n" +
+            `[Browser] A new table row is rendered for ${payload.name}.`,
+          notice: `Created contact ${payload.name} on the server and in the browser state.`,
+          formError: "",
+          clearForm: true,
+          highlight: { type: "create", id },
+        };
+      }
+
+      function buildGetPipeline(path, dbRows, clientRows) {
+        const dbBefore = cloneRows(dbRows);
+        const clientBefore = cloneRows(clientRows);
+        const allMatch = path === "/api/contacts" || path === "/api/contacts/";
+        const oneMatch = path.match(/^\/api\/contacts\/(\d+)\/?$/);
+
+        if (allMatch) {
+          const clientAfter = cloneRows(dbBefore);
+          return {
+            title: "RETRIEVE via REST GET - fetch all contacts",
+            badge: "200 OK",
+            method: "GET",
+            path: "/api/contacts",
+            dbBefore,
+            dbAfter: dbBefore,
+            clientBefore,
+            clientAfter,
+            request: requestBlock("GET", "/api/contacts"),
+            server:
+              "[Server] GET request received at endpoint: /api/contacts\n" +
+              "[Server] Routing to contactController.js -> function getAllContacts()",
+            sql:
+              "SELECT * FROM tbl_contacts;\n\n" +
+              `[MySQL] ${dbBefore.length} row(s) returned.`,
+            skippedDb: false,
+            response: responseBlock(
+              "HTTP/1.1 200 OK",
+              dbBefore.map(apiRow),
+            ),
+            clientLog:
+              "[Browser] The old local array is discarded.\n" +
+              "[Browser] JSON.parse() converts the response body into objects.\n" +
+              "[Browser] map() draws a fresh contact table from the server data.",
+            notice: "Browser state refreshed from the live database.",
+            formError: "",
+            highlight: { type: "read", ids: dbBefore.map((row) => row.id) },
+          };
+        }
+
+        if (oneMatch) {
+          const id = Number.parseInt(oneMatch[1], 10);
+          const found = dbBefore.find((row) => row.id === id);
+          if (found) {
+            const clientAfter = [found].map((row) => ({ ...row }));
+            return {
+              title: `RETRIEVE via REST GET - contact ID ${id}`,
+              badge: "200 OK",
+              method: "GET",
+              path: `/api/contacts/${id}`,
+              dbBefore,
+              dbAfter: dbBefore,
+              clientBefore,
+              clientAfter,
+              request: requestBlock("GET", `/api/contacts/${id}`),
+              server:
+                `[Server] GET request received at endpoint: /api/contacts/${id}\n` +
+                "[Server] Routing to contactController.js -> function getContactById(id)",
+              sql:
+                `SELECT * FROM tbl_contacts WHERE id = ${id};\n\n` +
+                "[MySQL] 1 row returned.",
+              skippedDb: false,
+              response: responseBlock("HTTP/1.1 200 OK", apiRow(found)),
+              clientLog:
+                "[Browser] The response represents one resource.\n" +
+                "[Browser] The contacts table is redrawn to show that single contact.",
+              notice: `Loaded contact ID ${id} from the API response.`,
+              formError: "",
+              highlight: { type: "read", ids: [id] },
+            };
+          }
+
+          return {
+            title: `RETRIEVE via REST GET - missing contact ID ${id}`,
+            badge: "404 Not Found",
+            method: "GET",
+            path: `/api/contacts/${id}`,
+            dbBefore,
+            dbAfter: dbBefore,
+            clientBefore,
+            clientAfter: clientBefore,
+            request: requestBlock("GET", `/api/contacts/${id}`),
+            server:
+              `[Server] GET request received at endpoint: /api/contacts/${id}\n` +
+              `[Server] Routing to contactController.js -> function getContactById(${id})`,
+            sql:
+              `SELECT * FROM tbl_contacts WHERE id = ${id};\n\n` +
+              "[MySQL] Empty result set.",
+            skippedDb: false,
+            response: responseBlock("HTTP/1.1 404 Not Found", {
+              error: "Not Found",
+              message: `Contact with ID ${id} does not exist.`,
+            }),
+            clientLog:
+              "[Browser] fetch() receives status 404.\n" +
+              "[Browser] The application renders a contact-not-found error banner.",
+            notice: `404 Error: contact ID ${id} was not found on the server.`,
+            formError: "",
+            highlight: { type: "none" },
+          };
+        }
+
+        return {
+          title: "GET request - route not handled by the contacts API",
+          badge: "404 Not Found",
+          method: "GET",
+          path,
+          dbBefore,
+          dbAfter: dbBefore,
+          clientBefore,
+          clientAfter: clientBefore,
+          request: requestBlock("GET", path),
+          server:
+            `[Server] GET request received at endpoint: ${path}\n` +
+            "[Server] No contacts API route matches this path.",
+          sql: "[SKIPPED]\nNo controller reached the database layer.",
+          skippedDb: true,
+          response: responseBlock("HTTP/1.1 404 Not Found", {
+            error: "Route Not Found",
+            message: "Only /api/contacts and /api/contacts/:id are implemented in this simulator.",
+          }),
+          clientLog:
+            "[Browser] The response is not a contacts resource.\n" +
+            "[Browser] Existing contact data stays unchanged.",
+          notice: "No API route matched that address.",
+          formError: "",
+          highlight: { type: "none" },
+        };
+      }
+
+      function buildPutPipeline(id, draft, dbRows, clientRows) {
+        const dbBefore = cloneRows(dbRows);
+        const clientBefore = cloneRows(clientRows);
+        const payload = {
+          contact_name: draft.contact_name.trim(),
+          contact_phone: draft.contact_phone.trim(),
+        };
+        const missingField = !payload.contact_name
+          ? "Name is required."
+          : !payload.contact_phone
+            ? "Phone number is required."
+            : "";
+        if (missingField) {
+          return {
+            title: `UPDATE via REST PUT - validation failure for ID ${id}`,
+            badge: "400 Bad Request",
+            method: "PUT",
+            path: `/api/contacts/${id}`,
+            dbBefore,
+            dbAfter: dbBefore,
+            clientBefore,
+            clientAfter: clientBefore,
+            request: requestBlock("PUT", `/api/contacts/${id}`, payload),
+            server:
+              `[Server] PUT request received for ID: ${id}\n` +
+              "[Server] Routing to updateContact() handler.\n" +
+              `[Server] Validation failed: ${missingField}`,
+            sql: "[SKIPPED]\nThe update query is not executed.",
+            skippedDb: true,
+            response: responseBlock("HTTP/1.1 400 Bad Request", {
+              error: "Validation Failed",
+              message: missingField,
+            }),
+            clientLog:
+              "[Browser] The edited row remains in edit mode.\n" +
+              "[Browser] The validation message is shown next to the form controls.",
+            notice: "",
+            formError: missingField,
+            highlight: { type: "none" },
+          };
+        }
+
+        const exists = dbBefore.some((row) => row.id === id);
+        if (!exists) {
+          return {
+            title: `UPDATE via REST PUT - missing contact ID ${id}`,
+            badge: "404 Not Found",
+            method: "PUT",
+            path: `/api/contacts/${id}`,
+            dbBefore,
+            dbAfter: dbBefore,
+            clientBefore,
+            clientAfter: clientBefore,
+            request: requestBlock("PUT", `/api/contacts/${id}`, payload),
+            server:
+              `[Server] PUT request received for ID: ${id}\n` +
+              "[Server] Routing to updateContact() handler.\n" +
+              "[Server] The target resource must already exist before it can be updated.",
+            sql:
+              "UPDATE tbl_contacts\n" +
+              `SET contact_name = '${payload.contact_name}', contact_phone = '${payload.contact_phone}'\n` +
+              `WHERE id = ${id};\n\n` +
+              "[MySQL] 0 rows affected.",
+            skippedDb: false,
+            response: responseBlock("HTTP/1.1 404 Not Found", {
+              error: "Update Failed",
+              message: "Record does not exist on the server.",
+            }),
+            clientLog:
+              "[Browser] The local row was stale.\n" +
+              "[Browser] The UI keeps the row visible until a refresh or delete reconciliation occurs.",
+            notice: `Update failed: contact ID ${id} does not exist on the server.`,
+            formError: "",
+            highlight: { type: "none" },
+          };
+        }
+
+        const dbAfter = dbBefore.map((row) =>
+          row.id === id ? { id, ...payload } : row,
+        );
+        const clientAfter = clientBefore.map((row) =>
+          row.id === id ? { id, ...payload } : row,
+        );
+        return {
+          title: `UPDATE via REST PUT - successful update for ID ${id}`,
+          badge: "200 OK",
+          method: "PUT",
+          path: `/api/contacts/${id}`,
+          dbBefore,
+          dbAfter,
+          clientBefore,
+          clientAfter,
+          request: requestBlock("PUT", `/api/contacts/${id}`, payload),
+          server:
+            `[Server] PUT request received for ID: ${id}\n` +
+            "[Server] Routing to controllers/contactController.js -> function updateContact()",
+          sql:
+            "UPDATE tbl_contacts\n" +
+            `SET contact_name = '${payload.contact_name}', contact_phone = '${payload.contact_phone}'\n` +
+            `WHERE id = ${id};\n\n` +
+            "[MySQL] 1 row affected.",
+          skippedDb: false,
+          response: responseBlock("HTTP/1.1 200 OK", {
+            success: true,
+            updatedId: id,
+          }),
+          clientLog:
+            "[Browser] fetch() receives status 200.\n" +
+            "[Browser] Only the edited object in the local array is replaced.\n" +
+            "[Browser] The visible table cell updates in place.",
+          notice: `Updated contact ID ${id}.`,
+          formError: "",
+          closeEditor: true,
+          highlight: { type: "update", id },
+        };
+      }
+
+      function buildDeletePipeline(id, dbRows, clientRows) {
+        const dbBefore = cloneRows(dbRows);
+        const clientBefore = cloneRows(clientRows);
+        const exists = dbBefore.some((row) => row.id === id);
+        if (!exists) {
+          const clientAfter = clientBefore.filter((row) => row.id !== id);
+          return {
+            title: `DELETE via REST DELETE - desynchronised 404 for ID ${id}`,
+            badge: "404 Not Found",
+            method: "DELETE",
+            path: `/api/contacts/${id}`,
+            dbBefore,
+            dbAfter: dbBefore,
+            clientBefore,
+            clientAfter,
+            request: requestBlock("DELETE", `/api/contacts/${id}`),
+            server:
+              `[Server] DELETE request received for ID: ${id}\n` +
+              "[Server] Routing to deleteContact() handler.",
+            sql:
+              `DELETE FROM tbl_contacts WHERE id = ${id};\n\n` +
+              "[MySQL] 0 rows affected because the id is already missing.",
+            skippedDb: false,
+            response: responseBlock("HTTP/1.1 404 Not Found", {
+              error: "Delete Failed",
+              message: "Record already deleted or does not exist.",
+            }),
+            clientLog:
+              "[Browser] The visible row was a ghost copy held in local state.\n" +
+              "[Browser] The 404 is handled as a reconciliation signal.\n" +
+              "[Browser] The ghost row is removed so the client matches the server.",
+            notice: `Server returned 404 for contact ID ${id}; the browser removed its stale ghost row.`,
+            formError: "",
+            highlight: { type: "none" },
+          };
+        }
+
+        const dbAfter = dbBefore.filter((row) => row.id !== id);
+        const clientAfter = clientBefore.filter((row) => row.id !== id);
+        return {
+          title: `DELETE via REST DELETE - successful delete for ID ${id}`,
+          badge: "204 No Content",
+          method: "DELETE",
+          path: `/api/contacts/${id}`,
+          dbBefore,
+          dbAfter,
+          clientBefore,
+          clientAfter,
+          request: requestBlock("DELETE", `/api/contacts/${id}`),
+          server:
+            `[Server] DELETE request received for ID: ${id}\n` +
+            "[Server] Routing to controllers/contactController.js -> function deleteContact()",
+          sql:
+            `DELETE FROM tbl_contacts WHERE id = ${id};\n\n` +
+            "[MySQL] 1 row affected.",
+          skippedDb: false,
+          response: responseBlock("HTTP/1.1 204 No Content", null),
+          clientLog:
+            "[Browser] fetch() receives a successful no-content response.\n" +
+            "[Browser] The matching row is removed from the local array.\n" +
+            "[Browser] The table closes the gap without reloading the page.",
+          notice: `Deleted contact ID ${id}.`,
+          formError: "",
+          highlight: { type: "delete", id },
+        };
+      }
+
+      function Header({ darkMode, setDarkMode }) {
+        const toggleMode = () => {
+          const next = !darkMode;
+          setDarkMode(next);
+          localStorage.setItem("uimode", next ? "dark" : "light");
+          document.documentElement.classList.toggle("dark", next);
+        };
+
+        const SunIcon = () => (
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+            />
+          </svg>
+        );
+
+        const MoonIcon = () => (
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+            />
+          </svg>
+        );
+
+        return (
+          <header className="sticky top-0 z-40 flex h-[58px] items-center justify-between bg-headerBg px-4 shadow-lg md:px-8">
+            <a
+              href="index.html"
+              className="font-mono text-[1.1rem] font-bold tracking-widest text-headerAccent no-underline md:text-[1.2rem]"
+            >
+              <span className="text-slate-500">&lt;</span>CS
+              <span className="text-slate-500">&gt;</span>&nbsp;Learning
+            </a>
+            <nav className="flex items-center gap-4">
+              <a
+                href="index.html"
+                className="text-sm font-medium tracking-wide text-slate-400 transition-colors hover:text-headerAccent"
+              >
+                Home
+              </a>
+              <button
+                onClick={toggleMode}
+                className="p-1 text-slate-400 transition-colors hover:text-headerAccent"
+                aria-label="Toggle dark mode"
+              >
+                {darkMode ? <SunIcon /> : <MoonIcon />}
+              </button>
+            </nav>
+          </header>
+        );
+      }
+
+      function SmallButton({ children, onClick, disabled, tone = "slate", title }) {
+        const tones = {
+          slate:
+            "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700",
+          blue: "border-blue-600 bg-blue-600 text-white hover:bg-blue-700",
+          green: "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
+          red: "border-red-600 bg-red-600 text-white hover:bg-red-700",
+          amber:
+            "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100",
+        };
+        return (
+          <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            title={title}
+            className={`inline-flex min-h-9 items-center justify-center rounded-md border px-3 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]}`}
+          >
+            {children}
+          </button>
+        );
+      }
+
+      function StatusPill({ text }) {
+        const color =
+          text.includes("404") || text.includes("400")
+            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
+            : text.includes("201")
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+              : "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200";
+        return (
+          <span className={`rounded-full border px-3 py-1 text-xs font-bold ${color}`}>
+            {text}
+          </span>
+        );
+      }
+
+      function ContactTable({ rows, mode, editingId, editDraft, setEditDraft, onEdit, onCancelEdit, onSaveEdit, onDelete }) {
+        return (
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <tr>
+                    <th className="px-3 py-2">ID</th>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Phone</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="px-3 py-6 text-center text-slate-500">
+                        No contacts in this local browser table.
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((row) => {
+                      const isEditing = editingId === row.id;
+                      return (
+                        <tr
+                          key={row.id}
+                          className="border-t border-slate-100 dark:border-slate-800"
+                        >
+                          <td className="px-3 py-2 font-mono text-slate-500">{row.id}</td>
+                          <td className="px-3 py-2">
+                            {isEditing ? (
+                              <input
+                                className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800"
+                                value={editDraft.contact_name}
+                                onChange={(e) =>
+                                  setEditDraft({
+                                    ...editDraft,
+                                    contact_name: e.target.value,
+                                  })
+                                }
+                              />
+                            ) : (
+                              row.contact_name
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isEditing ? (
+                              <input
+                                className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800"
+                                value={editDraft.contact_phone}
+                                onChange={(e) =>
+                                  setEditDraft({
+                                    ...editDraft,
+                                    contact_phone: e.target.value,
+                                  })
+                                }
+                              />
+                            ) : (
+                              <span className="font-mono">{row.contact_phone}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex justify-end gap-2">
+                              {isEditing ? (
+                                <>
+                                  <SmallButton tone="green" onClick={() => onSaveEdit(row.id)}>
+                                    Save
+                                  </SmallButton>
+                                  <SmallButton onClick={onCancelEdit}>Cancel</SmallButton>
+                                </>
+                              ) : (
+                                <>
+                                  <SmallButton
+                                    onClick={() => onEdit(row)}
+                                    title="Edit this contact with a PUT request"
+                                  >
+                                    Edit
+                                  </SmallButton>
+                                  <SmallButton
+                                    tone="red"
+                                    onClick={() => onDelete(row.id)}
+                                    title="Delete this contact with a DELETE request"
+                                  >
+                                    Delete
+                                  </SmallButton>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+      function BrowserSetup({
+        clientRows,
+        form,
+        setForm,
+        address,
+        setAddress,
+        formError,
+        notice,
+        onPost,
+        onGet,
+        onRefresh,
+        editingId,
+        editDraft,
+        setEditDraft,
+        onEdit,
+        onCancelEdit,
+        onSaveEdit,
+        onDelete,
+      }) {
+        return (
+          <div className="browser-chrome overflow-hidden rounded-xl border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-800 md:flex-row md:items-center">
+              <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-full bg-red-400"></span>
+                <span className="h-3 w-3 rounded-full bg-amber-400"></span>
+                <span className="h-3 w-3 rounded-full bg-emerald-400"></span>
+              </div>
+              <div className="flex min-w-0 flex-1 gap-2">
+                <input
+                  className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-950"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                />
+                <SmallButton tone="blue" onClick={onGet} title="Send GET for the current address">
+                  GET
+                </SmallButton>
+                <SmallButton onClick={onRefresh} title="Refresh contacts with GET /api/contacts">
+                  Refresh
+                </SmallButton>
+              </div>
+            </div>
+
+            <div className="grid gap-4 p-4 lg:grid-cols-[360px_1fr]">
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Add Contact
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Submits a REST POST request to the API.
+                </p>
+                <div className="mt-4 grid gap-3">
+                  <label className="grid gap-1 text-sm font-semibold">
+                    Name
+                    <input
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 font-normal dark:border-slate-600 dark:bg-slate-900"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      placeholder="Bob"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold">
+                    Phone
+                    <input
+                      className={`rounded-md border bg-white px-3 py-2 font-normal dark:bg-slate-900 ${
+                        formError.includes("Phone")
+                          ? "border-red-500 ring-2 ring-red-200"
+                          : "border-slate-300 dark:border-slate-600"
+                      }`}
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      placeholder="07999111222"
+                    />
+                  </label>
+                  {formError ? (
+                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+                      {formError}
+                    </div>
+                  ) : null}
+                  <SmallButton tone="green" onClick={onPost}>
+                    Add Contact
+                  </SmallButton>
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                      Client-side Contact Table
+                    </h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      This is the browser's local JavaScript array. It can become stale.
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
+                    clientContacts.length = {clientRows.length}
+                  </div>
+                </div>
+                {notice ? (
+                  <div className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">
+                    {notice}
+                  </div>
+                ) : null}
+                <ContactTable
+                  rows={clientRows}
+                  editingId={editingId}
+                  editDraft={editDraft}
+                  setEditDraft={setEditDraft}
+                  onEdit={onEdit}
+                  onCancelEdit={onCancelEdit}
+                  onSaveEdit={onSaveEdit}
+                  onDelete={onDelete}
+                />
+              </section>
+            </div>
+          </div>
+        );
+      }
+
+      function DatabaseSetup({ dbRows, onCellChange, onDeleteRow, onInsertRow, manualRow, setManualRow }) {
+        return (
+          <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="border-b border-slate-200 bg-slate-900 px-4 py-3 text-white dark:border-slate-700">
+              <div className="text-sm font-bold uppercase tracking-wider text-sky-300">
+                Live MySQL DB Viewer
+              </div>
+              <div className="mt-1 font-mono text-sm">database: contacts_app / table: tbl_contacts</div>
+            </div>
+            <div className="p-4">
+              <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                Edits here change the server database directly. The browser tab will not know until it sends another API request.
+              </div>
+              <div className="overflow-x-auto">
+                <table className="db-grid w-full min-w-[680px] text-left text-sm">
+                  <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <tr>
+                      <th className="px-3 py-2">id</th>
+                      <th className="px-3 py-2">contact_name</th>
+                      <th className="px-3 py-2">contact_phone</th>
+                      <th className="px-3 py-2 text-right">manual action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dbRows.map((row) => (
+                      <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 font-mono dark:border-slate-600 dark:bg-slate-950"
+                            value={row.id}
+                            onChange={(e) => onCellChange(row.id, "id", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-950"
+                            value={row.contact_name}
+                            onChange={(e) =>
+                              onCellChange(row.id, "contact_name", e.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 font-mono dark:border-slate-600 dark:bg-slate-950"
+                            value={row.contact_phone}
+                            onChange={(e) =>
+                              onCellChange(row.id, "contact_phone", e.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <SmallButton tone="red" onClick={() => onDeleteRow(row.id)}>
+                            Delete DB Row
+                          </SmallButton>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
+                <h3 className="font-bold">Insert record manually</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                  <input
+                    className="rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    value={manualRow.contact_name}
+                    onChange={(e) =>
+                      setManualRow({ ...manualRow, contact_name: e.target.value })
+                    }
+                    placeholder="contact_name"
+                  />
+                  <input
+                    className="rounded-md border border-slate-300 bg-white px-3 py-2 font-mono dark:border-slate-600 dark:bg-slate-900"
+                    value={manualRow.contact_phone}
+                    onChange={(e) =>
+                      setManualRow({ ...manualRow, contact_phone: e.target.value })
+                    }
+                    placeholder="contact_phone"
+                  />
+                  <SmallButton tone="blue" onClick={onInsertRow}>
+                    Insert Row
+                  </SmallButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function SceneTable({ rows, highlight, context }) {
+        const classForRow = (id) => {
+          if (!highlight) return "";
+          if (highlight.type === "create" && context === "db-after" && highlight.id === id) {
+            return "flash-create";
+          }
+          if (highlight.type === "update" && context === "db-after" && highlight.id === id) {
+            return "flash-update";
+          }
+          if (highlight.type === "read" && context === "db-after" && highlight.ids.includes(id)) {
+            return "flash-read";
+          }
+          return "";
+        };
+
+        return (
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <tr>
+                  <th className="px-3 py-2">id</th>
+                  <th className="px-3 py-2">contact_name</th>
+                  <th className="px-3 py-2">contact_phone</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" className="px-3 py-6 text-center text-slate-500">
+                      Empty result set
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((row) => (
+                    <tr key={`${context}-${row.id}`} className={`border-t border-slate-100 dark:border-slate-800 ${classForRow(row.id)}`}>
+                      <td className="px-3 py-2 font-mono">{row.id}</td>
+                      <td className="px-3 py-2">{row.contact_name}</td>
+                      <td className="px-3 py-2 font-mono">{row.contact_phone}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      function PipelineView({ pipeline, sceneIndex, setSceneIndex, onFinish, onCancel }) {
+        const scenes = [
+          {
+            label: "Outbound request",
+            title: "Scene 2 - Browser sends an HTTP request",
+            body: (
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div>
+                  <h3 className="mb-2 font-bold">Raw HTTP request</h3>
+                  <pre className="code-pane rounded-lg border border-slate-200 bg-slate-950 p-4 text-sm text-slate-100">
+                    {pipeline.request}
+                  </pre>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                  <h3 className="font-bold">Client state before the request</h3>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    The browser sends a new stateless HTTP request. It does not send its whole local table unless a request body is required.
+                  </p>
+                  <div className="mt-4 rounded-md bg-slate-100 p-3 font-mono text-sm dark:bg-slate-800">
+                    method = {pipeline.method}<br />
+                    endpoint = {pipeline.path}<br />
+                    localRows = {pipeline.clientBefore.length}
+                  </div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            label: "Server route",
+            title: "Scene 3 - Server routing and controller logic",
+            body: (
+              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+                <pre className="code-pane rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm text-emerald-200">
+                  {pipeline.server}
+                </pre>
+                <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                  <h3 className="font-bold">Controller selected</h3>
+                  <div className="mt-3 rounded-md bg-slate-100 p-3 font-mono text-sm dark:bg-slate-800">
+                    controllers/contactController.js<br />
+                    {routeName(
+                      pipeline.method === "GET"
+                        ? pipeline.path === "/api/contacts"
+                          ? "GET_ALL"
+                          : "GET_ONE"
+                        : pipeline.method,
+                    )}
+                  </div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            label: "Database",
+            title: pipeline.skippedDb
+              ? "Scene 4 - Database layer bypassed"
+              : "Scene 4 - MySQL executes the SQL statement",
+            body: (
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div>
+                  <h3 className="mb-2 font-bold">
+                    {pipeline.skippedDb ? "No SQL executed" : "SQL execution"}
+                  </h3>
+                  <pre className={`code-pane rounded-lg border p-4 text-sm ${
+                    pipeline.skippedDb
+                      ? "border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
+                      : "border-slate-200 bg-slate-950 text-sky-100"
+                  }`}>
+                    {pipeline.sql}
+                  </pre>
+                </div>
+                <div className="overflow-x-auto">
+                  <h3 className="mb-2 font-bold">tbl_contacts after this step</h3>
+                  <SceneTable
+                    rows={pipeline.dbAfter}
+                    highlight={pipeline.highlight}
+                    context="db-after"
+                  />
+                </div>
+              </div>
+            ),
+          },
+          {
+            label: "Inbound response",
+            title: "Scene 5 - Server returns an HTTP response",
+            body: (
+              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+                <pre className="code-pane rounded-lg border border-slate-200 bg-slate-950 p-4 text-sm text-slate-100">
+                  {pipeline.response}
+                </pre>
+                <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                  <h3 className="font-bold">Stateless REST point</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    The response contains enough information for this request only. The server does not remember the browser's previous UI state between REST calls.
+                  </p>
+                </div>
+              </div>
+            ),
+          },
+          {
+            label: "Client render",
+            title: "Scene 6 - Browser updates its local UI",
+            body: (
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div>
+                  <h3 className="mb-2 font-bold">Browser console</h3>
+                  <pre className="code-pane rounded-lg border border-slate-200 bg-slate-950 p-4 text-sm text-emerald-100">
+                    {pipeline.clientLog}
+                  </pre>
+                </div>
+                <div className="overflow-x-auto">
+                  <h3 className="mb-2 font-bold">Client table after render</h3>
+                  <SceneTable
+                    rows={pipeline.clientAfter}
+                    highlight={pipeline.highlight}
+                    context="client-after"
+                  />
+                </div>
+              </div>
+            ),
+          },
+        ];
+        const scene = scenes[sceneIndex];
+        const progress = `${sceneIndex + 1} / ${scenes.length}`;
+
+        return (
+          <main className="mx-auto max-w-7xl px-4 py-6">
+            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-bold">{pipeline.title}</h1>
+                  <StatusPill text={pipeline.badge} />
+                </div>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Effects are shown from stored before/after snapshots. State is committed only when the final scene is completed.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <SmallButton onClick={onCancel}>Return Without Commit</SmallButton>
+              </div>
+            </div>
+
+            <div className="mb-4 grid gap-2 md:grid-cols-5">
+              {scenes.map((item, index) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setSceneIndex(index)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm font-semibold transition ${
+                    index === sceneIndex
+                      ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <span className="block text-xs text-slate-400">Scene {index + 2}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 md:p-6">
+              <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <h2 className="text-lg font-bold">{scene.title}</h2>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  Step {progress}
+                </span>
+              </div>
+              {scene.body}
+            </section>
+
+            <div className="mt-4 flex flex-wrap justify-between gap-3">
+              <SmallButton
+                disabled={sceneIndex === 0}
+                onClick={() => setSceneIndex(Math.max(0, sceneIndex - 1))}
+              >
+                Previous Scene
+              </SmallButton>
+              {sceneIndex === scenes.length - 1 ? (
+                <SmallButton tone="green" onClick={onFinish}>
+                  Commit Final State
+                </SmallButton>
+              ) : (
+                <SmallButton
+                  tone="blue"
+                  onClick={() => setSceneIndex(Math.min(scenes.length - 1, sceneIndex + 1))}
+                >
+                  Next Scene
+                </SmallButton>
+              )}
+            </div>
+          </main>
+        );
+      }
+
+      function App() {
+        const [darkMode, setDarkMode] = useState(
+          document.documentElement.classList.contains("dark"),
+        );
+        const [activeTab, setActiveTab] = useState("browser");
+        const [dbRows, setDbRows] = useState(cloneRows(STARTING_CONTACTS));
+        const [clientRows, setClientRows] = useState(cloneRows(STARTING_CONTACTS));
+        const [form, setForm] = useState({ name: "Bob", phone: "07999111222" });
+        const [address, setAddress] = useState("http://contactsapp.local/");
+        const [manualRow, setManualRow] = useState({
+          contact_name: "",
+          contact_phone: "",
+        });
+        const [formError, setFormError] = useState("");
+        const [notice, setNotice] = useState("");
+        const [editingId, setEditingId] = useState(null);
+        const [editDraft, setEditDraft] = useState({
+          contact_name: "",
+          contact_phone: "",
+        });
+        const [pipeline, setPipeline] = useState(null);
+        const [sceneIndex, setSceneIndex] = useState(0);
+
+        const dbIds = useMemo(() => dbRows.map((row) => row.id).join(","), [dbRows]);
+        const clientIds = useMemo(
+          () => clientRows.map((row) => row.id).join(","),
+          [clientRows],
+        );
+
+        const startPipeline = (nextPipeline) => {
+          setPipeline(nextPipeline);
+          setSceneIndex(0);
+          setNotice("");
+          setFormError("");
+        };
+
+        const finishPipeline = () => {
+          if (!pipeline) return;
+          setDbRows(cloneRows(pipeline.dbAfter));
+          setClientRows(cloneRows(pipeline.clientAfter));
+          setNotice(pipeline.notice || "");
+          setFormError(pipeline.formError || "");
+          if (pipeline.clearForm) setForm({ name: "", phone: "" });
+          if (pipeline.closeEditor) setEditingId(null);
+          setPipeline(null);
+          setSceneIndex(0);
+          setActiveTab("browser");
+        };
+
+        const onPost = () => {
+          startPipeline(buildPostPipeline(form, dbRows, clientRows));
+        };
+
+        const onGet = () => {
+          const path = parseContactsPath(address);
+          startPipeline(buildGetPipeline(path, dbRows, clientRows));
+        };
+
+        const onRefresh = () => {
+          setAddress("http://contactsapp.local/api/contacts");
+          startPipeline(buildGetPipeline("/api/contacts", dbRows, clientRows));
+        };
+
+        const onEdit = (row) => {
+          setEditingId(row.id);
+          setEditDraft({
+            contact_name: row.contact_name,
+            contact_phone: row.contact_phone,
+          });
+          setFormError("");
+        };
+
+        const onSaveEdit = (id) => {
+          startPipeline(buildPutPipeline(id, editDraft, dbRows, clientRows));
+        };
+
+        const onDelete = (id) => {
+          startPipeline(buildDeletePipeline(id, dbRows, clientRows));
+        };
+
+        const onCellChange = (rowId, field, value) => {
+          setDbRows((rows) => {
+            const next = rows.map((row) => {
+              if (row.id !== rowId) return row;
+              return {
+                ...row,
+                [field]: field === "id" ? normaliseId(value) : value,
+              };
+            });
+            return next.sort((a, b) => a.id - b.id);
+          });
+        };
+
+        const onDeleteDbRow = (id) => {
+          setDbRows((rows) => rows.filter((row) => row.id !== id));
+          setNotice(
+            `Database row ${id} was deleted directly. The browser table is unchanged until it makes an API request.`,
+          );
+        };
+
+        const onInsertDbRow = () => {
+          const contact_name = manualRow.contact_name.trim();
+          const contact_phone = manualRow.contact_phone.trim();
+          if (!contact_name || !contact_phone) {
+            setNotice("Manual DB insert needs both contact_name and contact_phone.");
+            return;
+          }
+          const id = nextId(dbRows);
+          setDbRows((rows) => [...rows, { id, contact_name, contact_phone }]);
+          setManualRow({ contact_name: "", contact_phone: "" });
+          setNotice(
+            `Database row ${id} was inserted directly. Refresh the browser to fetch it.`,
+          );
+        };
+
+        const resetAll = () => {
+          setDbRows(cloneRows(STARTING_CONTACTS));
+          setClientRows(cloneRows(STARTING_CONTACTS));
+          setForm({ name: "Bob", phone: "07999111222" });
+          setAddress("http://contactsapp.local/");
+          setFormError("");
+          setNotice("Simulation reset to the starting client and database state.");
+          setEditingId(null);
+          setPipeline(null);
+          setActiveTab("browser");
+        };
+
+        if (pipeline) {
+          return (
+            <>
+              <Header darkMode={darkMode} setDarkMode={setDarkMode} />
+              <PipelineView
+                pipeline={pipeline}
+                sceneIndex={sceneIndex}
+                setSceneIndex={setSceneIndex}
+                onFinish={finishPipeline}
+                onCancel={() => setPipeline(null)}
+              />
+            </>
+          );
+        }
+
+        return (
+          <>
+            <Header darkMode={darkMode} setDarkMode={setDarkMode} />
+            <main className="mx-auto max-w-7xl px-4 py-6">
+              <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-wider text-sky-600 dark:text-sky-300">
+                    AQA A Level Computer Science - Paper 2
+                  </p>
+                  <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">
+                    REST CRUD Pipeline Simulator
+                  </h1>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    Run realistic REST operations against a contacts API. The browser and database deliberately hold separate state so you can create stale-client edge cases.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <SmallButton onClick={resetAll}>Reset Simulation</SmallButton>
+                </div>
+              </div>
+
+              <div className="mb-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="text-xs font-bold uppercase text-slate-500">Client array IDs</div>
+                  <div className="mt-1 font-mono text-sm">{clientIds || "(empty)"}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="text-xs font-bold uppercase text-slate-500">Database row IDs</div>
+                  <div className="mt-1 font-mono text-sm">{dbIds || "(empty)"}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="text-xs font-bold uppercase text-slate-500">REST rule</div>
+                  <div className="mt-1 text-sm">Each API action starts a new stateless request-response cycle.</div>
+                </div>
+              </div>
+
+              <div className="mb-4 flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("browser")}
+                  className={`flex-1 rounded-md px-3 py-2 text-sm font-bold transition ${
+                    activeTab === "browser"
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Simulated Web Browser
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("database")}
+                  className={`flex-1 rounded-md px-3 py-2 text-sm font-bold transition ${
+                    activeTab === "database"
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Live MySQL DB Viewer
+                </button>
+              </div>
+
+              {activeTab === "browser" ? (
+                <BrowserSetup
+                  clientRows={clientRows}
+                  form={form}
+                  setForm={setForm}
+                  address={address}
+                  setAddress={setAddress}
+                  formError={formError}
+                  notice={notice}
+                  onPost={onPost}
+                  onGet={onGet}
+                  onRefresh={onRefresh}
+                  editingId={editingId}
+                  editDraft={editDraft}
+                  setEditDraft={setEditDraft}
+                  onEdit={onEdit}
+                  onCancelEdit={() => setEditingId(null)}
+                  onSaveEdit={onSaveEdit}
+                  onDelete={onDelete}
+                />
+              ) : (
+                <DatabaseSetup
+                  dbRows={dbRows}
+                  onCellChange={onCellChange}
+                  onDeleteRow={onDeleteDbRow}
+                  onInsertRow={onInsertDbRow}
+                  manualRow={manualRow}
+                  setManualRow={setManualRow}
+                />
+              )}
+            </main>
+          </>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
