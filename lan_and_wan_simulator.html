@@ -795,14 +795,25 @@
           gw: "214.123.72.15",
           subnet: "255.255.255.0",
           switch: "RT_EDGE",
-          x: 500,
-          y: 50,
+          x: 970,
+          y: 60,
           browserOutput: "",
           files: {
             "index.html": { type: "html", content: DEFAULT_INDEX_INTERNET },
             "dog.jpg": { type: "image", animal: "dog" },
             "gerbil.jpg": { type: "image", animal: "gerbil" },
           },
+        },
+        // Visual abstraction for the WAN. The Edge NAT Router forwards
+        // outbound packets here instead of directly to INT_SRV; the cloud
+        // rewrites MACs and bounces the packet through a couple of
+        // anonymous "internet routers" before exiting to the real dest.
+        CLOUD: {
+          id: "CLOUD",
+          type: "Cloud",
+          name: "Internet Routing",
+          x: 500,
+          y: 60,
         },
       };
 
@@ -837,6 +848,23 @@
           (ipToNum(ip) & ipToNum(mask)) === (ipToNum(subnet) & ipToNum(mask))
         );
       };
+
+      // Random "anonymous internet router" MAC — different each hop so
+      // students can see the address rewriting at every cloud bounce.
+      const randomCloudMac = () => {
+        const hex = () =>
+          Math.floor(Math.random() * 256)
+            .toString(16)
+            .padStart(2, "0")
+            .toUpperCase();
+        return `${hex()}:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
+      };
+
+      // Number of bounces the packet makes inside the cloud (each bounce
+      // rewrites both MACs to fresh random values). The last bounce sets
+      // the dst MAC to the real final destination so the next transit
+      // delivers the packet to the actual server/router.
+      const CLOUD_INTERNAL_HOPS = 2;
 
       class NetworkEngine {
         static getLinkProtocol(srcId, dstId) {
@@ -1160,6 +1188,43 @@
               extraLogs,
             };
 
+          // Cloud abstraction: when the edge router forwards a packet
+          // out its WAN interface toward the Internet web server, send
+          // it through the cloud pseudo-node instead. The cloud will
+          // bounce the packet between anonymous internet routers
+          // (rewriting MACs each time) before the final hop delivers
+          // it to the real destination MAC.
+          const exitsViaWan =
+            router.id === "RT_EDGE" && outIface.connectedTo === "INT_SRV";
+          if (exitsViaWan) {
+            const firstHopMac = randomCloudMac();
+            return {
+              action: "FORWARD",
+              packet: {
+                ...p,
+                currentNode: router.id,
+                nextNode: "CLOUD",
+                state: "TRANSIT",
+                progress: 0,
+                networkLayer: { ...p.networkLayer, ttl: newTtl },
+                linkLayer: {
+                  protocol: "Ethernet",
+                  srcMAC: outIface.mac,
+                  dstMAC: firstHopMac,
+                },
+                cloudHopIndex: 0,
+                cloudHopsRemaining: CLOUD_INTERNAL_HOPS,
+                cloudDestNode: outIface.connectedTo,
+                cloudDestMac: nextHopMac,
+              },
+              updatedNode: updatedRouter,
+              extraLogs: [
+                ...extraLogs,
+                `Packet leaves ${router.name} via WAN towards anonymous internet router ${firstHopMac}`,
+              ],
+            };
+          }
+
           return {
             action: "FORWARD",
             packet: {
@@ -1244,6 +1309,50 @@
           };
         }
 
+        // Cloud pseudo-router: each time a packet arrives at the cloud
+        // node, rewrite its link-layer MACs (src becomes the prior dst,
+        // dst becomes a fresh random "anonymous internet router"). When
+        // the cloud's internal-hop budget runs out, the final dst is set
+        // to the real destination's MAC and the packet exits the cloud.
+        static processCloud(p, cloud) {
+          const newIndex = (p.cloudHopIndex || 0) + 1;
+          const remaining = (p.cloudHopsRemaining || 0) - 1;
+          const previousDst = p.linkLayer.dstMAC;
+          let dstMAC, nextNode;
+          const extraLogs = [];
+          if (remaining > 0) {
+            dstMAC = randomCloudMac();
+            nextNode = cloud.id;
+            extraLogs.push(
+              `Cloud hop ${newIndex}: anonymous internet router rewrites MAC to ${dstMAC}`,
+            );
+          } else {
+            dstMAC = p.cloudDestMac;
+            nextNode = p.cloudDestNode;
+            extraLogs.push(
+              `Cloud exits to ${nextNode} with destination MAC ${dstMAC}`,
+            );
+          }
+          return {
+            action: "FORWARD",
+            packet: {
+              ...p,
+              currentNode: cloud.id,
+              nextNode,
+              state: "TRANSIT",
+              progress: 0,
+              cloudHopIndex: newIndex,
+              cloudHopsRemaining: remaining,
+              linkLayer: {
+                ...p.linkLayer,
+                srcMAC: previousDst,
+                dstMAC,
+              },
+            },
+            extraLogs,
+          };
+        }
+
         // Build one or more reply packets for an incoming request. Image
         // responses are split into 3 fragments with staggered delayRemaining
         // so they leave the server one step apart; everything else returns
@@ -1266,24 +1375,52 @@
             };
 
           const replyNextNode = node.switch || p.currentNode;
-          const baseReply = {
-            transactionId: p.transactionId,
-            state: "TRANSIT",
-            currentNode: node.id,
-            nextNode: replyNextNode,
-            progress: 0,
-            networkLayer: {
-              protocol: "IPv4",
-              srcIP: node.ip,
-              dstIP: p.networkLayer.srcIP,
-              ttl: 64,
-            },
-            linkLayer: {
-              protocol: this.getLinkProtocol(node.id, replyNextNode),
-              srcMAC: node.mac,
-              dstMAC: nextHopMac,
-            },
-          };
+          // Cloud abstraction (reverse direction): replies leaving the
+          // Internet web server bound for the LAN go through the cloud
+          // pseudo-node first, bouncing through anonymous internet
+          // routers before the final hop delivers them to RT_EDGE.
+          const replyViaCloud = node.id === "INT_SRV";
+          const baseReply = replyViaCloud
+            ? {
+                transactionId: p.transactionId,
+                state: "TRANSIT",
+                currentNode: node.id,
+                nextNode: "CLOUD",
+                progress: 0,
+                networkLayer: {
+                  protocol: "IPv4",
+                  srcIP: node.ip,
+                  dstIP: p.networkLayer.srcIP,
+                  ttl: 64,
+                },
+                linkLayer: {
+                  protocol: "Ethernet",
+                  srcMAC: node.mac,
+                  dstMAC: randomCloudMac(),
+                },
+                cloudHopIndex: 0,
+                cloudHopsRemaining: CLOUD_INTERNAL_HOPS,
+                cloudDestNode: replyNextNode,
+                cloudDestMac: nextHopMac,
+              }
+            : {
+                transactionId: p.transactionId,
+                state: "TRANSIT",
+                currentNode: node.id,
+                nextNode: replyNextNode,
+                progress: 0,
+                networkLayer: {
+                  protocol: "IPv4",
+                  srcIP: node.ip,
+                  dstIP: p.networkLayer.srcIP,
+                  ttl: 64,
+                },
+                linkLayer: {
+                  protocol: this.getLinkProtocol(node.id, replyNextNode),
+                  srcMAC: node.mac,
+                  dstMAC: nextHopMac,
+                },
+              };
 
           if (p.appLayer.protocol === "Ping") {
             const reply = {
@@ -1685,6 +1822,28 @@
         );
         const [leftPanelWidth, setLeftPanelWidth] = useState(300);
         const [isResizingLeft, setIsResizingLeft] = useState(false);
+        const ZOOM_MIN = 0.5;
+        const ZOOM_MAX = 2.0;
+        const ZOOM_STEP = 0.1;
+        const [zoom, setZoom] = useState(1.0);
+        // Convenience alias for the cloud pseudo-node's position. The
+        // cloud is a real entry in INITIAL_NODES (type "Cloud") that the
+        // engine routes RT_EDGE <-> INT_SRV traffic through, performing
+        // anonymous-router MAC rewriting on each cloud hop.
+        const CLOUD = nodes.CLOUD;
+        // Two visible positions inside the cloud where packets land
+        // between hops — gives the "flashing" effect the user expects
+        // as the packet bounces through anonymous internet routers.
+        const CLOUD_STOPS = [
+          { x: CLOUD.x - 32, y: CLOUD.y - 6 },
+          { x: CLOUD.x + 32, y: CLOUD.y - 6 },
+        ];
+        const cloudStopFor = (idx) =>
+          CLOUD_STOPS[Math.max(0, Math.min(CLOUD_STOPS.length - 1, idx))];
+        const zoomIn = () =>
+          setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)));
+        const zoomOut = () =>
+          setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)));
 
         useEffect(() => {
           if (!isResizingLeft) return;
@@ -1806,6 +1965,8 @@
                   result = NetworkEngine.processSwitch(p, activeNode);
                 else if (activeNode.type === "Router")
                   result = NetworkEngine.processRouter(p, activeNode);
+                else if (activeNode.type === "Cloud")
+                  result = NetworkEngine.processCloud(p, activeNode);
                 else result = NetworkEngine.processPC(p, activeNode);
 
                 if (result.extraLogs) {
@@ -3065,19 +3226,122 @@
 
               {/* CENTER: Canvas */}
               <div className="flex-1 flex flex-col relative bg-slate-100 dark:bg-slate-900">
+                {/* Floating zoom controls */}
+                <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
+                  <button
+                    onClick={zoomIn}
+                    disabled={zoom >= ZOOM_MAX}
+                    title="Zoom in"
+                    className="w-8 h-8 rounded bg-white/90 dark:bg-slate-700/90 border border-slate-300 dark:border-slate-600 shadow text-lg font-bold text-slate-700 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-slate-700"
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={zoomOut}
+                    disabled={zoom <= ZOOM_MIN}
+                    title="Zoom out"
+                    className="w-8 h-8 rounded bg-white/90 dark:bg-slate-700/90 border border-slate-300 dark:border-slate-600 shadow text-lg font-bold text-slate-700 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-slate-700"
+                  >
+                    −
+                  </button>
+                </div>
                 {/* Canvas area */}
                 <div
-                  className="flex-1 relative overflow-hidden"
+                  className="flex-1 min-w-0 min-h-0 relative overflow-auto"
                   style={{
                     backgroundImage: `radial-gradient(${isDark ? "#334155" : "#cbd5e1"} 1px, transparent 1px)`,
                     backgroundSize: "30px 30px",
                   }}
                 >
-                  <svg
-                    className="w-full h-full absolute inset-0"
-                    viewBox="0 0 1000 700"
-                    preserveAspectRatio="xMidYMid meet"
+                  <div
+                    style={{
+                      width: `${1080 * zoom}px`,
+                      height: `${740 * zoom}px`,
+                      position: "relative",
+                    }}
                   >
+                  <svg
+                    viewBox="0 0 1080 740"
+                    preserveAspectRatio="xMidYMid meet"
+                    width="100%"
+                    height="100%"
+                    style={{ display: "block" }}
+                  >
+                    {/* LAN bounding box (dotted) */}
+                    <rect
+                      x="60"
+                      y="110"
+                      width="985"
+                      height="615"
+                      rx="14"
+                      ry="14"
+                      fill="none"
+                      stroke={isDark ? "#64748b" : "#94a3b8"}
+                      strokeWidth="2"
+                      strokeDasharray="8 6"
+                    />
+                    <text
+                      x="75"
+                      y="130"
+                      fontSize="13"
+                      fontWeight="bold"
+                      fill={isDark ? "#94a3b8" : "#64748b"}
+                    >
+                      LAN
+                    </text>
+
+                    {/* Internet Routing cloud — single bezier-curve path */}
+                    <g transform={`translate(${CLOUD.x}, ${CLOUD.y})`}>
+                      <path
+                        d="M -75 30
+                           C -75 10, -65 0, -50 0
+                           C -45 -20, -25 -25, -10 -15
+                           C -5 -30, 15 -30, 25 -15
+                           C 40 -20, 60 -10, 60 5
+                           C 75 5, 75 30, 60 30
+                           Z"
+                        fill={isDark ? "#1e293b" : "#f1f5f9"}
+                        stroke={isDark ? "#475569" : "#94a3b8"}
+                        strokeWidth="2"
+                        strokeLinejoin="round"
+                      />
+                      <text
+                        x="0"
+                        y="0"
+                        textAnchor="middle"
+                        fontSize="12"
+                        fontWeight="bold"
+                        fill={isDark ? "#cbd5e1" : "#475569"}
+                      >
+                        Internet
+                      </text>
+                      <text
+                        x="0"
+                        y="14"
+                        textAnchor="middle"
+                        fontSize="12"
+                        fontWeight="bold"
+                        fill={isDark ? "#cbd5e1" : "#475569"}
+                      >
+                        Routing
+                      </text>
+                    </g>
+
+                    {/* Dotted horizontal abstract link: cloud -> INT_SRV
+                        (red to match the Internet/WAN legend; finer dot
+                        pattern visually distinguishes it from regular
+                        LAN links which use a 6,4 dash) */}
+                    <line
+                      x1={CLOUD.x + 75}
+                      y1={CLOUD.y}
+                      x2={nodes.INT_SRV.x - 30}
+                      y2={nodes.INT_SRV.y}
+                      stroke="#ef4444"
+                      strokeWidth="3"
+                      strokeDasharray="2 6"
+                      strokeLinecap="round"
+                    />
+
                     {/* Links */}
                     {LINKS.map((link) => {
                       const n1 = nodes[link.source];
@@ -3148,6 +3412,25 @@
                           </g>
                         );
                       }
+                      // L7 is the engine link RT_EDGE <-> INT_SRV; visually
+                      // we draw it as a stub from RT_EDGE up into the cloud,
+                      // with the cloud -> INT_SRV portion shown as the red
+                      // dotted abstraction drawn separately above.
+                      if (link.id === "L7") {
+                        const edge = nodes.RT_EDGE;
+                        return (
+                          <line
+                            key={link.id}
+                            x1={edge.x}
+                            y1={edge.y}
+                            x2={CLOUD.x}
+                            y2={CLOUD.y + 30}
+                            stroke={isDark ? "#475569" : "#94a3b8"}
+                            strokeWidth="4"
+                            strokeDasharray="6,4"
+                          />
+                        );
+                      }
                       return (
                         <line
                           key={link.id}
@@ -3164,6 +3447,9 @@
 
                     {/* Nodes */}
                     {Object.values(nodes).map((node) => {
+                      // The cloud is rendered as its own bezier SVG above;
+                      // skip it here so it isn't drawn as a regular node.
+                      if (node.type === "Cloud") return null;
                       const color = getEntityColor(node.id);
                       const isSelected = selectedNodeId === node.id;
                       const handleClick = () => {
@@ -3252,8 +3538,42 @@
 
                       if (p.state === "TRANSIT") {
                         const next = nodes[p.nextNode];
-                        px = curr.x + (next.x - curr.x) * (p.progress / 100);
-                        py = curr.y + (next.y - curr.y) * (p.progress / 100);
+                        // Cloud-aware interpolation: when the leg
+                        // involves the cloud pseudo-node, route the
+                        // packet via the two CLOUD_STOPS so it visibly
+                        // bounces through the cloud rather than gliding
+                        // straight past it.
+                        let from = null;
+                        let to = null;
+                        if (
+                          p.currentNode === "CLOUD" &&
+                          p.nextNode === "CLOUD"
+                        ) {
+                          from = cloudStopFor((p.cloudHopIndex || 1) - 1);
+                          to = cloudStopFor(p.cloudHopIndex || 1);
+                        } else if (p.nextNode === "CLOUD") {
+                          from = curr;
+                          to = cloudStopFor(p.cloudHopIndex || 0);
+                        } else if (p.currentNode === "CLOUD") {
+                          from = cloudStopFor((p.cloudHopIndex || 1) - 1);
+                          to = next;
+                        }
+                        if (from && to) {
+                          px = from.x + (to.x - from.x) * (p.progress / 100);
+                          py = from.y + (to.y - from.y) * (p.progress / 100);
+                        } else {
+                          px = curr.x + (next.x - curr.x) * (p.progress / 100);
+                          py = curr.y + (next.y - curr.y) * (p.progress / 100);
+                        }
+                      } else if (
+                        p.state === "ARRIVED" &&
+                        p.currentNode === "CLOUD"
+                      ) {
+                        // Render the packet at the cloud stop it just
+                        // landed on, rather than the cloud's centre.
+                        const stop = cloudStopFor(p.cloudHopIndex || 0);
+                        px = stop.x;
+                        py = stop.y;
                       } else if (p.state === "ARRIVED" && p.prevNode) {
                         const prev = nodes[p.prevNode];
                         const dx = curr.x - prev.x;
@@ -3341,6 +3661,7 @@
                       );
                     })}
                   </svg>
+                  </div>
 
                 </div>
               </div>
@@ -3968,9 +4289,10 @@
         }, [validTabIds.join(",")]);
 
         const [newHostEntry, setNewHostEntry] = useState({
-          hostname: "mycompany.local",
-          ip: "192.168.1.254",
+          hostname: "",
+          ip: "",
         });
+        const [showAddHost, setShowAddHost] = useState(false);
         const [newDnsRecord, setNewDnsRecord] = useState({
           hostname: "intranet.local",
           value: "192.168.1.254",
@@ -4158,36 +4480,53 @@
                             ))}
                           </div>
                         )}
-                        <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
-                          <input
-                            value={newHostEntry.hostname}
-                            onChange={(e) =>
-                              setNewHostEntry({
-                                ...newHostEntry,
-                                hostname: e.target.value,
-                              })
-                            }
-                            placeholder="hostname"
-                            className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
-                          />
-                          <input
-                            value={newHostEntry.ip}
-                            onChange={(e) =>
-                              setNewHostEntry({
-                                ...newHostEntry,
-                                ip: e.target.value,
-                              })
-                            }
-                            placeholder="IP"
-                            className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
-                          />
+                        {!showAddHost ? (
                           <button
-                            onClick={() => onAddHostEntry(node.id, newHostEntry)}
-                            className="px-1.5 py-1 rounded bg-blue-600 text-white text-[10px] font-bold"
+                            onClick={() => setShowAddHost(true)}
+                            className="px-2 py-1 rounded bg-blue-600 text-white text-[10px] font-bold"
                           >
-                            Add
+                            + Add record
                           </button>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                              Domain name
+                            </label>
+                            <input
+                              value={newHostEntry.hostname}
+                              onChange={(e) =>
+                                setNewHostEntry({
+                                  ...newHostEntry,
+                                  hostname: e.target.value,
+                                })
+                              }
+                              className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                            />
+                            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mt-1">
+                              IP address
+                            </label>
+                            <input
+                              value={newHostEntry.ip}
+                              onChange={(e) =>
+                                setNewHostEntry({
+                                  ...newHostEntry,
+                                  ip: e.target.value,
+                                })
+                              }
+                              className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                            />
+                            <button
+                              onClick={() => {
+                                onAddHostEntry(node.id, newHostEntry);
+                                setNewHostEntry({ hostname: "", ip: "" });
+                                setShowAddHost(false);
+                              }}
+                              className="mt-1 px-2 py-1 rounded bg-blue-600 text-white text-[10px] font-bold self-start"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div>
