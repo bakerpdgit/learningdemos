@@ -302,9 +302,178 @@
         return path.replace(/^\//, "");
       };
 
+      const isValidIp = (value) =>
+        /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(value || "");
+
+      const normaliseHostname = (value) =>
+        (value || "").trim().toLowerCase().replace(/\.$/, "");
+
+      const defaultBrowser = () => ({
+        address: "http://mycompany.local/",
+        page: null,
+        resources: {},
+        lastResolution: null,
+      });
+
+      const parseBrowserTarget = (raw, basePage = null) => {
+        const input = (raw || "").trim();
+        if (!input) return { error: "Browser address bar is empty." };
+        if (input.startsWith("/") && basePage && basePage.serverIp) {
+          return {
+            host: basePage.host || basePage.serverIp,
+            path: input,
+            displayUrl: `http://${basePage.host || basePage.serverIp}${input}`,
+            isIp: isValidIp(basePage.serverIp),
+            targetIp: basePage.serverIp,
+          };
+        }
+        let candidate = input;
+        if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) {
+          candidate = `http://${candidate}`;
+        }
+        try {
+          const parsed = new URL(candidate);
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            return { error: "Only http:// style browser requests are supported." };
+          }
+          const host = normaliseHostname(parsed.hostname);
+          const path = parsed.pathname || "/";
+          return {
+            host,
+            path,
+            displayUrl: `http://${host}${path}`,
+            isIp: isValidIp(host),
+            targetIp: isValidIp(host) ? host : null,
+          };
+        } catch (e) {
+          return { error: `Cannot parse browser address: ${input}` };
+        }
+      };
+
+      const makeDnsCacheEntry = (hostname, ip, ttl, source = "DNS server") => ({
+        hostname: normaliseHostname(hostname),
+        ip,
+        ttl,
+        source,
+        cachedAt: new Date().toLocaleTimeString(),
+      });
+
+      const DEFAULT_DNS_RECORDS = [
+        {
+          id: "dns-default-mycompany",
+          hostname: "mycompany.local",
+          type: "A",
+          value: "192.168.1.254",
+          ttl: 300,
+        },
+      ];
+
+      const DEFAULT_DHCP_ALLOCATIONS = [
+        {
+          id: "dhcp-rt-a",
+          deviceId: "RT_A",
+          deviceName: "Subnet A Router",
+          mac: "AA:AA:AA:AA:AA:01",
+          ip: "192.168.1.1",
+          mode: "Static reservation",
+          scope: "Subnet A",
+          status: "Active",
+          subnet: "255.255.255.0",
+          gateway: "192.168.1.1",
+          dns: "192.168.1.253",
+          lease: "Reserved",
+        },
+        {
+          id: "dhcp-srv1",
+          deviceId: "SRV1",
+          deviceName: "Local Web Server",
+          mac: "01:01:01:01:01:80",
+          ip: "192.168.1.254",
+          mode: "Static reservation",
+          scope: "Subnet A",
+          status: "Active",
+          subnet: "255.255.255.0",
+          gateway: "192.168.1.1",
+          dns: "192.168.1.253",
+          lease: "Reserved",
+        },
+        {
+          id: "dhcp-dns-a",
+          deviceId: "DNS_A",
+          deviceName: "Local DNS Server",
+          mac: "01:01:01:01:01:53",
+          ip: "192.168.1.253",
+          mode: "Static reservation",
+          scope: "Subnet A",
+          status: "Active",
+          subnet: "255.255.255.0",
+          gateway: "192.168.1.1",
+          dns: "192.168.1.253",
+          lease: "Reserved",
+        },
+        {
+          id: "dhcp-client-pc1",
+          deviceId: "PC1",
+          deviceName: "Client PC 1",
+          mac: "01:01:01:01:01:01",
+          ip: "192.168.1.2",
+          mode: "Dynamic lease",
+          scope: "Subnet A",
+          status: "Active",
+          subnet: "255.255.255.0",
+          gateway: "192.168.1.1",
+          dns: "192.168.1.253",
+          lease: "8 hours",
+        },
+        {
+          id: "dhcp-client-pc2",
+          deviceId: "PC2",
+          deviceName: "Client PC 2",
+          mac: "02:02:02:02:02:01",
+          ip: "192.168.2.2",
+          mode: "Dynamic lease",
+          scope: "Subnet B",
+          status: "Active via routed scope",
+          subnet: "255.255.255.0",
+          gateway: "192.168.2.1",
+          dns: "192.168.1.253",
+          lease: "8 hours",
+        },
+        {
+          id: "dhcp-client-pc3",
+          deviceId: "PC3",
+          deviceName: "Client PC 3",
+          mac: "02:02:02:02:02:02",
+          ip: "192.168.2.3",
+          mode: "Dynamic lease",
+          scope: "Subnet B",
+          status: "Active via routed scope",
+          subnet: "255.255.255.0",
+          gateway: "192.168.2.1",
+          dns: "192.168.1.253",
+          lease: "8 hours",
+        },
+        {
+          id: "dhcp-client-lap-b",
+          deviceId: "LAP_B",
+          deviceName: "Client Laptop 1",
+          mac: "02:02:02:02:02:04",
+          ip: "192.168.2.4",
+          mode: "Dynamic lease",
+          scope: "Subnet B",
+          status: "Active via routed scope",
+          subnet: "255.255.255.0",
+          gateway: "192.168.2.1",
+          dns: "192.168.1.253",
+          lease: "8 hours",
+        },
+      ];
+
       const IP_MAC_TABLE = {
         "192.168.1.2": "01:01:01:01:01:01",
         "192.168.1.254": "01:01:01:01:01:80",
+        "192.168.1.253": "01:01:01:01:01:53",
+        "192.168.1.252": "01:01:01:01:01:67",
         "192.168.1.1": "AA:AA:AA:AA:AA:01",
         "192.168.2.2": "02:02:02:02:02:01",
         "192.168.2.3": "02:02:02:02:02:02",
@@ -320,6 +489,8 @@
       const MAC_NODE_TABLE = {
         "01:01:01:01:01:01": "PC1",
         "01:01:01:01:01:80": "SRV1",
+        "01:01:01:01:01:53": "DNS_A",
+        "01:01:01:01:01:67": "DHCP_A",
         "AA:AA:AA:AA:AA:01": "RT_A",
         "02:02:02:02:02:01": "PC2",
         "02:02:02:02:02:02": "PC3",
@@ -341,10 +512,14 @@
           mac: "01:01:01:01:01:01",
           gw: "192.168.1.1",
           subnet: "255.255.255.0",
+          dns: "192.168.1.253",
           switch: "SW_A",
           x: 150,
           y: 550,
           browserOutput: "",
+          hostsFile: [],
+          dnsCache: [],
+          browser: defaultBrowser(),
         },
         SRV1: {
           id: "SRV1",
@@ -363,6 +538,34 @@
             "cat.jpg": { type: "image", animal: "cat" },
             "rabbit.jpg": { type: "image", animal: "rabbit" },
           },
+        },
+        DNS_A: {
+          id: "DNS_A",
+          type: "Server",
+          service: "DNS",
+          name: "Local DNS Server",
+          ip: "192.168.1.253",
+          mac: "01:01:01:01:01:53",
+          gw: "192.168.1.1",
+          subnet: "255.255.255.0",
+          switch: "SW_A",
+          x: 500,
+          y: 550,
+          records: DEFAULT_DNS_RECORDS,
+        },
+        DHCP_A: {
+          id: "DHCP_A",
+          type: "Server",
+          service: "DHCP",
+          name: "Local DHCP Server",
+          ip: "192.168.1.252",
+          mac: "01:01:01:01:01:67",
+          gw: "192.168.1.1",
+          subnet: "255.255.255.0",
+          switch: "SW_A",
+          x: 250,
+          y: 640,
+          allocations: DEFAULT_DHCP_ALLOCATIONS,
         },
         SW_A: {
           id: "SW_A",
@@ -430,10 +633,14 @@
           mac: "02:02:02:02:02:01",
           gw: "192.168.2.1",
           subnet: "255.255.255.0",
+          dns: "192.168.1.253",
           switch: "SW_B",
           x: 650,
           y: 550,
           browserOutput: "",
+          hostsFile: [],
+          dnsCache: [],
+          browser: defaultBrowser(),
         },
         PC3: {
           id: "PC3",
@@ -443,10 +650,14 @@
           mac: "02:02:02:02:02:02",
           gw: "192.168.2.1",
           subnet: "255.255.255.0",
+          dns: "192.168.1.253",
           switch: "SW_B",
           x: 850,
           y: 550,
           browserOutput: "",
+          hostsFile: [],
+          dnsCache: [],
+          browser: defaultBrowser(),
         },
         SW_B: {
           id: "SW_B",
@@ -470,10 +681,14 @@
           mac: "02:02:02:02:02:04",
           gw: "192.168.2.1",
           subnet: "255.255.255.0",
+          dns: "192.168.1.253",
           switch: "WAP_B",
           x: 980,
           y: 620,
           browserOutput: "",
+          hostsFile: [],
+          dnsCache: [],
+          browser: defaultBrowser(),
         },
         RT_B: {
           id: "RT_B",
@@ -594,6 +809,8 @@
       const LINKS = [
         { id: "L1", source: "PC1", target: "SW_A" },
         { id: "L2", source: "SRV1", target: "SW_A" },
+        { id: "L13", source: "DNS_A", target: "SW_A" },
+        { id: "L14", source: "DHCP_A", target: "SW_A" },
         { id: "L3", source: "SW_A", target: "RT_A" },
         { id: "L4", source: "RT_A", target: "SW_CORE" },
         { id: "L5", source: "SW_CORE", target: "RT_B" },
@@ -698,12 +915,42 @@
             };
           } else if (type === "HTTP") {
             const path = options.path || "/";
-            p.appLayer = { protocol: "HTTP", method: "GET", path };
-            p.payload = `GET ${path} HTTP/1.1`;
+            const host = options.host || targetIp;
+            p.appLayer = {
+              protocol: "HTTP",
+              method: "GET",
+              path,
+              host,
+              requestedUrl: options.requestedUrl || `http://${host}${path}`,
+            };
+            p.payload = `GET ${path} HTTP/1.1\nHost: ${host}`;
             p.transportLayer = {
               protocol: "TCP",
               srcPort: 49152 + Math.floor(Math.random() * 16000),
               dstPort: 80,
+              seq: 1,
+              total: 1,
+              checksum:
+                "0x" +
+                Math.floor(Math.random() * 65535)
+                  .toString(16)
+                  .toUpperCase(),
+            };
+          } else if (type === "DNS") {
+            const hostname = normaliseHostname(options.hostname);
+            p.appLayer = {
+              protocol: "DNS",
+              method: "QUERY",
+              hostname,
+              path: options.path || "/",
+              requestedUrl:
+                options.requestedUrl || `http://${hostname}${options.path || "/"}`,
+            };
+            p.payload = `DNS QUERY A ${hostname}`;
+            p.transportLayer = {
+              protocol: "UDP",
+              srcPort: 49152 + Math.floor(Math.random() * 16000),
+              dstPort: 53,
               seq: 1,
               total: 1,
               checksum:
@@ -943,12 +1190,14 @@
 
           const isHttpResponse =
             p.appLayer.protocol === "HTTP" && p.appLayer.method === "RESPONSE";
+          const isDnsResponse =
+            p.appLayer.protocol === "DNS" && p.appLayer.method === "RESPONSE";
           const isPingReply =
             p.appLayer.protocol === "Ping" &&
             p.payload &&
             p.payload.includes("Reply");
 
-          if (isHttpResponse || isPingReply) {
+          if (isHttpResponse || isDnsResponse || isPingReply) {
             return {
               action: "CONSUME",
               message: `${node.name} received response from ${p.networkLayer.srcIP}.`,
@@ -957,11 +1206,24 @@
             };
           }
 
-          // PCs do not run web servers in this simulation
-          if (p.appLayer.protocol === "HTTP" && node.type !== "Server") {
+          if (p.appLayer.protocol === "DNS" && node.service !== "DNS") {
             return {
               action: "DROP",
-              reason: `${node.name} dropped HTTP request: Connection refused on port 80.`,
+              reason: `${node.name} dropped DNS query: DNS service is not running.`,
+            };
+          }
+
+          if (p.appLayer.protocol === "HTTP" && !node.files) {
+            return {
+              action: "DROP",
+              reason: `${node.name} dropped HTTP request: Web service is not running on port 80.`,
+            };
+          }
+
+          if (!["Ping", "HTTP", "DNS"].includes(p.appLayer.protocol)) {
+            return {
+              action: "DROP",
+              reason: `${node.name} dropped packet: Unknown application protocol ${p.appLayer.protocol}.`,
             };
           }
 
@@ -976,7 +1238,9 @@
             summary:
               p.appLayer.protocol === "Ping"
                 ? `Ping (seq ${p.transportLayer.seq}/${p.transportLayer.total || 1})`
-                : `${p.appLayer.method || "HTTP"} ${p.appLayer.path || "/"}`,
+                : p.appLayer.protocol === "DNS"
+                  ? `DNS A query for ${p.appLayer.hostname}`
+                  : `${p.appLayer.method || "HTTP"} ${p.appLayer.path || "/"}`,
           };
         }
 
@@ -1028,6 +1292,51 @@
               appLayer: { protocol: "Ping" },
               payload: "ICMP Echo Reply Data",
               transportLayer: { ...p.transportLayer },
+            };
+            return { action: "FORWARD", packets: [reply] };
+          }
+
+          if (p.appLayer.protocol === "DNS") {
+            if (node.service !== "DNS") {
+              return { action: "DROP", reason: "DNS service is not running." };
+            }
+            const hostname = normaliseHostname(p.appLayer.hostname);
+            const record = (node.records || []).find(
+              (r) =>
+                normaliseHostname(r.hostname) === hostname &&
+                (r.type || "A").toUpperCase() === "A",
+            );
+            const status = record ? "NOERROR" : "NXDOMAIN";
+            const answerIp = record ? record.value : null;
+            const ttl = record ? Number(record.ttl) || 300 : 0;
+            const reply = {
+              ...baseReply,
+              id: generateId(),
+              appLayer: {
+                protocol: "DNS",
+                method: "RESPONSE",
+                hostname,
+                path: p.appLayer.path || "/",
+                requestedUrl: p.appLayer.requestedUrl,
+                status,
+                resolvedIp: answerIp,
+                ttl,
+              },
+              payload: answerIp
+                ? `DNS RESPONSE\n${hostname} A ${answerIp}\nTTL ${ttl}`
+                : `DNS RESPONSE\n${hostname} NXDOMAIN`,
+              transportLayer: {
+                protocol: "UDP",
+                srcPort: 53,
+                dstPort: p.transportLayer.srcPort,
+                seq: 1,
+                total: 1,
+                checksum:
+                  "0x" +
+                  Math.floor(Math.random() * 65535)
+                    .toString(16)
+                    .toUpperCase(),
+              },
             };
             return { action: "FORWARD", packets: [reply] };
           }
@@ -1374,6 +1683,29 @@
         const [isDark, setIsDark] = useState(() =>
           document.documentElement.classList.contains("dark"),
         );
+        const [leftPanelWidth, setLeftPanelWidth] = useState(300);
+        const [isResizingLeft, setIsResizingLeft] = useState(false);
+
+        useEffect(() => {
+          if (!isResizingLeft) return;
+          const onMove = (e) => {
+            const next = Math.min(460, Math.max(240, e.clientX));
+            setLeftPanelWidth(next);
+          };
+          const onUp = () => setIsResizingLeft(false);
+          const prevCursor = document.body.style.cursor;
+          const prevSelect = document.body.style.userSelect;
+          document.body.style.cursor = "col-resize";
+          document.body.style.userSelect = "none";
+          window.addEventListener("mousemove", onMove);
+          window.addEventListener("mouseup", onUp);
+          return () => {
+            document.body.style.cursor = prevCursor;
+            document.body.style.userSelect = prevSelect;
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+          };
+        }, [isResizingLeft]);
 
         const activePackets = packets.filter(
           (p) => p.state === "TRANSIT" || p.state === "ARRIVED",
@@ -1518,10 +1850,100 @@
                     rp.appLayer &&
                     rp.appLayer.protocol === "HTTP" &&
                     rp.appLayer.method === "RESPONSE";
+                  const isDns =
+                    rp &&
+                    rp.appLayer &&
+                    rp.appLayer.protocol === "DNS" &&
+                    rp.appLayer.method === "RESPONSE";
                   const isPing =
                     rp && rp.appLayer && rp.appLayer.protocol === "Ping";
 
                   if (
+                    isDns &&
+                    (activeNode.type === "PC" || activeNode.type === "Laptop")
+                  ) {
+                    const hostname = rp.appLayer.hostname;
+                    const resolvedIp = rp.appLayer.resolvedIp;
+                    const status = rp.appLayer.status;
+                    const prevBrowser = activeNode.browser || defaultBrowser();
+                    if (status === "NOERROR" && resolvedIp) {
+                      const nextCache = [
+                        makeDnsCacheEntry(
+                          hostname,
+                          resolvedIp,
+                          rp.appLayer.ttl || 300,
+                        ),
+                        ...(activeNode.dnsCache || []).filter(
+                          (entry) =>
+                            normaliseHostname(entry.hostname) !==
+                            normaliseHostname(hostname),
+                        ),
+                      ];
+                      nodeUpdates[activeNode.id] = {
+                        ...activeNode,
+                        dnsCache: nextCache,
+                        browser: {
+                          ...prevBrowser,
+                          address:
+                            rp.appLayer.requestedUrl ||
+                            `http://${hostname}${rp.appLayer.path || "/"}`,
+                          lastResolution: {
+                            hostname,
+                            ip: resolvedIp,
+                            source: "DNS server",
+                            status,
+                            time: new Date().toLocaleTimeString(),
+                          },
+                        },
+                      };
+                      followUpRequests.push({
+                        clientId: activeNode.id,
+                        targetIp: resolvedIp,
+                        path: rp.appLayer.path || "/",
+                        host: hostname,
+                        requestedUrl:
+                          rp.appLayer.requestedUrl ||
+                          `http://${hostname}${rp.appLayer.path || "/"}`,
+                        transactionId: p.transactionId,
+                      });
+                      addLocalLog(
+                        `${activeNode.name} cached DNS answer: ${hostname} -> ${resolvedIp}`,
+                        "success",
+                      );
+                    } else {
+                      nodeUpdates[activeNode.id] = {
+                        ...activeNode,
+                        browser: {
+                          ...prevBrowser,
+                          address:
+                            rp.appLayer.requestedUrl ||
+                            `http://${hostname}${rp.appLayer.path || "/"}`,
+                          page: {
+                            serverIp: null,
+                            host: hostname,
+                            path: rp.appLayer.path || "/",
+                            html: null,
+                            status: "DNS_ERROR",
+                            message: `DNS could not resolve ${hostname}.`,
+                          },
+                          resources: {},
+                          lastResolution: {
+                            hostname,
+                            ip: null,
+                            source: "DNS server",
+                            status,
+                            time: new Date().toLocaleTimeString(),
+                          },
+                        },
+                      };
+                      addLocalLog(
+                        `${activeNode.name} received DNS NXDOMAIN for ${hostname}.`,
+                        "error",
+                      );
+                    }
+                    autoSelectNodeId = activeNode.id;
+                    autoSelectTab = "BROWSER";
+                  } else if (
                     isHttp &&
                     (activeNode.type === "PC" || activeNode.type === "Laptop")
                   ) {
@@ -1591,9 +2013,14 @@
                           });
                         });
                         newBrowser = {
+                          ...prevBrowser,
                           page: {
                             serverIp,
+                            host: rp.appLayer.host || serverIp,
                             path: rp.appLayer.path,
+                            requestedUrl:
+                              rp.appLayer.requestedUrl ||
+                              `http://${rp.appLayer.host || serverIp}${rp.appLayer.path}`,
                             html: res.content,
                             status: 200,
                           },
@@ -1621,9 +2048,14 @@
                         newBrowser = { ...prevBrowser, resources };
                       } else {
                         newBrowser = {
+                          ...prevBrowser,
                           page: {
                             serverIp,
+                            host: rp.appLayer.host || serverIp,
                             path: rp.appLayer.path,
+                            requestedUrl:
+                              rp.appLayer.requestedUrl ||
+                              `http://${rp.appLayer.host || serverIp}${rp.appLayer.path}`,
                             html: null,
                             status: rp.appLayer.status || 500,
                             message:
@@ -2047,7 +2479,11 @@
             newPackets.push(res.packet);
           }
           target =
-            type === "HTTP" ? `${targetIp}${options.path || "/"}` : targetIp;
+            type === "HTTP"
+              ? `${options.host || targetIp}${options.path || "/"}`
+              : type === "DNS"
+                ? `${options.hostname} via ${targetIp}`
+                : targetIp;
 
           setPackets((prev) => [...prev, ...newPackets]);
           commitUpdates({
@@ -2084,7 +2520,13 @@
             clientNode,
             next.targetIp,
             "HTTP",
-            { path: next.path, transactionId: next.transactionId },
+            {
+              path: next.path,
+              host: next.host || next.targetIp,
+              requestedUrl:
+                next.requestedUrl || `http://${next.host || next.targetIp}${next.path}`,
+              transactionId: next.transactionId,
+            },
           );
           if (res.error) {
             commitUpdates({
@@ -2102,9 +2544,9 @@
           commitUpdates({
             logsToAdd: [
               {
-                msg: `${clientNode.name} auto-fetching ${next.targetIp}${next.path}`,
-                type: "info",
-              },
+                  msg: `${clientNode.name} auto-fetching ${next.host || next.targetIp}${next.path}`,
+                  type: "info",
+                },
             ],
             nodeUpdates: {},
           });
@@ -2119,21 +2561,148 @@
           commitUpdates,
         ]);
 
-        // Handler used by the mini browser when the student clicks a link.
-        const handleBrowserNavigate = (clientId, url) => {
+        const updateNode = (nodeId, updater) => {
+          setNodes((prev) => {
+            const node = prev[nodeId];
+            if (!node) return prev;
+            return { ...prev, [nodeId]: updater(node) };
+          });
+        };
+
+        const setClientBrowserAddress = (clientId, address) => {
+          updateNode(clientId, (client) => ({
+            ...client,
+            browser: { ...(client.browser || defaultBrowser()), address },
+          }));
+        };
+
+        const updateClientBrowserShell = (clientId, browserPatch) => {
+          updateNode(clientId, (client) => ({
+            ...client,
+            browser: {
+              ...(client.browser || defaultBrowser()),
+              ...browserPatch,
+            },
+          }));
+        };
+
+        const resolveBrowserRequest = (clientId, parsed) => {
           const client = nodes[clientId];
           if (!client) return;
-          const baseIp =
-            (client.browser &&
-              client.browser.page &&
-              client.browser.page.serverIp) ||
-            null;
-          const resolved = resolveUrl(url, baseIp);
-          if (!resolved || !resolved.ip) {
+          const hostname = normaliseHostname(parsed.host);
+          if (!hostname) {
+            commitUpdates({
+              logsToAdd: [{ msg: "Browser address has no host name.", type: "error" }],
+              nodeUpdates: {},
+            });
+            return;
+          }
+
+          if (parsed.isIp && parsed.targetIp) {
+            updateClientBrowserShell(clientId, {
+              address: parsed.displayUrl,
+              lastResolution: {
+                hostname,
+                ip: parsed.targetIp,
+                source: "Direct IP address",
+                status: "SKIPPED_DNS",
+                time: new Date().toLocaleTimeString(),
+              },
+            });
+            sendUserRequest(clientId, parsed.targetIp, "HTTP", {
+              path: parsed.path,
+              host: parsed.targetIp,
+              requestedUrl: parsed.displayUrl,
+            });
+            return;
+          }
+
+          const hostsEntry = (client.hostsFile || []).find(
+            (entry) => normaliseHostname(entry.hostname) === hostname,
+          );
+          if (hostsEntry && hostsEntry.ip) {
+            updateClientBrowserShell(clientId, {
+              address: parsed.displayUrl,
+              lastResolution: {
+                hostname,
+                ip: hostsEntry.ip,
+                source: "hosts file",
+                status: "NOERROR",
+                time: new Date().toLocaleTimeString(),
+              },
+            });
             commitUpdates({
               logsToAdd: [
                 {
-                  msg: `Cannot resolve link target: ${url}`,
+                  msg: `${client.name} resolved ${hostname} from its local hosts file.`,
+                  type: "success",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            sendUserRequest(clientId, hostsEntry.ip, "HTTP", {
+              path: parsed.path,
+              host: hostname,
+              requestedUrl: parsed.displayUrl,
+            });
+            return;
+          }
+
+          const cacheEntry = (client.dnsCache || []).find(
+            (entry) => normaliseHostname(entry.hostname) === hostname,
+          );
+          if (cacheEntry && cacheEntry.ip) {
+            updateClientBrowserShell(clientId, {
+              address: parsed.displayUrl,
+              lastResolution: {
+                hostname,
+                ip: cacheEntry.ip,
+                source: "DNS cache",
+                status: "NOERROR",
+                time: new Date().toLocaleTimeString(),
+              },
+            });
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${client.name} resolved ${hostname} from local DNS cache.`,
+                  type: "success",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            sendUserRequest(clientId, cacheEntry.ip, "HTTP", {
+              path: parsed.path,
+              host: hostname,
+              requestedUrl: parsed.displayUrl,
+            });
+            return;
+          }
+
+          if (!client.dns || !isValidIp(client.dns)) {
+            updateClientBrowserShell(clientId, {
+              address: parsed.displayUrl,
+              page: {
+                serverIp: null,
+                host: hostname,
+                path: parsed.path,
+                html: null,
+                status: "DNS_ERROR",
+                message: "No valid DNS server is configured.",
+              },
+              resources: {},
+              lastResolution: {
+                hostname,
+                ip: null,
+                source: "DNS configuration",
+                status: "NO_DNS_SERVER",
+                time: new Date().toLocaleTimeString(),
+              },
+            });
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${client.name} cannot resolve ${hostname}: no DNS server configured.`,
                   type: "error",
                 },
               ],
@@ -2141,9 +2710,42 @@
             });
             return;
           }
-          sendUserRequest(clientId, resolved.ip, "HTTP", {
-            path: resolved.path,
+
+          updateClientBrowserShell(clientId, {
+            address: parsed.displayUrl,
+            lastResolution: {
+              hostname,
+              ip: null,
+              source: "DNS query pending",
+              status: "PENDING",
+              time: new Date().toLocaleTimeString(),
+            },
           });
+          sendUserRequest(clientId, client.dns, "DNS", {
+            hostname,
+            path: parsed.path,
+            requestedUrl: parsed.displayUrl,
+          });
+        };
+
+        // Handler used by the mini browser when the student clicks a link.
+        const handleBrowserNavigate = (clientId, url) => {
+          const client = nodes[clientId];
+          if (!client) return;
+          const parsed = parseBrowserTarget(url, client.browser?.page || null);
+          if (parsed.error) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: parsed.error,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return;
+          }
+          resolveBrowserRequest(clientId, parsed);
         };
 
         // Handlers for editing server filesystems.
@@ -2179,6 +2781,101 @@
             delete files[fileName];
             return { ...prev, [serverId]: { ...server, files } };
           });
+        };
+
+        const addDnsRecord = (serverId, record) => {
+          const hostname = normaliseHostname(record.hostname);
+          const value = (record.value || "").trim();
+          if (!hostname || !isValidIp(value)) return;
+          updateNode(serverId, (server) => ({
+            ...server,
+            records: [
+              ...(server.records || []),
+              {
+                id: generateId(),
+                hostname,
+                type: "A",
+                value,
+                ttl: Number(record.ttl) || 300,
+              },
+            ],
+          }));
+        };
+
+        const updateDnsRecord = (serverId, recordId, field, value) => {
+          updateNode(serverId, (server) => ({
+            ...server,
+            records: (server.records || []).map((record) =>
+              record.id === recordId
+                ? {
+                    ...record,
+                    [field]:
+                      field === "hostname"
+                        ? normaliseHostname(value)
+                        : field === "ttl"
+                          ? Number(value) || 0
+                          : value,
+                  }
+                : record,
+            ),
+          }));
+        };
+
+        const deleteDnsRecord = (serverId, recordId) => {
+          updateNode(serverId, (server) => ({
+            ...server,
+            records: (server.records || []).filter(
+              (record) => record.id !== recordId,
+            ),
+          }));
+        };
+
+        const addHostEntry = (clientId, entry) => {
+          const hostname = normaliseHostname(entry.hostname);
+          const ip = (entry.ip || "").trim();
+          if (!hostname || !isValidIp(ip)) return;
+          updateNode(clientId, (client) => ({
+            ...client,
+            hostsFile: [
+              ...(client.hostsFile || []),
+              { id: generateId(), hostname, ip },
+            ],
+          }));
+        };
+
+        const updateHostEntry = (clientId, entryId, field, value) => {
+          updateNode(clientId, (client) => ({
+            ...client,
+            hostsFile: (client.hostsFile || []).map((entry) =>
+              entry.id === entryId
+                ? {
+                    ...entry,
+                    [field]:
+                      field === "hostname" ? normaliseHostname(value) : value,
+                  }
+                : entry,
+            ),
+          }));
+        };
+
+        const deleteHostEntry = (clientId, entryId) => {
+          updateNode(clientId, (client) => ({
+            ...client,
+            hostsFile: (client.hostsFile || []).filter(
+              (entry) => entry.id !== entryId,
+            ),
+          }));
+        };
+
+        const clearDnsCache = (clientId) => {
+          updateNode(clientId, (client) => ({
+            ...client,
+            dnsCache: [],
+            browser: {
+              ...(client.browser || defaultBrowser()),
+              lastResolution: null,
+            },
+          }));
         };
 
         // Render Helpers
@@ -2298,7 +2995,75 @@
 
             {/* Main Content */}
             <div className="flex flex-1 overflow-hidden">
-              {/* LEFT: Canvas & Logs */}
+              {/* LEFT: Legend and event log */}
+              <aside
+                className="shrink-0 bg-slate-50 dark:bg-slate-950 border-r border-slate-300 dark:border-slate-700 flex flex-col overflow-hidden"
+                style={{ width: leftPanelWidth }}
+              >
+                <div className="p-3 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100">
+                  <h3 className="font-bold mb-2">Network Legend</h3>
+                  <div className="flex flex-col gap-1 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      Subnet A (192.168.1.0/24)
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      Subnet B (192.168.2.0/24)
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      Internet/WAN
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke={isDark ? "#10b981" : "#047857"}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      >
+                        <path d="M5 12a10 10 0 0 1 14 0"></path>
+                        <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
+                        <circle
+                          cx="12"
+                          cy="19"
+                          r="1"
+                          fill={isDark ? "#10b981" : "#047857"}
+                          stroke="none"
+                        ></circle>
+                      </svg>
+                      Wireless link
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 bg-slate-50 dark:bg-black flex flex-col font-mono text-xs">
+                  <div className="bg-slate-200 dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-300 dark:border-slate-700">
+                    Simulation Event Log
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
+                    {logs.map((log) => (
+                      <div
+                        key={log.id}
+                        className={`${log.type === "error" ? "text-red-700 dark:text-red-400" : log.type === "success" ? "text-green-700 dark:text-green-400" : "text-slate-700 dark:text-slate-300"}`}
+                      >
+                        <span className="text-slate-500">[{log.time}]</span>{" "}
+                        <span>{log.msg}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </aside>
+
+              <div
+                className="w-1.5 shrink-0 cursor-col-resize bg-slate-300 hover:bg-sky-500 dark:bg-slate-700 dark:hover:bg-sky-500 transition-colors"
+                onMouseDown={() => setIsResizingLeft(true)}
+                title="Drag to resize the legend and event log panel"
+              />
+
+              {/* CENTER: Canvas */}
               <div className="flex-1 flex flex-col relative bg-slate-100 dark:bg-slate-900">
                 {/* Canvas area */}
                 <div
@@ -2577,64 +3342,6 @@
                     })}
                   </svg>
 
-                  {/* Top-right Legend / Map info */}
-                  <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-800/80 p-3 rounded border border-slate-300 dark:border-slate-700 pointer-events-none text-slate-900 dark:text-slate-100">
-                    <h3 className="font-bold mb-2">Network Legend</h3>
-                    <div className="flex flex-col gap-1 text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>{" "}
-                        Subnet A (192.168.1.0/24)
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-green-500"></div>{" "}
-                        Subnet B (192.168.2.0/24)
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500"></div>{" "}
-                        Internet/WAN
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke={isDark ? "#10b981" : "#047857"}
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                        >
-                          <path d="M5 12a10 10 0 0 1 14 0"></path>
-                          <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
-                          <circle
-                            cx="12"
-                            cy="19"
-                            r="1"
-                            fill={isDark ? "#10b981" : "#047857"}
-                            stroke="none"
-                          ></circle>
-                        </svg>
-                        Wireless link
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Console Logs */}
-                <div className="h-48 bg-slate-50 dark:bg-black border-t border-slate-300 dark:border-slate-700 flex flex-col font-mono text-sm">
-                  <div className="bg-slate-200 dark:bg-slate-800 px-4 py-1 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-300 dark:border-slate-700">
-                    Simulation Event Log
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
-                    {logs.map((log) => (
-                      <div
-                        key={log.id}
-                        className={`flex gap-3 ${log.type === "error" ? "text-red-700 dark:text-red-400" : log.type === "success" ? "text-green-700 dark:text-green-400" : "text-slate-700 dark:text-slate-300"}`}
-                      >
-                        <span className="text-slate-500">[{log.time}]</span>
-                        <span>{log.msg}</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
 
@@ -2684,8 +3391,23 @@
                         onCancelPicker={cancelPicker}
                         onSendRequest={sendUserRequest}
                         onNavigate={handleBrowserNavigate}
+                        onBrowserAddressChange={setClientBrowserAddress}
+                        onBrowserSubmit={(nodeId) => {
+                          const client = nodes[nodeId];
+                          handleBrowserNavigate(
+                            nodeId,
+                            client?.browser?.address || "http://mycompany.local/",
+                          );
+                        }}
                         onOpenFileEditor={openFileEditor}
                         onDeleteFile={deleteFile}
+                        onAddDnsRecord={addDnsRecord}
+                        onUpdateDnsRecord={updateDnsRecord}
+                        onDeleteDnsRecord={deleteDnsRecord}
+                        onAddHostEntry={addHostEntry}
+                        onUpdateHostEntry={updateHostEntry}
+                        onDeleteHostEntry={deleteHostEntry}
+                        onClearDnsCache={clearDnsCache}
                         color={getEntityColor(selectedNodeId)}
                         transactionActive={transactionActive}
                       />
@@ -3168,13 +3890,24 @@
         onCancelPicker,
         onSendRequest,
         onNavigate,
+        onBrowserAddressChange,
+        onBrowserSubmit,
         onOpenFileEditor,
         onDeleteFile,
+        onAddDnsRecord,
+        onUpdateDnsRecord,
+        onDeleteDnsRecord,
+        onAddHostEntry,
+        onUpdateHostEntry,
+        onDeleteHostEntry,
+        onClearDnsCache,
         color,
         transactionActive,
       }) => {
         const isClient = node.type === "PC" || node.type === "Laptop";
         const isServer = node.type === "Server";
+        const isDnsServer = node.service === "DNS";
+        const isDhcpServer = node.service === "DHCP";
 
         const hasProcessing = processing && processing.length > 0;
         const hasTerminal = terminal && terminal.length > 0;
@@ -3193,7 +3926,9 @@
           if (hasTerminal) tabs.push({ id: "TERMINAL", label: "Terminal" });
         }
         if (isServer) {
-          tabs.push({ id: "FILES", label: "Files" });
+          if (isDnsServer) tabs.push({ id: "DNS", label: "DNS" });
+          if (isDhcpServer) tabs.push({ id: "DHCP", label: "DHCP" });
+          if (node.files) tabs.push({ id: "FILES", label: "Files" });
         }
         const validTabIds = tabs.map((t) => t.id);
 
@@ -3232,6 +3967,32 @@
           }
         }, [validTabIds.join(",")]);
 
+        const [newHostEntry, setNewHostEntry] = useState({
+          hostname: "mycompany.local",
+          ip: "192.168.1.254",
+        });
+        const [newDnsRecord, setNewDnsRecord] = useState({
+          hostname: "intranet.local",
+          value: "192.168.1.254",
+          ttl: 300,
+        });
+        const [selectedAllocationId, setSelectedAllocationId] = useState(
+          node.allocations && node.allocations[0] ? node.allocations[0].id : null,
+        );
+
+        useEffect(() => {
+          setSelectedAllocationId(
+            node.allocations && node.allocations[0]
+              ? node.allocations[0].id
+              : null,
+          );
+        }, [node.id]);
+
+        const selectedAllocation =
+          (node.allocations || []).find((a) => a.id === selectedAllocationId) ||
+          (node.allocations || [])[0] ||
+          null;
+
         return (
           <div className="flex flex-col">
             <div
@@ -3252,7 +4013,7 @@
                     {node.name}
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-slate-400">
-                    {node.type}
+                    {node.service ? `${node.service} ${node.type}` : node.type}
                   </p>
                 </div>
               </div>
@@ -3297,12 +4058,174 @@
                         <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.gw}
                         </span>
+                        {node.dns && (
+                          <>
+                            <span className="text-slate-600 dark:text-slate-400">
+                              DNS:
+                            </span>
+                            <span className="font-mono text-slate-700 dark:text-slate-300">
+                              {node.dns}
+                            </span>
+                          </>
+                        )}
                         <span className="text-slate-600 dark:text-slate-400">
                           MAC:
                         </span>
                         <span className="font-mono text-slate-700 dark:text-slate-300">
                           {node.mac}
                         </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {isClient && (
+                    <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700">
+                      <div className="text-slate-500 mb-2 font-semibold text-xs uppercase">
+                        Name Resolution
+                      </div>
+                      {node.browser?.lastResolution ? (
+                        <div className="mb-3 rounded bg-slate-100 dark:bg-slate-800 p-2 text-xs">
+                          <div className="font-semibold text-slate-700 dark:text-slate-200">
+                            Last lookup:{" "}
+                            <span className="font-mono">
+                              {node.browser.lastResolution.hostname}
+                            </span>
+                          </div>
+                          <div className="mt-1 grid grid-cols-[70px_1fr] gap-x-2">
+                            <span className="text-slate-500">Source:</span>
+                            <span>{node.browser.lastResolution.source}</span>
+                            <span className="text-slate-500">Result:</span>
+                            <span className="font-mono">
+                              {node.browser.lastResolution.ip ||
+                                node.browser.lastResolution.status}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mb-3 text-xs italic text-slate-500">
+                          No hostname lookup has been attempted yet.
+                        </div>
+                      )}
+
+                      <div className="mb-3">
+                        <div className="mb-1 text-xs font-bold text-slate-600 dark:text-slate-400">
+                          Local hosts file
+                        </div>
+                        {(node.hostsFile || []).length === 0 ? (
+                          <div className="text-xs italic text-slate-500 mb-2">
+                            Empty. Add a row to override DNS.
+                          </div>
+                        ) : (
+                          <div className="space-y-1 mb-2">
+                            {(node.hostsFile || []).map((entry) => (
+                              <div
+                                key={entry.id}
+                                className="grid grid-cols-[1fr_1fr_auto] gap-1"
+                              >
+                                <input
+                                  value={entry.hostname}
+                                  onChange={(e) =>
+                                    onUpdateHostEntry(
+                                      node.id,
+                                      entry.id,
+                                      "hostname",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                                />
+                                <input
+                                  value={entry.ip}
+                                  onChange={(e) =>
+                                    onUpdateHostEntry(
+                                      node.id,
+                                      entry.id,
+                                      "ip",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                                />
+                                <button
+                                  onClick={() =>
+                                    onDeleteHostEntry(node.id, entry.id)
+                                  }
+                                  className="px-1.5 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-bold"
+                                >
+                                  Del
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
+                          <input
+                            value={newHostEntry.hostname}
+                            onChange={(e) =>
+                              setNewHostEntry({
+                                ...newHostEntry,
+                                hostname: e.target.value,
+                              })
+                            }
+                            placeholder="hostname"
+                            className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                          />
+                          <input
+                            value={newHostEntry.ip}
+                            onChange={(e) =>
+                              setNewHostEntry({
+                                ...newHostEntry,
+                                ip: e.target.value,
+                              })
+                            }
+                            placeholder="IP"
+                            className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                          />
+                          <button
+                            onClick={() => onAddHostEntry(node.id, newHostEntry)}
+                            className="px-1.5 py-1 rounded bg-blue-600 text-white text-[10px] font-bold"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            DNS cache
+                          </span>
+                          <button
+                            onClick={() => onClearDnsCache(node.id)}
+                            className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-[10px] font-semibold"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        {(node.dnsCache || []).length === 0 ? (
+                          <div className="text-xs italic text-slate-500">
+                            Cache empty.
+                          </div>
+                        ) : (
+                          <table className="w-full text-[11px]">
+                            <tbody>
+                              {(node.dnsCache || []).map((entry) => (
+                                <tr
+                                  key={`${entry.hostname}-${entry.ip}`}
+                                  className="border-t border-slate-200 dark:border-slate-800"
+                                >
+                                  <td className="py-1 font-mono">
+                                    {entry.hostname}
+                                  </td>
+                                  <td className="py-1 font-mono">{entry.ip}</td>
+                                  <td className="py-1 text-right text-slate-500">
+                                    TTL {entry.ttl}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
                       </div>
                     </div>
                   )}
@@ -3507,14 +4430,43 @@
 
               {tab === "BROWSER" && (
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs font-mono text-slate-700 dark:text-slate-300">
-                    <span className="text-slate-500">URL:</span>
-                    <span className="truncate">
-                      {node.browser && node.browser.page
-                        ? `http://${node.browser.page.serverIp}${node.browser.page.path}`
-                        : "(blank)"}
+                  <div className="flex items-center gap-1 rounded border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 p-1">
+                    <span className="px-1 text-[10px] font-bold uppercase text-slate-500">
+                      URL
                     </span>
+                    <input
+                      value={
+                        (node.browser && node.browser.address) ||
+                        "http://mycompany.local/"
+                      }
+                      onChange={(e) =>
+                        onBrowserAddressChange(node.id, e.target.value)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") onBrowserSubmit(node.id);
+                      }}
+                      className="min-w-0 flex-1 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-2 py-1 font-mono text-xs text-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      onClick={() => onBrowserSubmit(node.id)}
+                      disabled={transactionActive}
+                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold"
+                    >
+                      Go
+                    </button>
                   </div>
+                  {node.browser?.lastResolution && (
+                    <div className="rounded bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300">
+                      Lookup:{" "}
+                      <span className="font-mono">
+                        {node.browser.lastResolution.hostname}
+                      </span>{" "}
+                      via {node.browser.lastResolution.source}
+                      {node.browser.lastResolution.ip
+                        ? ` -> ${node.browser.lastResolution.ip}`
+                        : ""}
+                    </div>
+                  )}
                   <div
                     className="bg-white text-black rounded border border-slate-400 overflow-auto shadow-inner"
                     style={{ height: 220, padding: 8 }}
@@ -3535,7 +4487,8 @@
                       )
                     ) : (
                       <div className="flex items-center justify-center h-full text-slate-400 italic text-xs">
-                        Browser window empty — use the HTTP tab to load a page.
+                        Blank new tab — type an IP address or hostname in the
+                        address bar.
                       </div>
                     )}
                   </div>
@@ -3564,7 +4517,9 @@
                           <span className="font-bold text-slate-800 dark:text-slate-100">
                             {entry.requestType === "Ping"
                               ? "ICMP Echo Service"
-                              : "HTTP Service (port 80)"}
+                              : entry.requestType === "DNS"
+                                ? "DNS Service (UDP 53)"
+                                : "HTTP Service (port 80)"}
                           </span>
                           <span className="text-[10px] uppercase text-slate-500">
                             from {req.networkLayer.srcIP}
@@ -3647,6 +4602,189 @@
                         </div>
                       );
                     })
+                  )}
+                </div>
+              )}
+
+              {tab === "DNS" && (
+                <div className="flex flex-col gap-3">
+                  <div className="rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-2 text-xs text-emerald-900 dark:text-emerald-100">
+                    DNS service is running on UDP port{" "}
+                    <span className="font-mono font-bold">53</span>. Queries
+                    return A records from this table.
+                  </div>
+                  <div className="space-y-1">
+                    {(node.records || []).map((record) => (
+                      <div
+                        key={record.id}
+                        className="grid grid-cols-[1fr_42px_1fr_52px_auto] gap-1 text-[11px]"
+                      >
+                        <input
+                          value={record.hostname}
+                          onChange={(e) =>
+                            onUpdateDnsRecord(
+                              node.id,
+                              record.id,
+                              "hostname",
+                              e.target.value,
+                            )
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono"
+                        />
+                        <input
+                          value={record.type || "A"}
+                          disabled
+                          className="min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-slate-500"
+                        />
+                        <input
+                          value={record.value}
+                          onChange={(e) =>
+                            onUpdateDnsRecord(
+                              node.id,
+                              record.id,
+                              "value",
+                              e.target.value,
+                            )
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono"
+                        />
+                        <input
+                          value={record.ttl}
+                          onChange={(e) =>
+                            onUpdateDnsRecord(
+                              node.id,
+                              record.id,
+                              "ttl",
+                              e.target.value,
+                            )
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono"
+                        />
+                        <button
+                          onClick={() => onDeleteDnsRecord(node.id, record.id)}
+                          className="px-1.5 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-bold"
+                        >
+                          Del
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded border border-slate-300 dark:border-slate-700 p-2">
+                    <div className="mb-2 text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Add A record
+                    </div>
+                    <div className="grid grid-cols-[1fr_1fr_52px_auto] gap-1 text-[11px]">
+                      <input
+                        value={newDnsRecord.hostname}
+                        onChange={(e) =>
+                          setNewDnsRecord({
+                            ...newDnsRecord,
+                            hostname: e.target.value,
+                          })
+                        }
+                        placeholder="hostname"
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono"
+                      />
+                      <input
+                        value={newDnsRecord.value}
+                        onChange={(e) =>
+                          setNewDnsRecord({
+                            ...newDnsRecord,
+                            value: e.target.value,
+                          })
+                        }
+                        placeholder="IP address"
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono"
+                      />
+                      <input
+                        value={newDnsRecord.ttl}
+                        onChange={(e) =>
+                          setNewDnsRecord({
+                            ...newDnsRecord,
+                            ttl: e.target.value,
+                          })
+                        }
+                        placeholder="TTL"
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono"
+                      />
+                      <button
+                        onClick={() => onAddDnsRecord(node.id, newDnsRecord)}
+                        className="px-2 py-1 rounded bg-blue-600 text-white text-[10px] font-bold"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {tab === "DHCP" && (
+                <div className="flex flex-col gap-3">
+                  <div className="rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-2 text-xs text-blue-900 dark:text-blue-100">
+                    DHCP service is running. This version starts after leases
+                    have already been allocated; DORA animation will be added
+                    when new devices can join the network.
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px] border-collapse">
+                      <thead>
+                        <tr className="text-slate-500 border-b border-slate-300 dark:border-slate-700">
+                          <th className="text-left py-1">Device</th>
+                          <th className="text-left py-1">IP</th>
+                          <th className="text-left py-1">Mode</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(node.allocations || []).map((allocation) => (
+                          <tr
+                            key={allocation.id}
+                            onClick={() => setSelectedAllocationId(allocation.id)}
+                            className={`cursor-pointer border-b border-slate-200 dark:border-slate-800 last:border-0 ${
+                              selectedAllocationId === allocation.id
+                                ? "bg-blue-100 dark:bg-blue-900/40"
+                                : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                            }`}
+                          >
+                            <td className="py-1 pr-2">{allocation.deviceName}</td>
+                            <td className="py-1 pr-2 font-mono">
+                              {allocation.ip}
+                            </td>
+                            <td className="py-1 pr-2">{allocation.mode}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {selectedAllocation && (
+                    <div className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-xs">
+                      <div className="mb-2 font-bold text-slate-800 dark:text-slate-100">
+                        Allocation details
+                      </div>
+                      <div className="grid grid-cols-[110px_1fr] gap-y-1">
+                        <span className="text-slate-500">Device:</span>
+                        <span>{selectedAllocation.deviceName}</span>
+                        <span className="text-slate-500">MAC:</span>
+                        <span className="font-mono">{selectedAllocation.mac}</span>
+                        <span className="text-slate-500">IP address:</span>
+                        <span className="font-mono">{selectedAllocation.ip}</span>
+                        <span className="text-slate-500">Subnet mask:</span>
+                        <span className="font-mono">
+                          {selectedAllocation.subnet}
+                        </span>
+                        <span className="text-slate-500">Gateway:</span>
+                        <span className="font-mono">
+                          {selectedAllocation.gateway}
+                        </span>
+                        <span className="text-slate-500">DNS server:</span>
+                        <span className="font-mono">{selectedAllocation.dns}</span>
+                        <span className="text-slate-500">Lease:</span>
+                        <span>{selectedAllocation.lease}</span>
+                        <span className="text-slate-500">Scope:</span>
+                        <span>{selectedAllocation.scope}</span>
+                        <span className="text-slate-500">Status:</span>
+                        <span>{selectedAllocation.status}</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -3779,9 +4917,40 @@
                     value={
                       packet.appLayer.protocol === "Ping"
                         ? "ICMP Message"
-                        : "HTTP Traffic"
+                        : packet.appLayer.protocol === "DNS"
+                          ? packet.appLayer.method === "RESPONSE"
+                            ? "DNS Response"
+                            : "DNS Query"
+                          : "HTTP Traffic"
                     }
                   />
+                  {packet.appLayer.hostname && (
+                    <>
+                      <span className="text-slate-500">Hostname:</span>
+                      <ChangedValue
+                        className="font-mono text-slate-700 dark:text-slate-300 break-all"
+                        value={packet.appLayer.hostname}
+                      />
+                    </>
+                  )}
+                  {packet.appLayer.resolvedIp && (
+                    <>
+                      <span className="text-slate-500">Answer:</span>
+                      <ChangedValue
+                        className="font-mono text-slate-700 dark:text-slate-300 break-all"
+                        value={packet.appLayer.resolvedIp}
+                      />
+                    </>
+                  )}
+                  {packet.appLayer.status && (
+                    <>
+                      <span className="text-slate-500">Status:</span>
+                      <ChangedValue
+                        className="font-mono text-slate-700 dark:text-slate-300 break-all"
+                        value={packet.appLayer.status}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 
