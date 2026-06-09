@@ -319,10 +319,13 @@
         const input = (raw || "").trim();
         if (!input) return { error: "Browser address bar is empty." };
         if (input.startsWith("/") && basePage && basePage.serverIp) {
+          const inheritedPort = basePage.port || 80;
+          const portSuffix = inheritedPort === 80 ? "" : `:${inheritedPort}`;
           return {
             host: basePage.host || basePage.serverIp,
             path: input,
-            displayUrl: `http://${basePage.host || basePage.serverIp}${input}`,
+            port: inheritedPort,
+            displayUrl: `http://${basePage.host || basePage.serverIp}${portSuffix}${input}`,
             isIp: isValidIp(basePage.serverIp),
             targetIp: basePage.serverIp,
           };
@@ -338,10 +341,16 @@
           }
           const host = normaliseHostname(parsed.hostname);
           const path = parsed.pathname || "/";
+          // new URL() strips the default port (80 for http); preserve any
+          // explicit non-default port the user typed so the request packet
+          // carries the right dstPort.
+          const port = parsed.port ? parseInt(parsed.port, 10) : 80;
+          const portSuffix = port === 80 ? "" : `:${port}`;
           return {
             host,
             path,
-            displayUrl: `http://${host}${path}`,
+            port,
+            displayUrl: `http://${host}${portSuffix}${path}`,
             isIp: isValidIp(host),
             targetIp: isValidIp(host) ? host : null,
           };
@@ -532,6 +541,7 @@
           switch: "SW_A",
           x: 350,
           y: 550,
+          httpPort: 80,
           browserOutput: "",
           files: {
             "index.html": { type: "html", content: DEFAULT_INDEX_LOCAL },
@@ -796,7 +806,8 @@
           subnet: "255.255.255.0",
           switch: "RT_EDGE",
           x: 970,
-          y: 60,
+          y: 35,
+          httpPort: 80,
           browserOutput: "",
           files: {
             "index.html": { type: "html", content: DEFAULT_INDEX_INTERNET },
@@ -813,7 +824,7 @@
           type: "Cloud",
           name: "Internet Routing",
           x: 500,
-          y: 60,
+          y: 35,
         },
       };
 
@@ -944,6 +955,7 @@
           } else if (type === "HTTP") {
             const path = options.path || "/";
             const host = options.host || targetIp;
+            const dstPort = Number(options.dstPort) || 80;
             p.appLayer = {
               protocol: "HTTP",
               method: "GET",
@@ -955,7 +967,7 @@
             p.transportLayer = {
               protocol: "TCP",
               srcPort: 49152 + Math.floor(Math.random() * 16000),
-              dstPort: 80,
+              dstPort,
               seq: 1,
               total: 1,
               checksum:
@@ -971,6 +983,7 @@
               method: "QUERY",
               hostname,
               path: options.path || "/",
+              followUpPort: Number(options.dstPort) || 80,
               requestedUrl:
                 options.requestedUrl || `http://${hostname}${options.path || "/"}`,
             };
@@ -1281,8 +1294,22 @@
           if (p.appLayer.protocol === "HTTP" && !node.files) {
             return {
               action: "DROP",
-              reason: `${node.name} dropped HTTP request: Web service is not running on port 80.`,
+              reason: `${node.name} dropped HTTP request: Web service is not running.`,
             };
+          }
+
+          // Port-aware HTTP: the server only answers on its configured
+          // httpPort (default 80). If the request hits a different port,
+          // drop it just like a real OS would when no listener is bound.
+          if (p.appLayer.protocol === "HTTP") {
+            const serverPort = Number(node.httpPort) || 80;
+            const requestedPort = Number(p.transportLayer?.dstPort) || 80;
+            if (serverPort !== requestedPort) {
+              return {
+                action: "DROP",
+                reason: `${node.name} dropped HTTP request: no service listening on port ${requestedPort} (HTTP runs on port ${serverPort}).`,
+              };
+            }
           }
 
           if (!["Ping", "HTTP", "DNS"].includes(p.appLayer.protocol)) {
@@ -1454,6 +1481,7 @@
                 method: "RESPONSE",
                 hostname,
                 path: p.appLayer.path || "/",
+                followUpPort: p.appLayer.followUpPort || 80,
                 requestedUrl: p.appLayer.requestedUrl,
                 status,
                 resolvedIp: answerIp,
@@ -1542,7 +1570,7 @@
                   : payloadText,
               transportLayer: {
                 protocol: "TCP",
-                srcPort: 80,
+                srcPort: Number(node.httpPort) || 80,
                 dstPort: p.transportLayer.srcPort,
                 seq,
                 total,
@@ -1768,9 +1796,11 @@
         // all expected packets of a transmission have arrived.
         // Shape: { [clientId]: { [bufKey]: { received, total, fragments[], firstPacket } } }
         const [transportBuffers, setTransportBuffers] = useState({});
-        // Per-client terminals (for ping output).
+        // Per-client terminals (scrollback for typed commands and ping output).
         // Shape: { [clientId]: [{ id, text, type }] }
         const [terminals, setTerminals] = useState({});
+        // Per-client current draft of the terminal command line.
+        const [terminalDrafts, setTerminalDrafts] = useState({});
         // Last requested tab focus signal — fires the inspector to
         // switch tabs when an event (processing, fragment, delivery,
         // ping reply) wants attention drawn somewhere specific.
@@ -1838,8 +1868,17 @@
           { x: CLOUD.x - 32, y: CLOUD.y - 6 },
           { x: CLOUD.x + 32, y: CLOUD.y - 6 },
         ];
-        const cloudStopFor = (idx) =>
-          CLOUD_STOPS[Math.max(0, Math.min(CLOUD_STOPS.length - 1, idx))];
+        // Outbound (to INT_SRV) visits the left stop first then the
+        // right one. Return packets (back to RT_EDGE) traverse the
+        // cloud in reverse — right stop first, then left — so it
+        // visually reads as a true return route.
+        const cloudStopFor = (packet, idx) => {
+          const reversed = packet && packet.cloudDestNode === "RT_EDGE";
+          const stops = reversed
+            ? [CLOUD_STOPS[1], CLOUD_STOPS[0]]
+            : CLOUD_STOPS;
+          return stops[Math.max(0, Math.min(stops.length - 1, idx))];
+        };
         const zoomIn = () =>
           setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)));
         const zoomOut = () =>
@@ -2062,6 +2101,7 @@
                         targetIp: resolvedIp,
                         path: rp.appLayer.path || "/",
                         host: hostname,
+                        dstPort: rp.appLayer.followUpPort || 80,
                         requestedUrl:
                           rp.appLayer.requestedUrl ||
                           `http://${hostname}${rp.appLayer.path || "/"}`,
@@ -2169,6 +2209,7 @@
                             clientId: activeNode.id,
                             targetIp: resolved ? resolved.ip : serverIp,
                             path: resolved ? resolved.path : "/" + ref,
+                            dstPort: rp.transportLayer?.srcPort || 80,
                             resourceKey: key,
                             transactionId: p.transactionId,
                           });
@@ -2664,6 +2705,100 @@
           setNodeExpanded(false);
         };
 
+        // Append one or more lines to a client's terminal scrollback.
+        const appendTerminalLines = (clientId, lines) => {
+          setTerminals((t) => {
+            const existing = t[clientId] || [];
+            const stamped = lines.map((l) => ({
+              id: generateId(),
+              text: l.text,
+              type: l.type || "output",
+            }));
+            return {
+              ...t,
+              [clientId]: [...existing, ...stamped].slice(-200),
+            };
+          });
+        };
+
+        // Parse and execute a typed terminal command for the given client.
+        // Supports: ping <ip>, ipconfig. Anything else is reported as
+        // "Unsupported command".
+        const runTerminalCommand = (clientId, raw) => {
+          const client = nodes[clientId];
+          if (!client) return;
+          const trimmed = (raw || "").trim();
+          setTerminalDrafts((d) => ({ ...d, [clientId]: "" }));
+          if (!trimmed) {
+            appendTerminalLines(clientId, [{ text: "", type: "command" }]);
+            return;
+          }
+          appendTerminalLines(clientId, [
+            { text: trimmed, type: "command" },
+          ]);
+          const tokens = trimmed.split(/\s+/);
+          const cmd = tokens[0].toLowerCase();
+          if (cmd === "ping") {
+            const targetIp = tokens[1];
+            if (!targetIp || !isValidIp(targetIp)) {
+              appendTerminalLines(clientId, [
+                {
+                  text: "Usage: ping <ip>  (IPv4 dotted-quad)",
+                  type: "error",
+                },
+              ]);
+              return;
+            }
+            if (transactionActive) {
+              appendTerminalLines(clientId, [
+                {
+                  text: "A simulation is already in progress. Try again when it finishes.",
+                  type: "error",
+                },
+              ]);
+              return;
+            }
+            appendTerminalLines(clientId, [
+              {
+                text: `Pinging ${targetIp} with 32 bytes of data:`,
+                type: "output",
+              },
+            ]);
+            sendUserRequest(clientId, targetIp, "PING");
+          } else if (cmd === "ipconfig") {
+            appendTerminalLines(clientId, [
+              { text: "Ethernet adapter:", type: "output" },
+              {
+                text: `  IPv4 Address . . : ${client.ip || "(unassigned)"}`,
+                type: "output",
+              },
+              {
+                text: `  Subnet Mask  . . : ${client.subnet || "(none)"}`,
+                type: "output",
+              },
+              {
+                text: `  Default Gateway. : ${client.gw || "(none)"}`,
+                type: "output",
+              },
+              {
+                text: `  DNS Server   . . : ${client.dns || "(none)"}`,
+                type: "output",
+              },
+              {
+                text: `  MAC Address  . . : ${client.mac || "(none)"}`,
+                type: "output",
+              },
+            ]);
+          } else {
+            appendTerminalLines(clientId, [
+              {
+                text: `'${tokens[0]}' is not a recognised command. Try: ping, ipconfig`,
+                type: "error",
+              },
+            ]);
+          }
+        };
+
         // Drain the auto-fetch queue once the previous transaction fully
         // completes (no packets in flight and no processing entries left).
         useEffect(() => {
@@ -2684,6 +2819,7 @@
             {
               path: next.path,
               host: next.host || next.targetIp,
+              dstPort: next.dstPort || 80,
               requestedUrl:
                 next.requestedUrl || `http://${next.host || next.targetIp}${next.path}`,
               transactionId: next.transactionId,
@@ -2773,6 +2909,7 @@
             sendUserRequest(clientId, parsed.targetIp, "HTTP", {
               path: parsed.path,
               host: parsed.targetIp,
+              dstPort: parsed.port || 80,
               requestedUrl: parsed.displayUrl,
             });
             return;
@@ -2804,6 +2941,7 @@
             sendUserRequest(clientId, hostsEntry.ip, "HTTP", {
               path: parsed.path,
               host: hostname,
+              dstPort: parsed.port || 80,
               requestedUrl: parsed.displayUrl,
             });
             return;
@@ -2835,6 +2973,7 @@
             sendUserRequest(clientId, cacheEntry.ip, "HTTP", {
               path: parsed.path,
               host: hostname,
+              dstPort: parsed.port || 80,
               requestedUrl: parsed.displayUrl,
             });
             return;
@@ -2885,6 +3024,7 @@
           sendUserRequest(clientId, client.dns, "DNS", {
             hostname,
             path: parsed.path,
+            dstPort: parsed.port || 80,
             requestedUrl: parsed.displayUrl,
           });
         };
@@ -2942,6 +3082,15 @@
             delete files[fileName];
             return { ...prev, [serverId]: { ...server, files } };
           });
+        };
+
+        // Reconfigure which TCP port the web server's HTTP listener
+        // binds to. Clients hitting any other port will get dropped at
+        // the server with a "no service listening on port X" error.
+        const updateServerHttpPort = (serverId, port) => {
+          const parsed = Number(port);
+          if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) return;
+          updateNode(serverId, (server) => ({ ...server, httpPort: parsed }));
         };
 
         const addDnsRecord = (serverId, record) => {
@@ -3424,7 +3573,7 @@
                             x1={edge.x}
                             y1={edge.y}
                             x2={CLOUD.x}
-                            y2={CLOUD.y + 30}
+                            y2={CLOUD.y + 28}
                             stroke={isDark ? "#475569" : "#94a3b8"}
                             strokeWidth="4"
                             strokeDasharray="6,4"
@@ -3549,13 +3698,13 @@
                           p.currentNode === "CLOUD" &&
                           p.nextNode === "CLOUD"
                         ) {
-                          from = cloudStopFor((p.cloudHopIndex || 1) - 1);
-                          to = cloudStopFor(p.cloudHopIndex || 1);
+                          from = cloudStopFor(p, (p.cloudHopIndex || 1) - 1);
+                          to = cloudStopFor(p, p.cloudHopIndex || 1);
                         } else if (p.nextNode === "CLOUD") {
                           from = curr;
-                          to = cloudStopFor(p.cloudHopIndex || 0);
+                          to = cloudStopFor(p, p.cloudHopIndex || 0);
                         } else if (p.currentNode === "CLOUD") {
-                          from = cloudStopFor((p.cloudHopIndex || 1) - 1);
+                          from = cloudStopFor(p, (p.cloudHopIndex || 1) - 1);
                           to = next;
                         }
                         if (from && to) {
@@ -3571,7 +3720,7 @@
                       ) {
                         // Render the packet at the cloud stop it just
                         // landed on, rather than the cloud's centre.
-                        const stop = cloudStopFor(p.cloudHopIndex || 0);
+                        const stop = cloudStopFor(p, p.cloudHopIndex || 0);
                         px = stop.x;
                         py = stop.y;
                       } else if (p.state === "ARRIVED" && p.prevNode) {
@@ -3729,6 +3878,12 @@
                         onUpdateHostEntry={updateHostEntry}
                         onDeleteHostEntry={deleteHostEntry}
                         onClearDnsCache={clearDnsCache}
+                        terminalDraft={terminalDrafts[selectedNodeId] || ""}
+                        onTerminalDraftChange={(clientId, value) =>
+                          setTerminalDrafts((d) => ({ ...d, [clientId]: value }))
+                        }
+                        onRunTerminalCommand={runTerminalCommand}
+                        onUpdateServerHttpPort={updateServerHttpPort}
                         color={getEntityColor(selectedNodeId)}
                         transactionActive={transactionActive}
                       />
@@ -4222,6 +4377,10 @@
         onUpdateHostEntry,
         onDeleteHostEntry,
         onClearDnsCache,
+        terminalDraft,
+        onTerminalDraftChange,
+        onRunTerminalCommand,
+        onUpdateServerHttpPort,
         color,
         transactionActive,
       }) => {
@@ -4229,6 +4388,8 @@
         const isServer = node.type === "Server";
         const isDnsServer = node.service === "DNS";
         const isDhcpServer = node.service === "DHCP";
+        const [pingFormOpen, setPingFormOpen] = useState(false);
+        const [httpDstPort, setHttpDstPort] = useState("80");
 
         const hasProcessing = processing && processing.length > 0;
         const hasTerminal = terminal && terminal.length > 0;
@@ -4240,11 +4401,10 @@
         const tabs = [{ id: "INFO", label: "Info" }];
         if (hasProcessing) tabs.push({ id: "SERVICE", label: "Service" });
         if (isClient) {
-          tabs.push({ id: "PING", label: "Ping" });
+          tabs.push({ id: "TERMINAL", label: "Terminal" });
           tabs.push({ id: "HTTP", label: "HTTP" });
           if (hasBuffer) tabs.push({ id: "TRANSPORT", label: "Transport" });
           tabs.push({ id: "BROWSER", label: "Browser" });
-          if (hasTerminal) tabs.push({ id: "TERMINAL", label: "Terminal" });
         }
         if (isServer) {
           if (isDnsServer) tabs.push({ id: "DNS", label: "DNS" });
@@ -4688,38 +4848,6 @@
                 </div>
               )}
 
-              {tab === "PING" && (
-                <div className="flex flex-col gap-3">
-                  <p className="text-xs text-slate-700 dark:text-slate-300">
-                    Send an ICMP Echo Request to test connectivity.
-                  </p>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      Target IP Address
-                    </label>
-                    <IpInputWithPicker
-                      value={pingTarget}
-                      onChange={onPingTargetChange}
-                      picking={pickerSlot === "PING"}
-                      onStartPicker={() => onStartPicker("PING")}
-                      onCancelPicker={onCancelPicker}
-                    />
-                  </div>
-                  <button
-                    onClick={() => onSendRequest(node.id, pingTarget, "PING")}
-                    disabled={transactionActive || pickerSlot === "PING"}
-                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition text-sm"
-                  >
-                    Send Ping Request
-                  </button>
-                  {transactionActive && (
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded px-2 py-1">
-                      Finish simulating the current packet before starting a new
-                      one.
-                    </p>
-                  )}
-                </div>
-              )}
 
               {tab === "HTTP" && (
                 <div className="flex flex-col gap-3">
@@ -4743,15 +4871,24 @@
                       Destination Port
                     </label>
                     <input
-                      type="text"
-                      value="80 (HTTP)"
-                      disabled
-                      className="w-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-500 rounded p-2 font-mono text-sm cursor-not-allowed"
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={httpDstPort}
+                      onChange={(e) => setHttpDstPort(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded p-2 font-mono text-sm"
                     />
+                    <p className="text-[10px] text-slate-500 italic mt-1">
+                      Defaults to 80 (HTTP). Servers only reply if their
+                      configured HTTP port matches.
+                    </p>
                   </div>
                   <button
                     onClick={() =>
-                      onSendRequest(node.id, httpTarget, "HTTP", { path: "/" })
+                      onSendRequest(node.id, httpTarget, "HTTP", {
+                        path: "/",
+                        dstPort: Number(httpDstPort) || 80,
+                      })
                     }
                     disabled={transactionActive || pickerSlot === "HTTP"}
                     className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition text-sm"
@@ -4887,18 +5024,108 @@
               )}
 
               {tab === "TERMINAL" && (
-                <div
-                  className="bg-black text-emerald-300 font-mono text-[11px] rounded p-2 overflow-auto"
-                  style={{ height: 220 }}
-                >
-                  {(terminal || []).length === 0 ? (
-                    <span className="text-slate-500 italic">
-                      Terminal is empty — send a ping to populate output.
-                    </span>
+                <div className="flex flex-col gap-2">
+                  <div className="bg-black rounded font-mono text-[11px] overflow-hidden">
+                    <div
+                      className="p-2 overflow-auto"
+                      style={{ height: 200 }}
+                    >
+                      {(terminal || []).length === 0 && (
+                        <div className="text-slate-500 italic mb-1">
+                          Type a command, e.g.{" "}
+                          <span className="text-emerald-300">
+                            ping 192.168.1.2
+                          </span>{" "}
+                          or{" "}
+                          <span className="text-emerald-300">ipconfig</span>.
+                        </div>
+                      )}
+                      {(terminal || []).map((line) => (
+                        <div
+                          key={line.id}
+                          className={
+                            line.type === "command"
+                              ? "text-amber-300"
+                              : line.type === "error"
+                                ? "text-red-400"
+                                : "text-emerald-300"
+                          }
+                        >
+                          {line.type === "command" ? "$ " : ""}
+                          {line.text}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center border-t border-emerald-900/60 px-2 py-1">
+                      <span className="text-amber-300 mr-1">$</span>
+                      <input
+                        value={terminalDraft || ""}
+                        onChange={(e) =>
+                          onTerminalDraftChange(node.id, e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            onRunTerminalCommand(
+                              node.id,
+                              terminalDraft || "",
+                            );
+                          }
+                        }}
+                        placeholder="ping 192.168.1.2"
+                        className="flex-1 bg-transparent border-none outline-none text-emerald-300 placeholder-emerald-900 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+                  {!pingFormOpen ? (
+                    <button
+                      onClick={() => setPingFormOpen(true)}
+                      disabled={transactionActive}
+                      className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-1.5 px-3 rounded self-start transition"
+                    >
+                      Start Ping
+                    </button>
                   ) : (
-                    (terminal || []).map((line) => (
-                      <div key={line.id}>{line.text}</div>
-                    ))
+                    <div className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 flex flex-col gap-2">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                        Target IP Address
+                      </label>
+                      <IpInputWithPicker
+                        value={pingTarget}
+                        onChange={onPingTargetChange}
+                        picking={pickerSlot === "PING"}
+                        onStartPicker={() => onStartPicker("PING")}
+                        onCancelPicker={onCancelPicker}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            onRunTerminalCommand(
+                              node.id,
+                              `ping ${pingTarget}`,
+                            );
+                            setPingFormOpen(false);
+                          }}
+                          disabled={
+                            transactionActive || pickerSlot === "PING"
+                          }
+                          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-1 px-3 rounded"
+                        >
+                          Send Ping
+                        </button>
+                        <button
+                          onClick={() => setPingFormOpen(false)}
+                          className="bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold py-1 px-3 rounded"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {transactionActive && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded px-2 py-1">
+                      Finish simulating the current packet before starting a
+                      new one.
+                    </p>
                   )}
                 </div>
               )}
@@ -5130,6 +5357,24 @@
 
               {tab === "FILES" && (
                 <div className="flex flex-col gap-3">
+                  <div className="rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2 text-xs flex items-center gap-2">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      HTTP service port:
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={node.httpPort ?? 80}
+                      onChange={(e) =>
+                        onUpdateServerHttpPort(node.id, e.target.value)
+                      }
+                      className="w-20 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-0.5 font-mono text-xs"
+                    />
+                    <span className="text-[10px] text-slate-500 italic">
+                      requests on any other port will be dropped
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-700 dark:text-slate-300">
                     Files served by this web server (root is{" "}
                     <span className="font-mono">/</span>):
