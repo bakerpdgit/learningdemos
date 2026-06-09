@@ -337,7 +337,9 @@
         try {
           const parsed = new URL(candidate);
           if (!["http:", "https:"].includes(parsed.protocol)) {
-            return { error: "Only http:// style browser requests are supported." };
+            return {
+              error: "Only http:// style browser requests are supported.",
+            };
           }
           const host = normaliseHostname(parsed.hostname);
           const path = parsed.pathname || "/";
@@ -389,6 +391,20 @@
           status: "Active",
           subnet: "255.255.255.0",
           gateway: "192.168.1.1",
+          dns: "192.168.1.253",
+          lease: "Reserved",
+        },
+        {
+          id: "dhcp-rt-b",
+          deviceId: "RT_B",
+          deviceName: "Subnet B Router",
+          mac: "BB:BB:BB:BB:BB:01",
+          ip: "192.168.2.1",
+          mode: "Static reservation",
+          scope: "Subnet B",
+          status: "Active via routed scope",
+          subnet: "255.255.255.0",
+          gateway: "192.168.2.1",
           dns: "192.168.1.253",
           lease: "Reserved",
         },
@@ -478,7 +494,8 @@
         },
       ];
 
-      const IP_MAC_TABLE = {
+      // Mutable so new nodes added at runtime can register IP/MAC pairs.
+      let IP_MAC_TABLE = {
         "192.168.1.2": "01:01:01:01:01:01",
         "192.168.1.254": "01:01:01:01:01:80",
         "192.168.1.253": "01:01:01:01:01:53",
@@ -495,7 +512,8 @@
         "203.0.113.50": "WW:WW:WW:WW:WW:WW",
       };
 
-      const MAC_NODE_TABLE = {
+      // Mutable counterpart of IP_MAC_TABLE — updated in lockstep.
+      let MAC_NODE_TABLE = {
         "01:01:01:01:01:01": "PC1",
         "01:01:01:01:01:80": "SRV1",
         "01:01:01:01:01:53": "DNS_A",
@@ -682,6 +700,9 @@
           name: "Subnet B WAP",
           x: 920,
           y: 470,
+          ssid: "mywifi",
+          ssidBroadcast: true,
+          password: "",
         },
         LAP_B: {
           id: "LAP_B",
@@ -828,7 +849,10 @@
         },
       };
 
-      const LINKS = [
+      // Mutable so the engine (static methods that close over this name)
+      // and the React UI (which mirrors it in state for re-renders) stay
+      // in sync as the student adds new nodes / links at runtime.
+      let LINKS = [
         { id: "L1", source: "PC1", target: "SW_A" },
         { id: "L2", source: "SRV1", target: "SW_A" },
         { id: "L13", source: "DNS_A", target: "SW_A" },
@@ -858,6 +882,28 @@
         return (
           (ipToNum(ip) & ipToNum(mask)) === (ipToNum(subnet) & ipToNum(mask))
         );
+      };
+
+      // Number -> dotted quad. Used to display the result of subnet-mask
+      // arithmetic so students can see the network ID derived from an IP.
+      const numToIp = (n) =>
+        [
+          (n >>> 24) & 0xff,
+          (n >>> 16) & 0xff,
+          (n >>> 8) & 0xff,
+          n & 0xff,
+        ].join(".");
+
+      const networkIdFor = (ip, mask) =>
+        numToIp((ipToNum(ip) & ipToNum(mask)) >>> 0);
+
+      // Count the set bits in a mask to produce the conventional /N
+      // shorthand used in routing-table logs (e.g. "/24" for 255.255.255.0).
+      const prefixLengthOf = (mask) => {
+        const n = ipToNum(mask);
+        let len = 0;
+        for (let i = 0; i < 32; i++) if (((n >>> i) & 1) === 1) len++;
+        return len;
       };
 
       // Random "anonymous internet router" MAC — different each hop so
@@ -985,7 +1031,8 @@
               path: options.path || "/",
               followUpPort: Number(options.dstPort) || 80,
               requestedUrl:
-                options.requestedUrl || `http://${hostname}${options.path || "/"}`,
+                options.requestedUrl ||
+                `http://${hostname}${options.path || "/"}`,
             };
             p.payload = `DNS QUERY A ${hostname}`;
             p.transportLayer = {
@@ -1005,6 +1052,42 @@
         }
 
         static processSwitch(p, node) {
+          // L2 broadcast: simplified flood. We pick the most useful
+          // neighbour for a DHCP DISCOVER — the directly-connected
+          // DHCP server — and forward to it. If no DHCP server is on
+          // this L2 segment, drop with a "no DHCP reachable" log so
+          // the student sees broadcast Discover fail across LANs.
+          if (p.linkLayer.dstMAC === "FF:FF:FF:FF:FF:FF") {
+            const neighborIds = LINKS.filter(
+              (l) => l.source === node.id || l.target === node.id,
+            ).map((l) => (l.source === node.id ? l.target : l.source));
+            const dhcpNeighbor = neighborIds
+              .map((id) => INITIAL_NODES[id])
+              .find((n) => n && n.service === "DHCP");
+            if (dhcpNeighbor) {
+              return {
+                action: "FORWARD",
+                packet: {
+                  ...p,
+                  currentNode: node.id,
+                  nextNode: dhcpNeighbor.id,
+                  state: "TRANSIT",
+                  progress: 0,
+                  linkLayer: {
+                    ...p.linkLayer,
+                    protocol: this.getLinkProtocol(node.id, dhcpNeighbor.id),
+                  },
+                },
+                extraLogs: [
+                  `${node.name} flooded broadcast frame onto local segment (delivered to ${dhcpNeighbor.name})`,
+                ],
+              };
+            }
+            return {
+              action: "DROP",
+              reason: `${node.name} broadcast frame: no DHCP server reachable on this LAN — broadcast does not cross routers.`,
+            };
+          }
           let destNodeId = MAC_NODE_TABLE[p.linkLayer.dstMAC];
           if (!destNodeId)
             return {
@@ -1042,6 +1125,17 @@
         }
 
         static processRouter(p, router) {
+          // Routers do not forward broadcasts. Surface the rule so
+          // students see broadcast DHCP DISCOVER die at the LAN edge.
+          if (
+            p.linkLayer.dstMAC === "FF:FF:FF:FF:FF:FF" ||
+            p.networkLayer.dstIP === "255.255.255.255"
+          ) {
+            return {
+              action: "DROP",
+              reason: `${router.name} dropped broadcast frame: routers do not forward broadcasts across subnets.`,
+            };
+          }
           let isForMe = router.interfaces.some(
             (i) => i.ip === p.networkLayer.dstIP,
           );
@@ -1130,12 +1224,37 @@
             }
           });
 
-          if (!bestMatch)
+          if (!bestMatch) {
+            extraLogs.push(
+              `${router.name} routing-table lookup: no entry matches ${p.networkLayer.dstIP} — dropping`,
+            );
             return {
               action: "DROP",
               reason: `Router ${router.name} dropped packet: No route to host ${p.networkLayer.dstIP}.`,
               extraLogs,
             };
+          }
+
+          // Subnet-mask transparency for the chosen route: show the AND
+          // that extracted the network ID and the resulting routing-table
+          // hit, so students see the longest-prefix-match decision.
+          {
+            const dstNet = networkIdFor(p.networkLayer.dstIP, bestMatch.mask);
+            const ifaceName =
+              (router.interfaces[bestMatch.iface] &&
+                router.interfaces[bestMatch.iface].name) ||
+              `iface ${bestMatch.iface}`;
+            const hopDesc =
+              bestMatch.nextHop === "0.0.0.0"
+                ? "direct (no next-hop router)"
+                : `via ${bestMatch.nextHop}`;
+            extraLogs.push(
+              `${router.name} applying mask ${bestMatch.mask} (/${longestMask}) to dst ${p.networkLayer.dstIP} = ${dstNet}`,
+            );
+            extraLogs.push(
+              `${router.name} routing-table hit: ${bestMatch.dest}/${longestMask} → ${ifaceName}, ${hopDesc}`,
+            );
+          }
 
           // NAT OUTBOUND (LAN -> WAN)
           if (router.natTable !== undefined && bestMatch.iface === 1) {
@@ -1238,17 +1357,32 @@
             };
           }
 
+          // Direct-attach routers (e.g. RT_C with PC4/PC5 hanging off a
+          // single interface) can't pin `connectedTo` to one neighbour.
+          // Prefer the node that actually owns the next-hop MAC when it
+          // is directly linked to this router.
+          let nextNode = outIface.connectedTo;
+          const macOwner = MAC_NODE_TABLE[nextHopMac];
+          if (macOwner) {
+            const macOwnerLinked = LINKS.some(
+              (l) =>
+                (l.source === router.id && l.target === macOwner) ||
+                (l.target === router.id && l.source === macOwner),
+            );
+            if (macOwnerLinked) nextNode = macOwner;
+          }
+
           return {
             action: "FORWARD",
             packet: {
               ...p,
               currentNode: router.id,
-              nextNode: outIface.connectedTo,
+              nextNode,
               state: "TRANSIT",
               progress: 0,
               networkLayer: { ...p.networkLayer, ttl: newTtl },
               linkLayer: {
-                protocol: this.getLinkProtocol(router.id, outIface.connectedTo),
+                protocol: this.getLinkProtocol(router.id, nextNode),
                 srcMAC: outIface.mac,
                 dstMAC: nextHopMac,
               },
@@ -1259,6 +1393,46 @@
         }
 
         static processPC(p, node) {
+          // DHCP packets bypass the strict IP match — DISCOVER targets
+          // broadcast/server, replies target an IP the client doesn't yet
+          // own. We route by MAC instead and dispatch by appLayer.method.
+          if (p.appLayer && p.appLayer.protocol === "DHCP") {
+            const method = p.appLayer.method;
+            // Server side
+            if (node.service === "DHCP") {
+              if (method === "DISCOVER") return this.buildDhcpReply(p, node, "OFFER");
+              if (method === "REQUEST") return this.buildDhcpReply(p, node, "ACK");
+              return {
+                action: "DROP",
+                reason: `${node.name} dropped unexpected DHCP ${method}.`,
+              };
+            }
+            // Client side — packet should be addressed to our MAC
+            if (p.linkLayer.dstMAC !== node.mac) {
+              return {
+                action: "DROP",
+                reason: `${node.name} dropped DHCP ${method}: not addressed to me.`,
+              };
+            }
+            if (method === "OFFER") return this.buildDhcpRequest(p, node);
+            if (method === "ACK") {
+              return {
+                action: "CONSUME",
+                message: `${node.name} received DHCP ACK — applying lease.`,
+                responseData: p.payload,
+                responsePacket: p,
+                dhcpApplied: {
+                  clientId: node.id,
+                  config: p.appLayer.offer,
+                },
+              };
+            }
+            return {
+              action: "DROP",
+              reason: `${node.name} dropped unexpected DHCP ${method}.`,
+            };
+          }
+
           if (p.networkLayer.dstIP !== node.ip) {
             return {
               action: "DROP",
@@ -1333,6 +1507,256 @@
                 : p.appLayer.protocol === "DNS"
                   ? `DNS A query for ${p.appLayer.hostname}`
                   : `${p.appLayer.method || "HTTP"} ${p.appLayer.path || "/"}`,
+          };
+        }
+
+        // Build a DHCP DISCOVER packet. Either unicast (to a known DHCP
+        // server IP — routed normally across subnets) or broadcast (dst
+        // 255.255.255.255 / FF:FF:FF:FF:FF:FF — switches flood, routers
+        // drop, so the student sees broadcast Discover fail across LANs).
+        static createDhcpDiscover(srcNode, targetIp, mode) {
+          if (!srcNode.mac)
+            return { error: `${srcNode.name} has no MAC address.` };
+          const nextNode = srcNode.switch;
+          if (!nextNode)
+            return {
+              error: `${srcNode.name} has no link-layer neighbor (switch/WAP) — cannot send DHCP.`,
+            };
+          let dstMac, dstIp;
+          if (mode === "broadcast") {
+            dstMac = "FF:FF:FF:FF:FF:FF";
+            dstIp = "255.255.255.255";
+          } else {
+            dstIp = targetIp;
+            const myIp = srcNode.ip || "0.0.0.0";
+            const targetIsLocal =
+              srcNode.subnet &&
+              srcNode.ip &&
+              isIpInSubnet(targetIp, myIp, srcNode.subnet);
+            if (targetIsLocal) {
+              dstMac = IP_MAC_TABLE[targetIp];
+              if (!dstMac)
+                return { error: `ARP failed: no MAC known for ${targetIp}.` };
+            } else {
+              if (!srcNode.gw)
+                return {
+                  error: `${srcNode.name}: cannot reach off-subnet DHCP server without a default gateway.`,
+                };
+              dstMac = IP_MAC_TABLE[srcNode.gw];
+              if (!dstMac)
+                return {
+                  error: `ARP failed: no MAC known for gateway ${srcNode.gw}.`,
+                };
+            }
+          }
+          return {
+            packet: {
+              id: generateId(),
+              transactionId: generateId(),
+              state: "TRANSIT",
+              currentNode: srcNode.id,
+              nextNode,
+              progress: 0,
+              networkLayer: {
+                protocol: "IPv4",
+                srcIP: srcNode.ip || "0.0.0.0",
+                dstIP: dstIp,
+                ttl: 64,
+              },
+              linkLayer: {
+                protocol: "Ethernet",
+                srcMAC: srcNode.mac,
+                dstMAC: dstMac,
+              },
+              transportLayer: {
+                protocol: "UDP",
+                srcPort: 68,
+                dstPort: 67,
+                seq: 1,
+                total: 1,
+                checksum:
+                  "0x" +
+                  Math.floor(Math.random() * 65535)
+                    .toString(16)
+                    .toUpperCase(),
+              },
+              appLayer: {
+                protocol: "DHCP",
+                method: "DISCOVER",
+                clientMac: srcNode.mac,
+                clientName: srcNode.name,
+                clientId: srcNode.id,
+                mode,
+              },
+              payload: `DHCP DISCOVER\nClient MAC: ${srcNode.mac}\nMode: ${mode}\nRequesting an IP lease`,
+            },
+          };
+        }
+
+        // Build a DHCP reply (OFFER for DISCOVER, ACK for REQUEST). The
+        // reservation lookup is a straight MAC match against the
+        // server's allocations table — students learn the reservation
+        // model first, then we can layer pools later.
+        static buildDhcpReply(p, server, method) {
+          const clientMac = p.appLayer.clientMac;
+          const allocation = (server.allocations || []).find(
+            (a) =>
+              a.mac && a.mac.toUpperCase() === (clientMac || "").toUpperCase(),
+          );
+          if (!allocation) {
+            return {
+              action: "DROP",
+              reason: `${server.name} dropped DHCP ${p.appLayer.method}: no reservation for MAC ${clientMac}. Add an allocation in the DHCP tab.`,
+            };
+          }
+          // Pre-register the offered IP so the reply can route back to
+          // the client by MAC even before the client has applied the
+          // lease — sim-only shortcut to avoid modelling the L2-only
+          // direct-to-MAC delivery DHCP actually uses.
+          IP_MAC_TABLE = {
+            ...IP_MAC_TABLE,
+            [allocation.ip]: clientMac,
+          };
+          const replyNextNode = server.switch || p.currentNode;
+          const isLocal =
+            server.subnet &&
+            isIpInSubnet(
+              allocation.ip,
+              server.ip,
+              server.subnet,
+            );
+          const nextHopIp = isLocal ? allocation.ip : server.gw;
+          const nextHopMac = IP_MAC_TABLE[nextHopIp];
+          if (!nextHopMac) {
+            return {
+              action: "DROP",
+              reason: `${server.name} dropped DHCP ${method}: ARP failed for return route ${nextHopIp}.`,
+            };
+          }
+          return {
+            action: "FORWARD",
+            packets: [
+              {
+                id: generateId(),
+                transactionId: p.transactionId,
+                state: "TRANSIT",
+                currentNode: server.id,
+                nextNode: replyNextNode,
+                progress: 0,
+                networkLayer: {
+                  protocol: "IPv4",
+                  srcIP: server.ip,
+                  dstIP: allocation.ip,
+                  ttl: 64,
+                },
+                linkLayer: {
+                  protocol: "Ethernet",
+                  srcMAC: server.mac,
+                  dstMAC: nextHopMac,
+                },
+                transportLayer: {
+                  protocol: "UDP",
+                  srcPort: 67,
+                  dstPort: 68,
+                  seq: 1,
+                  total: 1,
+                  checksum:
+                    "0x" +
+                    Math.floor(Math.random() * 65535)
+                      .toString(16)
+                      .toUpperCase(),
+                },
+                appLayer: {
+                  protocol: "DHCP",
+                  method,
+                  clientMac,
+                  clientId: p.appLayer.clientId,
+                  offer: {
+                    ip: allocation.ip,
+                    subnet: allocation.subnet,
+                    gw: allocation.gateway,
+                    dns: allocation.dns,
+                    lease: allocation.lease,
+                  },
+                },
+                payload: `DHCP ${method}\nClient MAC: ${clientMac}\nIP: ${allocation.ip}\nMask: ${allocation.subnet}\nGW: ${allocation.gateway}\nDNS: ${allocation.dns}\nLease: ${allocation.lease}`,
+              },
+            ],
+          };
+        }
+
+        // Build the client's REQUEST after receiving an OFFER — confirms
+        // the offered IP to the same server, completing DORA.
+        static buildDhcpRequest(p, client) {
+          const replyNextNode = client.switch;
+          if (!replyNextNode)
+            return {
+              action: "DROP",
+              reason: `${client.name} has no link-layer neighbor — cannot send DHCP REQUEST.`,
+            };
+          // Target the OFFER's source (the DHCP server). Use the same
+          // L2 path the OFFER arrived through.
+          const dstIp = p.networkLayer.srcIP;
+          const srcMac = client.mac;
+          const myIp = client.ip || "0.0.0.0";
+          const isLocal =
+            client.subnet &&
+            client.ip &&
+            isIpInSubnet(dstIp, myIp, client.subnet);
+          let dstMac;
+          if (isLocal) {
+            dstMac = IP_MAC_TABLE[dstIp];
+          } else {
+            dstMac = IP_MAC_TABLE[client.gw];
+          }
+          if (!dstMac)
+            return {
+              action: "DROP",
+              reason: `${client.name} DHCP REQUEST: ARP failed for next hop.`,
+            };
+          return {
+            action: "FORWARD",
+            packets: [
+              {
+                id: generateId(),
+                transactionId: p.transactionId,
+                state: "TRANSIT",
+                currentNode: client.id,
+                nextNode: replyNextNode,
+                progress: 0,
+                networkLayer: {
+                  protocol: "IPv4",
+                  srcIP: myIp,
+                  dstIP: dstIp,
+                  ttl: 64,
+                },
+                linkLayer: {
+                  protocol: "Ethernet",
+                  srcMAC: srcMac,
+                  dstMAC: dstMac,
+                },
+                transportLayer: {
+                  protocol: "UDP",
+                  srcPort: 68,
+                  dstPort: 67,
+                  seq: 1,
+                  total: 1,
+                  checksum:
+                    "0x" +
+                    Math.floor(Math.random() * 65535)
+                      .toString(16)
+                      .toUpperCase(),
+                },
+                appLayer: {
+                  protocol: "DHCP",
+                  method: "REQUEST",
+                  clientMac: srcMac,
+                  clientId: client.id,
+                  offer: p.appLayer.offer,
+                },
+                payload: `DHCP REQUEST\nClient MAC: ${srcMac}\nRequesting offered IP: ${p.appLayer.offer?.ip}`,
+              },
+            ],
           };
         }
 
@@ -1771,6 +2195,10 @@
 
       const App = () => {
         const [nodes, setNodes] = useState(INITIAL_NODES);
+        // Mirror of the module-level LINKS list so the canvas re-renders
+        // when student-added links appear. The static engine methods
+        // still read LINKS directly (kept in sync by helpers below).
+        const [links, setLinks] = useState(LINKS);
         const [packets, setPackets] = useState([]);
         const [logs, setLogs] = useState([
           {
@@ -1852,6 +2280,8 @@
         );
         const [leftPanelWidth, setLeftPanelWidth] = useState(300);
         const [isResizingLeft, setIsResizingLeft] = useState(false);
+        const [rightPanelWidth, setRightPanelWidth] = useState(384);
+        const [isResizingRight, setIsResizingRight] = useState(false);
         const ZOOM_MIN = 0.5;
         const ZOOM_MAX = 2.0;
         const ZOOM_STEP = 0.1;
@@ -1885,12 +2315,23 @@
           setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)));
 
         useEffect(() => {
-          if (!isResizingLeft) return;
+          if (!isResizingLeft && !isResizingRight) return;
           const onMove = (e) => {
-            const next = Math.min(460, Math.max(240, e.clientX));
-            setLeftPanelWidth(next);
+            if (isResizingLeft) {
+              const next = Math.min(460, Math.max(240, e.clientX));
+              setLeftPanelWidth(next);
+            } else if (isResizingRight) {
+              const next = Math.min(
+                700,
+                Math.max(280, window.innerWidth - e.clientX),
+              );
+              setRightPanelWidth(next);
+            }
           };
-          const onUp = () => setIsResizingLeft(false);
+          const onUp = () => {
+            setIsResizingLeft(false);
+            setIsResizingRight(false);
+          };
           const prevCursor = document.body.style.cursor;
           const prevSelect = document.body.style.userSelect;
           document.body.style.cursor = "col-resize";
@@ -1903,7 +2344,7 @@
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
           };
-        }, [isResizingLeft]);
+        }, [isResizingLeft, isResizingRight]);
 
         const activePackets = packets.filter(
           (p) => p.state === "TRANSIT" || p.state === "ARRIVED",
@@ -2016,11 +2457,19 @@
                 }
 
                 if (result.action === "FORWARD") {
-                  nextPackets.push(result.packet);
-                  addLocalLog(
-                    `Packet routed from ${activeNode.name} towards ${nodes[result.packet.nextNode].name}`,
-                    "success",
-                  );
+                  // FORWARD results may carry one packet (`packet`) or
+                  // many (`packets`, used for DHCP OFFER/ACK and any
+                  // future multi-packet forwarders).
+                  const forwarded = result.packets || [result.packet];
+                  forwarded.forEach((fp) => {
+                    nextPackets.push(fp);
+                    if (nodes[fp.nextNode]) {
+                      addLocalLog(
+                        `Packet routed from ${activeNode.name} towards ${nodes[fp.nextNode].name}`,
+                        "success",
+                      );
+                    }
+                  });
                 } else if (result.action === "PROCESSING") {
                   // Request consumed for service-side processing — emit
                   // a processing entry; reply will be generated after the
@@ -2045,6 +2494,33 @@
                 } else if (result.action === "CONSUME") {
                   addLocalLog(result.message, "success");
                   const rp = result.responsePacket;
+                  // DHCP ACK delivered — apply the offered config to
+                  // the client node and re-register its new IP/MAC.
+                  if (result.dhcpApplied) {
+                    const { clientId, config } = result.dhcpApplied;
+                    const client = nodes[clientId];
+                    if (client && config) {
+                      nodeUpdates[clientId] = {
+                        ...(nodeUpdates[clientId] || client),
+                        ip: config.ip,
+                        subnet: config.subnet,
+                        gw: config.gw,
+                        dns: config.dns,
+                        dhcpLease: config.lease,
+                      };
+                      // Make sure IP_MAC_TABLE has the new mapping
+                      // (buildDhcpReply pre-registered, but be defensive).
+                      IP_MAC_TABLE = {
+                        ...IP_MAC_TABLE,
+                        [config.ip]: client.mac,
+                      };
+                      addLocalLog(
+                        `${client.name} applied DHCP lease: ${config.ip}/${config.subnet}, gw ${config.gw}, dns ${config.dns}`,
+                        "success",
+                      );
+                    }
+                    if (selectedPacketId === p.id) clearSelectedPacket = true;
+                  }
                   const isHttp =
                     rp &&
                     rp.appLayer &&
@@ -2642,6 +3118,56 @@
             });
             return;
           }
+          // Up-front guards: an unconfigured client can't send anything.
+          if (!node.ip) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${node.name}: no IP address configured — cannot send. Configure the Network tab first.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return;
+          }
+          if (!node.gw) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${node.name}: no default gateway configured — cannot send off-subnet packets.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return;
+          }
+          if (node.subnet && !isIpInSubnet(node.gw, node.ip, node.subnet)) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${node.name}: default gateway ${node.gw} is not in this device's subnet (${node.ip}/${node.subnet}) — packets will fail.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return;
+          }
+          // Laptops must be associated with a WAP before they can send.
+          if (node.type === "Laptop" && !node.switch) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${node.name}: not associated with a wireless access point — connect on the WiFi tab first.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return;
+          }
 
           // Ping emits 4 staggered request packets per Send, mirroring
           // the default Windows `ping` behaviour. Each subsequent packet
@@ -2687,9 +3213,40 @@
                 ? `${options.hostname} via ${targetIp}`
                 : targetIp;
 
+          // Subnet-check transparency: show the bitwise AND that drives
+          // "is the target on my LAN?" so students see why the frame
+          // either ARPs the target directly or goes to the default gateway.
+          const subnetLogs = [];
+          if (node.ip && node.subnet) {
+            const myNet = networkIdFor(node.ip, node.subnet);
+            const targetNet = networkIdFor(targetIp, node.subnet);
+            subnetLogs.push({
+              msg: `${node.name} subnet check: ${node.ip} AND ${node.subnet} = ${myNet} (my network)`,
+              type: "info",
+            });
+            subnetLogs.push({
+              msg: `${node.name} subnet check: ${targetIp} AND ${node.subnet} = ${targetNet} (target network)`,
+              type: "info",
+            });
+            if (myNet === targetNet) {
+              const directMac = IP_MAC_TABLE[targetIp];
+              subnetLogs.push({
+                msg: `${node.name} networks match → ARP for ${targetIp} directly${directMac ? ` (MAC ${directMac})` : ""}`,
+                type: "info",
+              });
+            } else {
+              const gwMac = IP_MAC_TABLE[node.gw];
+              subnetLogs.push({
+                msg: `${node.name} networks differ → frame addressed to default gateway ${node.gw}${gwMac ? ` (MAC ${gwMac})` : ""}`,
+                type: "info",
+              });
+            }
+          }
+
           setPackets((prev) => [...prev, ...newPackets]);
           commitUpdates({
             logsToAdd: [
+              ...subnetLogs,
               {
                 msg:
                   type === "PING"
@@ -2733,9 +3290,7 @@
             appendTerminalLines(clientId, [{ text: "", type: "command" }]);
             return;
           }
-          appendTerminalLines(clientId, [
-            { text: trimmed, type: "command" },
-          ]);
+          appendTerminalLines(clientId, [{ text: trimmed, type: "command" }]);
           const tokens = trimmed.split(/\s+/);
           const cmd = tokens[0].toLowerCase();
           if (cmd === "ping") {
@@ -2821,7 +3376,8 @@
               host: next.host || next.targetIp,
               dstPort: next.dstPort || 80,
               requestedUrl:
-                next.requestedUrl || `http://${next.host || next.targetIp}${next.path}`,
+                next.requestedUrl ||
+                `http://${next.host || next.targetIp}${next.path}`,
               transactionId: next.transactionId,
             },
           );
@@ -2841,9 +3397,9 @@
           commitUpdates({
             logsToAdd: [
               {
-                  msg: `${clientNode.name} auto-fetching ${next.host || next.targetIp}${next.path}`,
-                  type: "info",
-                },
+                msg: `${clientNode.name} auto-fetching ${next.host || next.targetIp}${next.path}`,
+                type: "info",
+              },
             ],
             nodeUpdates: {},
           });
@@ -2864,6 +3420,433 @@
             if (!node) return prev;
             return { ...prev, [nodeId]: updater(node) };
           });
+        };
+
+        // Insert a new node into both React state and the engine's view.
+        // Used when the student clicks one of the dotted "+ add..."
+        // placeholders on the canvas.
+        const addNode = (nodeId, nodeData) => {
+          const node = { id: nodeId, ...nodeData };
+          setNodes((prev) => ({ ...prev, [nodeId]: node }));
+          if (node.ip && node.mac) registerIpMac(node.ip, node.mac, nodeId);
+          else if (node.mac) {
+            MAC_NODE_TABLE = { ...MAC_NODE_TABLE, [node.mac]: nodeId };
+          }
+        };
+
+        // Append a link. The engine reads LINKS directly so we update
+        // both the module-level value and the React mirror.
+        const addLink = (source, target, opts = {}) => {
+          const id = opts.id || `L_${source}_${target}_${LINKS.length + 1}`;
+          const newLink = { id, source, target, ...opts };
+          LINKS = [...LINKS, newLink];
+          setLinks(LINKS);
+        };
+
+        // Register an IP↔MAC mapping at runtime so the engine's ARP
+        // simulation can resolve frames addressed to a newly-configured
+        // device.
+        const registerIpMac = (ip, mac, nodeId) => {
+          if (ip) IP_MAC_TABLE = { ...IP_MAC_TABLE, [ip]: mac };
+          if (mac) MAC_NODE_TABLE = { ...MAC_NODE_TABLE, [mac]: nodeId };
+        };
+
+        // Drop an IP from the table (e.g. when a device is reconfigured
+        // or releases a DHCP lease) so stale ARP entries don't leak.
+        const unregisterIp = (ip) => {
+          if (!ip) return;
+          const next = { ...IP_MAC_TABLE };
+          delete next[ip];
+          IP_MAC_TABLE = next;
+        };
+
+        // Generate a unique MAC address for a brand-new device.
+        const generateMac = () => {
+          const hex = () =>
+            Math.floor(Math.random() * 256)
+              .toString(16)
+              .padStart(2, "0")
+              .toUpperCase();
+          let mac;
+          do {
+            mac = `${hex()}:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
+          } while (MAC_NODE_TABLE[mac]);
+          return mac;
+        };
+
+        // Click handler for the dotted "+ add..." placeholders on the
+        // canvas. Each kind seeds a deliberately-incomplete node so the
+        // student has to configure IP / routing / WiFi before traffic
+        // can flow.
+        const handleAddNode = (kind) => {
+          if (kind === "LAPTOP") {
+            if (nodes.LAP_NEW) return;
+            const mac = generateMac();
+            addNode("LAP_NEW", {
+              type: "Laptop",
+              name: "Client Laptop 2",
+              mac,
+              x: 750,
+              y: 620,
+              switch: null,
+              subnet: "",
+              gw: "",
+              dns: "",
+            });
+            // Seed DHCP_A so a DHCP-from-Network-tab lease "just works"
+            // once the student finishes WiFi association — keeps the
+            // focus on routing rather than IP-typing chores.
+            addDhcpAllocation("DHCP_A", {
+              deviceName: "Client Laptop 2",
+              mac,
+              ip: "192.168.2.5",
+              subnet: "255.255.255.0",
+              gateway: "192.168.2.1",
+              dns: "192.168.1.253",
+              lease: "8 hours",
+              scope: "Subnet B (wireless)",
+            });
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: "Added Client Laptop 2 (unassociated, no IP). Configure WiFi, then either DHCP or manual network settings.",
+                  type: "info",
+                },
+              ],
+              nodeUpdates: {},
+            });
+          } else if (kind === "ROUTER_C") {
+            if (nodes.RT_C) return;
+            const macCore = generateMac();
+            const macLan = generateMac();
+            addNode("RT_C", {
+              type: "Router",
+              name: "Subnet C Router",
+              x: 700,
+              y: 200,
+              interfaces: [
+                {
+                  name: "eth0 (Core)",
+                  ip: "10.0.0.3",
+                  mac: macCore,
+                  connectedTo: "SW_CORE",
+                },
+                {
+                  name: "eth1 (LAN)",
+                  ip: "192.168.3.1",
+                  mac: macLan,
+                  connectedTo: "",
+                },
+              ],
+              routes: [],
+            });
+            addLink("RT_C", "SW_CORE");
+            registerIpMac("10.0.0.3", macCore, "RT_C");
+            registerIpMac("192.168.3.1", macLan, "RT_C");
+            addDhcpAllocation("DHCP_A", {
+              deviceName: "Subnet C Router",
+              mac: macLan,
+              ip: "192.168.3.1",
+              subnet: "255.255.255.0",
+              gateway: "192.168.3.1",
+              dns: "192.168.1.253",
+              lease: "Reserved",
+              scope: "Subnet C",
+            });
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: "Added Subnet C Router (eth0 10.0.0.3 / eth1 192.168.3.1). Routing table is empty — student must add routes on RT_C and the other routers.",
+                  type: "info",
+                },
+              ],
+              nodeUpdates: {},
+            });
+          } else if (kind === "PC4" || kind === "PC5") {
+            if (nodes[kind]) return;
+            if (!nodes.RT_C) return;
+            const isPc4 = kind === "PC4";
+            const mac = generateMac();
+            const reservedIp = isPc4 ? "192.168.3.10" : "192.168.3.11";
+            addNode(kind, {
+              type: "PC",
+              name: isPc4 ? "Client PC 4" : "Client PC 5",
+              mac,
+              x: 820,
+              y: isPc4 ? 270 : 170,
+              switch: "RT_C",
+              subnet: "",
+              gw: "",
+              dns: "",
+            });
+            addLink(kind, "RT_C");
+            addDhcpAllocation("DHCP_A", {
+              deviceName: isPc4 ? "Client PC 4" : "Client PC 5",
+              mac,
+              ip: reservedIp,
+              subnet: "255.255.255.0",
+              gateway: "192.168.3.1",
+              dns: "192.168.1.253",
+              lease: "8 hours",
+              scope: "Subnet C",
+            });
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `Added ${kind} (no IP). Configure manually or via DHCP from the Network tab.`,
+                  type: "info",
+                },
+              ],
+              nodeUpdates: {},
+            });
+          }
+        };
+
+        // --- Editable router routes -----------------------------------
+        const addRoute = (routerId, route) => {
+          updateNode(routerId, (r) => ({
+            ...r,
+            routes: [...(r.routes || []), route],
+          }));
+        };
+        const updateRoute = (routerId, routeIdx, field, value) => {
+          updateNode(routerId, (r) => ({
+            ...r,
+            routes: (r.routes || []).map((rt, i) =>
+              i === routeIdx
+                ? {
+                    ...rt,
+                    [field]:
+                      field === "iface" || field === "metric"
+                        ? Number(value)
+                        : value,
+                  }
+                : rt,
+            ),
+          }));
+        };
+        const deleteRoute = (routerId, routeIdx) => {
+          updateNode(routerId, (r) => ({
+            ...r,
+            routes: (r.routes || []).filter((_, i) => i !== routeIdx),
+          }));
+        };
+        // --- Editable DHCP allocations (reservations) -----------------
+        const addDhcpAllocation = (serverId, allocation) => {
+          updateNode(serverId, (s) => ({
+            ...s,
+            allocations: [
+              ...(s.allocations || []),
+              {
+                id: generateId(),
+                deviceName: allocation.deviceName || "(unnamed)",
+                mac: (allocation.mac || "").toUpperCase(),
+                ip: allocation.ip || "",
+                subnet: allocation.subnet || "255.255.255.0",
+                gateway: allocation.gateway || "",
+                dns: allocation.dns || "",
+                lease: allocation.lease || "8 hours",
+                mode: "Static reservation",
+                scope: allocation.scope || "(student-added)",
+                status: "Reserved",
+              },
+            ],
+          }));
+        };
+        const deleteDhcpAllocation = (serverId, allocationId) => {
+          updateNode(serverId, (s) => ({
+            ...s,
+            allocations: (s.allocations || []).filter(
+              (a) => a.id !== allocationId,
+            ),
+          }));
+        };
+
+        const copyRoutesFrom = (targetRouterId, sourceRouterId) => {
+          const source = nodes[sourceRouterId];
+          if (!source) return;
+          const cloned = (source.routes || []).map((r) => ({ ...r }));
+          updateNode(targetRouterId, (r) => ({ ...r, routes: cloned }));
+        };
+
+        // --- Editable interface IPs (so student can set RT_C eth1 to
+        // 192.168.3.1 and have the engine pick it up). ----------------
+        const updateInterfaceIp = (routerId, ifaceIdx, ip) => {
+          const r = nodes[routerId];
+          if (!r) return;
+          const iface = r.interfaces[ifaceIdx];
+          if (!iface) return;
+          if (iface.ip) unregisterIp(iface.ip);
+          if (ip) registerIpMac(ip, iface.mac, routerId);
+          updateNode(routerId, (rr) => ({
+            ...rr,
+            interfaces: rr.interfaces.map((it, i) =>
+              i === ifaceIdx ? { ...it, ip } : it,
+            ),
+          }));
+        };
+
+        // --- Client / laptop manual network configuration -------------
+        const updateClientNetwork = (clientId, patch) => {
+          const c = nodes[clientId];
+          if (!c) return;
+          // Re-register IP <-> MAC pairs when either field changes so the
+          // engine's ARP simulation always reflects the live config.
+          const nextIp = "ip" in patch ? patch.ip : c.ip;
+          const nextMac = "mac" in patch ? patch.mac : c.mac;
+          if (c.ip && (patch.ip !== c.ip || patch.mac !== c.mac)) {
+            unregisterIp(c.ip);
+          }
+          if ("mac" in patch && c.mac && c.mac !== patch.mac) {
+            const tbl = { ...MAC_NODE_TABLE };
+            delete tbl[c.mac];
+            MAC_NODE_TABLE = tbl;
+          }
+          if (nextMac) {
+            MAC_NODE_TABLE = { ...MAC_NODE_TABLE, [nextMac]: clientId };
+          }
+          if (nextIp && nextMac) registerIpMac(nextIp, nextMac, clientId);
+          updateNode(clientId, (cc) => ({ ...cc, ...patch }));
+        };
+
+        // --- WAP wireless configuration -------------------------------
+        const updateWapConfig = (wapId, patch) => {
+          updateNode(wapId, (w) => ({ ...w, ...patch }));
+        };
+
+        // --- Laptop WiFi association ----------------------------------
+        // Joins a laptop to a WAP if the password matches (or open
+        // network). Creates the wireless link in `links` state. On
+        // mismatch, the engine emits an authentication-failure log.
+        const connectLaptopWifi = (laptopId, wapId, ssid, password) => {
+          const wap = nodes[wapId];
+          if (!wap) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `WiFi: no access point with SSID '${ssid}' is reachable.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return false;
+          }
+          const wapSsid = wap.ssid || "mywifi";
+          if (ssid !== wapSsid) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `WiFi: SSID '${ssid}' not found on ${wap.name}.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return false;
+          }
+          if ((wap.password || "") !== (password || "")) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `WiFi authentication failed for SSID '${wapSsid}' — wrong password.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return false;
+          }
+          // Tear down any prior association of this laptop.
+          disconnectLaptopWifi(laptopId, /* silent */ true);
+          updateNode(laptopId, (l) => ({ ...l, switch: wapId }));
+          addLink(laptopId, wapId, { wireless: true });
+          commitUpdates({
+            logsToAdd: [
+              {
+                msg: `${
+                  nodes[laptopId]?.name || laptopId
+                } associated with ${wap.name} (SSID '${wapSsid}').`,
+                type: "success",
+              },
+            ],
+            nodeUpdates: {},
+          });
+          return true;
+        };
+        // DHCP lease request (stub — wired to the proper DORA flow once
+        // the engine implements DHCP_DISCOVER / OFFER / REQUEST / ACK
+        // packet types).
+        const requestDhcpLease = (clientId, opts = {}) => {
+          const client = nodes[clientId];
+          if (!client) return;
+          const mode = opts.mode || "unicast";
+          const serverIp = opts.serverIp || "";
+          if (mode === "unicast" && !isValidIp(serverIp)) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${client.name}: DHCP unicast needs a valid server IP.`,
+                  type: "error",
+                },
+              ],
+              nodeUpdates: {},
+            });
+            return;
+          }
+          const targetIp =
+            mode === "broadcast" ? "255.255.255.255" : serverIp;
+          const res = NetworkEngine.createDhcpDiscover(client, targetIp, mode);
+          if (res.error) {
+            commitUpdates({
+              logsToAdd: [{ msg: res.error, type: "error" }],
+              nodeUpdates: {},
+            });
+            return;
+          }
+          setPackets((prev) => [...prev, res.packet]);
+          commitUpdates({
+            logsToAdd: [
+              {
+                msg: `${client.name} sent DHCP DISCOVER (${mode}${
+                  mode === "unicast" ? ` → ${serverIp}` : ""
+                }).`,
+                type: "info",
+              },
+            ],
+            nodeUpdates: {},
+          });
+          setSelectedPacketId(res.packet.id);
+          setPacketExpanded(true);
+        };
+
+        const disconnectLaptopWifi = (laptopId, silent = false) => {
+          const lap = nodes[laptopId];
+          if (!lap) return;
+          // Remove any wireless link involving this laptop.
+          const next = LINKS.filter(
+            (l) =>
+              !(
+                (l.source === laptopId || l.target === laptopId) &&
+                l.wireless
+              ),
+          );
+          if (next.length !== LINKS.length) {
+            LINKS = next;
+            setLinks(LINKS);
+          }
+          updateNode(laptopId, (l) => ({ ...l, switch: null }));
+          if (!silent) {
+            commitUpdates({
+              logsToAdd: [
+                {
+                  msg: `${lap.name} disconnected from WiFi.`,
+                  type: "info",
+                },
+              ],
+              nodeUpdates: {},
+            });
+          }
         };
 
         const setClientBrowserAddress = (clientId, address) => {
@@ -2889,7 +3872,9 @@
           const hostname = normaliseHostname(parsed.host);
           if (!hostname) {
             commitUpdates({
-              logsToAdd: [{ msg: "Browser address has no host name.", type: "error" }],
+              logsToAdd: [
+                { msg: "Browser address has no host name.", type: "error" },
+              ],
               nodeUpdates: {},
             });
             return;
@@ -3409,414 +4394,505 @@
                       position: "relative",
                     }}
                   >
-                  <svg
-                    viewBox="0 0 1080 740"
-                    preserveAspectRatio="xMidYMid meet"
-                    width="100%"
-                    height="100%"
-                    style={{ display: "block" }}
-                  >
-                    {/* LAN bounding box (dotted) */}
-                    <rect
-                      x="60"
-                      y="110"
-                      width="985"
-                      height="615"
-                      rx="14"
-                      ry="14"
-                      fill="none"
-                      stroke={isDark ? "#64748b" : "#94a3b8"}
-                      strokeWidth="2"
-                      strokeDasharray="8 6"
-                    />
-                    <text
-                      x="75"
-                      y="130"
-                      fontSize="13"
-                      fontWeight="bold"
-                      fill={isDark ? "#94a3b8" : "#64748b"}
+                    <svg
+                      viewBox="0 0 1080 740"
+                      preserveAspectRatio="xMidYMid meet"
+                      width="100%"
+                      height="100%"
+                      style={{ display: "block" }}
                     >
-                      LAN
-                    </text>
+                      {/* LAN bounding box (dotted) */}
+                      <rect
+                        x="60"
+                        y="110"
+                        width="985"
+                        height="615"
+                        rx="14"
+                        ry="14"
+                        fill="none"
+                        stroke={isDark ? "#64748b" : "#94a3b8"}
+                        strokeWidth="2"
+                        strokeDasharray="8 6"
+                      />
+                      <text
+                        x="75"
+                        y="130"
+                        fontSize="13"
+                        fontWeight="bold"
+                        fill={isDark ? "#94a3b8" : "#64748b"}
+                      >
+                        LAN
+                      </text>
 
-                    {/* Internet Routing cloud — single bezier-curve path */}
-                    <g transform={`translate(${CLOUD.x}, ${CLOUD.y})`}>
-                      <path
-                        d="M -75 30
+                      {/* Internet Routing cloud — single bezier-curve path */}
+                      <g transform={`translate(${CLOUD.x}, ${CLOUD.y})`}>
+                        <path
+                          d="M -75 30
                            C -75 10, -65 0, -50 0
                            C -45 -20, -25 -25, -10 -15
                            C -5 -30, 15 -30, 25 -15
                            C 40 -20, 60 -10, 60 5
                            C 75 5, 75 30, 60 30
                            Z"
-                        fill={isDark ? "#1e293b" : "#f1f5f9"}
-                        stroke={isDark ? "#475569" : "#94a3b8"}
-                        strokeWidth="2"
-                        strokeLinejoin="round"
-                      />
-                      <text
-                        x="0"
-                        y="0"
-                        textAnchor="middle"
-                        fontSize="12"
-                        fontWeight="bold"
-                        fill={isDark ? "#cbd5e1" : "#475569"}
-                      >
-                        Internet
-                      </text>
-                      <text
-                        x="0"
-                        y="14"
-                        textAnchor="middle"
-                        fontSize="12"
-                        fontWeight="bold"
-                        fill={isDark ? "#cbd5e1" : "#475569"}
-                      >
-                        Routing
-                      </text>
-                    </g>
+                          fill={isDark ? "#1e293b" : "#f1f5f9"}
+                          stroke={isDark ? "#475569" : "#94a3b8"}
+                          strokeWidth="2"
+                          strokeLinejoin="round"
+                        />
+                        <text
+                          x="0"
+                          y="0"
+                          textAnchor="middle"
+                          fontSize="12"
+                          fontWeight="bold"
+                          fill={isDark ? "#cbd5e1" : "#475569"}
+                        >
+                          Internet
+                        </text>
+                        <text
+                          x="0"
+                          y="14"
+                          textAnchor="middle"
+                          fontSize="12"
+                          fontWeight="bold"
+                          fill={isDark ? "#cbd5e1" : "#475569"}
+                        >
+                          Routing
+                        </text>
+                      </g>
 
-                    {/* Dotted horizontal abstract link: cloud -> INT_SRV
+                      {/* Dotted horizontal abstract link: cloud -> INT_SRV
                         (red to match the Internet/WAN legend; finer dot
                         pattern visually distinguishes it from regular
                         LAN links which use a 6,4 dash) */}
-                    <line
-                      x1={CLOUD.x + 75}
-                      y1={CLOUD.y}
-                      x2={nodes.INT_SRV.x - 30}
-                      y2={nodes.INT_SRV.y}
-                      stroke="#ef4444"
-                      strokeWidth="3"
-                      strokeDasharray="2 6"
-                      strokeLinecap="round"
-                    />
+                      <line
+                        x1={CLOUD.x + 75}
+                        y1={CLOUD.y}
+                        x2={nodes.INT_SRV.x - 30}
+                        y2={nodes.INT_SRV.y}
+                        stroke="#ef4444"
+                        strokeWidth="3"
+                        strokeDasharray="2 6"
+                        strokeLinecap="round"
+                      />
 
-                    {/* Links */}
-                    {LINKS.map((link) => {
-                      const n1 = nodes[link.source];
-                      const n2 = nodes[link.target];
-                      if (link.wireless) {
-                        // Show both fans whenever there's any traffic on the
-                        // wireless link: even when only one side is sending
-                        // the "main" packet, the other side is acknowledging,
-                        // so both radios are actively in use.
-                        const linkActive = packets.some(
-                          (p) =>
-                            p.state === "TRANSIT" &&
-                            !(p.delayRemaining > 0) &&
-                            ((p.currentNode === link.source &&
-                              p.nextNode === link.target) ||
-                              (p.currentNode === link.target &&
-                                p.nextNode === link.source)),
-                        );
-                        if (!linkActive) return null;
+                      {/* Links */}
+                      {links.map((link) => {
+                        const n1 = nodes[link.source];
+                        const n2 = nodes[link.target];
+                        if (link.wireless) {
+                          // Show both fans whenever there's any traffic on the
+                          // wireless link: even when only one side is sending
+                          // the "main" packet, the other side is acknowledging,
+                          // so both radios are actively in use.
+                          const linkActive = packets.some(
+                            (p) =>
+                              p.state === "TRANSIT" &&
+                              !(p.delayRemaining > 0) &&
+                              ((p.currentNode === link.source &&
+                                p.nextNode === link.target) ||
+                                (p.currentNode === link.target &&
+                                  p.nextNode === link.source)),
+                          );
+                          if (!linkActive) return null;
 
-                        const stroke = isDark ? "#10b981" : "#047857";
-                        // Each fan emanates from its source toward its
-                        // target, sitting just outside the node circle
-                        // (node radius is 30) so the arcs stay visible.
-                        // offsetDeg lets us nudge a fan visually without
-                        // changing the target it's aimed at.
-                        const fan = (src, tgt, k, offsetDeg = 0) => {
-                          const angleDeg =
-                            (Math.atan2(tgt.x - src.x, tgt.y - src.y) * 180) /
-                              Math.PI +
-                            offsetDeg;
+                          const stroke = isDark ? "#10b981" : "#047857";
+                          // Each fan emanates from its source toward its
+                          // target, sitting just outside the node circle
+                          // (node radius is 30) so the arcs stay visible.
+                          // offsetDeg lets us nudge a fan visually without
+                          // changing the target it's aimed at.
+                          const fan = (src, tgt, k, offsetDeg = 0) => {
+                            const angleDeg =
+                              (Math.atan2(tgt.x - src.x, tgt.y - src.y) * 180) /
+                                Math.PI +
+                              offsetDeg;
+                            return (
+                              <g
+                                key={k}
+                                transform={`translate(${src.x}, ${src.y}) rotate(${angleDeg})`}
+                              >
+                                <path
+                                  d="M -21 36.37 A 42 42 0 0 0 21 36.37"
+                                  fill="none"
+                                  stroke={stroke}
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                  opacity="0.95"
+                                />
+                                <path
+                                  d="M -27 46.77 A 54 54 0 0 0 27 46.77"
+                                  fill="none"
+                                  stroke={stroke}
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                  opacity="0.7"
+                                />
+                                <path
+                                  d="M -33 57.16 A 66 66 0 0 0 33 57.16"
+                                  fill="none"
+                                  stroke={stroke}
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                  opacity="0.45"
+                                />
+                              </g>
+                            );
+                          };
                           return (
-                            <g
-                              key={k}
-                              transform={`translate(${src.x}, ${src.y}) rotate(${angleDeg})`}
-                            >
-                              <path
-                                d="M -21 36.37 A 42 42 0 0 0 21 36.37"
-                                fill="none"
-                                stroke={stroke}
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                opacity="0.95"
-                              />
-                              <path
-                                d="M -27 46.77 A 54 54 0 0 0 27 46.77"
-                                fill="none"
-                                stroke={stroke}
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                opacity="0.7"
-                              />
-                              <path
-                                d="M -33 57.16 A 66 66 0 0 0 33 57.16"
-                                fill="none"
-                                stroke={stroke}
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                opacity="0.45"
-                              />
+                            <g key={link.id}>
+                              {fan(n1, n2, `${link.id}-a`, -40)}
+                              {fan(n2, n1, `${link.id}-b`, -60)}
                             </g>
                           );
-                        };
-                        return (
-                          <g key={link.id}>
-                            {fan(n1, n2, `${link.id}-a`, -40)}
-                            {fan(n2, n1, `${link.id}-b`, -60)}
-                          </g>
-                        );
-                      }
-                      // L7 is the engine link RT_EDGE <-> INT_SRV; visually
-                      // we draw it as a stub from RT_EDGE up into the cloud,
-                      // with the cloud -> INT_SRV portion shown as the red
-                      // dotted abstraction drawn separately above.
-                      if (link.id === "L7") {
-                        const edge = nodes.RT_EDGE;
+                        }
+                        // L7 is the engine link RT_EDGE <-> INT_SRV; visually
+                        // we draw it as a stub from RT_EDGE up into the cloud,
+                        // with the cloud -> INT_SRV portion shown as the red
+                        // dotted abstraction drawn separately above.
+                        if (link.id === "L7") {
+                          const edge = nodes.RT_EDGE;
+                          return (
+                            <line
+                              key={link.id}
+                              x1={edge.x}
+                              y1={edge.y}
+                              x2={CLOUD.x}
+                              y2={CLOUD.y + 28}
+                              stroke={isDark ? "#475569" : "#94a3b8"}
+                              strokeWidth="4"
+                              strokeDasharray="6,4"
+                            />
+                          );
+                        }
                         return (
                           <line
                             key={link.id}
-                            x1={edge.x}
-                            y1={edge.y}
-                            x2={CLOUD.x}
-                            y2={CLOUD.y + 28}
+                            x1={n1.x}
+                            y1={n1.y}
+                            x2={n2.x}
+                            y2={n2.y}
                             stroke={isDark ? "#475569" : "#94a3b8"}
                             strokeWidth="4"
                             strokeDasharray="6,4"
                           />
                         );
-                      }
-                      return (
-                        <line
-                          key={link.id}
-                          x1={n1.x}
-                          y1={n1.y}
-                          x2={n2.x}
-                          y2={n2.y}
-                          stroke={isDark ? "#475569" : "#94a3b8"}
-                          strokeWidth="4"
-                          strokeDasharray="6,4"
-                        />
-                      );
-                    })}
+                      })}
 
-                    {/* Nodes */}
-                    {Object.values(nodes).map((node) => {
-                      // The cloud is rendered as its own bezier SVG above;
-                      // skip it here so it isn't drawn as a regular node.
-                      if (node.type === "Cloud") return null;
-                      const color = getEntityColor(node.id);
-                      const isSelected = selectedNodeId === node.id;
-                      const handleClick = () => {
-                        if (pickerSlot && selectedNodeId) {
-                          const ip = ipForPicker(node);
-                          if (!ip) return;
-                          if (pickerSlot === "PING") {
-                            setPingTargets((m) => ({
-                              ...m,
-                              [selectedNodeId]: ip,
-                            }));
-                          } else if (pickerSlot === "HTTP") {
-                            setHttpTargets((m) => ({
-                              ...m,
-                              [selectedNodeId]: ip,
-                            }));
-                          }
-                          setPickerSlot(null);
-                          return;
-                        }
-                        setSelectedNodeId(node.id);
-                        setNodeExpanded(true);
-                      };
-                      return (
-                        <g
-                          key={node.id}
-                          transform={`translate(${node.x}, ${node.y})`}
-                          onClick={handleClick}
-                          className="cursor-pointer"
-                        >
-                          <circle
-                            cx="0"
-                            cy="0"
-                            r="30"
-                            fill={isDark ? "#1e293b" : "#f8fafc"}
-                            stroke={
-                              isSelected ? (isDark ? "#fff" : "#0f172a") : color
+                      {/* Nodes */}
+                      {Object.values(nodes).map((node) => {
+                        // The cloud is rendered as its own bezier SVG above;
+                        // skip it here so it isn't drawn as a regular node.
+                        if (node.type === "Cloud") return null;
+                        const color = getEntityColor(node.id);
+                        const isSelected = selectedNodeId === node.id;
+                        const handleClick = () => {
+                          if (pickerSlot && selectedNodeId) {
+                            const ip = ipForPicker(node);
+                            if (!ip) return;
+                            if (pickerSlot === "PING") {
+                              setPingTargets((m) => ({
+                                ...m,
+                                [selectedNodeId]: ip,
+                              }));
+                            } else if (pickerSlot === "HTTP") {
+                              setHttpTargets((m) => ({
+                                ...m,
+                                [selectedNodeId]: ip,
+                              }));
                             }
-                            strokeWidth={isSelected ? 4 : 2}
-                          />
-                          <g transform="translate(-20, -20)" fill={color}>
-                            {node.type === "PC" && <Icons.PC />}
-                            {node.type === "Server" && <Icons.Server />}
-                            {node.type === "Switch" && <Icons.Switch />}
-                            {node.type === "Router" && <Icons.Router />}
-                            {node.type === "WAP" && <Icons.WAP />}
-                            {node.type === "Laptop" && <Icons.Laptop />}
-                          </g>
-                          <text
-                            x="0"
-                            y="48"
-                            textAnchor="middle"
-                            fill={isDark ? "#cbd5e1" : "#1e293b"}
-                            fontSize="14"
-                            fontWeight="bold"
+                            setPickerSlot(null);
+                            return;
+                          }
+                          setSelectedNodeId(node.id);
+                          setNodeExpanded(true);
+                        };
+                        return (
+                          <g
+                            key={node.id}
+                            transform={`translate(${node.x}, ${node.y})`}
+                            onClick={handleClick}
+                            className="cursor-pointer"
                           >
-                            {node.name}
-                          </text>
-                          {(node.type === "PC" ||
-                            node.type === "Server" ||
-                            node.type === "Laptop") && (
+                            <circle
+                              cx="0"
+                              cy="0"
+                              r="30"
+                              fill={isDark ? "#1e293b" : "#f8fafc"}
+                              stroke={
+                                isSelected
+                                  ? isDark
+                                    ? "#fff"
+                                    : "#0f172a"
+                                  : color
+                              }
+                              strokeWidth={isSelected ? 4 : 2}
+                            />
+                            <g transform="translate(-20, -20)" fill={color}>
+                              {node.type === "PC" && <Icons.PC />}
+                              {node.type === "Server" && <Icons.Server />}
+                              {node.type === "Switch" && <Icons.Switch />}
+                              {node.type === "Router" && <Icons.Router />}
+                              {node.type === "WAP" && <Icons.WAP />}
+                              {node.type === "Laptop" && <Icons.Laptop />}
+                            </g>
                             <text
                               x="0"
-                              y="66"
+                              y="48"
                               textAnchor="middle"
-                              fill={isDark ? "#94a3b8" : "#475569"}
-                              fontSize="13"
+                              fill={isDark ? "#cbd5e1" : "#1e293b"}
+                              fontSize="14"
+                              fontWeight="bold"
                             >
-                              {node.ip}
+                              {node.name}
                             </text>
-                          )}
-                        </g>
-                      );
-                    })}
+                            {(node.type === "PC" ||
+                              node.type === "Server" ||
+                              node.type === "Laptop") && (
+                              <text
+                                x="0"
+                                y="66"
+                                textAnchor="middle"
+                                fill={isDark ? "#94a3b8" : "#475569"}
+                                fontSize="13"
+                              >
+                                {node.ip}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      })}
 
-                    {/* Packets */}
-                    {packets.map((p) => {
-                      // Packets still in their delay window haven't left
-                      // their source yet — hide them on the canvas (the
-                      // node icon will gently glow if it has queued
-                      // packets, see node rendering above).
-                      if (p.state === "TRANSIT" && (p.delayRemaining || 0) > 0)
-                        return null;
-                      let px, py;
-                      const curr = nodes[p.currentNode];
+                      {/* Add-node placeholders — student-clickable dotted
+                          circles that seed deliberately-unconfigured nodes. */}
+                      {[
+                        !nodes.LAP_NEW && {
+                          kind: "LAPTOP",
+                          x: 750,
+                          y: 620,
+                          line1: "+ Add",
+                          line2: "Laptop",
+                        },
+                        !nodes.RT_C && {
+                          kind: "ROUTER_C",
+                          x: 700,
+                          y: 200,
+                          line1: "+ Add Router",
+                          line2: "(Subnet C)",
+                        },
+                        nodes.RT_C &&
+                          !nodes.PC5 && {
+                            kind: "PC5",
+                            x: 820,
+                            y: 170,
+                            line1: "+ Add",
+                            line2: "PC 5",
+                          },
+                        nodes.RT_C &&
+                          !nodes.PC4 && {
+                            kind: "PC4",
+                            x: 820,
+                            y: 270,
+                            line1: "+ Add",
+                            line2: "PC 4",
+                          },
+                      ]
+                        .filter(Boolean)
+                        .map((ph) => (
+                          <g
+                            key={`addph-${ph.kind}`}
+                            transform={`translate(${ph.x}, ${ph.y})`}
+                            onClick={() => handleAddNode(ph.kind)}
+                            className="cursor-pointer"
+                          >
+                            <circle
+                              cx="0"
+                              cy="0"
+                              r="28"
+                              fill="none"
+                              stroke={isDark ? "#64748b" : "#94a3b8"}
+                              strokeWidth="2"
+                              strokeDasharray="6 4"
+                            />
+                            <text
+                              x="0"
+                              y="-2"
+                              textAnchor="middle"
+                              fontSize="10"
+                              fontWeight="bold"
+                              fill={isDark ? "#94a3b8" : "#64748b"}
+                            >
+                              {ph.line1}
+                            </text>
+                            <text
+                              x="0"
+                              y="12"
+                              textAnchor="middle"
+                              fontSize="10"
+                              fontWeight="bold"
+                              fill={isDark ? "#94a3b8" : "#64748b"}
+                            >
+                              {ph.line2}
+                            </text>
+                          </g>
+                        ))}
 
-                      if (p.state === "TRANSIT") {
-                        const next = nodes[p.nextNode];
-                        // Cloud-aware interpolation: when the leg
-                        // involves the cloud pseudo-node, route the
-                        // packet via the two CLOUD_STOPS so it visibly
-                        // bounces through the cloud rather than gliding
-                        // straight past it.
-                        let from = null;
-                        let to = null;
+                      {/* Packets */}
+                      {packets.map((p) => {
+                        // Packets still in their delay window haven't left
+                        // their source yet — hide them on the canvas (the
+                        // node icon will gently glow if it has queued
+                        // packets, see node rendering above).
                         if (
-                          p.currentNode === "CLOUD" &&
-                          p.nextNode === "CLOUD"
+                          p.state === "TRANSIT" &&
+                          (p.delayRemaining || 0) > 0
+                        )
+                          return null;
+                        let px, py;
+                        const curr = nodes[p.currentNode];
+
+                        if (p.state === "TRANSIT") {
+                          const next = nodes[p.nextNode];
+                          // Cloud-aware interpolation: when the leg
+                          // involves the cloud pseudo-node, route the
+                          // packet via the two CLOUD_STOPS so it visibly
+                          // bounces through the cloud rather than gliding
+                          // straight past it.
+                          let from = null;
+                          let to = null;
+                          if (
+                            p.currentNode === "CLOUD" &&
+                            p.nextNode === "CLOUD"
+                          ) {
+                            from = cloudStopFor(p, (p.cloudHopIndex || 1) - 1);
+                            to = cloudStopFor(p, p.cloudHopIndex || 1);
+                          } else if (p.nextNode === "CLOUD") {
+                            from = curr;
+                            to = cloudStopFor(p, p.cloudHopIndex || 0);
+                          } else if (p.currentNode === "CLOUD") {
+                            from = cloudStopFor(p, (p.cloudHopIndex || 1) - 1);
+                            to = next;
+                          }
+                          if (from && to) {
+                            px = from.x + (to.x - from.x) * (p.progress / 100);
+                            py = from.y + (to.y - from.y) * (p.progress / 100);
+                          } else {
+                            px =
+                              curr.x + (next.x - curr.x) * (p.progress / 100);
+                            py =
+                              curr.y + (next.y - curr.y) * (p.progress / 100);
+                          }
+                        } else if (
+                          p.state === "ARRIVED" &&
+                          p.currentNode === "CLOUD"
                         ) {
-                          from = cloudStopFor(p, (p.cloudHopIndex || 1) - 1);
-                          to = cloudStopFor(p, p.cloudHopIndex || 1);
-                        } else if (p.nextNode === "CLOUD") {
-                          from = curr;
-                          to = cloudStopFor(p, p.cloudHopIndex || 0);
-                        } else if (p.currentNode === "CLOUD") {
-                          from = cloudStopFor(p, (p.cloudHopIndex || 1) - 1);
-                          to = next;
-                        }
-                        if (from && to) {
-                          px = from.x + (to.x - from.x) * (p.progress / 100);
-                          py = from.y + (to.y - from.y) * (p.progress / 100);
-                        } else {
-                          px = curr.x + (next.x - curr.x) * (p.progress / 100);
-                          py = curr.y + (next.y - curr.y) * (p.progress / 100);
-                        }
-                      } else if (
-                        p.state === "ARRIVED" &&
-                        p.currentNode === "CLOUD"
-                      ) {
-                        // Render the packet at the cloud stop it just
-                        // landed on, rather than the cloud's centre.
-                        const stop = cloudStopFor(p, p.cloudHopIndex || 0);
-                        px = stop.x;
-                        py = stop.y;
-                      } else if (p.state === "ARRIVED" && p.prevNode) {
-                        const prev = nodes[p.prevNode];
-                        const dx = curr.x - prev.x;
-                        const dy = curr.y - prev.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const radius = 30; // Radius of the node circle
-                        if (dist > 0) {
-                          px = curr.x - (dx / dist) * radius;
-                          py = curr.y - (dy / dist) * radius;
+                          // Render the packet at the cloud stop it just
+                          // landed on, rather than the cloud's centre.
+                          const stop = cloudStopFor(p, p.cloudHopIndex || 0);
+                          px = stop.x;
+                          py = stop.y;
+                        } else if (p.state === "ARRIVED" && p.prevNode) {
+                          const prev = nodes[p.prevNode];
+                          const dx = curr.x - prev.x;
+                          const dy = curr.y - prev.y;
+                          const dist = Math.sqrt(dx * dx + dy * dy);
+                          const radius = 30; // Radius of the node circle
+                          if (dist > 0) {
+                            px = curr.x - (dx / dist) * radius;
+                            py = curr.y - (dy / dist) * radius;
+                          } else {
+                            px = curr.x;
+                            py = curr.y;
+                          }
                         } else {
                           px = curr.x;
                           py = curr.y;
                         }
-                      } else {
-                        px = curr.x;
-                        py = curr.y;
-                      }
 
-                      if (p.state === "DROPPED") {
+                        if (p.state === "DROPPED") {
+                          return (
+                            <g
+                              key={p.id}
+                              transform={`translate(${px}, ${py})`}
+                              className="opacity-80"
+                            >
+                              <circle
+                                cx="0"
+                                cy="0"
+                                r="14"
+                                fill={isDark ? "#1e293b" : "#fef2f2"}
+                                stroke="#ef4444"
+                                strokeWidth="2"
+                              />
+                              <line
+                                x1="-8"
+                                y1="-8"
+                                x2="8"
+                                y2="8"
+                                stroke="#ef4444"
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                              />
+                              <line
+                                x1="8"
+                                y1="-8"
+                                x2="-8"
+                                y2="8"
+                                stroke="#ef4444"
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                              />
+                            </g>
+                          );
+                        }
+
+                        const isSelected = selectedPacketId === p.id;
                         return (
                           <g
                             key={p.id}
                             transform={`translate(${px}, ${py})`}
-                            className="opacity-80"
+                            onClick={() => {
+                              setSelectedPacketId(p.id);
+                              setPacketExpanded(true);
+                            }}
+                            className="cursor-pointer"
                           >
                             <circle
                               cx="0"
                               cy="0"
                               r="14"
-                              fill={isDark ? "#1e293b" : "#fef2f2"}
-                              stroke="#ef4444"
-                              strokeWidth="2"
+                              fill="#f59e0b"
+                              stroke={
+                                isSelected
+                                  ? isDark
+                                    ? "#fff"
+                                    : "#0f172a"
+                                  : "#b45309"
+                              }
+                              strokeWidth={isSelected ? 3 : 1}
                             />
-                            <line
-                              x1="-8"
-                              y1="-8"
-                              x2="8"
-                              y2="8"
-                              stroke="#ef4444"
-                              strokeWidth="3"
-                              strokeLinecap="round"
-                            />
-                            <line
-                              x1="8"
-                              y1="-8"
-                              x2="-8"
-                              y2="8"
-                              stroke="#ef4444"
-                              strokeWidth="3"
-                              strokeLinecap="round"
-                            />
+                            <g transform="translate(-12, -12)">
+                              <Icons.Packet color="transparent" />
+                            </g>
                           </g>
                         );
-                      }
-
-                      const isSelected = selectedPacketId === p.id;
-                      return (
-                        <g
-                          key={p.id}
-                          transform={`translate(${px}, ${py})`}
-                          onClick={() => {
-                            setSelectedPacketId(p.id);
-                            setPacketExpanded(true);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <circle
-                            cx="0"
-                            cy="0"
-                            r="14"
-                            fill="#f59e0b"
-                            stroke={
-                              isSelected
-                                ? isDark
-                                  ? "#fff"
-                                  : "#0f172a"
-                                : "#b45309"
-                            }
-                            strokeWidth={isSelected ? 3 : 1}
-                          />
-                          <g transform="translate(-12, -12)">
-                            <Icons.Packet color="transparent" />
-                          </g>
-                        </g>
-                      );
-                    })}
-                  </svg>
+                      })}
+                    </svg>
                   </div>
-
                 </div>
               </div>
 
+              <div
+                className="w-1.5 shrink-0 cursor-col-resize bg-slate-300 hover:bg-sky-500 dark:bg-slate-700 dark:hover:bg-sky-500 transition-colors"
+                onMouseDown={() => setIsResizingRight(true)}
+                title="Drag to resize the inspector panel"
+              />
+
               {/* RIGHT: Inspector Panel */}
-              <div className="w-96 bg-slate-100 dark:bg-slate-800 border-l border-slate-300 dark:border-slate-700 flex flex-col">
+              <div
+                className="shrink-0 bg-slate-100 dark:bg-slate-800 border-l border-slate-300 dark:border-slate-700 flex flex-col"
+                style={{ width: rightPanelWidth }}
+              >
                 <div className="flex-1 overflow-y-auto flex flex-col">
                   {/* NODE SECTION */}
                   <CollapsibleSection
@@ -3866,7 +4942,8 @@
                           const client = nodes[nodeId];
                           handleBrowserNavigate(
                             nodeId,
-                            client?.browser?.address || "http://mycompany.local/",
+                            client?.browser?.address ||
+                              "http://mycompany.local/",
                           );
                         }}
                         onOpenFileEditor={openFileEditor}
@@ -3880,10 +4957,26 @@
                         onClearDnsCache={clearDnsCache}
                         terminalDraft={terminalDrafts[selectedNodeId] || ""}
                         onTerminalDraftChange={(clientId, value) =>
-                          setTerminalDrafts((d) => ({ ...d, [clientId]: value }))
+                          setTerminalDrafts((d) => ({
+                            ...d,
+                            [clientId]: value,
+                          }))
                         }
                         onRunTerminalCommand={runTerminalCommand}
                         onUpdateServerHttpPort={updateServerHttpPort}
+                        allNodes={nodes}
+                        onAddRoute={addRoute}
+                        onUpdateRoute={updateRoute}
+                        onDeleteRoute={deleteRoute}
+                        onCopyRoutesFrom={copyRoutesFrom}
+                        onUpdateInterfaceIp={updateInterfaceIp}
+                        onUpdateClientNetwork={updateClientNetwork}
+                        onUpdateWapConfig={updateWapConfig}
+                        onConnectLaptopWifi={connectLaptopWifi}
+                        onDisconnectLaptopWifi={disconnectLaptopWifi}
+                        onDhcpRequest={requestDhcpLease}
+                        onAddDhcpAllocation={addDhcpAllocation}
+                        onDeleteDhcpAllocation={deleteDhcpAllocation}
                         color={getEntityColor(selectedNodeId)}
                         transactionActive={transactionActive}
                       />
@@ -3913,6 +5006,8 @@
                         packets={activePackets}
                         selectedPacketId={selectedPacketId}
                         onSelectPacket={setSelectedPacketId}
+                        nodes={nodes}
+                        links={links}
                       />
                     ) : (
                       <div className="p-6 text-center text-slate-500 text-sm">
@@ -4381,6 +5476,19 @@
         onTerminalDraftChange,
         onRunTerminalCommand,
         onUpdateServerHttpPort,
+        allNodes,
+        onAddRoute,
+        onUpdateRoute,
+        onDeleteRoute,
+        onCopyRoutesFrom,
+        onUpdateInterfaceIp,
+        onUpdateClientNetwork,
+        onUpdateWapConfig,
+        onConnectLaptopWifi,
+        onDisconnectLaptopWifi,
+        onDhcpRequest,
+        onAddDhcpAllocation,
+        onDeleteDhcpAllocation,
         color,
         transactionActive,
       }) => {
@@ -4390,6 +5498,40 @@
         const isDhcpServer = node.service === "DHCP";
         const [pingFormOpen, setPingFormOpen] = useState(false);
         const [httpDstPort, setHttpDstPort] = useState("80");
+        // Local form state for the new tabs (Routes, Network, WiFi,
+        // Wireless). All reset whenever the inspector remounts on
+        // selectedNodeId change so per-node draft state stays clean.
+        const [newRoute, setNewRoute] = useState({
+          dest: "",
+          mask: "255.255.255.0",
+          nextHop: "",
+          iface: 0,
+          metric: 1,
+        });
+        const [copyRoutesFromId, setCopyRoutesFromId] = useState("");
+        const [dhcpMode, setDhcpMode] = useState("unicast");
+        const [dhcpServerIp, setDhcpServerIp] = useState("");
+        const [wifiSsidDraft, setWifiSsidDraft] = useState("");
+        const [wifiPasswordDraft, setWifiPasswordDraft] = useState("");
+        // Seed the WiFi form from the laptop's current association so
+        // the SSID dropdown reads as already-selected when the user
+        // opens the WIFI tab for a pre-configured laptop.
+        useEffect(() => {
+          if (node.type !== "Laptop") return;
+          const wap = node.switch && (allNodes || {})[node.switch];
+          if (wap) {
+            setWifiSsidDraft(wap.ssid || "mywifi");
+            setWifiPasswordDraft(wap.password || "");
+          }
+        }, [node.id]);
+        const [newAlloc, setNewAlloc] = useState({
+          deviceName: "",
+          mac: "",
+          ip: "",
+          subnet: "255.255.255.0",
+          gateway: "",
+          dns: "",
+        });
 
         const hasProcessing = processing && processing.length > 0;
         const hasTerminal = terminal && terminal.length > 0;
@@ -4398,14 +5540,22 @@
         );
         const hasBuffer = pendingBuffers.length > 0;
 
+        const isRouter = node.type === "Router";
+        const isWap = node.type === "WAP";
+        const isLaptop = node.type === "Laptop";
+
         const tabs = [{ id: "INFO", label: "Info" }];
         if (hasProcessing) tabs.push({ id: "SERVICE", label: "Service" });
         if (isClient) {
+          tabs.push({ id: "NETCONFIG", label: "Network" });
+          if (isLaptop) tabs.push({ id: "WIFI", label: "WiFi" });
           tabs.push({ id: "TERMINAL", label: "Terminal" });
           tabs.push({ id: "HTTP", label: "HTTP" });
           if (hasBuffer) tabs.push({ id: "TRANSPORT", label: "Transport" });
           tabs.push({ id: "BROWSER", label: "Browser" });
         }
+        if (isRouter) tabs.push({ id: "ROUTES", label: "Routes" });
+        if (isWap) tabs.push({ id: "WIRELESS", label: "Wireless" });
         if (isServer) {
           if (isDnsServer) tabs.push({ id: "DNS", label: "DNS" });
           if (isDhcpServer) tabs.push({ id: "DHCP", label: "DHCP" });
@@ -4459,7 +5609,9 @@
           ttl: 300,
         });
         const [selectedAllocationId, setSelectedAllocationId] = useState(
-          node.allocations && node.allocations[0] ? node.allocations[0].id : null,
+          node.allocations && node.allocations[0]
+            ? node.allocations[0].id
+            : null,
         );
 
         useEffect(() => {
@@ -4848,7 +6000,6 @@
                 </div>
               )}
 
-
               {tab === "HTTP" && (
                 <div className="flex flex-col gap-3">
                   <p className="text-xs text-slate-700 dark:text-slate-300">
@@ -5026,18 +6177,14 @@
               {tab === "TERMINAL" && (
                 <div className="flex flex-col gap-2">
                   <div className="bg-black rounded font-mono text-[11px] overflow-hidden">
-                    <div
-                      className="p-2 overflow-auto"
-                      style={{ height: 200 }}
-                    >
+                    <div className="p-2 overflow-auto" style={{ height: 200 }}>
                       {(terminal || []).length === 0 && (
                         <div className="text-slate-500 italic mb-1">
                           Type a command, e.g.{" "}
                           <span className="text-emerald-300">
                             ping 192.168.1.2
                           </span>{" "}
-                          or{" "}
-                          <span className="text-emerald-300">ipconfig</span>.
+                          or <span className="text-emerald-300">ipconfig</span>.
                         </div>
                       )}
                       {(terminal || []).map((line) => (
@@ -5065,10 +6212,7 @@
                         }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
-                            onRunTerminalCommand(
-                              node.id,
-                              terminalDraft || "",
-                            );
+                            onRunTerminalCommand(node.id, terminalDraft || "");
                           }
                         }}
                         placeholder="ping 192.168.1.2"
@@ -5099,15 +6243,10 @@
                       <div className="flex gap-2">
                         <button
                           onClick={() => {
-                            onRunTerminalCommand(
-                              node.id,
-                              `ping ${pingTarget}`,
-                            );
+                            onRunTerminalCommand(node.id, `ping ${pingTarget}`);
                             setPingFormOpen(false);
                           }}
-                          disabled={
-                            transactionActive || pickerSlot === "PING"
-                          }
+                          disabled={transactionActive || pickerSlot === "PING"}
                           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-1 px-3 rounded"
                         >
                           Send Ping
@@ -5123,8 +6262,8 @@
                   )}
                   {transactionActive && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded px-2 py-1">
-                      Finish simulating the current packet before starting a
-                      new one.
+                      Finish simulating the current packet before starting a new
+                      one.
                     </p>
                   )}
                 </div>
@@ -5287,9 +6426,10 @@
               {tab === "DHCP" && (
                 <div className="flex flex-col gap-3">
                   <div className="rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-2 text-xs text-blue-900 dark:text-blue-100">
-                    DHCP service is running. This version starts after leases
-                    have already been allocated; DORA animation will be added
-                    when new devices can join the network.
+                    Reservations match incoming DISCOVER packets by client
+                    MAC. Static reservations for routers, servers and PCs
+                    are pre-seeded; new student-added devices are added
+                    automatically when they appear on the canvas.
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-[11px] border-collapse">
@@ -5298,24 +6438,43 @@
                           <th className="text-left py-1">Device</th>
                           <th className="text-left py-1">IP</th>
                           <th className="text-left py-1">Mode</th>
+                          <th className="text-left py-1"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {(node.allocations || []).map((allocation) => (
                           <tr
                             key={allocation.id}
-                            onClick={() => setSelectedAllocationId(allocation.id)}
+                            onClick={() =>
+                              setSelectedAllocationId(allocation.id)
+                            }
                             className={`cursor-pointer border-b border-slate-200 dark:border-slate-800 last:border-0 ${
                               selectedAllocationId === allocation.id
                                 ? "bg-blue-100 dark:bg-blue-900/40"
                                 : "hover:bg-slate-100 dark:hover:bg-slate-800"
                             }`}
                           >
-                            <td className="py-1 pr-2">{allocation.deviceName}</td>
+                            <td className="py-1 pr-2">
+                              {allocation.deviceName}
+                            </td>
                             <td className="py-1 pr-2 font-mono">
                               {allocation.ip}
                             </td>
                             <td className="py-1 pr-2">{allocation.mode}</td>
+                            <td className="py-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteDhcpAllocation(
+                                    node.id,
+                                    allocation.id,
+                                  );
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-bold"
+                              >
+                                Del
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -5330,9 +6489,13 @@
                         <span className="text-slate-500">Device:</span>
                         <span>{selectedAllocation.deviceName}</span>
                         <span className="text-slate-500">MAC:</span>
-                        <span className="font-mono">{selectedAllocation.mac}</span>
+                        <span className="font-mono">
+                          {selectedAllocation.mac}
+                        </span>
                         <span className="text-slate-500">IP address:</span>
-                        <span className="font-mono">{selectedAllocation.ip}</span>
+                        <span className="font-mono">
+                          {selectedAllocation.ip}
+                        </span>
                         <span className="text-slate-500">Subnet mask:</span>
                         <span className="font-mono">
                           {selectedAllocation.subnet}
@@ -5342,7 +6505,9 @@
                           {selectedAllocation.gateway}
                         </span>
                         <span className="text-slate-500">DNS server:</span>
-                        <span className="font-mono">{selectedAllocation.dns}</span>
+                        <span className="font-mono">
+                          {selectedAllocation.dns}
+                        </span>
                         <span className="text-slate-500">Lease:</span>
                         <span>{selectedAllocation.lease}</span>
                         <span className="text-slate-500">Scope:</span>
@@ -5352,6 +6517,46 @@
                       </div>
                     </div>
                   )}
+                  <div className="rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2 text-xs flex flex-col gap-1">
+                    <div className="font-bold text-slate-700 dark:text-slate-300">
+                      Add reservation
+                    </div>
+                    {[
+                      { f: "deviceName", ph: "Device name" },
+                      { f: "mac", ph: "Client MAC (00:11:22:33:44:55)" },
+                      { f: "ip", ph: "IP address" },
+                      { f: "subnet", ph: "Subnet mask" },
+                      { f: "gateway", ph: "Default gateway" },
+                      { f: "dns", ph: "DNS server" },
+                    ].map((row) => (
+                      <input
+                        key={row.f}
+                        value={newAlloc[row.f]}
+                        onChange={(e) =>
+                          setNewAlloc({ ...newAlloc, [row.f]: e.target.value })
+                        }
+                        placeholder={row.ph}
+                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                      />
+                    ))}
+                    <button
+                      onClick={() => {
+                        if (!newAlloc.mac || !newAlloc.ip) return;
+                        onAddDhcpAllocation(node.id, newAlloc);
+                        setNewAlloc({
+                          deviceName: "",
+                          mac: "",
+                          ip: "",
+                          subnet: "255.255.255.0",
+                          gateway: "",
+                          dns: "",
+                        });
+                      }}
+                      className="self-start px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold"
+                    >
+                      Add reservation
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -5421,6 +6626,543 @@
                   </button>
                 </div>
               )}
+
+              {tab === "ROUTES" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                    Routing table. Longest-prefix match selects the route
+                    for each packet. Leave blank to drop everything.
+                  </p>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-xs flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      Copy routes from:
+                    </span>
+                    <select
+                      value={copyRoutesFromId}
+                      onChange={(e) => setCopyRoutesFromId(e.target.value)}
+                      className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs"
+                    >
+                      <option value="">(choose a router)</option>
+                      {Object.values(allNodes || {})
+                        .filter(
+                          (n) => n.type === "Router" && n.id !== node.id,
+                        )
+                        .map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.name}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (copyRoutesFromId)
+                          onCopyRoutesFrom(node.id, copyRoutesFromId);
+                      }}
+                      disabled={!copyRoutesFromId}
+                      className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold"
+                    >
+                      Copy
+                    </button>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_44px_40px_auto] gap-1 text-[10px] font-bold uppercase text-slate-500 mb-1">
+                      <span>Dest</span>
+                      <span>Mask</span>
+                      <span>Next Hop</span>
+                      <span>Iface</span>
+                      <span>Metric</span>
+                      <span></span>
+                    </div>
+                    {(node.routes || []).length === 0 && (
+                      <div className="text-[11px] italic text-slate-500 py-1">
+                        Empty table — packets will be dropped here.
+                      </div>
+                    )}
+                    {(node.routes || []).map((rt, i) => (
+                      <div
+                        key={i}
+                        className="grid grid-cols-[1fr_1fr_1fr_44px_40px_auto] gap-1 mb-1"
+                      >
+                        <input
+                          value={rt.dest}
+                          onChange={(e) =>
+                            onUpdateRoute(node.id, i, "dest", e.target.value)
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                        />
+                        <input
+                          value={rt.mask}
+                          onChange={(e) =>
+                            onUpdateRoute(node.id, i, "mask", e.target.value)
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                        />
+                        <input
+                          value={rt.nextHop}
+                          onChange={(e) =>
+                            onUpdateRoute(
+                              node.id,
+                              i,
+                              "nextHop",
+                              e.target.value,
+                            )
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                        />
+                        <input
+                          type="number"
+                          value={rt.iface ?? 0}
+                          onChange={(e) =>
+                            onUpdateRoute(node.id, i, "iface", e.target.value)
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                        />
+                        <input
+                          type="number"
+                          value={rt.metric ?? 1}
+                          onChange={(e) =>
+                            onUpdateRoute(node.id, i, "metric", e.target.value)
+                          }
+                          className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                        />
+                        <button
+                          onClick={() => onDeleteRoute(node.id, i)}
+                          className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-bold"
+                        >
+                          Del
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 flex flex-col gap-1">
+                    <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      Add route
+                    </div>
+                    <div className="grid grid-cols-[1fr_1fr_1fr_44px_40px_auto] gap-1">
+                      <input
+                        value={newRoute.dest}
+                        onChange={(e) =>
+                          setNewRoute({ ...newRoute, dest: e.target.value })
+                        }
+                        placeholder="0.0.0.0"
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                      />
+                      <input
+                        value={newRoute.mask}
+                        onChange={(e) =>
+                          setNewRoute({ ...newRoute, mask: e.target.value })
+                        }
+                        placeholder="255.255.255.0"
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                      />
+                      <input
+                        value={newRoute.nextHop}
+                        onChange={(e) =>
+                          setNewRoute({
+                            ...newRoute,
+                            nextHop: e.target.value,
+                          })
+                        }
+                        placeholder="next hop IP"
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                      />
+                      <input
+                        type="number"
+                        value={newRoute.iface}
+                        onChange={(e) =>
+                          setNewRoute({
+                            ...newRoute,
+                            iface: Number(e.target.value),
+                          })
+                        }
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                      />
+                      <input
+                        type="number"
+                        value={newRoute.metric}
+                        onChange={(e) =>
+                          setNewRoute({
+                            ...newRoute,
+                            metric: Number(e.target.value),
+                          })
+                        }
+                        className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                      />
+                      <button
+                        onClick={() => {
+                          onAddRoute(node.id, { ...newRoute });
+                          setNewRoute({
+                            dest: "",
+                            mask: "255.255.255.0",
+                            nextHop: "",
+                            iface: 0,
+                            metric: 1,
+                          });
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2">
+                    <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">
+                      Interfaces (edit IP)
+                    </div>
+                    {(node.interfaces || []).map((iface, i) => (
+                      <div
+                        key={i}
+                        className="grid grid-cols-[1fr_1fr_auto] gap-1 mb-1 items-center"
+                      >
+                        <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400">
+                          {iface.name}
+                        </span>
+                        <input
+                          value={iface.ip || ""}
+                          onChange={(e) =>
+                            onUpdateInterfaceIp(node.id, i, e.target.value)
+                          }
+                          placeholder="(unconfigured)"
+                          className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
+                        />
+                        <span className="text-[10px] font-mono text-slate-500">
+                          {iface.mac}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tab === "NETCONFIG" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                    Configure this device's network settings — manually or
+                    via DHCP. Without an IP, gateway, and DNS the device
+                    cannot send packets.
+                  </p>
+
+                  <div className="rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2 text-[11px] font-mono">
+                    Status:{" "}
+                    {node.ip ? (
+                      <span className="text-emerald-700 dark:text-emerald-300">
+                        configured ({node.ip})
+                      </span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-400">
+                        not configured — packets will be rejected
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 flex flex-col gap-1">
+                    <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Manual configuration{" "}
+                      <span className="font-normal text-slate-500">
+                        (all values are IPv4 dotted-quad addresses)
+                      </span>
+                    </div>
+                    {[
+                      {
+                        field: "ip",
+                        label: "IP Address",
+                        placeholder: "e.g. 192.168.2.5",
+                      },
+                      {
+                        field: "subnet",
+                        label: "Subnet Mask",
+                        placeholder: "255.255.255.0",
+                      },
+                      {
+                        field: "gw",
+                        label: "Default Gateway",
+                        placeholder: "e.g. 192.168.2.1 (router's LAN IP)",
+                      },
+                      {
+                        field: "dns",
+                        label: "DNS Server",
+                        placeholder: "e.g. 192.168.1.253",
+                      },
+                    ].map((row) => (
+                      <div
+                        key={row.field}
+                        className="grid grid-cols-[100px_1fr] gap-2 items-center"
+                      >
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                          {row.label}
+                        </label>
+                        <input
+                          value={node[row.field] || ""}
+                          onChange={(e) =>
+                            onUpdateClientNetwork(node.id, {
+                              [row.field]: e.target.value,
+                            })
+                          }
+                          placeholder={row.placeholder}
+                          className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                        />
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-[100px_1fr] gap-2 items-center">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        MAC Address
+                      </label>
+                      <input
+                        value={node.mac || ""}
+                        onChange={(e) =>
+                          onUpdateClientNetwork(node.id, {
+                            mac: e.target.value.toUpperCase(),
+                          })
+                        }
+                        placeholder="AA:BB:CC:DD:EE:FF"
+                        className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 flex flex-col gap-2">
+                    <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      DHCP
+                    </div>
+                    <div className="flex gap-3 text-[11px]">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={dhcpMode === "unicast"}
+                          onChange={() => setDhcpMode("unicast")}
+                        />
+                        Unicast (to known server)
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={dhcpMode === "broadcast"}
+                          onChange={() => setDhcpMode("broadcast")}
+                        />
+                        Broadcast (same LAN only)
+                      </label>
+                    </div>
+                    {dhcpMode === "unicast" && (
+                      <input
+                        value={dhcpServerIp}
+                        onChange={(e) => setDhcpServerIp(e.target.value)}
+                        placeholder="DHCP server IP (e.g. 192.168.1.252)"
+                        className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                      />
+                    )}
+                    <button
+                      onClick={() =>
+                        onDhcpRequest(node.id, {
+                          mode: dhcpMode,
+                          serverIp: dhcpServerIp,
+                        })
+                      }
+                      disabled={transactionActive}
+                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold self-start"
+                    >
+                      Request lease
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {tab === "WIFI" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                    Associate this laptop with a Wireless Access Point.
+                    Without an active association, no packets can leave
+                    the device.
+                  </p>
+
+                  {(() => {
+                    const associatedWap =
+                      node.switch && (allNodes || {})[node.switch];
+                    const associatedSsid =
+                      associatedWap && (associatedWap.ssid || "mywifi");
+                    return (
+                      <div className="rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2 text-[11px] font-mono flex items-center justify-between gap-2">
+                        <span>
+                          Status:{" "}
+                          {associatedWap ? (
+                            <span className="text-emerald-700 dark:text-emerald-300">
+                              Connected to '{associatedSsid}' via{" "}
+                              {associatedWap.name}
+                            </span>
+                          ) : (
+                            <span className="text-red-600 dark:text-red-400">
+                              not connected
+                            </span>
+                          )}
+                        </span>
+                        {associatedWap && (
+                          <button
+                            onClick={() => onDisconnectLaptopWifi(node.id)}
+                            className="px-2 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-bold hover:bg-red-200 dark:hover:bg-red-900/60"
+                          >
+                            Forget network
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
+                    const reachableWaps = Object.values(allNodes || {}).filter(
+                      (n) => n.type === "WAP",
+                    );
+                    const broadcasting = reachableWaps.filter(
+                      (w) => w.ssidBroadcast !== false,
+                    );
+                    return (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 flex flex-col gap-2">
+                        {broadcasting.length > 0 ? (
+                          <>
+                            <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                              Visible networks
+                            </div>
+                            <select
+                              value={wifiSsidDraft}
+                              onChange={(e) =>
+                                setWifiSsidDraft(e.target.value)
+                              }
+                              className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px]"
+                            >
+                              <option value="">(choose SSID)</option>
+                              {broadcasting.map((w) => (
+                                <option
+                                  key={w.id}
+                                  value={w.ssid || "mywifi"}
+                                >
+                                  {w.ssid || "mywifi"} — {w.name}
+                                  {(w.password || "") ? " (locked)" : " (open)"}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                              SSID (broadcast disabled — type manually)
+                            </div>
+                            <input
+                              value={wifiSsidDraft}
+                              onChange={(e) =>
+                                setWifiSsidDraft(e.target.value)
+                              }
+                              placeholder="SSID name"
+                              className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                            />
+                          </>
+                        )}
+                        <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          Password (leave blank if open)
+                        </div>
+                        <input
+                          type="text"
+                          value={wifiPasswordDraft}
+                          onChange={(e) =>
+                            setWifiPasswordDraft(e.target.value)
+                          }
+                          placeholder="passphrase"
+                          className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              const matchedWap = Object.values(
+                                allNodes || {},
+                              ).find(
+                                (n) =>
+                                  n.type === "WAP" &&
+                                  (n.ssid || "mywifi") === wifiSsidDraft,
+                              );
+                              if (matchedWap) {
+                                onConnectLaptopWifi(
+                                  node.id,
+                                  matchedWap.id,
+                                  wifiSsidDraft,
+                                  wifiPasswordDraft,
+                                );
+                              } else {
+                                onConnectLaptopWifi(
+                                  node.id,
+                                  null,
+                                  wifiSsidDraft,
+                                  wifiPasswordDraft,
+                                );
+                              }
+                            }}
+                            disabled={!wifiSsidDraft}
+                            className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-bold"
+                          >
+                            {node.switch ? "Reconnect" : "Connect"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {tab === "WIRELESS" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                    Wireless Access Point configuration. Laptops can only
+                    associate if they know the SSID and (if set) the WPA2
+                    password.
+                  </p>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 flex flex-col gap-2">
+                    <div className="grid grid-cols-[120px_1fr] gap-2 items-center">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        SSID
+                      </label>
+                      <input
+                        value={node.ssid ?? "mywifi"}
+                        onChange={(e) =>
+                          onUpdateWapConfig(node.id, { ssid: e.target.value })
+                        }
+                        className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                      />
+                    </div>
+                    <div className="grid grid-cols-[120px_1fr] gap-2 items-center">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        Broadcast SSID
+                      </label>
+                      <label className="flex items-center gap-1 text-[11px]">
+                        <input
+                          type="checkbox"
+                          checked={node.ssidBroadcast !== false}
+                          onChange={(e) =>
+                            onUpdateWapConfig(node.id, {
+                              ssidBroadcast: e.target.checked,
+                            })
+                          }
+                        />
+                        Visible to scanning laptops
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-[120px_1fr] gap-2 items-center">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        WPA2 password
+                      </label>
+                      <input
+                        value={node.password ?? ""}
+                        onChange={(e) =>
+                          onUpdateWapConfig(node.id, {
+                            password: e.target.value,
+                          })
+                        }
+                        placeholder="(blank = open network)"
+                        className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -5430,6 +7172,8 @@
         packets,
         selectedPacketId,
         onSelectPacket,
+        nodes,
+        links,
       }) => {
         if (!packets || packets.length === 0) return null;
         // Make sure the chosen tab is one of the active packets;
@@ -5459,18 +7203,50 @@
                 </button>
               ))}
             </div>
-            <PacketInspector packet={current} />
+            <PacketInspector packet={current} nodes={nodes} links={links} />
           </div>
         );
       };
 
-      const PacketInspector = ({ packet }) => {
+      const PacketInspector = ({ packet, nodes, links }) => {
         if (!packet)
           return (
             <div className="p-6 text-center text-slate-500 text-sm">
               Packet no longer exists.
             </div>
           );
+
+        // Is the packet currently traversing an encrypted wireless link?
+        // We look at the active hop (TRANSIT: curr↔next, ARRIVED: prev↔curr)
+        // and check if any link between those two nodes is wireless with
+        // a non-empty password on the WAP endpoint.
+        const isEncryptedHop = (() => {
+          if (!packet || !links || !nodes) return false;
+          let a, b;
+          if (packet.state === "TRANSIT") {
+            a = packet.currentNode;
+            b = packet.nextNode;
+          } else if (packet.state === "ARRIVED") {
+            a = packet.prevNode;
+            b = packet.currentNode;
+          }
+          if (!a || !b) return false;
+          const wirelessLink = links.find(
+            (l) =>
+              l.wireless &&
+              ((l.source === a && l.target === b) ||
+                (l.target === a && l.source === b)),
+          );
+          if (!wirelessLink) return false;
+          const wap =
+            nodes[wirelessLink.source]?.type === "WAP"
+              ? nodes[wirelessLink.source]
+              : nodes[wirelessLink.target]?.type === "WAP"
+                ? nodes[wirelessLink.target]
+                : null;
+          if (!wap) return false;
+          return !!(wap.password && wap.password.length > 0);
+        })();
 
         return (
           <div className="bg-slate-100 dark:bg-slate-800">
@@ -5625,11 +7401,22 @@
 
               {/* Payload */}
               <div className="border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 rounded overflow-hidden mt-2">
-                <div className="bg-slate-200 dark:bg-slate-700/50 px-3 py-1 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase border-b border-slate-300 dark:border-slate-600">
-                  Packet Payload Data
+                <div className="bg-slate-200 dark:bg-slate-700/50 px-3 py-1 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase border-b border-slate-300 dark:border-slate-600 flex items-center justify-between">
+                  <span>Packet Payload Data</span>
+                  {isEncryptedHop && (
+                    <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold">
+                      WPA2 encrypted on this hop
+                    </span>
+                  )}
                 </div>
                 <div className="p-3 text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap payload-scroll">
-                  <ChangedValue value={packet.payload} />
+                  {isEncryptedHop ? (
+                    <span className="text-amber-700 dark:text-amber-300">
+                      [ENCRYPTED — WPA2]
+                    </span>
+                  ) : (
+                    <ChangedValue value={packet.payload} />
+                  )}
                 </div>
               </div>
             </div>
