@@ -319,13 +319,18 @@
         const input = (raw || "").trim();
         if (!input) return { error: "Browser address bar is empty." };
         if (input.startsWith("/") && basePage && basePage.serverIp) {
-          const inheritedPort = basePage.port || 80;
-          const portSuffix = inheritedPort === 80 ? "" : `:${inheritedPort}`;
+          const inheritedSecure = !!basePage.secure;
+          const defaultPort = inheritedSecure ? 443 : 80;
+          const inheritedPort = basePage.port || defaultPort;
+          const portSuffix =
+            inheritedPort === defaultPort ? "" : `:${inheritedPort}`;
+          const scheme = inheritedSecure ? "https" : "http";
           return {
             host: basePage.host || basePage.serverIp,
             path: input,
             port: inheritedPort,
-            displayUrl: `http://${basePage.host || basePage.serverIp}${portSuffix}${input}`,
+            secure: inheritedSecure,
+            displayUrl: `${scheme}://${basePage.host || basePage.serverIp}${portSuffix}${input}`,
             isIp: isValidIp(basePage.serverIp),
             targetIp: basePage.serverIp,
           };
@@ -338,21 +343,24 @@
           const parsed = new URL(candidate);
           if (!["http:", "https:"].includes(parsed.protocol)) {
             return {
-              error: "Only http:// style browser requests are supported.",
+              error: "Only http:// and https:// style browser requests are supported.",
             };
           }
+          const secure = parsed.protocol === "https:";
           const host = normaliseHostname(parsed.hostname);
           const path = parsed.pathname || "/";
-          // new URL() strips the default port (80 for http); preserve any
-          // explicit non-default port the user typed so the request packet
-          // carries the right dstPort.
-          const port = parsed.port ? parseInt(parsed.port, 10) : 80;
-          const portSuffix = port === 80 ? "" : `:${port}`;
+          // new URL() strips the default port (80 for http, 443 for https);
+          // preserve any explicit non-default port the user typed.
+          const defaultPort = secure ? 443 : 80;
+          const port = parsed.port ? parseInt(parsed.port, 10) : defaultPort;
+          const portSuffix = port === defaultPort ? "" : `:${port}`;
+          const scheme = secure ? "https" : "http";
           return {
             host,
             path,
             port,
-            displayUrl: `http://${host}${portSuffix}${path}`,
+            secure,
+            displayUrl: `${scheme}://${host}${portSuffix}${path}`,
             isIp: isValidIp(host),
             targetIp: isValidIp(host) ? host : null,
           };
@@ -559,7 +567,10 @@
           switch: "SW_A",
           x: 350,
           y: 550,
+          httpEnabled: true,
           httpPort: 80,
+          httpsEnabled: true,
+          httpsPort: 443,
           telnetEnabled: true,
           telnetPort: 23,
           sshEnabled: true,
@@ -834,7 +845,10 @@
           switch: "RT_EDGE",
           x: 970,
           y: 35,
+          httpEnabled: true,
           httpPort: 80,
+          httpsEnabled: true,
+          httpsPort: 443,
           telnetEnabled: false,
           telnetPort: 23,
           sshEnabled: true,
@@ -1013,15 +1027,19 @@
           } else if (type === "HTTP") {
             const path = options.path || "/";
             const host = options.host || targetIp;
-            const dstPort = Number(options.dstPort) || 80;
+            const secure = !!options.secure;
+            const dstPort = Number(options.dstPort) || (secure ? 443 : 80);
             p.appLayer = {
-              protocol: "HTTP",
+              protocol: secure ? "HTTPS" : "HTTP",
               method: "GET",
               path,
               host,
-              requestedUrl: options.requestedUrl || `http://${host}${path}`,
+              secure,
+              requestedUrl:
+                options.requestedUrl ||
+                `${secure ? "https" : "http"}://${host}${path}`,
             };
-            p.payload = `GET ${path} HTTP/1.1\nHost: ${host}`;
+            p.payload = `GET ${path} ${secure ? "HTTPS" : "HTTP"}/1.1\nHost: ${host}`;
             p.transportLayer = {
               protocol: "TCP",
               srcPort: 49152 + Math.floor(Math.random() * 16000),
@@ -1041,10 +1059,12 @@
               method: "QUERY",
               hostname,
               path: options.path || "/",
-              followUpPort: Number(options.dstPort) || 80,
+              followUpPort:
+                Number(options.dstPort) || (options.secure ? 443 : 80),
+              followUpSecure: !!options.secure,
               requestedUrl:
                 options.requestedUrl ||
-                `http://${hostname}${options.path || "/"}`,
+                `${options.secure ? "https" : "http"}://${hostname}${options.path || "/"}`,
             };
             p.payload = `DNS QUERY A ${hostname}`;
             p.transportLayer = {
@@ -1301,11 +1321,13 @@
               bestMatch.nextHop === "0.0.0.0"
                 ? "direct (no next-hop router)"
                 : `via ${bestMatch.nextHop}`;
-            extraLogs.push(
-              `${router.name} applying mask ${bestMatch.mask} (/${longestMask}) to dst ${p.networkLayer.dstIP} = ${dstNet}`,
-            );
+            // Conclusion first so it ends up at the top of the log
+            // group (logs are prepended; first-pushed wins the top spot).
             extraLogs.push(
               `${router.name} routing-table hit: ${bestMatch.dest}/${longestMask} → ${ifaceName}, ${hopDesc}`,
+            );
+            extraLogs.push(
+              `${router.name} applying mask ${bestMatch.mask} (/${longestMask}) to dst ${p.networkLayer.dstIP} = ${dstNet}`,
             );
           }
 
@@ -1538,7 +1560,9 @@
           }
 
           const isHttpResponse =
-            p.appLayer.protocol === "HTTP" && p.appLayer.method === "RESPONSE";
+            (p.appLayer.protocol === "HTTP" ||
+              p.appLayer.protocol === "HTTPS") &&
+            p.appLayer.method === "RESPONSE";
           const isDnsResponse =
             p.appLayer.protocol === "DNS" && p.appLayer.method === "RESPONSE";
           const isPingReply =
@@ -1562,28 +1586,45 @@
             };
           }
 
-          if (p.appLayer.protocol === "HTTP" && !node.files) {
+          const isHttpLike =
+            p.appLayer.protocol === "HTTP" || p.appLayer.protocol === "HTTPS";
+          if (isHttpLike && !node.files) {
             return {
               action: "DROP",
-              reason: `${node.name} dropped HTTP request: Web service is not running.`,
+              reason: `${node.name} dropped ${p.appLayer.protocol} request: Web service is not running.`,
             };
           }
 
-          // Port-aware HTTP: the server only answers on its configured
-          // httpPort (default 80). If the request hits a different port,
-          // drop it just like a real OS would when no listener is bound.
-          if (p.appLayer.protocol === "HTTP") {
-            const serverPort = Number(node.httpPort) || 80;
-            const requestedPort = Number(p.transportLayer?.dstPort) || 80;
+          // Per-protocol enable + port check. The server holds separate
+          // ports / enable flags for HTTP (80) and HTTPS (443) so the
+          // student can selectively turn each off.
+          if (isHttpLike) {
+            const isSecure = p.appLayer.protocol === "HTTPS";
+            const enabled = isSecure
+              ? node.httpsEnabled !== false
+              : node.httpEnabled !== false;
+            if (!enabled) {
+              return {
+                action: "DROP",
+                reason: `${node.name} dropped ${p.appLayer.protocol} request: service is disabled on this server.`,
+              };
+            }
+            const serverPort = isSecure
+              ? Number(node.httpsPort) || 443
+              : Number(node.httpPort) || 80;
+            const requestedPort =
+              Number(p.transportLayer?.dstPort) || serverPort;
             if (serverPort !== requestedPort) {
               return {
                 action: "DROP",
-                reason: `${node.name} dropped HTTP request: no service listening on port ${requestedPort} (HTTP runs on port ${serverPort}).`,
+                reason: `${node.name} dropped ${p.appLayer.protocol} request: no service listening on port ${requestedPort} (${p.appLayer.protocol} runs on port ${serverPort}).`,
               };
             }
           }
 
-          if (!["Ping", "HTTP", "DNS"].includes(p.appLayer.protocol)) {
+          if (
+            !["Ping", "HTTP", "HTTPS", "DNS"].includes(p.appLayer.protocol)
+          ) {
             return {
               action: "DROP",
               reason: `${node.name} dropped packet: Unknown application protocol ${p.appLayer.protocol}.`,
@@ -2277,6 +2318,7 @@
                 hostname,
                 path: p.appLayer.path || "/",
                 followUpPort: p.appLayer.followUpPort || 80,
+                followUpSecure: !!p.appLayer.followUpSecure,
                 requestedUrl: p.appLayer.requestedUrl,
                 status,
                 resolvedIp: answerIp,
@@ -2301,7 +2343,10 @@
             return { action: "FORWARD", packets: [reply] };
           }
 
-          if (p.appLayer.protocol !== "HTTP") {
+          if (
+            p.appLayer.protocol !== "HTTP" &&
+            p.appLayer.protocol !== "HTTPS"
+          ) {
             return { action: "DROP", reason: "Unknown protocol" };
           }
 
@@ -2346,6 +2391,11 @@
 
           const total = kind === "image" ? 3 : 1;
           const status = !file ? 404 : 200;
+          const isSecure = p.appLayer && p.appLayer.protocol === "HTTPS";
+          const responseProtocol = isSecure ? "HTTPS" : "HTTP";
+          const responseSrcPort = isSecure
+            ? Number(node.httpsPort) || 443
+            : Number(node.httpPort) || 80;
           const packets = [];
           for (let i = 0; i < total; i++) {
             const seq = i + 1;
@@ -2353,11 +2403,14 @@
               ...baseReply,
               id: generateId(),
               appLayer: {
-                protocol: "HTTP",
+                protocol: responseProtocol,
                 method: "RESPONSE",
                 status,
                 path: requestedPath,
                 resource,
+                secure: isSecure,
+                host: p.appLayer.host,
+                requestedUrl: p.appLayer.requestedUrl,
               },
               payload:
                 total > 1
@@ -2365,7 +2418,7 @@
                   : payloadText,
               transportLayer: {
                 protocol: "TCP",
-                srcPort: Number(node.httpPort) || 80,
+                srcPort: responseSrcPort,
                 dstPort: p.transportLayer.srcPort,
                 seq,
                 total,
@@ -2926,7 +2979,8 @@
                   const isHttp =
                     rp &&
                     rp.appLayer &&
-                    rp.appLayer.protocol === "HTTP" &&
+                    (rp.appLayer.protocol === "HTTP" ||
+                      rp.appLayer.protocol === "HTTPS") &&
                     rp.appLayer.method === "RESPONSE";
                   const isDns =
                     rp &&
@@ -2980,9 +3034,10 @@
                         path: rp.appLayer.path || "/",
                         host: hostname,
                         dstPort: rp.appLayer.followUpPort || 80,
+                        secure: !!rp.appLayer.followUpSecure,
                         requestedUrl:
                           rp.appLayer.requestedUrl ||
-                          `http://${hostname}${rp.appLayer.path || "/"}`,
+                          `${rp.appLayer.followUpSecure ? "https" : "http"}://${hostname}${rp.appLayer.path || "/"}`,
                         transactionId: p.transactionId,
                       });
                       addLocalLog(
@@ -3088,6 +3143,7 @@
                             targetIp: resolved ? resolved.ip : serverIp,
                             path: resolved ? resolved.path : "/" + ref,
                             dstPort: rp.transportLayer?.srcPort || 80,
+                            secure: !!rp.appLayer?.secure,
                             resourceKey: key,
                             transactionId: p.transactionId,
                           });
@@ -3119,13 +3175,47 @@
                           }
                         });
                         if (matchedKey) {
+                          // Image was referenced from a parent HTML page —
+                          // mark the embedded resource as loaded.
                           resources[matchedKey] = {
                             ...resources[matchedKey],
                             status: "loaded",
                             animal: res.animal,
                           };
+                          newBrowser = { ...prevBrowser, resources };
+                        } else {
+                          // Direct image navigation (browser opened
+                          // /rabbit.jpg directly) — synthesize a single-
+                          // image page so the renderer shows the picture.
+                          const imgSrc =
+                            (rp.appLayer.path || "/").replace(/^\//, "") ||
+                            incomingName;
+                          const syntheticResources = {
+                            [imgSrc]: {
+                              status: "loaded",
+                              ref: imgSrc,
+                              animal: res.animal,
+                              targetIp: serverIp,
+                              path: rp.appLayer.path,
+                            },
+                          };
+                          const scheme = rp.appLayer.secure ? "https" : "http";
+                          newBrowser = {
+                            ...prevBrowser,
+                            page: {
+                              serverIp,
+                              host: rp.appLayer.host || serverIp,
+                              path: rp.appLayer.path,
+                              requestedUrl:
+                                rp.appLayer.requestedUrl ||
+                                `${scheme}://${rp.appLayer.host || serverIp}${rp.appLayer.path}`,
+                              html: `<img src="${imgSrc}" alt="${imgSrc}" />`,
+                              status: 200,
+                              secure: !!rp.appLayer.secure,
+                            },
+                            resources: syntheticResources,
+                          };
                         }
-                        newBrowser = { ...prevBrowser, resources };
                       } else {
                         newBrowser = {
                           ...prevBrowser,
@@ -3734,9 +3824,12 @@
           }
 
           setPackets((prev) => [...prev, ...newPackets]);
+          // Logs are prepended to the event-log list so the FIRST entry
+          // pushed here ends up at the top. Push the action line first,
+          // then the conclusion, then the supporting arithmetic — student
+          // reads top-down: punchline → reasoning.
           commitUpdates({
             logsToAdd: [
-              ...subnetLogs,
               {
                 msg:
                   type === "PING"
@@ -3744,6 +3837,7 @@
                     : `Created ${type} request from ${node.name} to ${target}`,
                 type: "success",
               },
+              ...subnetLogs.slice().reverse(),
             ],
             nodeUpdates: {},
           });
@@ -4011,10 +4105,11 @@
             {
               path: next.path,
               host: next.host || next.targetIp,
-              dstPort: next.dstPort || 80,
+              dstPort: next.dstPort || (next.secure ? 443 : 80),
+              secure: !!next.secure,
               requestedUrl:
                 next.requestedUrl ||
-                `http://${next.host || next.targetIp}${next.path}`,
+                `${next.secure ? "https" : "http"}://${next.host || next.targetIp}${next.path}`,
               transactionId: next.transactionId,
             },
           );
@@ -4542,7 +4637,8 @@
             sendUserRequest(clientId, parsed.targetIp, "HTTP", {
               path: parsed.path,
               host: parsed.targetIp,
-              dstPort: parsed.port || 80,
+              dstPort: parsed.port || (parsed.secure ? 443 : 80),
+              secure: !!parsed.secure,
               requestedUrl: parsed.displayUrl,
             });
             return;
@@ -4574,7 +4670,8 @@
             sendUserRequest(clientId, hostsEntry.ip, "HTTP", {
               path: parsed.path,
               host: hostname,
-              dstPort: parsed.port || 80,
+              dstPort: parsed.port || (parsed.secure ? 443 : 80),
+              secure: !!parsed.secure,
               requestedUrl: parsed.displayUrl,
             });
             return;
@@ -4606,7 +4703,8 @@
             sendUserRequest(clientId, cacheEntry.ip, "HTTP", {
               path: parsed.path,
               host: hostname,
-              dstPort: parsed.port || 80,
+              dstPort: parsed.port || (parsed.secure ? 443 : 80),
+              secure: !!parsed.secure,
               requestedUrl: parsed.displayUrl,
             });
             return;
@@ -4657,7 +4755,8 @@
           sendUserRequest(clientId, client.dns, "DNS", {
             hostname,
             path: parsed.path,
-            dstPort: parsed.port || 80,
+            dstPort: parsed.port || (parsed.secure ? 443 : 80),
+            secure: !!parsed.secure,
             requestedUrl: parsed.displayUrl,
           });
         };
@@ -4742,6 +4841,12 @@
             if (!Number.isFinite(v) || v < 1 || v > 65535)
               delete sanitised.sshPort;
             else sanitised.sshPort = v;
+          }
+          if ("httpsPort" in patch) {
+            const v = Number(patch.httpsPort);
+            if (!Number.isFinite(v) || v < 1 || v > 65535)
+              delete sanitised.httpsPort;
+            else sanitised.httpsPort = v;
           }
           updateNode(serverId, (server) => ({ ...server, ...sanitised }));
         };
@@ -6230,6 +6335,17 @@
         const isDhcpServer = node.service === "DHCP";
         const [pingFormOpen, setPingFormOpen] = useState(false);
         const [httpDstPort, setHttpDstPort] = useState("80");
+        // Refs for the in-tab terminal so clicking anywhere in the
+        // scrollback focuses the input, and so we can keep the view
+        // pinned to the bottom as new lines arrive.
+        const terminalInputRef = useRef(null);
+        const terminalScrollRef = useRef(null);
+        useEffect(() => {
+          if (terminalScrollRef.current) {
+            terminalScrollRef.current.scrollTop =
+              terminalScrollRef.current.scrollHeight;
+          }
+        }, [terminal && terminal.length, terminalDraft]);
         // Local form state for the new tabs (Routes, Network, WiFi,
         // Wireless). All reset whenever the inspector remounts on
         // selectedNodeId change so per-node draft state stays clean.
@@ -6282,7 +6398,6 @@
           tabs.push({ id: "NETCONFIG", label: "Network" });
           if (isLaptop) tabs.push({ id: "WIFI", label: "WiFi" });
           tabs.push({ id: "TERMINAL", label: "Terminal" });
-          tabs.push({ id: "HTTP", label: "HTTP" });
           if (hasBuffer) tabs.push({ id: "TRANSPORT", label: "Transport" });
           tabs.push({ id: "BROWSER", label: "Browser" });
         }
@@ -6735,61 +6850,6 @@
                 </div>
               )}
 
-              {tab === "HTTP" && (
-                <div className="flex flex-col gap-3">
-                  <p className="text-xs text-slate-700 dark:text-slate-300">
-                    Simulate a web browser HTTP GET request.
-                  </p>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      Target IP Address
-                    </label>
-                    <IpInputWithPicker
-                      value={httpTarget}
-                      onChange={onHttpTargetChange}
-                      picking={pickerSlot === "HTTP"}
-                      onStartPicker={() => onStartPicker("HTTP")}
-                      onCancelPicker={onCancelPicker}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      Destination Port
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="65535"
-                      value={httpDstPort}
-                      onChange={(e) => setHttpDstPort(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded p-2 font-mono text-sm"
-                    />
-                    <p className="text-[10px] text-slate-500 italic mt-1">
-                      Defaults to 80 (HTTP). Servers only reply if their
-                      configured HTTP port matches.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      onSendRequest(node.id, httpTarget, "HTTP", {
-                        path: "/",
-                        dstPort: Number(httpDstPort) || 80,
-                      })
-                    }
-                    disabled={transactionActive || pickerSlot === "HTTP"}
-                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition text-sm"
-                  >
-                    Send HTTP Request
-                  </button>
-                  {transactionActive && (
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded px-2 py-1">
-                      Finish simulating the current packet before starting a new
-                      one.
-                    </p>
-                  )}
-                </div>
-              )}
-
               {tab === "BROWSER" && (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-1 rounded border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 p-1">
@@ -6923,21 +6983,31 @@
                       </span>
                     </div>
                   )}
-                  <div className="bg-black rounded font-mono text-[11px] overflow-hidden">
-                    <div className="p-2 overflow-auto" style={{ height: 200 }}>
+                  <div
+                    className="rounded font-mono text-[11px] border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 cursor-text"
+                    onClick={() => terminalInputRef.current?.focus()}
+                  >
+                    <div
+                      ref={terminalScrollRef}
+                      className="p-2 overflow-auto"
+                      style={{ height: 240 }}
+                    >
                       {(terminal || []).length === 0 && (
                         <div className="text-slate-500 italic mb-1">
                           Type a command, e.g.{" "}
-                          <span className="text-emerald-300">
+                          <span className="text-emerald-700 dark:text-emerald-300">
                             ping 192.168.1.2
                           </span>
                           ,{" "}
-                          <span className="text-emerald-300">ipconfig</span>,{" "}
-                          <span className="text-emerald-300">
+                          <span className="text-emerald-700 dark:text-emerald-300">
+                            ipconfig
+                          </span>
+                          ,{" "}
+                          <span className="text-emerald-700 dark:text-emerald-300">
                             telnet 192.168.1.254
                           </span>{" "}
                           or{" "}
-                          <span className="text-emerald-300">
+                          <span className="text-emerald-700 dark:text-emerald-300">
                             ssh 192.168.1.254
                           </span>
                           .
@@ -6948,10 +7018,10 @@
                           key={line.id}
                           className={
                             line.type === "command"
-                              ? "text-amber-300"
+                              ? "text-amber-700 dark:text-amber-300"
                               : line.type === "error"
-                                ? "text-red-400"
-                                : "text-emerald-300"
+                                ? "text-red-600 dark:text-red-400"
+                                : "text-emerald-700 dark:text-emerald-300"
                           }
                           style={{ whiteSpace: "pre-wrap" }}
                         >
@@ -6959,35 +7029,44 @@
                           {line.text}
                         </div>
                       ))}
-                    </div>
-                    <div className="flex items-center border-t border-emerald-900/60 px-2 py-1">
-                      <span className="text-amber-300 mr-1">$</span>
-                      <input
-                        type={
-                          remoteSession && remoteSession.state === "AUTH_PASS"
-                            ? "password"
-                            : "text"
-                        }
-                        value={terminalDraft || ""}
-                        onChange={(e) =>
-                          onTerminalDraftChange(node.id, e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            onRunTerminalCommand(node.id, terminalDraft || "");
+                      {/* Inline prompt — sits at the end of the
+                          scrollback so the cursor lives inside the
+                          terminal exactly where a real shell prompt
+                          would. */}
+                      <div className="flex items-center">
+                        <span className="text-amber-700 dark:text-amber-300 mr-1 select-none">
+                          $
+                        </span>
+                        <input
+                          ref={terminalInputRef}
+                          type={
+                            remoteSession &&
+                            remoteSession.state === "AUTH_PASS"
+                              ? "password"
+                              : "text"
                           }
-                        }}
-                        placeholder={
-                          remoteSession
-                            ? remoteSession.state === "AUTH_USER"
-                              ? "username"
-                              : remoteSession.state === "AUTH_PASS"
-                                ? "password"
-                                : "command"
-                            : "ping 192.168.1.2"
-                        }
-                        className="flex-1 bg-transparent border-none outline-none text-emerald-300 placeholder-emerald-900 font-mono text-[11px]"
-                      />
+                          value={terminalDraft || ""}
+                          onChange={(e) =>
+                            onTerminalDraftChange(node.id, e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              onRunTerminalCommand(node.id, terminalDraft || "");
+                            }
+                          }}
+                          placeholder={
+                            remoteSession
+                              ? remoteSession.state === "AUTH_USER"
+                                ? "username"
+                                : remoteSession.state === "AUTH_PASS"
+                                  ? "password"
+                                  : "command"
+                              : ""
+                          }
+                          className="flex-1 bg-transparent border-none outline-none text-slate-800 dark:text-emerald-300 placeholder-slate-400 dark:placeholder-emerald-900 font-mono text-[11px]"
+                          autoFocus
+                        />
+                      </div>
                     </div>
                   </div>
                   {remoteEdit && (
@@ -7020,46 +7099,6 @@
                         rows={8}
                         className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-1.5 font-mono text-[11px] text-slate-900 dark:text-slate-100"
                       />
-                    </div>
-                  )}
-                  {!pingFormOpen ? (
-                    <button
-                      onClick={() => setPingFormOpen(true)}
-                      disabled={transactionActive}
-                      className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-1.5 px-3 rounded self-start transition"
-                    >
-                      Start Ping
-                    </button>
-                  ) : (
-                    <div className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 flex flex-col gap-2">
-                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                        Target IP Address
-                      </label>
-                      <IpInputWithPicker
-                        value={pingTarget}
-                        onChange={onPingTargetChange}
-                        picking={pickerSlot === "PING"}
-                        onStartPicker={() => onStartPicker("PING")}
-                        onCancelPicker={onCancelPicker}
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            onRunTerminalCommand(node.id, `ping ${pingTarget}`);
-                            setPingFormOpen(false);
-                          }}
-                          disabled={transactionActive || pickerSlot === "PING"}
-                          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-1 px-3 rounded"
-                        >
-                          Send Ping
-                        </button>
-                        <button
-                          onClick={() => setPingFormOpen(false)}
-                          className="bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold py-1 px-3 rounded"
-                        >
-                          Cancel
-                        </button>
-                      </div>
                     </div>
                   )}
                   {transactionActive && (
@@ -7364,22 +7403,66 @@
 
               {tab === "FILES" && (
                 <div className="flex flex-col gap-3">
-                  <div className="rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2 text-xs flex items-center gap-2">
-                    <span className="font-bold text-slate-700 dark:text-slate-300">
-                      HTTP service port:
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="65535"
-                      value={node.httpPort ?? 80}
-                      onChange={(e) =>
-                        onUpdateServerHttpPort(node.id, e.target.value)
-                      }
-                      className="w-20 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-0.5 font-mono text-xs"
-                    />
+                  <div className="rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2 text-xs flex flex-col gap-2">
+                    <div className="font-bold text-slate-700 dark:text-slate-300">
+                      Web service
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1 text-[11px]">
+                        <input
+                          type="checkbox"
+                          checked={node.httpEnabled !== false}
+                          onChange={(e) =>
+                            onUpdateRemoteAccessConfig(node.id, {
+                              httpEnabled: e.target.checked,
+                            })
+                          }
+                        />
+                        HTTP
+                      </label>
+                      <span className="text-[11px] text-slate-500">port</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="65535"
+                        value={node.httpPort ?? 80}
+                        onChange={(e) =>
+                          onUpdateServerHttpPort(node.id, e.target.value)
+                        }
+                        className="w-16 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-0.5 font-mono text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1 text-[11px]">
+                        <input
+                          type="checkbox"
+                          checked={node.httpsEnabled !== false}
+                          onChange={(e) =>
+                            onUpdateRemoteAccessConfig(node.id, {
+                              httpsEnabled: e.target.checked,
+                            })
+                          }
+                        />
+                        HTTPS
+                      </label>
+                      <span className="text-[11px] text-slate-500">port</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="65535"
+                        value={node.httpsPort ?? 443}
+                        onChange={(e) =>
+                          onUpdateRemoteAccessConfig(node.id, {
+                            httpsPort: e.target.value,
+                          })
+                        }
+                        className="w-16 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-0.5 font-mono text-xs"
+                      />
+                    </div>
                     <span className="text-[10px] text-slate-500 italic">
-                      requests on any other port will be dropped
+                      Requests on disabled services / mismatched ports
+                      are dropped. HTTPS payloads show
+                      <span className="font-mono"> [ENCRYPTED — TLS]</span>.
                     </span>
                   </div>
                   <p className="text-xs text-slate-700 dark:text-slate-300">
@@ -8156,13 +8239,20 @@
             </div>
           );
 
-        // SSH packets are encrypted end-to-end. Wireless hops on a
-        // password-protected WAP are encrypted only on that single hop.
+        // SSH and HTTPS packets are encrypted end-to-end. Wireless
+        // hops on a password-protected WAP are encrypted only on that
+        // single hop.
         const isSshPacket =
           packet && packet.appLayer && packet.appLayer.protocol === "SSH";
-        const encryptionLabel = isSshPacket ? "SSH" : "WPA2";
+        const isHttpsPacket =
+          packet && packet.appLayer && packet.appLayer.protocol === "HTTPS";
+        const encryptionLabel = isSshPacket
+          ? "SSH"
+          : isHttpsPacket
+            ? "TLS (HTTPS)"
+            : "WPA2";
         const isEncryptedHop = (() => {
-          if (isSshPacket) return true;
+          if (isSshPacket || isHttpsPacket) return true;
           if (!packet || !links || !nodes) return false;
           let a, b;
           if (packet.state === "TRANSIT") {
@@ -8347,9 +8437,9 @@
                   <span>Packet Payload Data</span>
                   {isEncryptedHop && (
                     <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold">
-                      {encryptionLabel === "SSH"
-                        ? "SSH encrypted end-to-end"
-                        : "WPA2 encrypted on this hop"}
+                      {encryptionLabel === "WPA2"
+                        ? "WPA2 encrypted on this hop"
+                        : `${encryptionLabel} encrypted end-to-end`}
                     </span>
                   )}
                 </div>
