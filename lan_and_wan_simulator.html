@@ -303,7 +303,9 @@
       };
 
       const isValidIp = (value) =>
-        /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(value || "");
+        /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(
+          (value || "").trim(),
+        );
 
       const normaliseMac = (value) => {
         const raw = (value || "").trim().toUpperCase().replace(/-/g, ":");
@@ -921,10 +923,22 @@
       // 2. NETWORK ENGINE LOGIC
       // ==========================================
 
+      const normaliseIpInput = (value) => (value || "").trim();
+
       const ipToNum = (ip) =>
-        ip
+        normaliseIpInput(ip)
           .split(".")
           .reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+
+      const lookupMacForIp = (ip) => {
+        const key = normaliseIpInput(ip);
+        if (!key) return undefined;
+        if (IP_MAC_TABLE[key]) return IP_MAC_TABLE[key];
+        const matchingKey = Object.keys(IP_MAC_TABLE).find(
+          (candidate) => normaliseIpInput(candidate) === key,
+        );
+        return matchingKey ? IP_MAC_TABLE[matchingKey] : undefined;
+      };
 
       const isIpInSubnet = (ip, subnet, mask) => {
         return (
@@ -952,7 +966,7 @@
         return isIpInSubnet(ip, subnet, mask);
       };
 
-      const trimRouteIp = (value) => (value || "").trim();
+      const trimRouteIp = normaliseIpInput;
 
       const defaultMaskForInterface = (ip) =>
         isValidIp(ip) && ip.startsWith("10.") ? "255.255.255.0" : "255.255.255.0";
@@ -1048,9 +1062,23 @@
         }
 
         static createRequestPacket(srcNode, targetIp, type, options = {}) {
-          const isLocal = isIpInSubnet(targetIp, srcNode.ip, srcNode.subnet);
-          const nextHopIp = isLocal ? targetIp : srcNode.gw;
-          const nextHopMac = IP_MAC_TABLE[nextHopIp];
+          const dstIp = normaliseIpInput(targetIp);
+          const srcIp = normaliseIpInput(srcNode.ip);
+          const subnet = normaliseIpInput(srcNode.subnet);
+          const gateway = normaliseIpInput(srcNode.gw);
+          const isLocal = isIpInSubnet(dstIp, srcIp, subnet);
+          if (!isLocal) {
+            if (!gateway)
+              return {
+                error: `${srcNode.name}: no default gateway configured — cannot reach off-subnet host ${dstIp}.`,
+              };
+            if (subnet && !isIpInSubnet(gateway, srcIp, subnet))
+              return {
+                error: `${srcNode.name}: default gateway ${gateway} is not in this device's subnet (${srcIp}/${subnet}) — ARP for the gateway fails on the local segment.`,
+              };
+          }
+          const nextHopIp = isLocal ? dstIp : gateway;
+          const nextHopMac = lookupMacForIp(nextHopIp);
 
           if (!nextHopMac)
             return {
@@ -1066,8 +1094,8 @@
             progress: 0,
             networkLayer: {
               protocol: "IPv4",
-              srcIP: srcNode.ip,
-              dstIP: targetIp,
+              srcIP: srcIp,
+              dstIP: dstIp,
               ttl: 64,
             },
             linkLayer: {
@@ -1468,7 +1496,7 @@
             bestMatch.nextHop === "0.0.0.0"
               ? p.networkLayer.dstIP
               : bestMatch.nextHop;
-          const nextHopMac = IP_MAC_TABLE[nextHopIp];
+          const nextHopMac = lookupMacForIp(nextHopIp);
 
           if (!nextHopMac)
             return {
@@ -1754,7 +1782,7 @@
               srcNode.ip &&
               isIpInSubnet(targetIp, myIp, srcNode.subnet);
             if (targetIsLocal) {
-              dstMac = IP_MAC_TABLE[targetIp];
+              dstMac = lookupMacForIp(targetIp);
               if (!dstMac)
                 return { error: `ARP failed: no MAC known for ${targetIp}.` };
             } else {
@@ -1762,7 +1790,15 @@
                 return {
                   error: `${srcNode.name}: cannot reach off-subnet DHCP server without a default gateway.`,
                 };
-              dstMac = IP_MAC_TABLE[srcNode.gw];
+              if (
+                srcNode.subnet &&
+                srcNode.ip &&
+                !isIpInSubnet(srcNode.gw, srcNode.ip, srcNode.subnet)
+              )
+                return {
+                  error: `${srcNode.name}: default gateway ${srcNode.gw} is not in this device's subnet (${srcNode.ip}/${srcNode.subnet}) — ARP for the gateway fails on the local segment.`,
+                };
+              dstMac = lookupMacForIp(srcNode.gw);
               if (!dstMac)
                 return {
                   error: `ARP failed: no MAC known for gateway ${srcNode.gw}.`,
@@ -1818,10 +1854,10 @@
         // server's allocations table — students learn the reservation
         // model first, then we can layer pools later.
         static buildDhcpReply(p, server, method) {
-          const clientMac = p.appLayer.clientMac;
+          const clientMac = normaliseMac(p.appLayer.clientMac);
           const allocation = (server.allocations || []).find(
             (a) =>
-              a.mac && a.mac.toUpperCase() === (clientMac || "").toUpperCase(),
+              a.mac && normaliseMac(a.mac) === clientMac,
           );
           if (!allocation) {
             return {
@@ -1833,20 +1869,36 @@
           // the client by MAC even before the client has applied the
           // lease — sim-only shortcut to avoid modelling the L2-only
           // direct-to-MAC delivery DHCP actually uses.
-          IP_MAC_TABLE = {
-            ...IP_MAC_TABLE,
-            [allocation.ip]: clientMac,
-          };
+          const offerIp = normaliseIpInput(allocation.ip);
+          IP_MAC_TABLE = { ...IP_MAC_TABLE, [offerIp]: clientMac };
           const replyNextNode = server.switch || p.currentNode;
           const isLocal =
             server.subnet &&
             isIpInSubnet(
-              allocation.ip,
+              offerIp,
               server.ip,
               server.subnet,
             );
-          const nextHopIp = isLocal ? allocation.ip : server.gw;
-          const nextHopMac = IP_MAC_TABLE[nextHopIp];
+          const serverGw = normaliseIpInput(server.gw);
+          if (!isLocal) {
+            if (!serverGw) {
+              return {
+                action: "DROP",
+                reason: `${server.name} dropped DHCP ${method}: no default gateway configured — cannot send off-subnet reply to ${offerIp}.`,
+              };
+            }
+            if (
+              server.subnet &&
+              !isIpInSubnet(serverGw, server.ip, server.subnet)
+            ) {
+              return {
+                action: "DROP",
+                reason: `${server.name} dropped DHCP ${method}: default gateway ${serverGw} is not in this device's subnet (${server.ip}/${server.subnet}) — ARP for the gateway fails on the local segment.`,
+              };
+            }
+          }
+          const nextHopIp = isLocal ? offerIp : serverGw;
+          const nextHopMac = lookupMacForIp(nextHopIp);
           if (!nextHopMac) {
             return {
               action: "DROP",
@@ -1865,8 +1917,8 @@
                 progress: 0,
                 networkLayer: {
                   protocol: "IPv4",
-                  srcIP: server.ip,
-                  dstIP: allocation.ip,
+                  srcIP: normaliseIpInput(server.ip),
+                  dstIP: offerIp,
                   ttl: 64,
                 },
                 linkLayer: {
@@ -1892,14 +1944,16 @@
                   clientMac,
                   clientId: p.appLayer.clientId,
                   offer: {
-                    ip: allocation.ip,
-                    subnet: allocation.subnet,
-                    gw: allocation.gateway,
-                    dns: allocation.dns,
+                    ip: offerIp,
+                    subnet:
+                      normaliseIpInput(allocation.subnet) ||
+                      "255.255.255.0",
+                    gw: normaliseIpInput(allocation.gateway),
+                    dns: normaliseIpInput(allocation.dns),
                     lease: allocation.lease,
                   },
                 },
-                payload: `DHCP ${method}\nClient MAC: ${clientMac}\nIP: ${allocation.ip}\nMask: ${allocation.subnet}\nGW: ${allocation.gateway}\nDNS: ${allocation.dns}\nLease: ${allocation.lease}`,
+                payload: `DHCP ${method}\nClient MAC: ${clientMac}\nIP: ${offerIp}\nMask: ${normaliseIpInput(allocation.subnet) || "255.255.255.0"}\nGW: ${normaliseIpInput(allocation.gateway)}\nDNS: ${normaliseIpInput(allocation.dns)}\nLease: ${allocation.lease}`,
               },
             ],
           };
@@ -1925,9 +1979,9 @@
             isIpInSubnet(dstIp, myIp, client.subnet);
           let dstMac;
           if (isLocal) {
-            dstMac = IP_MAC_TABLE[dstIp];
+            dstMac = lookupMacForIp(dstIp);
           } else {
-            dstMac = IP_MAC_TABLE[client.gw];
+            dstMac = lookupMacForIp(client.gw);
           }
           if (!dstMac)
             return {
@@ -1989,15 +2043,34 @@
         // requesting client. Mirrors the routing logic used by HTTP
         // replies — pick the right next-hop MAC for the return path.
         static buildRemoteAccessReply(p, server, fields) {
+          const replyDstIp = normaliseIpInput(p.networkLayer.srcIP);
+          const serverIp = normaliseIpInput(server.ip);
+          const serverSubnet =
+            normaliseIpInput(server.subnet) || "255.255.255.0";
+          const serverGateway = normaliseIpInput(server.gw);
           const isLocal = isIpInSubnet(
-            p.networkLayer.srcIP,
-            server.ip,
-            server.subnet || "255.255.255.0",
+            replyDstIp,
+            serverIp,
+            serverSubnet,
           );
+          if (!isLocal) {
+            if (!serverGateway) {
+              return {
+                action: "DROP",
+                reason: `${server.name} dropped ${p.appLayer.protocol} reply: no default gateway configured — cannot send off-subnet reply to ${replyDstIp}.`,
+              };
+            }
+            if (!isIpInSubnet(serverGateway, serverIp, serverSubnet)) {
+              return {
+                action: "DROP",
+                reason: `${server.name} dropped ${p.appLayer.protocol} reply: default gateway ${serverGateway} is not in this device's subnet (${serverIp}/${serverSubnet}) — ARP for the gateway fails on the local segment.`,
+              };
+            }
+          }
           const nextHopIp = isLocal
-            ? p.networkLayer.srcIP
-            : server.gw || p.networkLayer.srcIP;
-          const nextHopMac = IP_MAC_TABLE[nextHopIp];
+            ? replyDstIp
+            : serverGateway || replyDstIp;
+          const nextHopMac = lookupMacForIp(nextHopIp);
           if (!nextHopMac) {
             return {
               action: "DROP",
@@ -2014,8 +2087,8 @@
             progress: 0,
             networkLayer: {
               protocol: "IPv4",
-              srcIP: server.ip,
-              dstIP: p.networkLayer.srcIP,
+              srcIP: serverIp,
+              dstIP: replyDstIp,
               ttl: 64,
             },
             linkLayer: {
@@ -2304,20 +2377,37 @@
         // so they leave the server one step apart; everything else returns
         // a single packet.
         static createReplyPackets(p, node) {
+          const replyDstIp = normaliseIpInput(p.networkLayer.srcIP);
+          const nodeIp = normaliseIpInput(node.ip);
+          const nodeSubnet =
+            normaliseIpInput(node.subnet) || "255.255.255.0";
+          const nodeGateway = normaliseIpInput(node.gw);
           const isLocal = isIpInSubnet(
-            p.networkLayer.srcIP,
-            node.ip,
-            node.subnet || "255.255.255.0",
+            replyDstIp,
+            nodeIp,
+            nodeSubnet,
           );
+          if (!isLocal) {
+            if (!nodeGateway)
+              return {
+                action: "DROP",
+                reason: `${node.name} dropped reply: no default gateway configured — cannot send off-subnet reply to ${replyDstIp}.`,
+              };
+            if (!isIpInSubnet(nodeGateway, nodeIp, nodeSubnet))
+              return {
+                action: "DROP",
+                reason: `${node.name} dropped reply: default gateway ${nodeGateway} is not in this device's subnet (${nodeIp}/${nodeSubnet}) — ARP for the gateway fails on the local segment.`,
+              };
+          }
           const nextHopIp = isLocal
-            ? p.networkLayer.srcIP
-            : node.gw || p.networkLayer.srcIP;
-          const nextHopMac = IP_MAC_TABLE[nextHopIp];
+            ? replyDstIp
+            : nodeGateway || replyDstIp;
+          const nextHopMac = lookupMacForIp(nextHopIp);
 
           if (!nextHopMac)
             return {
               action: "DROP",
-              reason: `${node.name} dropped reply: No ARP for return route.`,
+              reason: `${node.name} dropped reply: No ARP for return route ${nextHopIp || "(none)"}.`,
             };
 
           const replyNextNode = node.switch || p.currentNode;
@@ -2335,8 +2425,8 @@
                 progress: 0,
                 networkLayer: {
                   protocol: "IPv4",
-                  srcIP: node.ip,
-                  dstIP: p.networkLayer.srcIP,
+                  srcIP: nodeIp,
+                  dstIP: replyDstIp,
                   ttl: 64,
                 },
                 linkLayer: {
@@ -2357,8 +2447,8 @@
                 progress: 0,
                 networkLayer: {
                   protocol: "IPv4",
-                  srcIP: node.ip,
-                  dstIP: p.networkLayer.srcIP,
+                  srcIP: nodeIp,
+                  dstIP: replyDstIp,
                   ttl: 64,
                 },
                 linkLayer: {
@@ -3953,13 +4043,13 @@
               type: "info",
             });
             if (myNet === targetNet) {
-              const directMac = IP_MAC_TABLE[targetIp];
+              const directMac = lookupMacForIp(targetIp);
               subnetLogs.push({
                 msg: `${node.name} networks match → ARP for ${targetIp} directly${directMac ? ` (MAC ${directMac})` : ""}`,
                 type: "info",
               });
             } else {
-              const gwMac = IP_MAC_TABLE[node.gw];
+              const gwMac = lookupMacForIp(node.gw);
               subnetLogs.push({
                 msg: `${node.name} networks differ → frame addressed to default gateway ${node.gw}${gwMac ? ` (MAC ${gwMac})` : ""}`,
                 type: "info",
@@ -4364,16 +4454,28 @@
         // simulation can resolve frames addressed to a newly-configured
         // device.
         const registerIpMac = (ip, mac, nodeId) => {
-          if (ip) IP_MAC_TABLE = { ...IP_MAC_TABLE, [ip]: mac };
-          if (mac) MAC_NODE_TABLE = { ...MAC_NODE_TABLE, [mac]: nodeId };
+          const cleanIp = normaliseIpInput(ip);
+          const cleanMac = normaliseMac(mac);
+          if (cleanIp && cleanMac) {
+            const next = { ...IP_MAC_TABLE };
+            Object.keys(next).forEach((key) => {
+              if (normaliseIpInput(key) === cleanIp) delete next[key];
+            });
+            next[cleanIp] = cleanMac;
+            IP_MAC_TABLE = next;
+          }
+          if (cleanMac) MAC_NODE_TABLE = { ...MAC_NODE_TABLE, [cleanMac]: nodeId };
         };
 
         // Drop an IP from the table (e.g. when a device is reconfigured
         // or releases a DHCP lease) so stale ARP entries don't leak.
         const unregisterIp = (ip) => {
-          if (!ip) return;
+          const cleanIp = normaliseIpInput(ip);
+          if (!cleanIp) return;
           const next = { ...IP_MAC_TABLE };
-          delete next[ip];
+          Object.keys(next).forEach((key) => {
+            if (normaliseIpInput(key) === cleanIp) delete next[key];
+          });
           IP_MAC_TABLE = next;
         };
 
@@ -4599,11 +4701,12 @@
               {
                 id: generateId(),
                 deviceName: allocation.deviceName || "(unnamed)",
-                mac: (allocation.mac || "").toUpperCase(),
-                ip: allocation.ip || "",
-                subnet: allocation.subnet || "255.255.255.0",
-                gateway: allocation.gateway || "",
-                dns: allocation.dns || "",
+                mac: normaliseMac(allocation.mac),
+                ip: normaliseIpInput(allocation.ip),
+                subnet:
+                  normaliseIpInput(allocation.subnet) || "255.255.255.0",
+                gateway: normaliseIpInput(allocation.gateway),
+                dns: normaliseIpInput(allocation.dns),
                 lease: allocation.lease || "8 hours",
                 mode: "Static reservation",
                 scope: allocation.scope || "(student-added)",
@@ -4638,28 +4741,41 @@
           if (!r) return;
           const iface = r.interfaces[ifaceIdx];
           if (!iface) return;
+          const cleanIp = normaliseIpInput(ip);
           if (iface.ip) unregisterIp(iface.ip);
-          if (ip) registerIpMac(ip, iface.mac, routerId);
+          if (cleanIp) registerIpMac(cleanIp, iface.mac, routerId);
           updateNode(routerId, (rr) => ({
             ...rr,
             interfaces: rr.interfaces.map((it, i) =>
-              i === ifaceIdx ? { ...it, ip } : it,
+              i === ifaceIdx ? { ...it, ip: cleanIp } : it,
             ),
           }));
         };
 
         // --- Client / laptop manual network configuration -------------
         const updateClientNetwork = (clientId, patch) => {
+          const cleanedPatch = { ...patch };
+          ["ip", "subnet", "gw", "dns"].forEach((field) => {
+            if (field in cleanedPatch) {
+              cleanedPatch[field] = normaliseIpInput(cleanedPatch[field]);
+            }
+          });
+          if ("mac" in cleanedPatch) {
+            cleanedPatch.mac = normaliseMac(cleanedPatch.mac);
+          }
           const c = nodes[clientId];
           if (!c) return;
           // Re-register IP <-> MAC pairs when either field changes so the
           // engine's ARP simulation always reflects the live config.
-          const nextIp = "ip" in patch ? patch.ip : c.ip;
-          const nextMac = "mac" in patch ? patch.mac : c.mac;
-          if (c.ip && (patch.ip !== c.ip || patch.mac !== c.mac)) {
+          const nextIp = "ip" in cleanedPatch ? cleanedPatch.ip : c.ip;
+          const nextMac = "mac" in cleanedPatch ? cleanedPatch.mac : c.mac;
+          if (
+            c.ip &&
+            (cleanedPatch.ip !== c.ip || cleanedPatch.mac !== c.mac)
+          ) {
             unregisterIp(c.ip);
           }
-          if ("mac" in patch && c.mac && c.mac !== patch.mac) {
+          if ("mac" in cleanedPatch && c.mac && c.mac !== cleanedPatch.mac) {
             const tbl = { ...MAC_NODE_TABLE };
             delete tbl[c.mac];
             MAC_NODE_TABLE = tbl;
@@ -4668,7 +4784,7 @@
             MAC_NODE_TABLE = { ...MAC_NODE_TABLE, [nextMac]: clientId };
           }
           if (nextIp && nextMac) registerIpMac(nextIp, nextMac, clientId);
-          updateNode(clientId, (cc) => ({ ...cc, ...patch }));
+          updateNode(clientId, (cc) => ({ ...cc, ...cleanedPatch }));
         };
 
         // --- WAP wireless configuration -------------------------------
@@ -5264,11 +5380,15 @@
           const nextIpMac = {};
           const nextMacNode = {};
           Object.values(nextNodes || {}).forEach((node) => {
-            if (node.ip && node.mac) nextIpMac[node.ip] = node.mac;
-            if (node.mac) nextMacNode[node.mac] = node.id;
+            const nodeIp = normaliseIpInput(node.ip);
+            const nodeMac = normaliseMac(node.mac);
+            if (nodeIp && nodeMac) nextIpMac[nodeIp] = nodeMac;
+            if (nodeMac) nextMacNode[nodeMac] = node.id;
             (node.interfaces || []).forEach((iface) => {
-              if (iface.ip && iface.mac) nextIpMac[iface.ip] = iface.mac;
-              if (iface.mac) nextMacNode[iface.mac] = node.id;
+              const ifaceIp = normaliseIpInput(iface.ip);
+              const ifaceMac = normaliseMac(iface.mac);
+              if (ifaceIp && ifaceMac) nextIpMac[ifaceIp] = ifaceMac;
+              if (ifaceMac) nextMacNode[ifaceMac] = node.id;
             });
           });
           IP_MAC_TABLE = nextIpMac;
