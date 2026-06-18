@@ -30,7 +30,7 @@
     ></script>
 
     <!-- Babel for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -180,7 +180,7 @@
   <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-plugins="transform-react-jsx">
       const { useState, useEffect, useRef, useCallback } = React;
 
       // ==========================================
@@ -304,6 +304,26 @@
 
       const isValidIp = (value) =>
         /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(value || "");
+
+      const normaliseMac = (value) => {
+        const raw = (value || "").trim().toUpperCase().replace(/-/g, ":");
+        const compact = raw.replace(/:/g, "");
+        if (/^[0-9A-F]{12}$/.test(compact)) {
+          return compact.match(/.{2}/g).join(":");
+        }
+        return raw;
+      };
+
+      const isValidMac = (value) =>
+        /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(normaliseMac(value));
+
+      const isSwitchingNode = (node) =>
+        !!node && (node.type === "Switch" || node.type === "Hub");
+
+      const getSwitchingMode = (node) =>
+        node && (node.type === "Hub" || node.switchingMode === "hub")
+          ? "hub"
+          : "switch";
 
       const normaliseHostname = (value) =>
         (value || "").trim().toLowerCase().replace(/\.$/, "");
@@ -720,6 +740,8 @@
           ssid: "mywifi",
           ssidBroadcast: true,
           password: "",
+          macWhitelistEnabled: false,
+          macWhitelist: ["00:1A:2B:3C:4D:04"],
         },
         LAP_B: {
           id: "LAP_B",
@@ -959,7 +981,7 @@
           return link && link.wireless ? "Wi-Fi (802.11)" : "Ethernet";
         }
 
-        static getNextL2Hop(currentId, destId) {
+        static getNextL2Hop(currentId, destId, allNodes = INITIAL_NODES) {
           const directLink = LINKS.find(
             (l) =>
               (l.source === currentId && l.target === destId) ||
@@ -971,8 +993,8 @@
             (l) => l.source === currentId || l.target === currentId,
           ).map((l) => (l.source === currentId ? l.target : l.source));
           for (const neighborId of neighbors) {
-            const n = INITIAL_NODES[neighborId];
-            if (n && (n.type === "Switch" || n.type === "WAP")) {
+            const n = allNodes[neighborId];
+            if (n && (isSwitchingNode(n) || n.type === "WAP")) {
               return neighborId;
             }
           }
@@ -1112,7 +1134,7 @@
           return { packet: p };
         }
 
-        static processSwitch(p, node) {
+        static processSwitch(p, node, allNodes = INITIAL_NODES) {
           // L2 broadcast: simplified flood. We pick the most useful
           // neighbour for a DHCP DISCOVER — the directly-connected
           // DHCP server — and forward to it. If no DHCP server is on
@@ -1123,7 +1145,7 @@
               (l) => l.source === node.id || l.target === node.id,
             ).map((l) => (l.source === node.id ? l.target : l.source));
             const dhcpNeighbor = neighborIds
-              .map((id) => INITIAL_NODES[id])
+              .map((id) => allNodes[id])
               .find((n) => n && n.service === "DHCP");
             if (dhcpNeighbor) {
               return {
@@ -1159,7 +1181,7 @@
           // If the destination is reachable via another L2 device (e.g. a WAP
           // bridging the wireless segment), hop to that device first instead of
           // teleporting directly to the endpoint.
-          const destNode = INITIAL_NODES[destNodeId];
+          const destNode = allNodes[destNodeId];
           if (destNode && destNode.switch && destNode.switch !== node.id) {
             destNodeId = destNode.switch;
           }
@@ -1167,7 +1189,7 @@
           // If the resolved destination isn't directly linked to this node
           // (e.g. a WAP forwarding a reply destined for a router beyond its
           // wired uplink), hop via a neighbouring switch/WAP first.
-          destNodeId = this.getNextL2Hop(node.id, destNodeId);
+          destNodeId = this.getNextL2Hop(node.id, destNodeId, allNodes);
 
           return {
             action: "FORWARD",
@@ -2162,6 +2184,7 @@
             action: "FORWARD",
             packets: neighborIds.map((neighborId) => ({
               ...p,
+              id: generateId(),
               currentNode: hub.id,
               nextNode: neighborId,
               state: "TRANSIT",
@@ -2584,6 +2607,11 @@
             <rect x="14" y="4" width="4" height="16"></rect>
           </svg>
         ),
+        Stop: () => (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="6" width="12" height="12" rx="1"></rect>
+          </svg>
+        ),
         StepForward: () => (
           <svg
             width="20"
@@ -2878,16 +2906,28 @@
                 // Still in transit or delay — preserve as-is.
                 nextPackets.push(p);
               } else if (p.state === "ARRIVED") {
-                const node = nodes[p.currentNode];
-                const activeNode = nodeUpdates[node.id] || node;
+                const networkNodes = { ...nodes, ...nodeUpdates };
+                const node = networkNodes[p.currentNode];
+                if (!node) return;
+                const activeNode = node;
                 let result;
 
                 addLocalLog(`Processing packet at ${activeNode.name}...`);
 
-                if (activeNode.type === "Switch" || activeNode.type === "WAP")
-                  result = NetworkEngine.processSwitch(p, activeNode);
-                else if (activeNode.type === "Hub")
+                if (
+                  isSwitchingNode(activeNode) &&
+                  getSwitchingMode(activeNode) === "hub"
+                )
                   result = NetworkEngine.processHub(p, activeNode);
+                else if (
+                  activeNode.type === "Switch" ||
+                  activeNode.type === "WAP"
+                )
+                  result = NetworkEngine.processSwitch(
+                    p,
+                    activeNode,
+                    networkNodes,
+                  );
                 else if (activeNode.type === "Router")
                   result = NetworkEngine.processRouter(p, activeNode);
                 else if (activeNode.type === "Cloud")
@@ -3689,6 +3729,39 @@
           tickSimulation(100);
         };
 
+        const stopSimulation = () => {
+          const hadActive =
+            transactionActive ||
+            packetsRef.current.length > 0 ||
+            processingRef.current.length > 0 ||
+            autoFetchQueue.length > 0;
+
+          setIsPlaying(false);
+          packetsRef.current = [];
+          processingRef.current = [];
+          buffersRef.current = {};
+          setPackets([]);
+          setProcessingEntries([]);
+          setAutoFetchQueue([]);
+          setTransportBuffers({});
+          setSelectedPacketId(null);
+          setPacketExpanded(false);
+          setNodeExpanded(true);
+          setLogs((l) =>
+            [
+              {
+                id: generateId(),
+                time: new Date().toLocaleTimeString(),
+                msg: hadActive
+                  ? "Stopped simulation and cleared all active packets."
+                  : "No active simulation to stop.",
+                type: hadActive ? "info" : "error",
+              },
+              ...l,
+            ].slice(0, 50),
+          );
+        };
+
         const sendUserRequest = (nodeId, targetIp, type, options = {}) => {
           const node = nodes[nodeId];
           if (!targetIp.match(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/)) {
@@ -4267,23 +4340,20 @@
                   name: "eth1 (LAN)",
                   ip: "192.168.3.1",
                   mac: macLan,
-                  connectedTo: "HUB_C",
+                  connectedTo: "SW_C",
                 },
               ],
               routes: [],
             });
-            // A hub sits between RT_C and the Subnet C PCs. Unlike a
-            // switch it floods every received frame to all other ports
-            // (see NetworkEngine.processHub) — students see how Layer 1
-            // devices leak traffic across the LAN.
-            addNode("HUB_C", {
-              type: "Hub",
-              name: "Subnet C Hub",
+            addNode("SW_C", {
+              type: "Switch",
+              name: "Subnet C Switch",
+              switchingMode: "switch",
               x: 820,
               y: 220,
             });
             addLink("RT_C", "SW_CORE");
-            addLink("RT_C", "HUB_C");
+            addLink("RT_C", "SW_C");
             registerIpMac("10.0.0.3", macCore, "RT_C");
             registerIpMac("192.168.3.1", macLan, "RT_C");
             addDhcpAllocation("DHCP_A", {
@@ -4299,7 +4369,7 @@
             commitUpdates({
               logsToAdd: [
                 {
-                  msg: "Added Subnet C Router (eth0 10.0.0.3 / eth1 192.168.3.1) and Subnet C Hub. Routing table is empty — student must add routes on RT_C and the other routers.",
+                  msg: "Added Subnet C Router (eth0 10.0.0.3 / eth1 192.168.3.1) and Subnet C Switch. Routing table is empty — student must add routes on RT_C and the other routers.",
                   type: "info",
                 },
               ],
@@ -4317,12 +4387,12 @@
               mac,
               x: 940,
               y: isPc4 ? 270 : 170,
-              switch: "HUB_C",
+              switch: "SW_C",
               subnet: "",
               gw: "",
               dns: "",
             });
-            addLink(kind, "HUB_C");
+            addLink(kind, "SW_C");
             addDhcpAllocation("DHCP_A", {
               deviceName: isPc4 ? "Client PC 4" : "Client PC 5",
               mac,
@@ -4346,6 +4416,25 @@
         };
 
         // --- Editable router routes -----------------------------------
+        const updateSwitchingMode = (nodeId, mode) => {
+          if (mode !== "switch" && mode !== "hub") return;
+          updateNode(nodeId, (node) => {
+            if (!isSwitchingNode(node)) return node;
+            return { ...node, type: "Switch", switchingMode: mode };
+          });
+          setLogs((l) =>
+            [
+              {
+                id: generateId(),
+                time: new Date().toLocaleTimeString(),
+                msg: `${nodes[nodeId]?.name || nodeId} set to ${mode === "hub" ? "hub flooding" : "switch MAC-forwarding"} mode.`,
+                type: "info",
+              },
+              ...l,
+            ].slice(0, 50),
+          );
+        };
+
         const addRoute = (routerId, route) => {
           updateNode(routerId, (r) => ({
             ...r,
@@ -4454,7 +4543,50 @@
 
         // --- WAP wireless configuration -------------------------------
         const updateWapConfig = (wapId, patch) => {
-          updateNode(wapId, (w) => ({ ...w, ...patch }));
+          const wap = nodes[wapId];
+          if (!wap) return;
+          const nextWap = { ...wap, ...patch };
+          const allowedMacs = new Set(
+            (nextWap.macWhitelist || [])
+              .map(normaliseMac)
+              .filter((mac) => isValidMac(mac)),
+          );
+          const disallowedLaptops = nextWap.macWhitelistEnabled
+            ? Object.values(nodes).filter((n) => {
+                if (n.type !== "Laptop" || n.switch !== wapId) return false;
+                return !allowedMacs.has(normaliseMac(n.mac));
+              })
+            : [];
+
+          if (disallowedLaptops.length > 0) {
+            const disallowedIds = new Set(disallowedLaptops.map((n) => n.id));
+            LINKS = LINKS.filter(
+              (l) =>
+                !(
+                  l.wireless &&
+                  (l.source === wapId || l.target === wapId) &&
+                  (disallowedIds.has(l.source) || disallowedIds.has(l.target))
+                ),
+            );
+            setLinks(LINKS);
+            commitUpdates({
+              logsToAdd: disallowedLaptops.map((laptop) => ({
+                msg: `${laptop.name} disconnected from ${wap.name}: MAC ${normaliseMac(laptop.mac) || "(none)"} is not on the WAP whitelist.`,
+                type: "error",
+              })),
+              nodeUpdates: {},
+            });
+          }
+
+          setNodes((prev) => {
+            const next = { ...prev, [wapId]: { ...prev[wapId], ...patch } };
+            disallowedLaptops.forEach((laptop) => {
+              if (next[laptop.id]) {
+                next[laptop.id] = { ...next[laptop.id], switch: null };
+              }
+            });
+            return next;
+          });
         };
 
         // --- Laptop WiFi association ----------------------------------
@@ -4463,6 +4595,7 @@
         // mismatch, the engine emits an authentication-failure log.
         const connectLaptopWifi = (laptopId, wapId, ssid, password) => {
           const wap = nodes[wapId];
+          const laptop = nodes[laptopId];
           if (!wap) {
             commitUpdates({
               logsToAdd: [
@@ -4475,6 +4608,7 @@
             });
             return false;
           }
+          if (!laptop) return false;
           const wapSsid = wap.ssid || "mywifi";
           if (ssid !== wapSsid) {
             commitUpdates({
@@ -4500,6 +4634,24 @@
             });
             return false;
           }
+          if (wap.macWhitelistEnabled) {
+            const laptopMac = normaliseMac(laptop.mac);
+            const allowedMacs = (wap.macWhitelist || [])
+              .map(normaliseMac)
+              .filter((mac) => isValidMac(mac));
+            if (!laptopMac || !allowedMacs.includes(laptopMac)) {
+              commitUpdates({
+                logsToAdd: [
+                  {
+                    msg: `WiFi association denied for SSID '${wapSsid}' - ${laptop.name || laptopId} MAC ${laptopMac || "(none)"} is not on the WAP whitelist.`,
+                    type: "error",
+                  },
+                ],
+                nodeUpdates: {},
+              });
+              return false;
+            }
+          }
           // Tear down any prior association of this laptop.
           disconnectLaptopWifi(laptopId, /* silent */ true);
           updateNode(laptopId, (l) => ({ ...l, switch: wapId }));
@@ -4507,9 +4659,7 @@
           commitUpdates({
             logsToAdd: [
               {
-                msg: `${
-                  nodes[laptopId]?.name || laptopId
-                } associated with ${wap.name} (SSID '${wapSsid}').`,
+                msg: `${laptop.name || laptopId} associated with ${wap.name} (SSID '${wapSsid}').`,
                 type: "success",
               },
             ],
@@ -5091,6 +5241,17 @@
                   )}
                 </button>
                 <button
+                  onClick={stopSimulation}
+                  disabled={
+                    !transactionActive &&
+                    packets.length === 0 &&
+                    processingEntries.length === 0
+                  }
+                  className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  <Icons.Stop /> Stop
+                </button>
+                <button
                   onClick={manualStep}
                   disabled={isPlaying || !transactionActive}
                   className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
@@ -5455,8 +5616,7 @@
                             <g transform="translate(-20, -20)" fill={color}>
                               {node.type === "PC" && <Icons.PC />}
                               {node.type === "Server" && <Icons.Server />}
-                              {node.type === "Switch" && <Icons.Switch />}
-                              {node.type === "Hub" && <Icons.Switch />}
+                              {isSwitchingNode(node) && <Icons.Switch />}
                               {node.type === "Router" && <Icons.Router />}
                               {node.type === "WAP" && <Icons.WAP />}
                               {node.type === "Laptop" && <Icons.Laptop />}
@@ -5795,6 +5955,7 @@
                         onDeleteRoute={deleteRoute}
                         onCopyRoutesFrom={copyRoutesFrom}
                         onUpdateInterfaceIp={updateInterfaceIp}
+                        onUpdateSwitchingMode={updateSwitchingMode}
                         onUpdateClientNetwork={updateClientNetwork}
                         onUpdateWapConfig={updateWapConfig}
                         onConnectLaptopWifi={connectLaptopWifi}
@@ -6313,6 +6474,7 @@
         onDeleteRoute,
         onCopyRoutesFrom,
         onUpdateInterfaceIp,
+        onUpdateSwitchingMode,
         onUpdateClientNetwork,
         onUpdateWapConfig,
         onConnectLaptopWifi,
@@ -6361,6 +6523,7 @@
         const [dhcpServerIp, setDhcpServerIp] = useState("");
         const [wifiSsidDraft, setWifiSsidDraft] = useState("");
         const [wifiPasswordDraft, setWifiPasswordDraft] = useState("");
+        const [macWhitelistDraft, setMacWhitelistDraft] = useState("");
         // Seed the WiFi form from the laptop's current association so
         // the SSID dropdown reads as already-selected when the user
         // opens the WIFI tab for a pre-configured laptop.
@@ -6391,6 +6554,15 @@
         const isRouter = node.type === "Router";
         const isWap = node.type === "WAP";
         const isLaptop = node.type === "Laptop";
+        const isSwitchingDevice = isSwitchingNode(node);
+        const switchingMode = getSwitchingMode(node);
+        const wapWhitelist = isWap
+          ? (node.macWhitelist || []).map(normaliseMac).filter((mac) => mac)
+          : [];
+        const wapWhitelistDraftMac = normaliseMac(macWhitelistDraft);
+        const canAddWapWhitelistMac =
+          isValidMac(wapWhitelistDraftMac) &&
+          !wapWhitelist.includes(wapWhitelistDraftMac);
 
         const tabs = [{ id: "INFO", label: "Info" }];
         if (hasProcessing) tabs.push({ id: "SERVICE", label: "Service" });
@@ -6486,8 +6658,7 @@
                 <div style={{ color }}>
                   {node.type === "PC" && <Icons.PC />}
                   {node.type === "Server" && <Icons.Server />}
-                  {node.type === "Switch" && <Icons.Switch />}
-                  {node.type === "Hub" && <Icons.Switch />}
+                  {isSwitchingDevice && <Icons.Switch />}
                   {node.type === "Router" && <Icons.Router />}
                   {node.type === "WAP" && <Icons.WAP />}
                   {node.type === "Laptop" && <Icons.Laptop />}
@@ -6497,7 +6668,13 @@
                     {node.name}
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-slate-400">
-                    {node.service ? `${node.service} ${node.type}` : node.type}
+                    {node.service
+                      ? `${node.service} ${node.type}`
+                      : isSwitchingDevice
+                        ? switchingMode === "hub"
+                          ? "Hub"
+                          : "Switch"
+                        : node.type}
                   </p>
                 </div>
               </div>
@@ -6830,11 +7007,71 @@
                     </>
                   )}
 
-                  {node.type === "Switch" && (
-                    <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 italic">
-                      Layer 2 forwarding enabled.
-                      <br />
-                      MAC table populated automatically in this simulation.
+                  {isSwitchingDevice && (
+                    <div className="bg-white dark:bg-slate-900 p-3 rounded border border-slate-300 dark:border-slate-700">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                          <div className="text-slate-500 mb-1 font-semibold text-xs uppercase">
+                            Switching Behaviour
+                          </div>
+                          <div className="text-xs text-slate-600 dark:text-slate-400">
+                            {switchingMode === "hub"
+                              ? "Hub mode floods each frame out of every other connected port."
+                              : "Switch mode forwards frames by destination MAC address."}
+                          </div>
+                        </div>
+                        <label
+                          className={`shrink-0 flex items-center gap-2 text-[11px] font-bold ${transactionActive ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          title={
+                            transactionActive
+                              ? "Stop the current simulation before changing this mode."
+                              : "Toggle between switch and hub behaviour."
+                          }
+                        >
+                          <span
+                            className={
+                              switchingMode === "switch"
+                                ? "text-blue-700 dark:text-blue-300"
+                                : "text-slate-500"
+                            }
+                          >
+                            Switch
+                          </span>
+                          <span
+                            className={`relative inline-flex h-5 w-10 rounded-full transition ${switchingMode === "hub" ? "bg-amber-500" : "bg-blue-600"}`}
+                          >
+                            <span
+                              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${switchingMode === "hub" ? "left-5" : "left-0.5"}`}
+                            />
+                            <input
+                              type="checkbox"
+                              checked={switchingMode === "hub"}
+                              disabled={transactionActive}
+                              onChange={(e) =>
+                                onUpdateSwitchingMode(
+                                  node.id,
+                                  e.target.checked ? "hub" : "switch",
+                                )
+                              }
+                              className="sr-only"
+                            />
+                          </span>
+                          <span
+                            className={
+                              switchingMode === "hub"
+                                ? "text-amber-700 dark:text-amber-300"
+                                : "text-slate-500"
+                            }
+                          >
+                            Hub
+                          </span>
+                        </label>
+                      </div>
+                      <div className="rounded bg-slate-100 dark:bg-slate-800 p-2 text-[11px] text-slate-600 dark:text-slate-400">
+                        {switchingMode === "hub"
+                          ? "No MAC filtering is applied: all neighbouring NICs see the frame and discard it only if the destination MAC is not theirs."
+                          : "The simulated MAC table is populated automatically, so unicast frames take a direct Layer 2 path where possible."}
+                      </div>
                     </div>
                   )}
 
@@ -8183,6 +8420,136 @@
                         className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
                       />
                     </div>
+                    <div className="grid grid-cols-[120px_1fr] gap-2 items-center">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        MAC whitelist
+                      </label>
+                      <label className="flex items-center gap-1 text-[11px]">
+                        <input
+                          type="checkbox"
+                          checked={node.macWhitelistEnabled === true}
+                          onChange={(e) =>
+                            onUpdateWapConfig(node.id, {
+                              macWhitelistEnabled: e.target.checked,
+                            })
+                          }
+                        />
+                        Only allow listed client MACs
+                      </label>
+                    </div>
+                    {node.macWhitelistEnabled === true && (
+                      <div className="border-t border-slate-200 dark:border-slate-700 pt-2 flex flex-col gap-2">
+                        <div className="overflow-hidden rounded border border-slate-300 dark:border-slate-700">
+                          <table className="w-full text-[11px]">
+                            <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                              <tr>
+                                <th className="text-left px-2 py-1 font-bold">
+                                  Allowed MAC
+                                </th>
+                                <th className="text-left px-2 py-1 font-bold">
+                                  Device
+                                </th>
+                                <th className="w-16 px-2 py-1"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                              {wapWhitelist.length > 0 ? (
+                                wapWhitelist.map((mac, idx) => {
+                                  const owner = Object.values(
+                                    allNodes || {},
+                                  ).find((n) => normaliseMac(n.mac) === mac);
+                                  return (
+                                    <tr key={`${mac}-${idx}`}>
+                                      <td className="px-2 py-1 font-mono text-slate-800 dark:text-slate-100">
+                                        {mac}
+                                      </td>
+                                      <td className="px-2 py-1 text-slate-600 dark:text-slate-400">
+                                        {owner ? owner.name : "-"}
+                                      </td>
+                                      <td className="px-2 py-1 text-right">
+                                        <button
+                                          onClick={() =>
+                                            onUpdateWapConfig(node.id, {
+                                              macWhitelist:
+                                                wapWhitelist.filter(
+                                                  (_, i) => i !== idx,
+                                                ),
+                                            })
+                                          }
+                                          className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 font-bold"
+                                        >
+                                          Remove
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              ) : (
+                                <tr>
+                                  <td
+                                    colSpan={3}
+                                    className="px-2 py-3 text-center text-slate-500 dark:text-slate-400"
+                                  >
+                                    No client MAC addresses are allowed.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            value={macWhitelistDraft}
+                            onChange={(e) =>
+                              setMacWhitelistDraft(e.target.value.toUpperCase())
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter" || !canAddWapWhitelistMac)
+                                return;
+                              onUpdateWapConfig(node.id, {
+                                macWhitelist: [
+                                  ...wapWhitelist,
+                                  wapWhitelistDraftMac,
+                                ],
+                              });
+                              setMacWhitelistDraft("");
+                            }}
+                            placeholder="00:11:22:33:44:55"
+                            className="min-w-0 flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 font-mono text-[11px]"
+                          />
+                          <button
+                            onClick={() => {
+                              if (!canAddWapWhitelistMac) return;
+                              onUpdateWapConfig(node.id, {
+                                macWhitelist: [
+                                  ...wapWhitelist,
+                                  wapWhitelistDraftMac,
+                                ],
+                              });
+                              setMacWhitelistDraft("");
+                            }}
+                            disabled={!canAddWapWhitelistMac}
+                            className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-bold"
+                          >
+                            Add
+                          </button>
+                        </div>
+                        {macWhitelistDraft &&
+                          !isValidMac(wapWhitelistDraftMac) && (
+                            <div className="text-[11px] text-red-600 dark:text-red-400">
+                              Enter six hexadecimal byte pairs, for example
+                              00:11:22:33:44:55.
+                            </div>
+                          )}
+                        {macWhitelistDraft &&
+                          isValidMac(wapWhitelistDraftMac) &&
+                          wapWhitelist.includes(wapWhitelistDraftMac) && (
+                            <div className="text-[11px] text-amber-700 dark:text-amber-300">
+                              That MAC address is already whitelisted.
+                            </div>
+                          )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
