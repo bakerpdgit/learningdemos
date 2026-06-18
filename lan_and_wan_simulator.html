@@ -945,6 +945,52 @@
       const networkIdFor = (ip, mask) =>
         numToIp((ipToNum(ip) & ipToNum(mask)) >>> 0);
 
+      const safeIsIpInSubnet = (ip, subnet, mask) => {
+        if (!isValidIp(ip) || !isValidIp(subnet) || !isValidIp(mask)) {
+          return false;
+        }
+        return isIpInSubnet(ip, subnet, mask);
+      };
+
+      const trimRouteIp = (value) => (value || "").trim();
+
+      const defaultMaskForInterface = (ip) =>
+        isValidIp(ip) && ip.startsWith("10.") ? "255.255.255.0" : "255.255.255.0";
+
+      const inferRouteIface = (router, route) => {
+        const interfaces = router.interfaces || [];
+        const currentIface = Number(route.iface);
+        const nextHop = trimRouteIp(route.nextHop) || "0.0.0.0";
+        const isDirect = nextHop === "0.0.0.0";
+        const targetIp = isDirect ? trimRouteIp(route.dest) : nextHop;
+        const mask = isDirect
+          ? trimRouteIp(route.mask)
+          : defaultMaskForInterface(nextHop);
+        const inferredIdx = interfaces.findIndex(
+          (iface) => iface.ip && safeIsIpInSubnet(targetIp, iface.ip, mask),
+        );
+        if (inferredIdx >= 0) return inferredIdx;
+        if (
+          Number.isInteger(currentIface) &&
+          currentIface >= 0 &&
+          currentIface < interfaces.length
+        ) {
+          return currentIface;
+        }
+        return 0;
+      };
+
+      const sanitiseRoute = (router, route) => {
+        const cleaned = {
+          dest: trimRouteIp(route.dest),
+          mask: trimRouteIp(route.mask) || "255.255.255.0",
+          nextHop: trimRouteIp(route.nextHop) || "0.0.0.0",
+          iface: Number(route.iface) || 0,
+          metric: Number(route.metric) || 0,
+        };
+        return { ...cleaned, iface: inferRouteIface(router, cleaned) };
+      };
+
       // Count the set bits in a mask to produce the conventional /N
       // shorthand used in routing-table logs (e.g. "/24" for 255.255.255.0).
       const prefixLengthOf = (mask) => {
@@ -1304,16 +1350,23 @@
 
           let bestMatch = null;
           let longestMask = -1;
+          let bestMetric = Infinity;
 
-          router.routes.forEach((route) => {
+          (router.routes || []).forEach((rawRoute) => {
+            const route = sanitiseRoute(router, rawRoute);
+            if (!isValidIp(route.dest) || !isValidIp(route.mask)) return;
             if (isIpInSubnet(p.networkLayer.dstIP, route.dest, route.mask)) {
               const maskNum = ipToNum(route.mask);
               let maskLen = 0;
               for (let i = 0; i < 32; i++) {
                 if ((maskNum & (1 << i)) !== 0) maskLen++;
               }
-              if (maskLen > longestMask) {
+              if (
+                maskLen > longestMask ||
+                (maskLen === longestMask && route.metric < bestMetric)
+              ) {
                 longestMask = maskLen;
+                bestMetric = route.metric;
                 bestMatch = route;
               }
             }
@@ -1404,6 +1457,13 @@
           }
 
           const outIface = router.interfaces[bestMatch.iface];
+          if (!outIface) {
+            return {
+              action: "DROP",
+              reason: `Router ${router.name} dropped packet: route uses missing interface ${bestMatch.iface}.`,
+              extraLogs,
+            };
+          }
           const nextHopIp =
             bestMatch.nextHop === "0.0.0.0"
               ? p.networkLayer.dstIP
@@ -2681,6 +2741,8 @@
         const [terminals, setTerminals] = useState({});
         // Per-client current draft of the terminal command line.
         const [terminalDrafts, setTerminalDrafts] = useState({});
+        const [terminalHistories, setTerminalHistories] = useState({});
+        const [terminalHistoryIndexes, setTerminalHistoryIndexes] = useState({});
         // Per-client remote-access (Telnet / SSH) session state.
         // Shape: { [clientId]: { protocol, serverIp, state, username } }
         //   state = "AUTH_USER" | "AUTH_PASS" | "CONNECTED"
@@ -2743,6 +2805,14 @@
         const [isResizingLeft, setIsResizingLeft] = useState(false);
         const [rightPanelWidth, setRightPanelWidth] = useState(384);
         const [isResizingRight, setIsResizingRight] = useState(false);
+        const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+        const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+        const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+        const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+        const [saveFileName, setSaveFileName] = useState(
+          "lan_and_wan_sim.json",
+        );
+        const [loadStatus, setLoadStatus] = useState("");
         // Packet tracing toggle. When OFF, the canvas hides in-flight
         // packets, the event log is silenced, and the engine runs at
         // max speed so multi-step interactions (e.g. SSH sessions)
@@ -2788,14 +2858,15 @@
           if (!isResizingLeft && !isResizingRight) return;
           const onMove = (e) => {
             if (isResizingLeft) {
-              const next = Math.min(460, Math.max(240, e.clientX));
+              const max = Math.max(260, window.innerWidth - 96);
+              const next = Math.min(max, Math.max(180, e.clientX));
               setLeftPanelWidth(next);
+              setLeftPanelCollapsed(false);
             } else if (isResizingRight) {
-              const next = Math.min(
-                700,
-                Math.max(280, window.innerWidth - e.clientX),
-              );
+              const max = Math.max(260, window.innerWidth - 96);
+              const next = Math.min(max, Math.max(220, window.innerWidth - e.clientX));
               setRightPanelWidth(next);
+              setRightPanelCollapsed(false);
             }
           };
           const onUp = () => {
@@ -3977,12 +4048,53 @@
           return true;
         };
 
+        const rememberTerminalCommand = (clientId, command) => {
+          const value = (command || "").trim();
+          if (!value) return;
+          setTerminalHistories((histories) => {
+            const current = histories[clientId] || [];
+            const next =
+              current[current.length - 1] === value
+                ? current
+                : [...current, value].slice(-50);
+            setTerminalHistoryIndexes((idx) => ({
+              ...idx,
+              [clientId]: next.length,
+            }));
+            return { ...histories, [clientId]: next };
+          });
+        };
+
+        const recallTerminalHistory = (clientId, direction) => {
+          const history = terminalHistories[clientId] || [];
+          if (history.length === 0) return;
+          const current =
+            terminalHistoryIndexes[clientId] == null
+              ? history.length
+              : terminalHistoryIndexes[clientId];
+          const next =
+            direction === "up"
+              ? Math.max(0, current - 1)
+              : Math.min(history.length, current + 1);
+          setTerminalHistoryIndexes((idx) => ({
+            ...idx,
+            [clientId]: next,
+          }));
+          setTerminalDrafts((drafts) => ({
+            ...drafts,
+            [clientId]: next === history.length ? "" : history[next],
+          }));
+        };
+
         const runTerminalCommand = (clientId, raw) => {
           const client = nodes[clientId];
           if (!client) return;
           const trimmed = (raw || "").trim();
           setTerminalDrafts((d) => ({ ...d, [clientId]: "" }));
           const session = remoteSessions[clientId];
+          if (trimmed && (!session || session.state !== "AUTH_PASS")) {
+            rememberTerminalCommand(clientId, trimmed);
+          }
 
           // Inside an active remote-access session, every line goes to
           // the server. Local commands (ping/ipconfig) resume after the
@@ -4343,7 +4455,22 @@
                   connectedTo: "SW_C",
                 },
               ],
-              routes: [],
+              routes: [
+                {
+                  dest: "10.0.0.0",
+                  mask: "255.255.255.0",
+                  nextHop: "0.0.0.0",
+                  iface: 0,
+                  metric: 0,
+                },
+                {
+                  dest: "192.168.3.0",
+                  mask: "255.255.255.0",
+                  nextHop: "0.0.0.0",
+                  iface: 1,
+                  metric: 0,
+                },
+              ],
             });
             addNode("SW_C", {
               type: "Switch",
@@ -4369,7 +4496,7 @@
             commitUpdates({
               logsToAdd: [
                 {
-                  msg: "Added Subnet C Router (eth0 10.0.0.3 / eth1 192.168.3.1) and Subnet C Switch. Routing table is empty — student must add routes on RT_C and the other routers.",
+                  msg: "Added Subnet C Router (eth0 10.0.0.3 / eth1 192.168.3.1) and Subnet C Switch. Directly-connected routes are seeded; add routes on the other routers and any return routes RT_C needs.",
                   type: "info",
                 },
               ],
@@ -4438,23 +4565,23 @@
         const addRoute = (routerId, route) => {
           updateNode(routerId, (r) => ({
             ...r,
-            routes: [...(r.routes || []), route],
+            routes: [...(r.routes || []), sanitiseRoute(r, route)],
           }));
         };
         const updateRoute = (routerId, routeIdx, field, value) => {
           updateNode(routerId, (r) => ({
             ...r,
-            routes: (r.routes || []).map((rt, i) =>
-              i === routeIdx
-                ? {
-                    ...rt,
-                    [field]:
-                      field === "iface" || field === "metric"
-                        ? Number(value)
-                        : value,
-                  }
-                : rt,
-            ),
+            routes: (r.routes || []).map((rt, i) => {
+              if (i !== routeIdx) return rt;
+              const next = {
+                ...rt,
+                [field]:
+                  field === "iface" || field === "metric"
+                    ? Number(value)
+                    : trimRouteIp(value),
+              };
+              return sanitiseRoute(r, next);
+            }),
           }));
         };
         const deleteRoute = (routerId, routeIdx) => {
@@ -4496,8 +4623,11 @@
 
         const copyRoutesFrom = (targetRouterId, sourceRouterId) => {
           const source = nodes[sourceRouterId];
-          if (!source) return;
-          const cloned = (source.routes || []).map((r) => ({ ...r }));
+          const target = nodes[targetRouterId];
+          if (!source || !target) return;
+          const cloned = (source.routes || []).map((r) =>
+            sanitiseRoute(target, r),
+          );
           updateNode(targetRouterId, (r) => ({ ...r, routes: cloned }));
         };
 
@@ -5130,6 +5260,152 @@
           }));
         };
 
+        const rebuildAddressTables = (nextNodes) => {
+          const nextIpMac = {};
+          const nextMacNode = {};
+          Object.values(nextNodes || {}).forEach((node) => {
+            if (node.ip && node.mac) nextIpMac[node.ip] = node.mac;
+            if (node.mac) nextMacNode[node.mac] = node.id;
+            (node.interfaces || []).forEach((iface) => {
+              if (iface.ip && iface.mac) nextIpMac[iface.ip] = iface.mac;
+              if (iface.mac) nextMacNode[iface.mac] = node.id;
+            });
+          });
+          IP_MAC_TABLE = nextIpMac;
+          MAC_NODE_TABLE = nextMacNode;
+        };
+
+        const buildSimulationSave = () => ({
+          version: 1,
+          savedAt: new Date().toISOString(),
+          nodes,
+          links,
+          packets,
+          logs,
+          autoFetchQueue,
+          processingEntries,
+          transportBuffers,
+          terminals,
+          terminalDrafts,
+          terminalHistories,
+          remoteSessions,
+          remoteEdits,
+          ui: {
+            selectedNodeId,
+            selectedPacketId,
+            nodeExpanded,
+            packetExpanded,
+            leftPanelWidth,
+            rightPanelWidth,
+            leftPanelCollapsed,
+            rightPanelCollapsed,
+            speed,
+            zoom,
+            packetTracing,
+          },
+        });
+
+        const downloadSimulationSave = () => {
+          const filename =
+            (saveFileName || "lan_and_wan_sim.json").trim() ||
+            "lan_and_wan_sim.json";
+          const safeName = filename.toLowerCase().endsWith(".json")
+            ? filename
+            : `${filename}.json`;
+          const blob = new Blob(
+            [JSON.stringify(buildSimulationSave(), null, 2)],
+            { type: "application/json" },
+          );
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = safeName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          setSaveDialogOpen(false);
+          setLogs((l) =>
+            [
+              {
+                id: generateId(),
+                time: new Date().toLocaleTimeString(),
+                msg: `Saved simulation to ${safeName}.`,
+                type: "success",
+              },
+              ...l,
+            ].slice(0, 50),
+          );
+        };
+
+        const applySimulationSave = (data) => {
+          if (!data || !data.nodes || !Array.isArray(data.links)) {
+            throw new Error("This file is not a valid LAN simulator save.");
+          }
+          const nextNodes = data.nodes;
+          const nextLinks = data.links;
+          LINKS = nextLinks;
+          rebuildAddressTables(nextNodes);
+          setIsPlaying(false);
+          setNodes(nextNodes);
+          setLinks(nextLinks);
+          setPackets(data.packets || []);
+          packetsRef.current = data.packets || [];
+          setLogs(data.logs || []);
+          setAutoFetchQueue(data.autoFetchQueue || []);
+          setProcessingEntries(data.processingEntries || []);
+          processingRef.current = data.processingEntries || [];
+          setTransportBuffers(data.transportBuffers || {});
+          buffersRef.current = data.transportBuffers || {};
+          setTerminals(data.terminals || {});
+          setTerminalDrafts(data.terminalDrafts || {});
+          setTerminalHistories(data.terminalHistories || {});
+          setTerminalHistoryIndexes({});
+          setRemoteSessions(data.remoteSessions || {});
+          setRemoteEdits(data.remoteEdits || {});
+
+          const ui = data.ui || {};
+          setSelectedNodeId(ui.selectedNodeId || null);
+          setSelectedPacketId(ui.selectedPacketId || null);
+          setNodeExpanded(ui.nodeExpanded !== false);
+          setPacketExpanded(!!ui.packetExpanded);
+          setLeftPanelWidth(ui.leftPanelWidth || 300);
+          setRightPanelWidth(ui.rightPanelWidth || 384);
+          setLeftPanelCollapsed(!!ui.leftPanelCollapsed);
+          setRightPanelCollapsed(!!ui.rightPanelCollapsed);
+          setSpeed(ui.speed || 2);
+          setZoom(ui.zoom || 1);
+          setPacketTracing(ui.packetTracing !== false);
+        };
+
+        const loadSimulationFile = (file) => {
+          if (!file) return;
+          setLoadStatus(`Reading ${file.name}...`);
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              applySimulationSave(JSON.parse(reader.result));
+              setLoadStatus("");
+              setLoadDialogOpen(false);
+              setLogs((l) =>
+                [
+                  {
+                    id: generateId(),
+                    time: new Date().toLocaleTimeString(),
+                    msg: `Loaded simulation from ${file.name}.`,
+                    type: "success",
+                  },
+                  ...l,
+                ].slice(0, 50),
+              );
+            } catch (err) {
+              setLoadStatus(err.message || "Could not load that file.");
+            }
+          };
+          reader.onerror = () => setLoadStatus("Could not read that file.");
+          reader.readAsText(file);
+        };
+
         // Render Helpers
         const getEntityColor = (nodeId) => {
           if (nodeId.includes("A") || nodeId.includes("1")) return "#3b82f6"; // Blue for Subnet A
@@ -5142,6 +5418,14 @@
           if (nodeId.includes("EDGE") || nodeId.includes("INT"))
             return "#ef4444"; // Red for Edge/Internet
           return "#8b5cf6"; // Purple for Core
+        };
+
+        const getDisplayNodeName = (node) => {
+          if (!isSwitchingNode(node)) return node.name;
+          const label = getSwitchingMode(node) === "hub" ? "Hub" : "Switch";
+          return node.name.match(/\b(Switch|Hub)$/)
+            ? node.name.replace(/\b(Switch|Hub)$/, label)
+            : `${node.name} ${label}`;
         };
 
         return (
@@ -5208,6 +5492,21 @@
                 <Icons.Router /> LAN &amp; WAN Simulator
               </span>
               <div className="flex gap-3 items-center ml-auto">
+                <button
+                  onClick={() => setSaveDialogOpen(true)}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-100 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-600"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setLoadStatus("");
+                    setLoadDialogOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-100 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-600"
+                >
+                  Load
+                </button>
                 <button
                   onClick={() => setPacketTracing((t) => !t)}
                   title="Toggle packet animation + event log"
@@ -5278,73 +5577,100 @@
               {/* LEFT: Legend and event log */}
               <aside
                 className="shrink-0 bg-slate-50 dark:bg-slate-950 border-r border-slate-300 dark:border-slate-700 flex flex-col overflow-hidden"
-                style={{ width: leftPanelWidth }}
+                style={{ width: leftPanelCollapsed ? 36 : leftPanelWidth }}
               >
-                <div className="p-3 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100">
-                  <h3 className="font-bold mb-2">Network Legend</h3>
-                  <div className="flex flex-col gap-1 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                      Subnet A (192.168.1.0/24)
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      Subnet B (192.168.2.0/24)
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      Internet/WAN
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={isDark ? "#10b981" : "#047857"}
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                      >
-                        <path d="M5 12a10 10 0 0 1 14 0"></path>
-                        <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
-                        <circle
-                          cx="12"
-                          cy="19"
-                          r="1"
-                          fill={isDark ? "#10b981" : "#047857"}
-                          stroke="none"
-                        ></circle>
-                      </svg>
-                      Wireless link
-                    </div>
+                {leftPanelCollapsed ? (
+                  <div className="h-full flex items-start justify-center pt-2">
+                    <button
+                      onClick={() => setLeftPanelCollapsed(false)}
+                      title="Show legend and event log"
+                      className="w-7 h-7 rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                    >
+                      &gt;
+                    </button>
                   </div>
-                </div>
-                <div className="flex-1 min-h-0 bg-slate-50 dark:bg-black flex flex-col font-mono text-xs">
-                  <div className="bg-slate-200 dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-300 dark:border-slate-700">
-                    Simulation Event Log
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
-                    {logs.map((log) => (
-                      <div
-                        key={log.id}
-                        className={`${log.type === "error" ? "text-red-700 dark:text-red-400" : log.type === "success" ? "text-green-700 dark:text-green-400" : "text-slate-700 dark:text-slate-300"}`}
-                      >
-                        <span className="text-slate-500">[{log.time}]</span>{" "}
-                        <span>{log.msg}</span>
+                ) : (
+                  <>
+                    <div className="p-3 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold">Network Legend</h3>
+                        <button
+                          onClick={() => setLeftPanelCollapsed(true)}
+                          title="Hide legend and event log"
+                          className="w-7 h-7 rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                        >
+                          &lt;
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="flex flex-col gap-1 text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                          Subnet A (192.168.1.0/24)
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                          Subnet B (192.168.2.0/24)
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                          Internet/WAN
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={isDark ? "#10b981" : "#047857"}
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                          >
+                            <path d="M5 12a10 10 0 0 1 14 0"></path>
+                            <path d="M8.5 15.5a5 5 0 0 1 7 0"></path>
+                            <circle
+                              cx="12"
+                              cy="19"
+                              r="1"
+                              fill={isDark ? "#10b981" : "#047857"}
+                              stroke="none"
+                            ></circle>
+                          </svg>
+                          Wireless link
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-h-0 bg-slate-50 dark:bg-black flex flex-col font-mono text-xs">
+                      <div className="bg-slate-200 dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-300 dark:border-slate-700">
+                        Simulation Event Log
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
+                        {logs.map((log) => (
+                          <div
+                            key={log.id}
+                            className={`${log.type === "error" ? "text-red-700 dark:text-red-400" : log.type === "success" ? "text-green-700 dark:text-green-400" : "text-slate-700 dark:text-slate-300"}`}
+                          >
+                            <span className="text-slate-500">
+                              [{log.time}]
+                            </span>{" "}
+                            <span>{log.msg}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </aside>
 
-              <div
-                className="w-1.5 shrink-0 cursor-col-resize bg-slate-300 hover:bg-sky-500 dark:bg-slate-700 dark:hover:bg-sky-500 transition-colors"
-                onMouseDown={() => setIsResizingLeft(true)}
-                title="Drag to resize the legend and event log panel"
-              />
+              {!leftPanelCollapsed && (
+                <div
+                  className="w-1.5 shrink-0 cursor-col-resize bg-slate-300 hover:bg-sky-500 dark:bg-slate-700 dark:hover:bg-sky-500 transition-colors"
+                  onMouseDown={() => setIsResizingLeft(true)}
+                  title="Drag to resize the legend and event log panel"
+                />
+              )}
 
               {/* CENTER: Canvas */}
-              <div className="flex-1 flex flex-col relative bg-slate-100 dark:bg-slate-900">
+              <div className="flex-1 min-w-0 flex flex-col relative bg-slate-100 dark:bg-slate-900">
                 {/* Floating zoom controls */}
                 <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
                   <button
@@ -5629,7 +5955,7 @@
                               fontSize="14"
                               fontWeight="bold"
                             >
-                              {node.name}
+                              {getDisplayNodeName(node)}
                             </text>
                             {(node.type === "PC" ||
                               node.type === "Server" ||
@@ -5867,148 +6193,179 @@
                 </div>
               </div>
 
-              <div
-                className="w-1.5 shrink-0 cursor-col-resize bg-slate-300 hover:bg-sky-500 dark:bg-slate-700 dark:hover:bg-sky-500 transition-colors"
-                onMouseDown={() => setIsResizingRight(true)}
-                title="Drag to resize the inspector panel"
-              />
+              {!rightPanelCollapsed && (
+                <div
+                  className="w-1.5 shrink-0 cursor-col-resize bg-slate-300 hover:bg-sky-500 dark:bg-slate-700 dark:hover:bg-sky-500 transition-colors"
+                  onMouseDown={() => setIsResizingRight(true)}
+                  title="Drag to resize the inspector panel"
+                />
+              )}
 
               {/* RIGHT: Inspector Panel */}
               <div
-                className="shrink-0 bg-slate-100 dark:bg-slate-800 border-l border-slate-300 dark:border-slate-700 flex flex-col"
-                style={{ width: rightPanelWidth }}
+                className="relative shrink-0 bg-slate-100 dark:bg-slate-800 border-l border-slate-300 dark:border-slate-700 flex flex-col"
+                style={{ width: rightPanelCollapsed ? 36 : rightPanelWidth }}
               >
-                <div className="flex-1 overflow-y-auto flex flex-col">
-                  {/* NODE SECTION */}
-                  <CollapsibleSection
-                    title="Node Details"
-                    accent="#0ea5e9"
-                    expanded={nodeExpanded}
-                    onToggle={() => setNodeExpanded((e) => !e)}
-                    subtitle={
-                      selectedNodeId
-                        ? nodes[selectedNodeId].name
-                        : "No node selected"
-                    }
-                  >
-                    {selectedNodeId ? (
-                      <NodeInspector
-                        key={selectedNodeId}
-                        node={nodes[selectedNodeId]}
-                        processing={processingByNode[selectedNodeId] || []}
-                        terminal={terminals[selectedNodeId] || []}
-                        transportBuffer={transportBuffers[selectedNodeId] || {}}
-                        tabSignal={tabSignal}
-                        pingTarget={
-                          pingTargets[selectedNodeId] ?? "192.168.2.2"
-                        }
-                        httpTarget={
-                          httpTargets[selectedNodeId] ?? "203.0.113.50"
-                        }
-                        onPingTargetChange={(ip) =>
-                          setPingTargets((m) => ({
-                            ...m,
-                            [selectedNodeId]: ip,
-                          }))
-                        }
-                        onHttpTargetChange={(ip) =>
-                          setHttpTargets((m) => ({
-                            ...m,
-                            [selectedNodeId]: ip,
-                          }))
-                        }
-                        pickerSlot={pickerSlot}
-                        onStartPicker={startPicker}
-                        onCancelPicker={cancelPicker}
-                        onSendRequest={sendUserRequest}
-                        onNavigate={handleBrowserNavigate}
-                        onBrowserAddressChange={setClientBrowserAddress}
-                        onBrowserSubmit={(nodeId) => {
-                          const client = nodes[nodeId];
-                          handleBrowserNavigate(
-                            nodeId,
-                            client?.browser?.address ||
-                              "http://mycompany.local/",
-                          );
-                        }}
-                        onOpenFileEditor={openFileEditor}
-                        onDeleteFile={deleteFile}
-                        onAddDnsRecord={addDnsRecord}
-                        onUpdateDnsRecord={updateDnsRecord}
-                        onDeleteDnsRecord={deleteDnsRecord}
-                        onAddHostEntry={addHostEntry}
-                        onUpdateHostEntry={updateHostEntry}
-                        onDeleteHostEntry={deleteHostEntry}
-                        onClearDnsCache={clearDnsCache}
-                        terminalDraft={terminalDrafts[selectedNodeId] || ""}
-                        onTerminalDraftChange={(clientId, value) =>
-                          setTerminalDrafts((d) => ({
-                            ...d,
-                            [clientId]: value,
-                          }))
-                        }
-                        onRunTerminalCommand={runTerminalCommand}
-                        onUpdateServerHttpPort={updateServerHttpPort}
-                        allNodes={nodes}
-                        onAddRoute={addRoute}
-                        onUpdateRoute={updateRoute}
-                        onDeleteRoute={deleteRoute}
-                        onCopyRoutesFrom={copyRoutesFrom}
-                        onUpdateInterfaceIp={updateInterfaceIp}
-                        onUpdateSwitchingMode={updateSwitchingMode}
-                        onUpdateClientNetwork={updateClientNetwork}
-                        onUpdateWapConfig={updateWapConfig}
-                        onConnectLaptopWifi={connectLaptopWifi}
-                        onDisconnectLaptopWifi={disconnectLaptopWifi}
-                        onDhcpRequest={requestDhcpLease}
-                        onAddDhcpAllocation={addDhcpAllocation}
-                        onDeleteDhcpAllocation={deleteDhcpAllocation}
-                        onUpdateRemoteAccessConfig={updateRemoteAccessConfig}
-                        remoteEdit={remoteEdits[selectedNodeId]}
-                        remoteSession={remoteSessions[selectedNodeId]}
-                        onUpdateRemoteEditContent={updateRemoteEditContent}
-                        onSubmitRemoteEdit={submitRemoteEdit}
-                        onCancelRemoteEdit={cancelRemoteEdit}
-                        color={getEntityColor(selectedNodeId)}
-                        transactionActive={transactionActive}
-                      />
-                    ) : (
-                      <div className="p-6 text-center text-slate-500 text-sm">
-                        Click any node on the network map to inspect its details
-                        and (for PCs / Laptops / Servers) send pings or HTTP
-                        requests.
-                      </div>
-                    )}
-                  </CollapsibleSection>
+                {rightPanelCollapsed ? (
+                  <div className="h-full flex items-start justify-center pt-2">
+                    <button
+                      onClick={() => setRightPanelCollapsed(false)}
+                      title="Show inspector"
+                      className="w-7 h-7 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
+                    >
+                      &lt;
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto flex flex-col">
+                    <div className="h-0">
+                      <button
+                        onClick={() => setRightPanelCollapsed(true)}
+                        title="Hide inspector"
+                        className="absolute right-2 top-2 z-10 w-7 h-7 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
+                      >
+                        &gt;
+                      </button>
+                    </div>
+                    {/* NODE SECTION */}
+                    <CollapsibleSection
+                      title="Node Details"
+                      accent="#0ea5e9"
+                      expanded={nodeExpanded}
+                      onToggle={() => setNodeExpanded((e) => !e)}
+                      subtitle={
+                        selectedNodeId
+                          ? getDisplayNodeName(nodes[selectedNodeId])
+                          : "No node selected"
+                      }
+                    >
+                      {selectedNodeId ? (
+                        <NodeInspector
+                          key={selectedNodeId}
+                          node={nodes[selectedNodeId]}
+                          processing={processingByNode[selectedNodeId] || []}
+                          terminal={terminals[selectedNodeId] || []}
+                          transportBuffer={
+                            transportBuffers[selectedNodeId] || {}
+                          }
+                          tabSignal={tabSignal}
+                          pingTarget={
+                            pingTargets[selectedNodeId] ?? "192.168.2.2"
+                          }
+                          httpTarget={
+                            httpTargets[selectedNodeId] ?? "203.0.113.50"
+                          }
+                          onPingTargetChange={(ip) =>
+                            setPingTargets((m) => ({
+                              ...m,
+                              [selectedNodeId]: ip,
+                            }))
+                          }
+                          onHttpTargetChange={(ip) =>
+                            setHttpTargets((m) => ({
+                              ...m,
+                              [selectedNodeId]: ip,
+                            }))
+                          }
+                          pickerSlot={pickerSlot}
+                          onStartPicker={startPicker}
+                          onCancelPicker={cancelPicker}
+                          onSendRequest={sendUserRequest}
+                          onNavigate={handleBrowserNavigate}
+                          onBrowserAddressChange={setClientBrowserAddress}
+                          onBrowserSubmit={(nodeId) => {
+                            const client = nodes[nodeId];
+                            handleBrowserNavigate(
+                              nodeId,
+                              client?.browser?.address ||
+                                "http://mycompany.local/",
+                            );
+                          }}
+                          onOpenFileEditor={openFileEditor}
+                          onDeleteFile={deleteFile}
+                          onAddDnsRecord={addDnsRecord}
+                          onUpdateDnsRecord={updateDnsRecord}
+                          onDeleteDnsRecord={deleteDnsRecord}
+                          onAddHostEntry={addHostEntry}
+                          onUpdateHostEntry={updateHostEntry}
+                          onDeleteHostEntry={deleteHostEntry}
+                          onClearDnsCache={clearDnsCache}
+                          terminalDraft={terminalDrafts[selectedNodeId] || ""}
+                          onTerminalDraftChange={(clientId, value) => {
+                            setTerminalHistoryIndexes((idx) => ({
+                              ...idx,
+                              [clientId]:
+                                (terminalHistories[clientId] || []).length,
+                            }));
+                            setTerminalDrafts((d) => ({
+                              ...d,
+                              [clientId]: value,
+                            }));
+                          }}
+                          onTerminalHistoryRecall={recallTerminalHistory}
+                          onRunTerminalCommand={runTerminalCommand}
+                          onUpdateServerHttpPort={updateServerHttpPort}
+                          allNodes={nodes}
+                          onAddRoute={addRoute}
+                          onUpdateRoute={updateRoute}
+                          onDeleteRoute={deleteRoute}
+                          onCopyRoutesFrom={copyRoutesFrom}
+                          onUpdateInterfaceIp={updateInterfaceIp}
+                          onUpdateSwitchingMode={updateSwitchingMode}
+                          onUpdateClientNetwork={updateClientNetwork}
+                          onUpdateWapConfig={updateWapConfig}
+                          onConnectLaptopWifi={connectLaptopWifi}
+                          onDisconnectLaptopWifi={disconnectLaptopWifi}
+                          onDhcpRequest={requestDhcpLease}
+                          onAddDhcpAllocation={addDhcpAllocation}
+                          onDeleteDhcpAllocation={deleteDhcpAllocation}
+                          onUpdateRemoteAccessConfig={updateRemoteAccessConfig}
+                          remoteEdit={remoteEdits[selectedNodeId]}
+                          remoteSession={remoteSessions[selectedNodeId]}
+                          onUpdateRemoteEditContent={updateRemoteEditContent}
+                          onSubmitRemoteEdit={submitRemoteEdit}
+                          onCancelRemoteEdit={cancelRemoteEdit}
+                          color={getEntityColor(selectedNodeId)}
+                          transactionActive={transactionActive}
+                        />
+                      ) : (
+                        <div className="p-6 text-center text-slate-500 text-sm">
+                          Click any node on the network map to inspect its
+                          details and (for PCs / Laptops / Servers) send pings
+                          or HTTP requests.
+                        </div>
+                      )}
+                    </CollapsibleSection>
 
-                  {/* PACKET SECTION (tabbed across all in-flight packets) */}
-                  <CollapsibleSection
-                    title="Packet Details"
-                    accent="#f59e0b"
-                    expanded={packetExpanded}
-                    onToggle={() => setPacketExpanded((e) => !e)}
-                    subtitle={
-                      activePackets.length > 0
-                        ? `${activePackets.length} live packet${activePackets.length === 1 ? "" : "s"}`
-                        : "No active packets"
-                    }
-                  >
-                    {activePackets.length > 0 ? (
-                      <MultiPacketInspector
-                        packets={activePackets}
-                        selectedPacketId={selectedPacketId}
-                        onSelectPacket={setSelectedPacketId}
-                        nodes={nodes}
-                        links={links}
-                      />
-                    ) : (
-                      <div className="p-6 text-center text-slate-500 text-sm">
-                        No active packet in the simulator. Send a Ping or HTTP
-                        request from a node to populate this view.
-                      </div>
-                    )}
-                  </CollapsibleSection>
-                </div>
+                    {/* PACKET SECTION (tabbed across all in-flight packets) */}
+                    <CollapsibleSection
+                      title="Packet Details"
+                      accent="#f59e0b"
+                      expanded={packetExpanded}
+                      onToggle={() => setPacketExpanded((e) => !e)}
+                      subtitle={
+                        activePackets.length > 0
+                          ? `${activePackets.length} live packet${activePackets.length === 1 ? "" : "s"}`
+                          : "No active packets"
+                      }
+                    >
+                      {activePackets.length > 0 ? (
+                        <MultiPacketInspector
+                          packets={activePackets}
+                          selectedPacketId={selectedPacketId}
+                          onSelectPacket={setSelectedPacketId}
+                          nodes={nodes}
+                          links={links}
+                        />
+                      ) : (
+                        <div className="p-6 text-center text-slate-500 text-sm">
+                          No active packet in the simulator. Send a Ping or HTTP
+                          request from a node to populate this view.
+                        </div>
+                      )}
+                    </CollapsibleSection>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -6017,6 +6374,21 @@
                 state={editorState}
                 onClose={closeFileEditor}
                 onSave={saveFile}
+              />
+            )}
+            {saveDialogOpen && (
+              <SaveSimulationModal
+                filename={saveFileName}
+                onFilenameChange={setSaveFileName}
+                onCancel={() => setSaveDialogOpen(false)}
+                onSave={downloadSimulationSave}
+              />
+            )}
+            {loadDialogOpen && (
+              <LoadSimulationModal
+                status={loadStatus}
+                onCancel={() => setLoadDialogOpen(false)}
+                onLoadFile={loadSimulationFile}
               />
             )}
           </div>
@@ -6137,6 +6509,142 @@
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold text-sm"
                 >
                   Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const SaveSimulationModal = ({
+        filename,
+        onFilenameChange,
+        onCancel,
+        onSave,
+      }) => (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={onCancel}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-lg shadow-xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <h3 className="font-bold text-lg">Save Simulation</h3>
+              <button
+                onClick={onCancel}
+                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xl leading-none px-2"
+              >
+                x
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                File name
+              </label>
+              <input
+                value={filename}
+                onChange={(e) => onFilenameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onSave();
+                }}
+                className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 font-mono text-sm"
+              />
+              <p className="text-xs text-slate-500">
+                The file stores the current topology, router tables, devices,
+                packets, logs and terminal state.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex gap-2 justify-end">
+              <button
+                onClick={onCancel}
+                className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded font-semibold text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSave}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold text-sm"
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+
+      const LoadSimulationModal = ({
+        status,
+        onCancel,
+        onLoadFile,
+      }) => {
+        const fileInputRef = useRef(null);
+        const pickFile = () => fileInputRef.current?.click();
+        const handleFiles = (files) => {
+          const file = files && files[0];
+          if (file) onLoadFile(file);
+        };
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={onCancel}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-lg shadow-xl w-full max-w-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 className="font-bold text-lg">Load Simulation</h3>
+                <button
+                  onClick={onCancel}
+                  className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xl leading-none px-2"
+                >
+                  x
+                </button>
+              </div>
+              <div className="p-4 flex flex-col gap-3">
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleFiles(e.dataTransfer.files);
+                  }}
+                  className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded p-6 text-center bg-slate-50 dark:bg-slate-800"
+                >
+                  <div className="font-semibold text-slate-700 dark:text-slate-200">
+                    Drop a simulation JSON file here
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    or browse for a <span className="font-mono">.json</span>{" "}
+                    save file.
+                  </div>
+                  <button
+                    onClick={pickFile}
+                    className="mt-3 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold"
+                  >
+                    Browse
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    onChange={(e) => handleFiles(e.target.files)}
+                  />
+                </div>
+                {status && (
+                  <div className="rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+                    {status}
+                  </div>
+                )}
+              </div>
+              <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                <button
+                  onClick={onCancel}
+                  className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded font-semibold text-sm"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
@@ -6466,6 +6974,7 @@
         onClearDnsCache,
         terminalDraft,
         onTerminalDraftChange,
+        onTerminalHistoryRecall,
         onRunTerminalCommand,
         onUpdateServerHttpPort,
         allNodes,
@@ -6556,6 +7065,14 @@
         const isLaptop = node.type === "Laptop";
         const isSwitchingDevice = isSwitchingNode(node);
         const switchingMode = getSwitchingMode(node);
+        const displayNodeName = isSwitchingDevice
+          ? node.name.match(/\b(Switch|Hub)$/)
+            ? node.name.replace(
+                /\b(Switch|Hub)$/,
+                switchingMode === "hub" ? "Hub" : "Switch",
+              )
+            : `${node.name} ${switchingMode === "hub" ? "Hub" : "Switch"}`
+          : node.name;
         const wapWhitelist = isWap
           ? (node.macWhitelist || []).map(normaliseMac).filter((mac) => mac)
           : [];
@@ -6665,7 +7182,7 @@
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                    {node.name}
+                    {displayNodeName}
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-slate-400">
                     {node.service
@@ -7287,7 +7804,13 @@
                             onTerminalDraftChange(node.id, e.target.value)
                           }
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") {
+                            if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              onTerminalHistoryRecall(node.id, "up");
+                            } else if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              onTerminalHistoryRecall(node.id, "down");
+                            } else if (e.key === "Enter") {
                               onRunTerminalCommand(node.id, terminalDraft || "");
                             }
                           }}
@@ -7893,6 +8416,13 @@
                     Routing table. Longest-prefix match selects the route
                     for each packet. Leave blank to drop everything.
                   </p>
+                  <div className="rounded border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 p-2 text-[11px] text-blue-900 dark:text-blue-100">
+                    IFACE is the router interface the packet leaves from. For
+                    example, routes via a <span className="font-mono">10.0.0.x</span>{" "}
+                    next hop should use the core/WAN-side interface. Metric is
+                    the tie-breaker when two matching routes have the same
+                    prefix length; lower metric wins.
+                  </div>
 
                   <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-xs flex flex-wrap items-center gap-2">
                     <span className="font-bold text-slate-700 dark:text-slate-300">
@@ -7927,7 +8457,7 @@
                   </div>
 
                   <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2">
-                    <div className="grid grid-cols-[1fr_1fr_1fr_44px_40px_auto] gap-1 text-[10px] font-bold uppercase text-slate-500 mb-1">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_82px_48px_auto] gap-1 text-[10px] font-bold uppercase text-slate-500 mb-1">
                       <span>Dest</span>
                       <span>Mask</span>
                       <span>Next Hop</span>
@@ -7943,7 +8473,7 @@
                     {(node.routes || []).map((rt, i) => (
                       <div
                         key={i}
-                        className="grid grid-cols-[1fr_1fr_1fr_44px_40px_auto] gap-1 mb-1"
+                        className="grid grid-cols-[1fr_1fr_1fr_82px_48px_auto] gap-1 mb-1"
                       >
                         <input
                           value={rt.dest}
@@ -7971,14 +8501,19 @@
                           }
                           className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
                         />
-                        <input
-                          type="number"
+                        <select
                           value={rt.iface ?? 0}
                           onChange={(e) =>
                             onUpdateRoute(node.id, i, "iface", e.target.value)
                           }
                           className="min-w-0 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
-                        />
+                        >
+                          {(node.interfaces || []).map((iface, idx) => (
+                            <option key={idx} value={idx}>
+                              {idx}: {iface.name}
+                            </option>
+                          ))}
+                        </select>
                         <input
                           type="number"
                           value={rt.metric ?? 1}
@@ -8001,7 +8536,7 @@
                     <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                       Add route
                     </div>
-                    <div className="grid grid-cols-[1fr_1fr_1fr_44px_40px_auto] gap-1">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_82px_48px_auto] gap-1">
                       <input
                         value={newRoute.dest}
                         onChange={(e) =>
@@ -8029,8 +8564,7 @@
                         placeholder="next hop IP"
                         className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
                       />
-                      <input
-                        type="number"
+                      <select
                         value={newRoute.iface}
                         onChange={(e) =>
                           setNewRoute({
@@ -8039,7 +8573,13 @@
                           })
                         }
                         className="min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]"
-                      />
+                      >
+                        {(node.interfaces || []).map((iface, idx) => (
+                          <option key={idx} value={idx}>
+                            {idx}: {iface.name}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         type="number"
                         value={newRoute.metric}
@@ -8053,7 +8593,7 @@
                       />
                       <button
                         onClick={() => {
-                          onAddRoute(node.id, { ...newRoute });
+                          onAddRoute(node.id, sanitiseRoute(node, newRoute));
                           setNewRoute({
                             dest: "",
                             mask: "255.255.255.0",
