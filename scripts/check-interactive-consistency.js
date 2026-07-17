@@ -302,9 +302,12 @@ for (const [file, pattern] of filterReconciliationChecks) {
 }
 const vonNeumannMemorySource = fs.readFileSync(path.join(root, 'von_neumann_architecture.html'), 'utf8');
 if (!/const formatMemoryCellValue\s*=/.test(vonNeumannMemorySource)
-  || !/return `\$\{mnemonic\} \.\.\.`;/.test(vonNeumannMemorySource)
+  || !/return `\$\{mnemonic\}\.\.\.`;/.test(vonNeumannMemorySource)
+  || !/grid-template-columns:\s*repeat\(10,\s*minmax\(0,\s*1fr\)\)/.test(vonNeumannMemorySource)
+  || !/processor-side-panel\s*\{\s*width:\s*calc\(32% - 0\.5rem\)\s*!important;/s.test(vonNeumannMemorySource)
+  || !/processor-layout[^"']*overflow-x-hidden/.test(vonNeumannMemorySource)
   || !/title=\{tooltip\}[\s\S]{0,400}\{formatMemoryCellValue\(displayVal\)\}/.test(vonNeumannMemorySource)) {
-  failures.push('von_neumann_architecture.html: RAM cells must show an instruction mnemonic plus an ellipsis while keeping the full hover tooltip');
+  failures.push('von_neumann_architecture.html: RAM must fit ten compact mnemonic cells without horizontal overflow while keeping full hover tooltips');
 }
 
 const nextQuestionGateChecks = [
@@ -374,6 +377,12 @@ const searchingSortingSource = fs.readFileSync(path.join(root, 'searching_and_so
 if (!/const getTraceArray = \(\) =>[\s\S]*?effState\[`arr\[\$\{idx\}\]`\]/.test(searchingSortingSource)
   || !/const displayedArray = getTraceArray\(\);[\s\S]*?\{displayedArray\.map\(\(val, idx\) =>/.test(searchingSortingSource)) {
   failures.push('searching_and_sorting.html: the array preview must reflect the effective arr[n] values in the trace table');
+}
+if (!/\.search-sort-app\s*\{\s*height:\s*100vh\s*;/s.test(searchingSortingSource)
+  || !/body\[data-site-page="interactive"\] \.search-sort-app\s*\{\s*height:\s*calc\(100vh - 58px\)\s*;/s.test(searchingSortingSource)
+  || !/className="search-sort-app flex flex-col overflow-hidden/.test(searchingSortingSource)
+  || /search-sort-app[^"']*\bh-screen\b/.test(searchingSortingSource)) {
+  failures.push('searching_and_sorting.html: the app must subtract the built site bar so bottom trace controls remain in the viewport');
 }
 const floatingPointSource = fs.readFileSync(path.join(root, 'aqa_floating_point.html'), 'utf8');
 if (!/practice-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(280px, 320px\)/.test(floatingPointSource)

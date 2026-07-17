@@ -146,8 +146,9 @@
       /* Grid */
       .ram-grid {
         display: grid;
-        grid-template-columns: repeat(10, 1fr);
+        grid-template-columns: repeat(10, minmax(0, 1fr));
         gap: 2px;
+        width: 100%;
       }
       .ram-cell {
         background: var(--vn-panel);
@@ -161,6 +162,8 @@
         flex-direction: column;
         justify-content: center;
         height: 35px;
+        min-width: 0;
+        overflow: hidden;
         transition: all 0.2s;
       }
       .ram-cell:hover {
@@ -320,7 +323,7 @@
 
         const [mnemonic, ...operands] = text.trim().split(/\s+/);
         if (operands.length > 0 && /^[A-Z]+$/.test(mnemonic)) {
-          return `${mnemonic} ...`;
+          return `${mnemonic}...`;
         }
 
         return text.substring(0, 6);
@@ -918,9 +921,9 @@
             {/* CS Learning Header */}
             <></>
 
-          <div className="processor-layout flex p-4 gap-4 box-border items-start overflow-x-auto">
+          <div className="processor-layout flex p-4 gap-4 box-border items-start overflow-x-hidden">
             {/* LEFT PANEL: PROCESSOR (70%) */}
-            <div className="processor-panel w-[70%] cpu-box flex flex-col p-6 shadow-2xl overflow-visible">
+            <div className="processor-panel w-[70%] cpu-box flex flex-col p-6 shadow-2xl overflow-visible min-w-0">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h1 className="text-2xl font-bold text-slate-100 tracking-wider">
@@ -1127,7 +1130,7 @@
             </div>
 
             {/* RIGHT PANEL: MEMORY & CONTROL (30%) */}
-            <div className="processor-side-panel w-[30%] flex flex-col gap-4">
+            <div className="processor-side-panel w-[30%] flex flex-col gap-4 min-w-0">
               {/* Control & Topics */}
               <div className="control-card bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
                 <div className="flex justify-between items-center mb-2">
@@ -1239,7 +1242,7 @@
                   Hover for binary/details. Loop program loaded.
                 </div>
 
-                <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar">
                   {renderGrid()}
                 </div>
               </div>
@@ -1262,6 +1265,14 @@
       .von-neumann-simulator {
         background: var(--vn-page) !important;
         color: var(--vn-text);
+      }
+
+      .processor-panel {
+        width: calc(68% - 0.5rem) !important;
+      }
+
+      .processor-side-panel {
+        width: calc(32% - 0.5rem) !important;
       }
 
       .processor-panel,
