@@ -68,7 +68,8 @@
         } catch (e) {}
       })();
     </script>
-  </head>
+      <script src="scripts/site-shell.js"></script>
+</head>
   <body>
     <div id="root"></div>
 
@@ -150,10 +151,10 @@
         const cleanInput = input.trim().toLowerCase();
         const cleanCorrect = correct.trim().toLowerCase();
         const cleanPrefix = prefix.trim().toLowerCase();
-        if (cleanInput === cleanCorrect) return true;
-        if (cleanPrefix + cleanInput === cleanCorrect) return true;
-        if (cleanInput === cleanCorrect.replace(cleanPrefix, "").trim()) return true;
-        return false;
+        const cleanFullAnswer = cleanCorrect.startsWith(cleanPrefix)
+          ? cleanCorrect
+          : cleanPrefix + cleanCorrect;
+        return cleanInput === cleanFullAnswer || cleanInput === cleanCorrect;
       };
 
       // --- TOPICS & GENERATORS ---
@@ -290,7 +291,7 @@
               id: `file-text-1-${Date.now()}`,
               type: "text",
               topic: "file",
-              question: "Files are stored on secondary storage because it retains its contents even when power is lost. What 'N' describes this type of storage?",
+              question: "Files are stored on secondary storage because it retains its contents even when power is lost. What term describes this type of storage?",
               prefix: "N",
               answer: "on-volatile",
               fullWord: "Non-volatile",
@@ -468,14 +469,12 @@
         return (
           <div className="mt-6 flex flex-col items-center">
             <div className="flex items-end gap-1 text-2xl font-mono text-slate-700 dark:text-slate-300">
-              <span className="font-bold border-b-2 border-slate-400 dark:border-slate-500 pb-1">
-                {question.prefix}
-              </span>
               <input
                 type="text"
                 disabled={isEvaluated}
                 value={userAnswer || ""}
                 onChange={(e) => setUserAnswer(e.target.value)}
+                placeholder={`${question.prefix.toLowerCase()}...`}
                 className="bg-transparent border-b-2 border-slate-400 dark:border-slate-500 focus:border-indigo-500 outline-none pb-1 w-48 px-1 text-slate-800 dark:text-slate-100"
               />
             </div>
@@ -512,18 +511,18 @@
 
             <div className="flex flex-wrap items-center justify-center gap-6 text-2xl font-mono text-slate-700 dark:text-slate-300">
               <div className="flex items-end gap-1">
-                <span className="font-bold border-b-2 border-slate-400 dark:border-slate-500 pb-1">E</span>
                 <input type="text" disabled={isEvaluated} value={w1} onChange={(e) => setW1(e.target.value)}
+                  placeholder="e..."
                   className="bg-transparent border-b-2 border-slate-400 dark:border-slate-500 focus:border-indigo-500 outline-none pb-1 w-16 px-1 text-slate-800 dark:text-slate-100" />
               </div>
               <div className="flex items-end gap-1">
-                <span className="font-bold border-b-2 border-slate-400 dark:border-slate-500 pb-1">O</span>
                 <input type="text" disabled={isEvaluated} value={w2} onChange={(e) => setW2(e.target.value)}
+                  placeholder="o..."
                   className="bg-transparent border-b-2 border-slate-400 dark:border-slate-500 focus:border-indigo-500 outline-none pb-1 w-10 px-1 text-slate-800 dark:text-slate-100" />
               </div>
               <div className="flex items-end gap-1">
-                <span className="font-bold border-b-2 border-slate-400 dark:border-slate-500 pb-1">F</span>
                 <input type="text" disabled={isEvaluated} value={w3} onChange={(e) => setW3(e.target.value)}
+                  placeholder="f..."
                   className="bg-transparent border-b-2 border-slate-400 dark:border-slate-500 focus:border-indigo-500 outline-none pb-1 w-20 px-1 text-slate-800 dark:text-slate-100" />
               </div>
             </div>
@@ -914,38 +913,7 @@
         return (
           <div className="min-h-screen flex flex-col bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 relative pb-24">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={toggleTheme}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {theme === "dark" ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
 
             {/* Filter/Page Sub-header */}
             <FilterBar topics={topics} setTopics={setTopics} applyFilter={loadNewLoop} />

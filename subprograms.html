@@ -15,7 +15,7 @@
       gtag("js", new Date());
       gtag("config", "G-DYQESQXT38");
     </script>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -31,19 +31,19 @@
         },
       };
     </script>
-    
+
     <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    
-    <!-- Babel for in-browser JSX compilation -->
+
+    <!-- JSX is compiled during npm run build. -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; }
         .drop-zone { min-width: 120px; display: inline-block; text-align: center; }
         .code-font { font-family: 'Courier New', Courier, monospace; }
-        
+
         /* Custom scrollbar for dropdowns */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
@@ -64,6 +64,7 @@
         } catch (e) {}
       })();
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -275,7 +276,7 @@
             const [selectedTopics, setSelectedTopics] = useState([...SUBTOPICS]);
             const [tempSelectedTopics, setTempSelectedTopics] = useState([...SUBTOPICS]);
             const [isFilterOpen, setIsFilterOpen] = useState(false);
-            
+
             // Loop State
             const [questionLoop, setQuestionLoop] = useState([]);
             const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -299,7 +300,7 @@
                 setQuestionLoop(shuffled);
                 setTotalInLoop(shuffled.length);
                 setCurrentIndex(1);
-                
+
                 if (shuffled.length > 0) {
                     setupQuestion(shuffled[0]);
                 } else {
@@ -374,7 +375,7 @@
                     const ans = currentQuestion.answer.toLowerCase();
                     const input = (userAnswer || "").trim().toLowerCase();
                     const firstLet = currentQuestion.firstLetter.toLowerCase();
-                    
+
                     if (input === ans || (firstLet + input) === ans) {
                         correct = true;
                     }
@@ -469,9 +470,9 @@
                     {shuffledOptions.map((opt, i) => {
                         const isSelected = Array.isArray(userAnswer) && userAnswer.includes(opt);
                         const isCorrectAnswer = currentQuestion.answers.includes(opt);
-                        
+
                         let borderClass = 'border-slate-200 hover:border-blue-300 hover:bg-slate-50';
-                        
+
                         if (showSolution) {
                             if (isCorrectAnswer) {
                                 borderClass = 'border-green-500 bg-green-50 ring-2 ring-green-200';
@@ -504,12 +505,12 @@
             const renderFIB = () => (
                 <div className="mt-6 p-6 bg-blue-50/50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900 text-lg">
                     <span>{currentQuestion.text}</span>
-                    <span className="font-bold text-blue-700 ml-1">{currentQuestion.firstLetter}</span>
                     <input
                         type="text"
                         value={userAnswer || ""}
                         onChange={(e) => setUserAnswer(e.target.value)}
                         disabled={showSolution}
+                        placeholder={`${currentQuestion.firstLetter.toLowerCase()}...`}
                         className={`mx-1 px-2 py-1 border-b-2 bg-white outline-none w-32 focus:border-blue-500 font-bold text-blue-700
                             ${showSolution && isCorrect ? 'border-green-500' : ''}
                             ${showSolution && isCorrect === false ? 'border-red-500' : ''}
@@ -523,7 +524,7 @@
             const renderDragDrop = () => {
                 const handleZoneClick = (zoneId) => {
                     if (showSolution) return;
-                    
+
                     if (activeDropLabel) {
                         // Place label
                         setDropZones(prev => ({...prev, [zoneId]: activeDropLabel}));
@@ -597,10 +598,10 @@
                             <div className="grid grid-cols-[auto_min-content] gap-x-8 gap-y-2 text-slate-100 code-font items-center min-w-max">
                                 {currentQuestion.codeLines.map((lineObj, idx) => {
                                     if (lineObj.code === "" && !lineObj.zoneId) return <div key={idx} className="col-span-2 h-4"></div>;
-                                    
+
                                     const zId = lineObj.zoneId;
                                     let currentLabel = null, showCorrect = false, showWrong = false;
-                                    
+
                                     if (zId) {
                                         currentLabel = dropZones[zId];
                                         showCorrect = showSolution && currentLabel === currentQuestion.answers[zId];
@@ -641,38 +642,7 @@
                 return (
                     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
                         {/* CS Learning Header */}
-                        <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-                          <a
-                            href="index.html"
-                            className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-                          >
-                            <span className="text-slate-500">&lt;</span>CS
-                            <span className="text-slate-500">&gt;</span>&nbsp;Learning
-                          </a>
-                          <nav className="flex items-center gap-6">
-                            <a
-                              href="index.html"
-                              className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                            >
-                              Home
-                            </a>
-                            <button
-                              onClick={toggleTheme}
-                              className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                              aria-label="Toggle Dark Mode"
-                            >
-                              {theme === "dark" ? (
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>
-                              ) : (
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                                </svg>
-                              )}
-                            </button>
-                          </nav>
-                        </header>
+                        <></>
                         <div className="flex-1 flex items-center justify-center p-6 text-center">
                             <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-lg max-w-md w-full">
                                 <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">No Questions Found</h2>
@@ -687,21 +657,7 @@
             return (
                 <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                     {/* CS Learning Header */}
-                    <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-                      <a href="index.html" className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
-                        <span className="text-slate-500">&lt;</span>CS<span className="text-slate-500">&gt;</span>&nbsp;Learning
-                      </a>
-                      <nav className="flex items-center gap-6">
-                        <a href="index.html" className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors">Home</a>
-                        <button onClick={toggleTheme} className="text-slate-400 hover:text-headerAccent transition-colors p-1" aria-label="Toggle Dark Mode">
-                          {theme === "dark" ? (
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                          ) : (
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
-                          )}
-                        </button>
-                      </nav>
-                    </header>
+                    <></>
 
                     <div className="flex-1 p-4 md:p-8">
                     <div className="max-w-4xl mx-auto">

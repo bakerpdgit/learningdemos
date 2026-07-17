@@ -127,6 +127,12 @@
         gap: 0.8rem;
         margin-top: 0.35rem;
       }
+      .answer-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-top: 0.9rem;
+      }
       .row {
         display: flex;
         align-items: center;
@@ -397,35 +403,16 @@
         },
       };
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
   <body>
-    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
-  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
-    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
-  </a>
-  <nav class="flex items-center gap-6">
-    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
-    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
-      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-      </svg>
-      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-      </svg>
-    </button>
-  </nav>
-</header>
+
     <div class="page">
       <section class="card main">
         <h1>IP Addressing Interactive</h1>
-        <p class="subtitle">
-          Generate random questions from selected sub-topics. Press
-          <strong>Enter</strong> to submit answers quickly.
-        </p>
+        <p class="subtitle">Generate random questions from selected sub-topics.</p>
         <div class="toolbar">
           <button id="newQuestionBtn">New Random Question</button>
-          <button id="submitBtn" class="secondary">Submit Answer</button>
-          <button id="revealBtn" class="secondary">Reveal Worked Answer</button>
           <div class="score-pill" id="scorePill">Score: 0 / 0</div>
         </div>
 
@@ -433,6 +420,10 @@
           <div class="topic-label" id="topicLabel"></div>
           <p class="prompt" id="promptText"></p>
           <div class="answer-area" id="answerArea"></div>
+          <div class="answer-actions">
+            <button id="submitBtn">Submit Answer</button>
+            <button id="revealBtn" class="secondary" hidden>Show Solution</button>
+          </div>
           <div class="feedback" id="feedbackBox"></div>
         </div>
 
@@ -497,6 +488,7 @@
         current: null,
         total: 0,
         correct: 0,
+        hasAttemptedAnswer: false,
       };
 
       const privateBlocks = [
@@ -1115,10 +1107,16 @@
         box.innerHTML = `${head}<div class="explain">${state.current.explain}</div>`;
       }
 
+      function updateAnswerControls() {
+        document.getElementById("revealBtn").hidden = !state.hasAttemptedAnswer;
+      }
+
       function submitAnswer() {
         if (!state.current) return;
         const ans = getCurrentAnswer();
         const ok = isCorrect(ans);
+        state.hasAttemptedAnswer = true;
+        updateAnswerControls();
         state.total += 1;
         if (ok) state.correct += 1;
         document.getElementById("scorePill").textContent =
@@ -1134,7 +1132,9 @@
         }
         const topic = pick(topicIndexes);
         state.current = generateQuestion(topic);
+        state.hasAttemptedAnswer = false;
         renderQuestion();
+        updateAnswerControls();
         const box = document.getElementById("feedbackBox");
         box.className = "feedback";
         box.innerHTML = "";
@@ -1155,6 +1155,11 @@
             const idx = Number(el.dataset.topic);
             if (el.checked) state.selectedTopics.add(idx);
             else state.selectedTopics.delete(idx);
+            if (
+              state.current &&
+              !state.selectedTopics.has(state.current.topic) &&
+              state.selectedTopics.size > 0
+            ) newQuestion();
           }
         });
       }
@@ -1167,7 +1172,9 @@
         .addEventListener("click", submitAnswer);
       document
         .getElementById("revealBtn")
-        .addEventListener("click", () => showFeedback(false, true));
+        .addEventListener("click", () => {
+          if (state.hasAttemptedAnswer) showFeedback(false, true);
+        });
       document.getElementById("allOnBtn").addEventListener("click", () => {
         document.querySelectorAll("#topicList input").forEach((c) => {
           c.checked = true;

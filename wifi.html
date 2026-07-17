@@ -47,7 +47,8 @@
         } catch (e) {}
       })();
     </script>
-  </head>
+      <script src="scripts/site-shell.js"></script>
+</head>
   <body>
     <div id="root"></div>
 
@@ -106,7 +107,12 @@
 
         const checkAnswer = () => {
           let isCorrect = true;
-          words.forEach((w, idx) => { if (inputs[idx].trim().toLowerCase() !== w.answer.toLowerCase()) isCorrect = false; });
+          words.forEach((w, idx) => {
+            const value = inputs[idx].trim().toLowerCase();
+            const remainder = w.answer.toLowerCase();
+            const fullWord = (w.initial + w.answer).toLowerCase();
+            if (value !== remainder && value !== fullWord) isCorrect = false;
+          });
           setStatus(isCorrect ? "correct" : "incorrect");
           if (isCorrect) setShowSolution(false);
         };
@@ -121,8 +127,7 @@
             <div className="flex flex-wrap gap-4 items-center mb-4">
               {words.map((word, idx) => (
                 <div key={idx} className="flex items-center">
-                  <span className="font-bold text-lg text-slate-700 dark:text-slate-300 mr-1">{word.initial}</span>
-                  <input type="text" className="border-b-2 border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 outline-none px-2 py-1 w-24 text-slate-700 dark:text-slate-100 bg-slate-50 dark:bg-slate-700 rounded-t" value={inputs[idx]} onChange={(e) => handleChange(idx, e.target.value)} />
+                  <input type="text" placeholder={`${word.initial.toLowerCase()}...`} className="border-b-2 border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 outline-none px-2 py-1 w-24 text-slate-700 dark:text-slate-100 bg-slate-50 dark:bg-slate-700 rounded-t" value={inputs[idx]} onChange={(e) => handleChange(idx, e.target.value)} />
                 </div>
               ))}
             </div>
@@ -232,8 +237,10 @@
           if (q.type === "fill") {
             isCorrect = qInputs.every((val, idx) => {
               const expected = q.answer[idx].toLowerCase();
-              if (q.id === "hidden_node" && idx === 1) return val.toLowerCase() === "tation" || val.toLowerCase() === "ode";
-              return val.toLowerCase() === expected;
+              const fullWord = (q.initials[idx] + q.answer[idx]).toLowerCase();
+              const user = val.toLowerCase().trim();
+              if (q.id === "hidden_node" && idx === 1) return ["tation", "station", "ode", "node"].includes(user);
+              return user === expected || user === fullWord;
             });
           } else if (q.type === "mcq") {
             isCorrect = qSelected === q.answer;
@@ -243,7 +250,9 @@
 
         const revealSolution = () => {
           setQStatus("revealed");
-          if (step.question.type === "fill") setQInputs(step.question.answer);
+          if (step.question.type === "fill") {
+            setQInputs(step.question.answer.map((answer, index) => step.question.initials[index] + answer));
+          }
         };
 
         return (
@@ -311,8 +320,7 @@
                       <div className="flex flex-wrap gap-3 items-center mb-3">
                         {step.question.initials.map((init, idx) => (
                           <div key={idx} className="flex items-center">
-                            <span className="font-bold text-slate-700 dark:text-slate-300 mr-1">{init}</span>
-                            <input type="text" className={`border-b-2 outline-none px-2 py-1 w-24 rounded-t transition bg-slate-50 dark:bg-slate-700 ${qStatus === "revealed" ? "border-green-400 text-green-700 dark:text-green-400 font-medium" : "border-slate-300 dark:border-slate-500 focus:border-blue-500 text-slate-700 dark:text-slate-100"}`} value={qInputs[idx] || ""} onChange={(e) => { const newInputs = [...qInputs]; newInputs[idx] = e.target.value; setQInputs(newInputs); if (qStatus !== "revealed") setQStatus("idle"); }} disabled={qStatus === "revealed" || qStatus === "correct"} />
+                            <input type="text" placeholder={`${init.toLowerCase()}...`} className={`border-b-2 outline-none px-2 py-1 w-24 rounded-t transition bg-slate-50 dark:bg-slate-700 ${qStatus === "revealed" ? "border-green-400 text-green-700 dark:text-green-400 font-medium" : "border-slate-300 dark:border-slate-500 focus:border-blue-500 text-slate-700 dark:text-slate-100"}`} value={qInputs[idx] || ""} onChange={(e) => { const newInputs = [...qInputs]; newInputs[idx] = e.target.value; setQInputs(newInputs); if (qStatus !== "revealed") setQStatus("idle"); }} disabled={qStatus === "revealed" || qStatus === "correct"} />
                           </div>
                         ))}
                       </div>
@@ -389,38 +397,7 @@
         return (
           <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={toggleTheme}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {theme === "dark" ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
 
             <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 w-full">
               {/* Header & Filter */}

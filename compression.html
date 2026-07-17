@@ -57,7 +57,8 @@
         } catch (e) {}
       })();
     </script>
-  </head>
+      <script src="scripts/site-shell.js"></script>
+</head>
   <body>
     <div id="root"></div>
 
@@ -227,19 +228,16 @@
                     </span>
                   ) : (
                     <span className="relative flex items-center">
-                      <span className="bg-slate-200 dark:bg-slate-600 border border-slate-400 dark:border-slate-500 border-r-0 rounded-l px-2 py-1 font-mono text-slate-600 dark:text-slate-200 font-bold select-none">
-                        {part.hint}
-                      </span>
                       <input
                         type="text"
                         value={userInputs[index] || ""}
                         onChange={(e) => handleInputChange(index, e.target.value)}
-                        className={`border rounded-r px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400 gap-input text-slate-800 dark:text-slate-100
+                        className={`border rounded px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400 gap-input text-slate-800 dark:text-slate-100
                           ${isWrongInput ? "bg-red-50 dark:bg-red-900/20 border-red-500" : ""}
                           ${isCorrectInput ? "bg-green-50 dark:bg-green-900/20 border-green-500" : ""}
                           ${!isWrongInput && !isCorrectInput ? "border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-700" : ""}
                         `}
-                        placeholder="..."
+                        placeholder={`${part.hint.toLowerCase()}...`}
                         disabled={checkStatus === "checked" && isAllCorrectInput(parts, userInputs)}
                       />
                     </span>
@@ -666,7 +664,11 @@
           return tokens.map((t) => question.dict[t] || t).join(joinChar);
         }, [question]);
 
-        const validate = () => { onCheck(input.trim() === expected, { input, expected }); };
+        const validate = () => {
+          const normalizedInput = input.trim().toLocaleLowerCase("en-GB");
+          const normalizedExpected = expected.trim().toLocaleLowerCase("en-GB");
+          onCheck(normalizedInput === normalizedExpected, { input, expected });
+        };
 
         return (
           <div className="space-y-4">
@@ -823,30 +825,7 @@
         return (
           <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={toggleTheme}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle theme"
-                >
-                  {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-                </button>
-              </nav>
-            </header>
+            <></>
 
             <div className="max-w-4xl mx-auto pt-8 pb-16 px-4">
               {/* Page Sub-header & Controls */}
