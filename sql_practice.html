@@ -39,26 +39,12 @@
         to { opacity: 1; transform: translateY(0); }
       }
     </style>
-  </head>
+      <script src="scripts/site-shell.js"></script>
+</head>
   <body class="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors">
 
     <!-- CS Learning Header -->
-    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 sticky top-0">
-      <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
-        <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
-      </a>
-      <nav class="flex items-center gap-6">
-        <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors">Home</a>
-        <button id="theme-toggle" class="text-slate-400 hover:text-headerAccent transition-colors p-1" aria-label="Toggle Dark Mode">
-          <svg id="icon-sun" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-          </svg>
-          <svg id="icon-moon" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-          </svg>
-        </button>
-      </nav>
-    </header>
+
 
     <div id="app"></div>
 
@@ -122,7 +108,7 @@
         { id:8, type:"Multi-Table (JOIN + WHERE)", text:"Write a query to find the DeviceType and OS for the student with the LastName 'Lovelace'. Use the AQA comma-separated FROM clause approach.", tables:["Student","Device"], expectedSql:"SELECT Device.DeviceType, Device.OS \nFROM Student, Device \nWHERE Student.StudentID = Device.StudentID \n  AND Student.LastName = 'Lovelace'" },
       ];
 
-      const state = { currentQuestionIndex: 0, currentInput: "", viewState: "question", results: [] };
+      const state = { currentQuestionIndex: 0, currentInput: "", inputError: false, viewState: "question", results: [] };
       const app = document.getElementById("app");
 
       function currentQuestion() { return questions[state.currentQuestionIndex]; }
@@ -142,12 +128,12 @@
             <div class="overflow-x-auto">
               <table class="w-full text-left text-sm">
                 <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300">
-                  <tr>${table.columns.map(col => `<th class="border-b border-slate-200 dark:border-slate-600 px-4 py-2 font-semibold">${col}</th>`).join("")}</tr>
+                  <tr>${table.columns.map(col => `<th class="whitespace-nowrap border-b border-slate-200 dark:border-slate-600 px-4 py-2 font-semibold">${col}</th>`).join("")}</tr>
                 </thead>
                 <tbody>
                   ${table.data.map(row => `
                     <tr class="border-b border-slate-100 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                      ${row.map(cell => `<td class="px-4 py-2 font-mono text-slate-600 dark:text-slate-300">${escapeHtml(String(cell))}</td>`).join("")}
+                      ${row.map(cell => `<td class="whitespace-nowrap px-4 py-2 font-mono text-slate-600 dark:text-slate-300">${escapeHtml(String(cell))}</td>`).join("")}
                     </tr>`).join("")}
                 </tbody>
               </table>
@@ -161,7 +147,7 @@
 
         app.innerHTML = `
           <div class="bg-slate-800 dark:bg-slate-950 px-6 py-4 shadow-md">
-            <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 sm:flex-row">
+            <div class="mx-auto flex max-w-[96rem] flex-col items-center justify-between gap-3 sm:flex-row">
               <div>
                 <h1 class="flex items-center gap-2 text-xl font-bold text-white">
                   ${icon("code","h-5 w-5 text-sky-400")}
@@ -176,7 +162,7 @@
             </div>
           </div>
 
-          <main class="mx-auto max-w-6xl p-4 md:p-6 lg:p-8">
+          <main class="mx-auto max-w-[96rem] p-4 md:p-6 lg:p-8">
             ${state.viewState === "results" ? `
               <div class="mx-auto mt-10 max-w-2xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center shadow-lg">
                 <h2 class="mb-4 text-3xl font-bold text-slate-800 dark:text-slate-100">Practice Complete!</h2>
@@ -203,7 +189,7 @@
                 </button>
               </div>` : `
               <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
-                <div class="flex flex-col lg:col-span-5">
+                <div class="flex flex-col lg:col-span-6">
                   <h2 class="mb-3 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2 text-lg font-bold text-slate-700 dark:text-slate-300">
                     ${icon("database","h-5 w-5 text-sky-500")} Database Schema
                   </h2>
@@ -212,7 +198,7 @@
                   </div>
                 </div>
 
-                <div class="flex flex-col lg:col-span-7">
+                <div class="flex flex-col lg:col-span-6">
                   <div class="mb-4 flex-grow rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-md">
                     <div class="mb-5">
                       <span class="mb-3 inline-block rounded-full bg-sky-100 dark:bg-sky-900/40 px-2 py-1 text-xs font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300">
@@ -225,9 +211,15 @@
                       <div class="flex h-full flex-col">
                         <label class="mb-2 block text-sm font-semibold text-slate-600 dark:text-slate-400">Your SQL Query:</label>
                         <textarea id="sql-input"
-                          class="h-48 w-full resize-none rounded-lg bg-slate-900 dark:bg-black/50 p-4 font-mono text-base text-green-400 shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-500/50 border border-slate-700"
+                          class="h-48 w-full resize-none rounded-lg bg-slate-900 dark:bg-black/50 p-4 font-mono text-base text-green-400 shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-500/50 border ${state.inputError ? "border-red-500" : "border-slate-700"}"
                           placeholder="Write your SQL query here..."
-                          spellcheck="false">${escapeHtml(state.currentInput)}</textarea>
+                          spellcheck="false"
+                          aria-invalid="${state.inputError}"
+                          ${state.inputError ? 'aria-describedby="sql-input-error"' : ""}>${escapeHtml(state.currentInput)}</textarea>
+                        ${state.inputError ? `
+                          <p id="sql-input-error" class="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300" role="alert">
+                            ${icon("alert-circle", "h-4 w-4 shrink-0")} Please attempt writing an SQL query first.
+                          </p>` : ""}
                         <div class="mt-5 flex justify-end">
                           <button id="check-btn"
                             class="flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-700 px-6 py-2.5 font-bold text-white transition-all hover:scale-105">
@@ -272,10 +264,26 @@
 
       function bindEvents() {
         const sqlInput = document.getElementById("sql-input");
-        if (sqlInput) sqlInput.addEventListener("input", e => { state.currentInput = e.target.value; });
+        if (sqlInput) sqlInput.addEventListener("input", e => {
+          state.currentInput = e.target.value;
+          if (state.inputError) {
+            state.inputError = false;
+            document.getElementById("sql-input-error")?.remove();
+            sqlInput.classList.remove("border-red-500");
+            sqlInput.classList.add("border-slate-700");
+            sqlInput.setAttribute("aria-invalid", "false");
+            sqlInput.removeAttribute("aria-describedby");
+          }
+        });
         const checkBtn = document.getElementById("check-btn");
         if (checkBtn) checkBtn.addEventListener("click", () => {
-          if (state.currentInput.trim() === "") { alert("Please attempt writing an SQL query first!"); return; }
+          if (state.currentInput.trim() === "") {
+            state.inputError = true;
+            render();
+            document.getElementById("sql-input")?.focus();
+            return;
+          }
+          state.inputError = false;
           state.viewState = "review"; render();
         });
         const wrongBtn = document.getElementById("wrong-btn");
@@ -284,14 +292,14 @@
         if (rightBtn) rightBtn.addEventListener("click", () => handleMark(true));
         const restartBtn = document.getElementById("restart-btn");
         if (restartBtn) restartBtn.addEventListener("click", () => {
-          state.currentQuestionIndex = 0; state.currentInput = ""; state.viewState = "question"; state.results = []; render();
+          state.currentQuestionIndex = 0; state.currentInput = ""; state.inputError = false; state.viewState = "question"; state.results = []; render();
         });
       }
 
       function handleMark(isCorrect) {
         state.results = [...state.results, isCorrect];
         if (state.currentQuestionIndex < questions.length - 1) {
-          state.currentQuestionIndex++; state.currentInput = ""; state.viewState = "question";
+          state.currentQuestionIndex++; state.currentInput = ""; state.inputError = false; state.viewState = "question";
         } else { state.viewState = "results"; }
         render();
       }

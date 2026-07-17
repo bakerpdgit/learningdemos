@@ -63,7 +63,8 @@
         } catch (e) {}
       })();
     </script>
-  </head>
+      <script src="scripts/site-shell.js"></script>
+</head>
   <body>
     <div id="root"></div>
 
@@ -376,7 +377,7 @@
           } else if (nextQ.type === "contextual_scenario") {
             let initAns = {};
             nextQ.items.forEach((item) => {
-              initAns[item.id] = { wordInput: "", revealedCount: item.firstLetter.length, wordSolved: false, solvedWord: "", category: "", rowStatus: "pending" };
+              initAns[item.id] = { wordInput: "", revealedCount: 0, wordSolved: false, solvedWord: "", category: "", rowStatus: "pending" };
             });
             setContextualAnswer(initAns);
           }
@@ -514,17 +515,14 @@
         const renderKeyword = () => (
           <div className="mt-8 flex flex-col items-center justify-center fade-in">
             <div className="relative flex items-center w-full max-w-md shadow-sm">
-              <span className="absolute left-4 font-bold text-2xl text-indigo-700 dark:text-indigo-400 select-none">
-                {currentQuestion.firstLetter}
-              </span>
               <input
                 ref={inputRef}
                 type="text"
                 value={userAnswer}
                 onChange={(e) => handleAnswerChange(e.target.value)}
                 disabled={showSolution || isCorrect}
-                placeholder="... type the missing keyword or acronym"
-                className="w-full pl-12 pr-4 py-4 text-xl border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-slate-800 dark:text-slate-100 font-semibold bg-white dark:bg-slate-700"
+                placeholder={`${currentQuestion.firstLetter.toLowerCase()}...`}
+                className="w-full px-4 py-4 text-xl border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-slate-800 dark:text-slate-100 font-semibold bg-white dark:bg-slate-700"
                 onKeyDown={(e) => { if (e.key === "Enter") submitAnswer(); }}
               />
             </div>
@@ -573,7 +571,7 @@
               Complete the missing word (use [+] for hints) to reveal the categories, then select the correct category.
             </p>
             {currentQuestion.items.map((item) => {
-              let ans = contextualAnswer[item.id] || { wordInput: "", revealedCount: 1, wordSolved: false, rowStatus: "pending" };
+              let ans = contextualAnswer[item.id] || { wordInput: "", revealedCount: 0, wordSolved: false, rowStatus: "pending" };
               let primaryWord = item.missingWords[0];
               let prefix = primaryWord.substring(0, ans.revealedCount);
 
@@ -610,6 +608,7 @@
                             type="text"
                             value={ans.wordInput}
                             onChange={(e) => handleContextualWordChange(item.id, e.target.value, item)}
+                            placeholder={`${item.firstLetter.toLowerCase()}...`}
                             className="outline-none bg-transparent min-w-[5rem] max-w-[8rem] text-slate-800 dark:text-slate-100 font-semibold"
                           />
                           <button
@@ -750,41 +749,10 @@
         return (
           <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 relative pb-12">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={toggleTheme}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {theme === "dark" ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
 
             {/* Page Sub-Header */}
-            <div className="bg-indigo-800 dark:bg-slate-800 text-white p-4 shadow-md sticky top-[58px] z-40">
+            <div data-interactive-flat-header className="bg-indigo-800 dark:bg-slate-800 text-white p-4 sticky top-[58px] z-40">
               <div className="max-w-4xl mx-auto flex justify-between items-center">
                 <div>
                   <h1 className="text-xl md:text-2xl font-bold tracking-tight">AQA A-Level CS</h1>
@@ -799,7 +767,7 @@
                     className="flex items-center gap-2 bg-indigo-700 dark:bg-slate-700 hover:bg-indigo-600 dark:hover:bg-slate-600 px-4 py-2.5 rounded-lg transition-colors shadow-sm font-semibold text-sm"
                   >
                     <i className="fas fa-filter"></i>
-                    <span className="hidden md:inline">Topics Filter</span>
+                    <span className="hidden md:inline">Filter Topics</span>
                     <i className={`fas fa-chevron-${isMenuOpen ? "up" : "down"} text-xs ml-1`}></i>
                   </button>
 

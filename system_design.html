@@ -39,7 +39,7 @@
       crossorigin
       src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
     ></script>
-    <!-- Babel for in-browser JSX compilation -->
+    <!-- JSX is compiled during npm run build. -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
       body {
@@ -107,6 +107,7 @@
         } catch (e) {}
       })();
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
   <body>
     <div id="root"></div>
@@ -375,7 +376,7 @@
         const [isOpen, setIsOpen] = useState(false);
 
         return (
-          <div className="absolute top-4 right-4 z-50">
+          <div className="relative z-50">
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="bg-white dark:bg-slate-700 dark:border-slate-500 dark:text-slate-200 border border-gray-300 shadow-sm rounded-md px-4 py-2 flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none"
@@ -396,7 +397,22 @@
               Filter Subtopics
             </button>
             {isOpen && (
-              <div className="mt-2 w-64 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 shadow-lg rounded-md p-4 flex flex-col gap-2 fade-in">
+              <div
+                className="interactive-shell-filter-popover interactive-shell-standard-filter mt-2 w-64 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 shadow-lg rounded-md p-4 flex flex-col gap-2 fade-in"
+                role="dialog"
+                aria-label="Filter topics"
+              >
+                <button
+                  type="button"
+                  className="interactive-shell-filter-close"
+                  data-interactive-filter-close
+                  aria-label="Close filter"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18"></path>
+                  </svg>
+                </button>
                 {Object.values(topics).map((topic) => (
                   <label
                     key={topic}
@@ -416,9 +432,10 @@
                     setIsOpen(false);
                     onApply();
                   }}
-                  className="mt-3 bg-blue-600 hover:bg-blue-700 text-white rounded py-1 px-4 w-full transition-colors text-sm font-semibold"
+                  className="interactive-shell-filter-apply mt-3 bg-blue-600 hover:bg-blue-700 text-white rounded py-1 px-4 w-full transition-colors text-sm font-semibold"
+                  data-interactive-filter-apply
                 >
-                  Apply & New Question
+                  Apply Filter
                 </button>
               </div>
             )}
@@ -639,13 +656,11 @@
               <div className="text-lg text-gray-800 dark:text-slate-100 mb-8 font-medium leading-relaxed">
                 {parts[0]}
                 <span className="inline-flex items-center mx-1 relative top-1">
-                  <span className="text-xl font-bold text-gray-700 dark:text-slate-300 mr-1">
-                    {currentQ.hintLetter}
-                  </span>
                   <input
                     type="text"
                     value={typeof userAnswer === "string" ? userAnswer : ""}
                     onChange={(e) => setUserAnswer(e.target.value)}
+                    placeholder={`${currentQ.hintLetter.toLowerCase()}...`}
                     className="border-b-2 border-gray-400 dark:border-slate-500 w-32 px-1 focus:outline-none focus:border-blue-600 bg-transparent text-lg font-bold text-blue-700 dark:text-blue-400 placeholder-gray-300"
                     onKeyDown={(e) => e.key === "Enter" && checkAnswer()}
                     autoFocus
@@ -673,46 +688,8 @@
         return (
           <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-slate-900">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={() => setIsDark(d => !d)}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {isDark ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
           <div className="relative overflow-hidden flex flex-col items-center py-10 px-4">
-            <FilterDropdown
-              topics={TOPICS}
-              selectedTopics={tempSelectedTopics}
-              onToggle={toggleTopic}
-              onApply={handleApplyFilter}
-            />
-
             <div className="w-full max-w-4xl bg-white dark:bg-slate-800 shadow-xl rounded-xl p-6 md:p-10 fade-in flex flex-col min-h-[500px]">
               {/* Header Area */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b dark:border-slate-600 pb-4 mb-6">
@@ -720,17 +697,25 @@
                   <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">
                     System Design Interactive
                   </h1>
-                  <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-1 uppercase tracking-wider">
-                    {currentQ.topic}
-                  </p>
                 </div>
-                <div className="text-sm text-gray-500 dark:text-slate-400 mt-2 md:mt-0 bg-gray-100 dark:bg-slate-700 px-3 py-1 rounded-full">
-                  {unasked.length} Questions remaining in loop
+                <div className="flex items-center gap-3 mt-2 md:mt-0">
+                  <div className="text-sm text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-3 py-1 rounded-full">
+                    {unasked.length} Questions remaining in loop
+                  </div>
+                  <FilterDropdown
+                    topics={TOPICS}
+                    selectedTopics={tempSelectedTopics}
+                    onToggle={toggleTopic}
+                    onApply={handleApplyFilter}
+                  />
                 </div>
               </div>
 
               {/* Flex-grow container for main content area */}
               <div className="flex-grow">
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-slate-100 mb-5">
+                  {currentQ.topic}
+                </h2>
                 {/* Question Text */}
                 {renderQuestionText()}
 
@@ -1688,14 +1673,16 @@
                 </div>
 
                 <div className="flex gap-3 shrink-0">
-                  {(!feedback || feedback === "wrong") && !showSolution && (
+                  {!showSolution && (
                     <>
-                      <button
-                        onClick={revealSolution}
-                        className="px-6 py-2.5 rounded-lg font-semibold text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-                      >
-                        Show Solution
-                      </button>
+                      {feedback === "wrong" && (
+                        <button
+                          onClick={revealSolution}
+                          className="px-6 py-2.5 rounded-lg font-semibold text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                        >
+                          Show Solution
+                        </button>
+                      )}
                       <button
                         onClick={checkAnswer}
                         disabled={isSubmitDisabled()}

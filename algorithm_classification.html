@@ -26,7 +26,7 @@
       src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
     ></script>
 
-    <!-- Babel for in-browser JSX compilation -->
+    <!-- JSX is compiled during npm run build. -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- Tailwind CSS -->
@@ -107,6 +107,7 @@
         } catch (e) {}
       })();
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
   <body>
     <div id="root"></div>
@@ -194,6 +195,10 @@
       );
 
       // --- Components ---
+
+      // Matches gap tokens while allowing one level of LaTeX braces inside them,
+      // for example $\\log_{10}(x)$ in a dropdown option.
+      const GAP_FILL_TOKEN_PATTERN = /(\{(?:dropdown\|(?:[^{}]|\{[^{}]*\})*|[^|}]*\|(?:[^{}]|\{[^{}]*\})+)\})/g;
 
       // MathText Parser
       const MathText = ({ text }) => {
@@ -557,10 +562,9 @@
         const [dropdownOptions, setDropdownOptions] = useState({});
 
         const parts = useMemo(() => {
-          const regex = /(\{(?:dropdown\|[^}]*|[^|}]*\|[^}]+)\})/g;
           let gapCount = 0;
 
-          return question.text.split(regex).map((part, index) => {
+          return question.text.split(GAP_FILL_TOKEN_PATTERN).map((part, index) => {
             if (part.startsWith("{dropdown|")) {
               const rawOptions = part.slice(10, -1).split("|");
               const correct = rawOptions[0]; // First item is always correct
@@ -647,20 +651,16 @@
                     key={part.id}
                     className="inline-flex items-baseline mx-1"
                   >
-                    {part.prefix && (
-                      <span className="font-semibold text-blue-700">
-                        {part.prefix}
-                      </span>
-                    )}
                     <input
                       type="text"
                       value={
                         showSolution
-                          ? cleanPrefixAns(part.prefix, part.answer)
+                          ? part.answer
                           : val
                       }
                       onChange={(e) => handleChange(part.id, e.target.value)}
                       disabled={showSolution}
+                      placeholder={`${part.prefix.toLowerCase()}...`}
                       className={`w-28 border-b-2 outline-none px-1 text-center font-semibold text-blue-800 dark:text-blue-300 transition-colors
                                             ${showSolution ? "border-green-500 bg-green-50 dark:bg-green-900/30" : "border-gray-400 dark:border-slate-500 focus:border-blue-500 bg-transparent dark:bg-transparent"}
                                         `}
@@ -1339,10 +1339,9 @@
 
         const validateGapFill = (userAnsObj, text) => {
           if (!userAnsObj) return false;
-          const regex = /(\{(?:dropdown\|[^}]*|[^|}]*\|[^}]+)\})/g;
           let isCorrect = true;
 
-          text.split(regex).forEach((part, index) => {
+          text.split(GAP_FILL_TOKEN_PATTERN).forEach((part, index) => {
             const uid = part.startsWith("{dropdown")
               ? `dd_${index}`
               : `gap_${index}`;
@@ -1431,38 +1430,7 @@
         return (
           <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-slate-900">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={() => setIsDark(d => !d)}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {isDark ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
 
             <div className="flex flex-col items-center py-10 px-4">
             <div className="w-full max-w-4xl bg-white dark:bg-slate-800 shadow-xl rounded-2xl overflow-hidden flex flex-col">
@@ -1523,7 +1491,7 @@
               </div>
 
               {/* Main Content Area */}
-              <div className="p-8 flex-grow flex flex-col z-10 bg-gray-50/50 dark:bg-slate-800">
+              <div className="p-8 flex-grow flex flex-col z-10 bg-white dark:bg-slate-800">
                 {!currentQuestion ? (
                   <div className="text-center py-20 text-gray-500 dark:text-slate-400">
                     <div className="text-4xl mb-4">📚</div>

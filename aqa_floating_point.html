@@ -40,6 +40,9 @@
     }
     #theme-toggle:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; }
     main { max-width: 900px; margin: 1.75rem auto; padding: 0 1rem 3rem; }
+    .practice-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 1.25rem; align-items: start; }
+    .practice-layout .card { margin-bottom: 0; }
+    .calculator-sidebar { position: sticky; top: 7rem; }
 
     /* ── Cards ── */
     .card { background: var(--card); border-radius: 10px; padding: 1.4rem 1.6rem; box-shadow: 0 2px 8px rgba(0,0,0,0.09); margin-bottom: 1.25rem; }
@@ -170,6 +173,11 @@
       padding: 0.5rem 0.65rem;
     }
 
+    @media (max-width: 800px) {
+      .practice-layout { grid-template-columns: 1fr; }
+      .calculator-sidebar { position: static; }
+    }
+
     @media (max-width: 520px) {
       .bit-cell { width: 34px; height: 38px; font-size: 1rem; }
       .row-label { min-width: 80px; font-size: 0.72rem; }
@@ -226,25 +234,11 @@
         },
       };
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
 <body>
 
-<header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
-  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
-    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
-  </a>
-  <nav class="flex items-center gap-6">
-    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
-    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
-      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-      </svg>
-      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-      </svg>
-    </button>
-  </nav>
-</header>
+
 
 <main>
   <!-- Score / new question -->
@@ -258,8 +252,9 @@
     </div>
   </div>
 
-  <!-- Question card -->
-  <div class="card" id="qCard">
+  <div class="practice-layout">
+    <!-- Question card -->
+    <div class="card" id="qCard">
     <div class="card-header">
       <h2 id="qTypeLabel">Question</h2>
       <span class="badge" id="qBadge">&#8212;</span>
@@ -294,21 +289,24 @@
     <div class="btn-row" id="btnRow" style="display:none">
       <button class="btn btn-primary" id="submitBtn" onclick="handleSubmit()">Check Answer</button>
       <button class="btn btn-outline" id="solBtn" onclick="showSolution()" style="display:none">Show Solution</button>
-      <button class="btn btn-new" onclick="newQuestion()">Next Question</button>
+      <button class="btn btn-new" id="nextBtn" onclick="newQuestion()" style="display:none">Next Question</button>
     </div>
 
     <div class="fb" id="fb"></div>
     <div class="sol" id="solBox"></div>
-  </div>
-
-  <div class="card calc-card">
-    <div class="calc-title">Scientific Calculator</div>
-    <p class="calc-help">Try <code>acos(0.5) * 180 / PI</code> or <code>2^5 + sqrt(49)</code>.</p>
-    <input type="text" id="calcExpr" class="calc-input" placeholder="Enter expression..." />
-    <div class="calc-row">
-      <button class="calc-btn" id="calcBtn">=</button>
-      <div class="calc-out" id="calcOut">0.0</div>
     </div>
+
+    <aside class="calculator-sidebar" aria-label="Scientific calculator">
+      <div class="card calc-card">
+        <div class="calc-title">Scientific Calculator</div>
+        <p class="calc-help">Try <code>acos(0.5) * 180 / PI</code> or <code>2^5 + sqrt(49)</code>.</p>
+        <input type="text" id="calcExpr" class="calc-input" placeholder="Enter expression..." />
+        <div class="calc-row">
+          <button class="calc-btn" id="calcBtn">=</button>
+          <div class="calc-out" id="calcOut">0.0</div>
+        </div>
+      </div>
+    </aside>
   </div>
 </main>
 
@@ -1060,6 +1058,7 @@ function renderQ(q) {
   sol.className = 'sol'; sol.innerHTML = '';
   const solBtn = document.getElementById('solBtn');
   solBtn.style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
   const subBtn = document.getElementById('submitBtn');
   subBtn.textContent = 'Check Answer'; subBtn.style.display = '';
   const txtAns = document.getElementById('txtAns');
@@ -1183,7 +1182,8 @@ function handleSubmit() {
   if (correct) {
     scoreCor++;
     answered = true;
-    document.getElementById('submitBtn').textContent = 'Next Question';
+    document.getElementById('submitBtn').style.display = 'none';
+    document.getElementById('nextBtn').style.display = '';
   } else {
     wrongCount++;
     if (wrongCount >= 1) document.getElementById('solBtn').style.display = '';
@@ -1209,7 +1209,8 @@ function showSolution() {
   }
 
   answered = true;
-  document.getElementById('submitBtn').textContent = 'Next Question';
+  document.getElementById('submitBtn').style.display = 'none';
+  document.getElementById('nextBtn').style.display = '';
   document.getElementById('solBtn').style.display = 'none';
 }
 

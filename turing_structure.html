@@ -15,7 +15,7 @@
       gtag("js", new Date());
       gtag("config", "G-DYQESQXT38");
     </script>
-    <!-- React & Babel for standalone execution -->
+    <!-- React is loaded at runtime; JSX is compiled during npm run build. -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -92,6 +92,7 @@
         } catch (e) {}
       })();
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
   <body class="antialiased">
     <div id="root"></div>
@@ -131,7 +132,7 @@
           type: "fillblanks",
           title: "Universal Turing Machines (UTMs)",
           instructions:
-            "Complete the sentence summarizing Universal Turing Machines. A first-letter hint is provided.",
+            "Complete the sentence summarizing Universal Turing Machines.",
           segments: [
             {
               type: "text",
@@ -162,7 +163,7 @@
           type: "fillblanks",
           title: "The Halting Problem Statement",
           instructions:
-            "Complete the definition of the Halting Problem. A first-letter hint is provided.",
+            "Complete the definition of the Halting Problem.",
           segments: [
             {
               type: "text",
@@ -185,7 +186,7 @@
           type: "fillblanks",
           title: "Significance of the Halting Problem",
           instructions:
-            "Complete the sentence regarding the consequences of the Halting Problem. A first-letter hint is provided.",
+            "Complete the sentence regarding the consequences of the Halting Problem.",
           segments: [
             {
               type: "text",
@@ -1071,7 +1072,7 @@
             onSolved();
           } else {
             setFeedback(
-              "Some words are incorrect. Use the first letter hints to guide you.",
+              "Some words are incorrect. Check each word and try again.",
             );
           }
         };
@@ -1080,7 +1081,7 @@
           setShowSolution(true);
           const solvedAnswers = {};
           question.segments.forEach((s) => {
-            if (s.type === "blank") solvedAnswers[s.id] = s.answer.substring(1);
+            if (s.type === "blank") solvedAnswers[s.id] = s.answer;
           });
           setAnswers(solvedAnswers);
           setFeedback("Solution revealed.");
@@ -1112,14 +1113,11 @@
                       key={idx}
                       className="inline-flex items-baseline border-b-2 border-gray-400 dark:border-slate-500 bg-gray-50 dark:bg-slate-600 px-1 mx-1 rounded-t shadow-sm"
                     >
-                      <span className={`font-bold ${colorClass}`}>
-                        {seg.hint}
-                      </span>
                       <input
                         type="text"
                         value={
                           showSolution
-                            ? seg.answer.substring(1)
+                            ? seg.answer
                             : answers[seg.id]
                         }
                         onChange={(e) =>
@@ -1128,7 +1126,7 @@
                         disabled={showSolution || isCorrect}
                         style={{ width: `max(4rem, ${seg.answer.length}ch)` }}
                         className={`bg-transparent outline-none focus:bg-white px-1 ${colorClass} font-semibold`}
-                        placeholder="..."
+                        placeholder={`${seg.hint.toLowerCase()}...`}
                       />
                     </span>
                   );
@@ -1705,38 +1703,7 @@
         return (
           <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-slate-900">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={() => setIsDark(d => !d)}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {isDark ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
             <header className="bg-gray-800 dark:bg-slate-800 text-white p-4 shadow-lg border-b-4 border-indigo-500 sticky top-[58px] z-40">
               <div className="max-w-5xl mx-auto flex justify-between items-center">
                 <h2 className="text-indigo-300 font-medium">

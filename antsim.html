@@ -328,7 +328,7 @@
             .simulation-area {
                 grid-template-columns: 1fr;
             }
-            
+
             .info-panel {
                 max-width: 100%;
             }
@@ -497,25 +497,11 @@
         },
       };
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
 <body>
 
-    <header class="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0 w-full">
-  <a href="index.html" class="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline">
-    <span class="text-slate-500">&lt;</span>CS<span class="text-slate-500">&gt;</span>&nbsp;Learning
-  </a>
-  <nav class="flex items-center gap-6">
-    <a href="index.html" class="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors no-underline">Home</a>
-    <button id="theme-toggle" aria-label="Toggle theme" class="text-slate-400 hover:text-headerAccent transition-colors p-1">
-      <svg id="icon-sun" style="display:none" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-      </svg>
-      <svg id="icon-moon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-      </svg>
-    </button>
-  </nav>
-</header>
+
 
     <div class="container">
         <header>
@@ -608,7 +594,7 @@
 
     <script>
         // Simulation Classes and Logic (converted from Python)
-        
+
         class Entity {
             constructor(startRow, startColumn) {
                 this._row = startRow;
@@ -634,7 +620,7 @@
             }
 
             getAmountOfFood() { return this._amountOfFood; }
-            
+
             getDetails() {
                 return `${this._amountOfFood} food present\n\n`;
             }
@@ -660,7 +646,7 @@
 
             getFoodCapacity() { return this._foodCapacity; }
             isAtOwnNest() { return this._row === this._nestRow && this._column === this._nestColumn; }
-            
+
             advanceStage(nests, ants, pheromones) {
                 this._stages += 1;
             }
@@ -676,10 +662,10 @@
             _changeCell(newCellIndicator, rowToChange, columnToChange) {
                 if (newCellIndicator > 5) rowToChange += 1;
                 else if (newCellIndicator < 3) rowToChange -= 1;
-                
+
                 if ([0, 3, 6].includes(newCellIndicator)) columnToChange -= 1;
                 else if ([2, 5, 8].includes(newCellIndicator)) columnToChange += 1;
-                
+
                 return [rowToChange, columnToChange];
             }
 
@@ -755,22 +741,22 @@
             advanceStage(nests, ants, pheromones) {
                 let antsToCull = 0;
                 let count = 0;
-                
+
                 for (let a of ants) {
                     if (a.getNestRow() === this._row && a.getNestColumn() === this._column) {
                         if (a.getTypeOfAnt() === "queen") count += 10;
                         else count += 2;
                     }
                 }
-                
+
                 this.changeFood(-Math.floor(count));
-                
+
                 if (this._foodLevel === 0 && ants.length > 0) antsToCull += 1;
                 if (this._foodLevel < ants.length) antsToCull += 1;
                 if (this._foodLevel < ants.length * 5) {
                     antsToCull += 1;
                     if (antsToCull > ants.length) antsToCull = ants.length;
-                    
+
                     for (let a = 0; a < antsToCull; a++) {
                         const rPos = Math.floor(Math.random() * ants.length);
                         if (ants[rPos].getTypeOfAnt() === "queen") {
@@ -791,7 +777,7 @@
                         }
                     }
                 }
-                
+
                 return [nests, ants, pheromones];
             }
         }
@@ -959,12 +945,12 @@
             getCellDetails(row, column) {
                 const currentCell = this._grid[this._getIndex(row, column)];
                 let details = currentCell.getDetails();
-                
+
                 const n = this.getNestInCell(currentCell);
                 if (n !== null) {
                     details += `Nest present (${n.getFoodLevel()} food)\n\n`;
                 }
-                
+
                 if (this.getNumberOfAntsInCell(currentCell) > 0) {
                     details += "ANTS\n";
                     for (let a of this._ants) {
@@ -974,7 +960,7 @@
                     }
                     details += "\n\n";
                 }
-                
+
                 if (this.getNumberOfPheromonesInCell(currentCell) > 0) {
                     details += "PHEROMONES\n";
                     for (let p of this._pheromones) {
@@ -984,7 +970,7 @@
                     }
                     details += "\n\n";
                 }
-                
+
                 return details;
             }
 
@@ -1010,11 +996,11 @@
                         const index = this._pheromones.indexOf(p);
                         if (index > -1) this._pheromones.splice(index, 1);
                     }
-                    
+
                     for (let a of this._ants) {
                         a.advanceStage(this._nests, this._ants, this._pheromones);
                         const currentCell = this._grid[this._getIndex(a.getRow(), a.getColumn())];
-                        
+
                         if (a.getFoodCarried() > 0 && a.isAtOwnNest()) {
                             this.addFoodToNest(a.getFoodCarried(), a.getRow(), a.getColumn());
                             a.updateFoodCarried(-a.getFoodCarried());
@@ -1036,7 +1022,7 @@
                             );
                         }
                     }
-                    
+
                     for (let n of this._nests) {
                         [, this._ants, this._pheromones] = n.advanceStage(this._nests, this._ants, this._pheromones);
                     }
@@ -1049,26 +1035,26 @@
                     for (let col = 1; col <= this._numberOfColumns; col++) {
                         details += `${row}, ${col}: `;
                         const tempCell = this._grid[this._getIndex(row, col)];
-                        
+
                         if (this.getNestInCell(tempCell) !== null) {
                             details += "| Nest |  ";
                         }
-                        
+
                         const numberOfAnts = this.getNumberOfAntsInCell(tempCell);
                         if (numberOfAnts > 0) {
                             details += `| Ants: ${numberOfAnts} |  `;
                         }
-                        
+
                         const numberOfPheromones = this.getNumberOfPheromonesInCell(tempCell);
                         if (numberOfPheromones > 0) {
                             details += `| Pheromones: ${numberOfPheromones} |  `;
                         }
-                        
+
                         const amountOfFood = tempCell.getAmountOfFood();
                         if (amountOfFood > 0) {
                             details += `| ${amountOfFood} food |  `;
                         }
-                        
+
                         details += "\n";
                     }
                 }
@@ -1090,17 +1076,17 @@
         function initSimulation() {
             const simNo = document.getElementById('sim-select').value;
             let params;
-            
+
             switch(simNo) {
                 case "1": params = [1, 5, 5, 500, 3, 5, 1000, 50]; break;
                 case "2": params = [1, 5, 5, 500, 3, 5, 1000, 100]; break;
                 case "3": params = [1, 10, 10, 500, 3, 9, 1000, 25]; break;
                 case "4": params = [2, 10, 10, 500, 3, 6, 1000, 25]; break;
             }
-            
+
             Ant._nextAntId = 1;
             Nest._nextNestId = 1;
-            
+
             simulation = new Simulation(params);
             renderGrid();
             updateStats();
@@ -1109,26 +1095,26 @@
 
         function renderGrid() {
             if (!simulation) return;
-            
+
             const gridDiv = document.getElementById('grid');
             gridDiv.innerHTML = '';
             gridDiv.style.gridTemplateColumns = `repeat(${simulation.getColumns()}, 60px)`;
-            
+
             for (let row = 1; row <= simulation.getRows(); row++) {
                 for (let col = 1; col <= simulation.getColumns(); col++) {
                     const cell = document.createElement('div');
                     cell.className = 'cell';
                     cell.onclick = () => inspectCell(row, col);
-                    
+
                     const index = (row - 1) * simulation.getColumns() + col - 1;
                     const cellData = simulation.getGrid()[index];
                     const nest = simulation.getNestInCell(cellData);
                     const ants = simulation.getNumberOfAntsInCell(cellData);
                     const pheromones = simulation.getNumberOfPheromonesInCell(cellData);
                     const food = cellData.getAmountOfFood();
-                    
+
                     let content = `<div class="cell-content">`;
-                    
+
                     if (nest) {
                         cell.classList.add('cell-nest');
                         content += `🏠<br>`;
@@ -1145,7 +1131,7 @@
                         if (!nest && ants === 0 && food === 0) cell.classList.add('cell-pheromone');
                         content += `💨${pheromones}`;
                     }
-                    
+
                     content += `</div>`;
                     cell.innerHTML = content;
                     gridDiv.appendChild(cell);
@@ -1182,7 +1168,7 @@
 
         function inspectCell(row, col) {
             if (!simulation) return;
-            
+
             const details = simulation.getCellDetails(row, col);
             const infoDiv = document.getElementById('info-content');
             infoDiv.innerHTML = `
@@ -1198,7 +1184,7 @@
                 alert('Please initialize a simulation first!');
                 return;
             }
-            
+
             const details = simulation.getDetails();
             document.getElementById('modal-content').innerHTML = 
                 `<pre style="max-height: 400px; overflow-y: auto;">${details}</pre>`;

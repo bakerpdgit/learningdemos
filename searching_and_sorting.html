@@ -20,7 +20,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-    <!-- Babel -->
+    <!-- JSX is compiled during npm run build. -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- Tailwind CSS -->
@@ -107,7 +107,6 @@
         padding: 8px;
         border: 1px solid #e5e7eb;
       }
-      .dropdown:hover .dropdown-content { display: block; }
       .dark .dropdown-content {
         background-color: #1e293b;
         border-color: #475569;
@@ -197,6 +196,7 @@
         } catch (e) {}
       })();
     </script>
+    <script src="scripts/site-shell.js"></script>
 </head>
   <body>
     <div id="root"></div>
@@ -634,6 +634,7 @@
         const isDark = theme === "dark";
 
         const [selectedTopics, setSelectedTopics] = useState(["Linear Search", "Binary Search", "Bubble Sort", "Merge Sort"]);
+        const [isTopicFilterOpen, setIsTopicFilterOpen] = useState(false);
         const [activeProblem, setActiveProblem] = useState(ALL_PROBLEMS[0]);
         const [oracle, setOracle] = useState([]);
         const [userTable, setUserTable] = useState([]);
@@ -643,6 +644,14 @@
         const pseudocodeRef = useRef(null);
         const [leftWidth, setLeftWidth] = useState(33.33);
         const [topHeight, setTopHeight] = useState(40);
+
+        useEffect(() => {
+          if (selectedTopics.includes(activeProblem.topic)) return;
+          const nextAllowedProblem = ALL_PROBLEMS.find((problem) =>
+            selectedTopics.includes(problem.topic),
+          );
+          if (nextAllowedProblem) setActiveProblem(nextAllowedProblem);
+        }, [selectedTopics, activeProblem.topic]);
 
         const startHorizDrag = (e) => {
           e.preventDefault();
@@ -788,6 +797,14 @@
 
         const effState = getEffectiveState(userTable);
 
+        const getTraceArray = () =>
+          activeProblem.arr.map((initialValue, idx) => {
+            const traceValue = effState[`arr[${idx}]`];
+            return traceValue === undefined || traceValue === ""
+              ? initialValue
+              : traceValue;
+          });
+
         const getArrayVisualizer = () => {
           if (activeProblem.topic === "Merge Sort") {
             let currentArrStr = effState["arr"] ? effState["arr"].replace(/\[|\]/g, "") : activeProblem.arr.join(", ");
@@ -804,9 +821,10 @@
             );
           }
 
+          const displayedArray = getTraceArray();
           return (
             <div className="flex gap-2 flex-wrap justify-center">
-              {activeProblem.arr.map((val, idx) => {
+              {displayedArray.map((val, idx) => {
                 let highlight = false;
                 let labels = [];
                 if (activeProblem.topic.includes("Search")) {
@@ -849,38 +867,7 @@
         return (
           <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
             {/* CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={toggleTheme}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {theme === "dark" ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
 
             {/* Sub-header / Tool Navbar */}
             <header className="bg-white dark:bg-slate-800 shadow px-6 py-3 flex justify-between items-center z-20 shrink-0 border-b border-slate-200 dark:border-slate-700">
@@ -890,10 +877,16 @@
               </div>
               <div className="flex items-center space-x-4">
                 <div className="dropdown relative">
-                  <button className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600">
+                  <button
+                    type="button"
+                    aria-expanded={isTopicFilterOpen}
+                    onClick={() => setIsTopicFilterOpen((isOpen) => !isOpen)}
+                    className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600"
+                  >
                     Filter Topics <span className="ml-2">▼</span>
                   </button>
-                  <div className="dropdown-content">
+                  {isTopicFilterOpen && (
+                    <div className="dropdown-content" style={{ display: "block" }}>
                     {["Linear Search", "Binary Search", "Bubble Sort", "Merge Sort"].map((topic) => (
                       <label key={topic} className="flex items-center p-2 cursor-pointer hover:bg-gray-50">
                         <input
@@ -910,7 +903,8 @@
                         {topic}
                       </label>
                     ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <select
                   className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 py-2 px-4 rounded shadow font-semibold hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"

@@ -29,7 +29,7 @@
       src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
     ></script>
 
-    <!-- Babel for standalone JSX compilation -->
+    <!-- JSX is compiled during npm run build. -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- Tailwind CSS & Dark Mode Config -->
@@ -192,7 +192,8 @@
         user-select: none !important;
       }
     </style>
-  </head>
+      <script src="scripts/site-shell.js"></script>
+</head>
   <body
     class="bg-gray-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors"
   >
@@ -468,12 +469,22 @@
           "Medium",
           "Hard",
         ]);
+        const [isDifficultyFilterOpen, setIsDifficultyFilterOpen] = useState(false);
         const [activeGraph, setActiveGraph] = useState(ALL_GRAPHS[0]);
+
+        useEffect(() => {
+          if (selectedDifficulties.includes(activeGraph.difficulty)) return;
+          const nextAllowedGraph = ALL_GRAPHS.find((graph) =>
+            selectedDifficulties.includes(graph.difficulty),
+          );
+          if (nextAllowedGraph) setActiveGraph(nextAllowedGraph);
+        }, [selectedDifficulties, activeGraph.difficulty]);
 
         // Simulation State
         const [oracle, setOracle] = useState([]);
         const [userTable, setUserTable] = useState([]);
         const [currentRowIdx, setCurrentRowIdx] = useState(0);
+        const [currentOracleIdx, setCurrentOracleIdx] = useState(0);
         const [phase, setPhase] = useState("INIT");
         const [feedback, setFeedback] = useState({
           type: "info",
@@ -538,6 +549,7 @@
             { visited: "-", q: "", dist: initDist, prev: initPrev },
           ]);
           setCurrentRowIdx(0);
+          setCurrentOracleIdx(0);
           setPhase("INIT");
           setMinDistAnswer("");
           setBacktrackPath("");
@@ -561,7 +573,7 @@
 
         const checkStep = () => {
           const uRow = userTable[currentRowIdx];
-          const oRow = oracle[currentRowIdx];
+          const oRow = oracle[currentOracleIdx];
           let errors = [];
 
           if (phase === "DEQUEUE") {
@@ -615,10 +627,29 @@
                 errors.push(`Distance for Node ${n} is incorrect.`);
             });
             if (errors.length === 0) {
+              const completedRow = { ...uRow };
+              const completedDist = {};
+              const completedPrev = {};
+              activeGraph.nodes.forEach((n) => {
+                completedDist[n] = formatDist(oRow.dist[n]);
+                completedPrev[n] = formatPrev(oRow.prev[n]);
+              });
+              completedRow.dist = completedDist;
+              completedRow.prev = completedPrev;
+              const newTable = [...userTable];
+              newTable[currentRowIdx] = completedRow;
+              newTable.push({
+                visited: "-",
+                q: "",
+                dist: { ...completedDist },
+                prev: { ...completedPrev },
+              });
+              setUserTable(newTable);
+              setCurrentRowIdx(currentRowIdx + 1);
               setPhase("UPDATE_PQ");
               setFeedback({
                 type: "success",
-                msg: `Correct! Now process the UPDATE command. Review the Priority Queue string to reflect any new priorities based on updated distances (lowest distance first, alphabetical tie-break). Make changes if needed and submit.`,
+                msg: `Correct! A new trace row is ready for the UPDATE command. Enter the reordered Priority Queue using the updated distances (lowest distance first, alphabetical tie-break), then submit.`,
               });
               return;
             }
@@ -666,13 +697,14 @@
               });
               setUserTable(newTable);
               setCurrentRowIdx(currentRowIdx + 1);
+              setCurrentOracleIdx(currentOracleIdx + 1);
               setPhase("DEQUEUE");
               setFeedback({
                 type: "success",
                 msg:
                   phase === "INIT"
-                    ? `Initialization complete. Now, perform a Priority Dequeue.`
-                    : `Priority Queue updated! Row ${currentRowIdx + 1} complete. Now perform the next Priority Dequeue.`,
+                    ? `Initialization complete. A new row is ready for a Priority Dequeue.`
+                    : `Priority Queue updated! A new row is ready for the next Priority Dequeue.`,
               });
               return;
             }
@@ -757,7 +789,7 @@
         };
 
         const showHint = () => {
-          let oRow = oracle[currentRowIdx];
+          let oRow = oracle[currentOracleIdx];
           if (phase === "DEQUEUE") {
             handleRowChange("visited", oRow.visited);
             handleRowChange("q", oRow.q_pre.join(", "));
@@ -835,58 +867,7 @@
         return (
           <div className="flex flex-col h-screen overflow-hidden">
             {/* Global CS Learning Header */}
-            <header className="bg-headerBg h-[58px] flex items-center justify-between px-8 shadow-lg z-50 shrink-0">
-              <a
-                href="index.html"
-                className="font-mono text-[1.2rem] font-bold text-headerAccent tracking-widest no-underline"
-              >
-                <span className="text-slate-500">&lt;</span>CS
-                <span className="text-slate-500">&gt;</span>&nbsp;Learning
-              </a>
-              <nav className="flex items-center gap-6">
-                <a
-                  href="index.html"
-                  className="text-slate-400 hover:text-headerAccent text-[0.875rem] font-medium tracking-wide transition-colors"
-                >
-                  Home
-                </a>
-                <button
-                  onClick={toggleTheme}
-                  className="text-slate-400 hover:text-headerAccent transition-colors p-1"
-                  aria-label="Toggle Dark Mode"
-                >
-                  {theme === "dark" ? (
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                      />
-                    </svg>
-                  ) : (
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                      />
-                    </svg>
-                  )}
-                </button>
-              </nav>
-            </header>
+            <></>
 
             {/* App Toolbar */}
             <div className="bg-white dark:bg-slate-800 shadow-sm px-6 py-3 flex justify-between items-center z-20 shrink-0 border-b border-gray-200 dark:border-slate-700">
@@ -899,11 +880,17 @@
                 </p>
               </div>
               <div className="flex items-center space-x-4">
-                <div className="relative group">
-                  <button className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-expanded={isDifficultyFilterOpen}
+                    onClick={() => setIsDifficultyFilterOpen((isOpen) => !isOpen)}
+                    className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded shadow text-sm font-semibold inline-flex items-center border border-gray-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                  >
                     Filter Topics (Difficulty) <span className="ml-2">▼</span>
                   </button>
-                  <div className="absolute right-0 mt-1 bg-white dark:bg-slate-800 min-w-[160px] shadow-lg rounded border border-gray-200 dark:border-slate-700 z-10 hidden group-hover:block overflow-hidden">
+                  {isDifficultyFilterOpen && (
+                  <div className="absolute right-0 mt-1 bg-white dark:bg-slate-800 min-w-[160px] shadow-lg rounded border border-gray-200 dark:border-slate-700 z-10 overflow-hidden">
                     {["Easy", "Medium", "Hard"].map((diff) => (
                       <label
                         key={diff}
@@ -919,6 +906,7 @@
                       </label>
                     ))}
                   </div>
+                  )}
                 </div>
                 <select
                   className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 py-2 px-4 rounded shadow font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -1404,6 +1392,7 @@
                                     handleRowChange("q", e.target.value)
                                   }
                                   placeholder="e.g. A, B, C"
+                                  autoFocus={phase === "UPDATE_PQ"}
                                 />
                               ) : (
                                 row.q
