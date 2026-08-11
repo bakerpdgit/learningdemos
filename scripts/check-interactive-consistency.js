@@ -328,6 +328,42 @@ const bnfSource = fs.readFileSync(path.join(root, 'bnf_and_syntax_diagrams.html'
 if (/Select Sub-topics/.test(bnfSource) || !/<h1[^>]*>[\s\S]*BNF & Syntax Diagrams[\s\S]*<\/h1>/.test(bnfSource)) {
   failures.push('bnf_and_syntax_diagrams.html: title must be semantic and the obsolete filter heading removed');
 }
+const bnfPlaygroundSource = fs.readFileSync(path.join(root, 'bnf_syntax_playground.html'), 'utf8');
+if (/\balert\s*\(/.test(bnfPlaygroundSource)
+  || !/<h1[^>]*>BNF & Syntax Diagram Playground<\/h1>/.test(bnfPlaygroundSource)
+  || !/role="tablist"/.test(bnfPlaygroundSource)
+  || (bnfPlaygroundSource.match(/role="tab"/g) || []).length < 2
+  || !/const \[tab, setTab\] = useState\("bnf"\)/.test(bnfPlaygroundSource)
+  || !/\{tab === "bnf" \? \(/.test(bnfPlaygroundSource)) {
+  failures.push('bnf_syntax_playground.html: the BNF and syntax-diagram views must stay in one tab set so only one of them is on screen at a time');
+}
+if (!/const addComponent = \(kind\)/.test(bnfPlaygroundSource)
+  || !/const activateForConnect = \(id\)/.test(bnfPlaygroundSource)
+  || !/const deleteSelection = \(\)/.test(bnfPlaygroundSource)
+  || !/onAddRule/.test(bnfPlaygroundSource)
+  || !/onDeleteRule/.test(bnfPlaygroundSource)) {
+  failures.push('bnf_syntax_playground.html: the designer must let a learner add a component, draw a connector between components, delete either, and add or remove whole rules');
+}
+// Direction markers sit at the midpoint of every connector: a forward arrow
+// reads as a choice of route and a backward one as repetition.
+if (!/transform=\{"translate\(" \+ geometry\.mx \+ " " \+ geometry\.my \+ "\) rotate\(" \+ geometry\.angle \+ "\)"\}/.test(bnfPlaygroundSource)
+  || !/sd-edge-back/.test(bnfPlaygroundSource)
+  || !/sd-arrow-back/.test(bnfPlaygroundSource)) {
+  failures.push('bnf_syntax_playground.html: every connector needs a direction arrow at its midpoint, with backward (repetition) connectors distinguished from forward (choice) ones');
+}
+// An unfinished diagram must never be written back into the grammar, and a
+// rule body is only ever written if it re-reads as exactly the same structure.
+if (!/validateGraph\(nextGraph, ruleNames\)\.some\(\(issue\) => issue\.blocking\)/.test(bnfPlaygroundSource)
+  || !/function roundTripsCleanly/.test(bnfPlaygroundSource)
+  || !/roundTripsCleanly\(body, candidate, ebnf\)/.test(bnfPlaygroundSource)
+  || !/const REGEX_BUDGET/.test(bnfPlaygroundSource)) {
+  failures.push('bnf_syntax_playground.html: a diagram with floating or unreachable components must leave the grammar text alone, and a compiled rule body must re-parse to the structure it came from');
+}
+if (!/if \(nullable\.has\(symbol\.nt\)\)/.test(bnfPlaygroundSource)
+  || !/const parents = columns\[item\.start\]\.byNext\.get\(production\.lhs\)/.test(bnfPlaygroundSource)) {
+  failures.push('bnf_syntax_playground.html: the chart parser must keep advancing past nullable non-terminals so EBNF [ ] and { } rules still match');
+}
+
 const abstractionSource = fs.readFileSync(path.join(root, 'abstraction_and_automation.html'), 'utf8');
 if (/Select All/.test(abstractionSource)
   || !/next-question-button[\s\S]*?shrink-0[\s\S]*?gap-2[\s\S]*?whitespace-nowrap/.test(abstractionSource)) {

@@ -1,0 +1,2430 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A-Level CS: BNF & Syntax Diagram Playground</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: { extend: { colors: { headerBg: "#0f172a", headerAccent: "#38bdf8" } } },
+      };
+    </script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- JSX is compiled during npm run build. -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      .mono {
+        font-family: "Cascadia Mono", Consolas, "SFMono-Regular", ui-monospace, "Liberation Mono", monospace;
+      }
+
+      /* --- Syntax diagram surface --- */
+      .sd-canvas {
+        --sd-line: #64748b;
+        --sd-loop: #b45309;
+        --sd-lit-fill: #ecfeff;
+        --sd-lit-stroke: #0891b2;
+        --sd-lit-text: #155e75;
+        --sd-ref-fill: #eef2ff;
+        --sd-ref-stroke: #6366f1;
+        --sd-ref-text: #3730a3;
+        --sd-term-fill: #e2e8f0;
+        --sd-term-stroke: #475569;
+        --sd-term-text: #1e293b;
+        --sd-select: #d97706;
+        --sd-bad: #e11d48;
+        --sd-hover: #0ea5e9;
+        display: block;
+        background: #f8fafc;
+        touch-action: none;
+      }
+      html.dark .sd-canvas {
+        --sd-line: #94a3b8;
+        --sd-loop: #fbbf24;
+        --sd-lit-fill: #164e63;
+        --sd-lit-stroke: #22d3ee;
+        --sd-lit-text: #cffafe;
+        --sd-ref-fill: #312e81;
+        --sd-ref-stroke: #a5b4fc;
+        --sd-ref-text: #e0e7ff;
+        --sd-term-fill: #334155;
+        --sd-term-stroke: #94a3b8;
+        --sd-term-text: #f1f5f9;
+        --sd-select: #fbbf24;
+        --sd-bad: #fb7185;
+        --sd-hover: #38bdf8;
+        background: #0f172a;
+      }
+      .sd-wrap {
+        overflow: auto;
+        max-height: 32rem;
+        border-radius: 0.5rem;
+        border: 1px solid #cbd5e1;
+      }
+      html.dark .sd-wrap {
+        border-color: #334155;
+      }
+      .sd-edge {
+        stroke: var(--sd-line);
+        stroke-width: 1.8;
+        fill: none;
+        pointer-events: none;
+      }
+      .sd-edge-back {
+        stroke: var(--sd-loop);
+      }
+      .sd-edge-hit {
+        stroke: transparent;
+        stroke-width: 16;
+        fill: none;
+        pointer-events: stroke;
+        cursor: pointer;
+      }
+      .sd-edge-selected {
+        stroke: var(--sd-select);
+        stroke-width: 3;
+      }
+      .sd-arrow {
+        fill: var(--sd-line);
+        stroke: none;
+        pointer-events: none;
+      }
+      .sd-arrow-back {
+        fill: var(--sd-loop);
+      }
+      .sd-arrow-selected {
+        fill: var(--sd-select);
+      }
+      .sd-node {
+        cursor: grab;
+      }
+      .sd-node text {
+        font-family: "Cascadia Mono", Consolas, "SFMono-Regular", ui-monospace, monospace;
+        font-size: 13px;
+        pointer-events: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .sd-lit rect {
+        fill: var(--sd-lit-fill);
+        stroke: var(--sd-lit-stroke);
+        stroke-width: 1.8;
+      }
+      .sd-lit text { fill: var(--sd-lit-text); }
+      .sd-ref rect {
+        fill: var(--sd-ref-fill);
+        stroke: var(--sd-ref-stroke);
+        stroke-width: 1.8;
+      }
+      .sd-ref text { fill: var(--sd-ref-text); font-weight: 600; }
+      .sd-term rect {
+        fill: var(--sd-term-fill);
+        stroke: var(--sd-term-stroke);
+        stroke-width: 1.8;
+      }
+      .sd-term text { fill: var(--sd-term-text); font-weight: 600; }
+      .sd-node:hover rect {
+        stroke: var(--sd-hover);
+        stroke-width: 2.6;
+      }
+      .sd-node:focus { outline: none; }
+      .sd-node:focus-visible rect {
+        stroke: var(--sd-select);
+        stroke-width: 3;
+      }
+      .sd-node-selected rect {
+        stroke: var(--sd-select);
+        stroke-width: 3;
+      }
+      .sd-node-bad rect {
+        stroke: var(--sd-bad);
+        stroke-dasharray: 5 3;
+        stroke-width: 2.4;
+      }
+      .sd-node-source rect {
+        stroke: var(--sd-hover);
+        stroke-width: 3;
+      }
+      .sd-placeholder { opacity: 0.55; }
+      .sd-rubber {
+        stroke: var(--sd-hover);
+        stroke-width: 2;
+        stroke-dasharray: 5 4;
+        fill: none;
+        pointer-events: none;
+      }
+      .sd-connecting .sd-node { cursor: crosshair; }
+
+      /* Legend swatches */
+      .legend-oval {
+        border-radius: 999px;
+        background: #ecfeff;
+        border: 1.5px solid #0891b2;
+        color: #155e75;
+      }
+      .legend-rect {
+        border-radius: 4px;
+        background: #eef2ff;
+        border: 1.5px solid #6366f1;
+        color: #3730a3;
+      }
+      html.dark .legend-oval {
+        background: #164e63;
+        border-color: #22d3ee;
+        color: #cffafe;
+      }
+      html.dark .legend-rect {
+        background: #312e81;
+        border-color: #a5b4fc;
+        color: #e0e7ff;
+      }
+
+      .grammar-input { tab-size: 2; }
+      .derivation-branch { border-left: 1px dashed currentColor; }
+    </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useRef } = React;
+
+      /* =====================================================================
+         GRAMMAR MODEL
+
+         Abstract syntax nodes:
+           { t: "lit",  v }        terminal literal        -> oval
+           { t: "ref",  v }        non-terminal reference  -> rectangle
+           { t: "eps" }            the empty string
+           { t: "seq",  items }    one thing after another
+           { t: "alt",  items }    a choice
+           { t: "opt",  item }     EBNF [ x ]
+           { t: "rep",  item }     EBNF { x }   zero or more
+           { t: "rep1", item }     EBNF { x }+  one or more
+         ===================================================================== */
+
+      const EBNF_META = "[]{}()";
+      const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_ -]*$/;
+
+      function tokenizeBody(text, ebnf) {
+        const tokens = [];
+        const errors = [];
+        const isStop = (ch) =>
+          ch === "<" || ch === '"' || ch === "'" || ch === "|" || ch === "ε" ||
+          /\s/.test(ch) || (ebnf && EBNF_META.includes(ch));
+
+        let i = 0;
+        while (i < text.length) {
+          const ch = text[i];
+          if (/\s/.test(ch)) { i += 1; continue; }
+
+          if (ch === "<") {
+            const close = text.indexOf(">", i + 1);
+            const name = close < 0 ? "" : text.slice(i + 1, close).trim();
+            if (close < 0 || !NAME_PATTERN.test(name)) {
+              errors.push('Could not read a <non-terminal> name. Write a literal < as "<".');
+              return { tokens, errors };
+            }
+            tokens.push({ k: "ref", v: name });
+            i = close + 1;
+            continue;
+          }
+
+          if (ch === '"' || ch === "'") {
+            const close = text.indexOf(ch, i + 1);
+            if (close < 0) {
+              errors.push("A quoted literal was never closed.");
+              return { tokens, errors };
+            }
+            tokens.push({ k: "lit", v: text.slice(i + 1, close) });
+            i = close + 1;
+            continue;
+          }
+
+          if (ch === "|") { tokens.push({ k: "|" }); i += 1; continue; }
+          if (ch === "ε") { tokens.push({ k: "lit", v: "" }); i += 1; continue; }
+
+          if (ebnf && EBNF_META.includes(ch)) {
+            tokens.push({ k: ch });
+            i += 1;
+            if ((ch === "}" || ch === ")") && text[i] === "+") { tokens.push({ k: "+" }); i += 1; }
+            continue;
+          }
+
+          let j = i;
+          while (j < text.length && !isStop(text[j])) j += 1;
+          tokens.push({ k: "lit", v: text.slice(i, j) });
+          i = j;
+        }
+        return { tokens, errors };
+      }
+
+      function parseTokens(tokens, errors) {
+        let pos = 0;
+        const peek = () => tokens[pos];
+
+        function parseUnit() {
+          const tok = peek();
+          if (!tok) return null;
+          if (tok.k === "lit") { pos += 1; return tok.v === "" ? { t: "eps" } : { t: "lit", v: tok.v }; }
+          if (tok.k === "ref") { pos += 1; return { t: "ref", v: tok.v }; }
+          if (tok.k === "[") {
+            pos += 1;
+            const inner = parseAlt();
+            if (peek() && peek().k === "]") pos += 1;
+            else errors.push("An optional group [ … ] was never closed.");
+            return { t: "opt", item: inner };
+          }
+          if (tok.k === "{") {
+            pos += 1;
+            const inner = parseAlt();
+            if (peek() && peek().k === "}") pos += 1;
+            else errors.push("A repetition group { … } was never closed.");
+            if (peek() && peek().k === "+") { pos += 1; return { t: "rep1", item: inner }; }
+            return { t: "rep", item: inner };
+          }
+          if (tok.k === "(") {
+            pos += 1;
+            const inner = parseAlt();
+            if (peek() && peek().k === ")") pos += 1;
+            else errors.push("A group ( … ) was never closed.");
+            if (peek() && peek().k === "+") { pos += 1; return { t: "rep1", item: inner }; }
+            return inner;
+          }
+          errors.push("Unexpected '" + tok.k + "' in this rule.");
+          pos += 1;
+          return null;
+        }
+
+        function parseSeq() {
+          const items = [];
+          while (peek() && peek().k !== "|" && peek().k !== "]" && peek().k !== "}" && peek().k !== ")") {
+            const unit = parseUnit();
+            if (!unit) break;
+            items.push(unit);
+          }
+          if (items.length === 0) return { t: "eps" };
+          if (items.length === 1) return items[0];
+          return { t: "seq", items };
+        }
+
+        function parseAlt() {
+          const branches = [parseSeq()];
+          while (peek() && peek().k === "|") { pos += 1; branches.push(parseSeq()); }
+          if (branches.length === 1) return branches[0];
+          return { t: "alt", items: branches };
+        }
+
+        const ast = parseAlt();
+        if (pos < tokens.length) errors.push("Unexpected '" + tokens[pos].k + "' after the end of this rule.");
+        return ast;
+      }
+
+      /* ---------- Serialising an abstract syntax node back to BNF text ---------- */
+
+      function quoteLiteral(value) {
+        if (!value.includes('"')) return '"' + value + '"';
+        const pieces = [];
+        value.split('"').forEach((part, index) => {
+          if (index > 0) pieces.push("'\"'");
+          if (part !== "") pieces.push('"' + part + '"');
+        });
+        return pieces.length > 0 ? pieces.join(" ") : '""';
+      }
+
+      function needsQuote(value) {
+        return value === "" || /[\s<>"'|[\]{}()ε]/.test(value);
+      }
+
+      function serializeLiteral(value) {
+        return needsQuote(value) ? quoteLiteral(value) : value;
+      }
+
+      // level: "alt" (nothing needs bracketing), "seq" (an alt needs brackets),
+      // "unit" (a seq or an alt needs brackets).
+      function serializeNode(node, level) {
+        switch (node.t) {
+          case "eps":
+            return '""';
+          case "lit":
+            return serializeLiteral(node.v);
+          case "ref":
+            return "<" + node.v + ">";
+          case "seq": {
+            const body = node.items.map((item) => serializeNode(item, "unit")).join(" ");
+            return level === "unit" ? "( " + body + " )" : body;
+          }
+          case "alt": {
+            const body = node.items.map((item) => serializeNode(item, "seq")).join(" | ");
+            return level === "alt" ? body : "( " + body + " )";
+          }
+          case "opt":
+            return "[ " + serializeNode(node.item, "alt") + " ]";
+          case "rep":
+            return "{ " + serializeNode(node.item, "alt") + " }";
+          case "rep1":
+            return "{ " + serializeNode(node.item, "alt") + " }+";
+          default:
+            return '""';
+        }
+      }
+
+      function serializeRule(name, ast) {
+        return "<" + name + "> ::= " + serializeNode(ast, "alt");
+      }
+
+      /* ---------- Whole-grammar parsing ---------- */
+
+      function splitRuleLines(text) {
+        const lines = text.split(/\r?\n/);
+        const entries = [];
+        const issues = [];
+        let current = null;
+
+        lines.forEach((raw, index) => {
+          const trimmed = raw.trim();
+          if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("#")) return;
+          const match = raw.match(/^\s*<([^<>]*)>\s*(?:::=|:=|=|→)\s*(.*)$/);
+          if (match) {
+            current = { name: match[1].trim(), body: match[2], line: index + 1, endLine: index + 1 };
+            entries.push(current);
+          } else if (current) {
+            current.body += " " + trimmed;
+            current.endLine = index + 1;
+          } else {
+            issues.push({ line: index + 1, text: "Each rule must start with <name> ::= — this line does not." });
+          }
+        });
+
+        return { entries, issues };
+      }
+
+      function parseGrammar(text, ebnf) {
+        const { entries, issues } = splitRuleLines(text);
+        const problems = issues.map((issue) => ({ kind: "error", line: issue.line, text: issue.text }));
+        const rules = [];
+        const seenNames = new Map();
+
+        entries.forEach((entry) => {
+          const errors = [];
+          if (!NAME_PATTERN.test(entry.name)) {
+            errors.push("'" + entry.name + "' is not a valid rule name. Use a letter first, then letters, digits, spaces, - or _.");
+          }
+          const { tokens, errors: tokenErrors } = tokenizeBody(entry.body, ebnf);
+          tokenErrors.forEach((message) => errors.push(message));
+          const ast = errors.length > 0 ? null : parseTokens(tokens, errors);
+
+          const definitionCount = (seenNames.get(entry.name) || 0) + 1;
+          seenNames.set(entry.name, definitionCount);
+          if (definitionCount === 2) {
+            problems.push({
+              kind: "warning",
+              line: entry.line,
+              text: "<" + entry.name + "> is defined more than once. All of its alternatives are combined when testing.",
+            });
+          }
+
+          errors.forEach((message) => problems.push({ kind: "error", line: entry.line, text: message }));
+          rules.push({
+            key: entry.name + (definitionCount > 1 ? "#" + definitionCount : ""),
+            name: entry.name,
+            body: entry.body,
+            ast: errors.length === 0 ? ast : null,
+            line: entry.line,
+            endLine: entry.endLine,
+            definitionIndex: definitionCount,
+            errors,
+          });
+        });
+
+        const defined = new Set(rules.map((rule) => rule.name));
+        const referenced = new Set();
+        const collectRefs = (node) => {
+          if (!node) return;
+          if (node.t === "ref") { referenced.add(node.v); return; }
+          if (node.items) node.items.forEach(collectRefs);
+          if (node.item) collectRefs(node.item);
+        };
+        rules.forEach((rule) => collectRefs(rule.ast));
+
+        referenced.forEach((name) => {
+          if (!defined.has(name)) {
+            problems.push({ kind: "error", line: null, text: "<" + name + "> is used but never defined. Add a rule for it." });
+          }
+        });
+
+        if (rules.length === 0 && text.trim() !== "") {
+          problems.push({ kind: "error", line: null, text: "No rules found. Write at least one rule such as <digit> ::= 0 | 1." });
+        }
+
+        return { rules, problems, defined, referenced };
+      }
+
+      /* ---------- Flattening to plain productions for the parser ---------- */
+
+      function buildProductions(rules) {
+        const productions = [];
+        let counter = 0;
+        const emit = (lhs, rhs, synthetic) => productions.push({ lhs, rhs, synthetic: Boolean(synthetic) });
+
+        function symbolsFor(node) {
+          switch (node.t) {
+            case "eps":
+              return [];
+            case "lit":
+              return node.v === "" ? [] : [{ text: node.v }];
+            case "ref":
+              return [{ nt: node.v }];
+            case "seq": {
+              const out = [];
+              node.items.forEach((item) => { symbolsFor(item).forEach((symbol) => out.push(symbol)); });
+              return out;
+            }
+            case "alt": {
+              counter += 1;
+              const name = "«choice " + counter + "»";
+              node.items.forEach((item) => emit(name, symbolsFor(item), true));
+              return [{ nt: name }];
+            }
+            case "opt": {
+              counter += 1;
+              const name = "«optional " + counter + "»";
+              emit(name, [], true);
+              emit(name, symbolsFor(node.item), true);
+              return [{ nt: name }];
+            }
+            case "rep": {
+              counter += 1;
+              const name = "«repeat " + counter + "»";
+              const inner = symbolsFor(node.item);
+              emit(name, [], true);
+              emit(name, [{ nt: name }].concat(inner), true);
+              return [{ nt: name }];
+            }
+            case "rep1": {
+              counter += 1;
+              const name = "«repeat " + counter + "»";
+              const inner = symbolsFor(node.item);
+              emit(name, inner, true);
+              emit(name, [{ nt: name }].concat(inner), true);
+              return [{ nt: name }];
+            }
+            default:
+              return [];
+          }
+        }
+
+        rules.forEach((rule) => {
+          if (!rule.ast) return;
+          if (rule.ast.t === "alt") rule.ast.items.forEach((item) => emit(rule.name, symbolsFor(item)));
+          else emit(rule.name, symbolsFor(rule.ast));
+        });
+
+        return productions;
+      }
+
+      /* ---------- Earley chart parser ----------
+         Earley copes with left recursion (<expr> ::= <expr> + <term>) and with
+         ambiguity, so learners can write grammars the natural AQA way instead
+         of rewriting them to suit the tool. Terminals may be several characters
+         long, so a successful scan advances by the length of the literal.      */
+
+      const ITEM_LIMIT = 250000;
+      const INPUT_LIMIT = 400;
+
+      function earleyParse(productions, start, input) {
+        if (input.length > INPUT_LIMIT) return { ok: false, reason: "too-long", furthest: 0 };
+
+        const byLhs = new Map();
+        productions.forEach((production, index) => {
+          if (!byLhs.has(production.lhs)) byLhs.set(production.lhs, []);
+          byLhs.get(production.lhs).push(index);
+        });
+        if (!byLhs.has(start)) return { ok: false, reason: "no-start", furthest: 0 };
+
+        const nullable = new Set();
+        for (let changed = true; changed; ) {
+          changed = false;
+          productions.forEach((production) => {
+            if (nullable.has(production.lhs)) return;
+            if (production.rhs.every((symbol) => symbol.nt && nullable.has(symbol.nt))) {
+              nullable.add(production.lhs);
+              changed = true;
+            }
+          });
+        }
+
+        const length = input.length;
+        const columns = [];
+        for (let index = 0; index <= length; index += 1) {
+          columns.push({ items: [], seen: new Set(), byNext: new Map() });
+        }
+
+        let total = 0;
+        let overflow = false;
+
+        function add(column, item) {
+          const key = item.p + ":" + item.dot + ":" + item.start;
+          if (column.seen.has(key)) return;
+          column.seen.add(key);
+          column.items.push(item);
+          total += 1;
+          if (total > ITEM_LIMIT) overflow = true;
+          const rhs = productions[item.p].rhs;
+          if (item.dot < rhs.length && rhs[item.dot].nt) {
+            const name = rhs[item.dot].nt;
+            if (!column.byNext.has(name)) column.byNext.set(name, []);
+            column.byNext.get(name).push(item);
+          }
+        }
+
+        byLhs.get(start).forEach((p) => add(columns[0], { p, dot: 0, start: 0, kids: [] }));
+
+        let furthest = 0;
+        for (let i = 0; i <= length && !overflow; i += 1) {
+          const column = columns[i];
+          if (column.items.length > 0) furthest = i;
+          for (let k = 0; k < column.items.length && !overflow; k += 1) {
+            const item = column.items[k];
+            const production = productions[item.p];
+            if (item.dot < production.rhs.length) {
+              const symbol = production.rhs[item.dot];
+              if (symbol.nt) {
+                (byLhs.get(symbol.nt) || []).forEach((p) => add(column, { p, dot: 0, start: i, kids: [] }));
+                if (nullable.has(symbol.nt)) {
+                  add(column, {
+                    p: item.p,
+                    dot: item.dot + 1,
+                    start: item.start,
+                    kids: item.kids.concat([{ nt: symbol.nt, from: i, to: i, kids: [] }]),
+                  });
+                }
+              } else if (input.startsWith(symbol.text, i)) {
+                add(columns[i + symbol.text.length], {
+                  p: item.p,
+                  dot: item.dot + 1,
+                  start: item.start,
+                  kids: item.kids.concat([{ term: symbol.text, from: i, to: i + symbol.text.length }]),
+                });
+              }
+            } else {
+              const parents = columns[item.start].byNext.get(production.lhs) || [];
+              for (let q = 0; q < parents.length; q += 1) {
+                const parent = parents[q];
+                add(column, {
+                  p: parent.p,
+                  dot: parent.dot + 1,
+                  start: parent.start,
+                  kids: parent.kids.concat([{ nt: production.lhs, from: item.start, to: i, kids: item.kids }]),
+                });
+              }
+            }
+          }
+        }
+
+        if (overflow) return { ok: false, reason: "too-complex", furthest };
+
+        const finished = columns[length].items.find((item) => (
+          item.start === 0 &&
+          productions[item.p].lhs === start &&
+          item.dot === productions[item.p].rhs.length
+        ));
+        if (!finished) return { ok: false, reason: "no-parse", furthest };
+        return { ok: true, tree: { nt: start, from: 0, to: length, kids: finished.kids } };
+      }
+
+      // Hide the anonymous productions generated for [ ], { } and nested choices
+      // so the derivation only shows rules the learner actually wrote.
+      function tidyTree(node) {
+        if (node.term !== undefined) return [node];
+        const kids = [];
+        node.kids.forEach((kid) => { tidyTree(kid).forEach((child) => kids.push(child)); });
+        if (node.nt.startsWith("«")) return kids;
+        return [{ nt: node.nt, from: node.from, to: node.to, kids }];
+      }
+
+      function countTree(node) {
+        if (node.term !== undefined) return 1;
+        return node.kids.reduce((total, kid) => total + countTree(kid), 1);
+      }
+
+      /* =====================================================================
+         AUTOMATIC LAYOUT
+         A railroad-style measure/place pass, used only to give a rule's
+         components sensible starting positions when a diagram is first built
+         from BNF. After that the learner drags them wherever they like.
+         ===================================================================== */
+
+      const RR = { boxH: 30, padX: 12, charW: 8, gap: 34, arc: 10, branch: 16, vGap: 22, loopGap: 14 };
+
+      function literalLabel(value) {
+        if (value === "") return "ε";
+        if (/\s/.test(value)) return JSON.stringify(value);
+        return value;
+      }
+
+      function skipLayout() {
+        return { kind: "skip", path: null, w: 0, h: 12, ey: 6 };
+      }
+
+      function loopLayout(kid) {
+        return { kind: "loop", path: null, kid, w: kid.w + RR.arc * 2, h: kid.h + RR.loopGap + 10, ey: kid.ey };
+      }
+
+      function branchLayout(path, kids) {
+        const inner = kids.reduce((widest, kid) => Math.max(widest, kid.w), 0);
+        let h = 0;
+        kids.forEach((kid, index) => { h += kid.h + (index > 0 ? RR.vGap : 0); });
+        return { kind: "alt", path, kids, inner, w: inner + (RR.arc + RR.branch) * 2, h, ey: kids[0].ey };
+      }
+
+      function measure(node, path) {
+        switch (node.t) {
+          case "lit":
+          case "ref": {
+            const label = node.t === "ref" ? node.v : literalLabel(node.v);
+            return {
+              kind: node.t,
+              path,
+              w: Math.max(38, label.length * RR.charW + RR.padX * 2),
+              h: RR.boxH,
+              ey: RR.boxH / 2,
+            };
+          }
+          case "seq": {
+            const kids = node.items.map((item, index) => measure(item, path.concat(index)));
+            if (kids.length === 0) return measure({ t: "eps" }, path);
+            const w = kids.reduce((total, kid) => total + kid.w, 0) + RR.gap * (kids.length - 1);
+            const ey = kids.reduce((highest, kid) => Math.max(highest, kid.ey), 0);
+            const h = ey + kids.reduce((deepest, kid) => Math.max(deepest, kid.h - kid.ey), 0);
+            return { kind: "seq", path, kids, w, h, ey };
+          }
+          case "alt": {
+            const kids = node.items.map((item, index) => measure(item, path.concat(index)));
+            if (kids.length === 0) return measure({ t: "eps" }, path);
+            return branchLayout(path, kids);
+          }
+          case "opt":
+            return branchLayout(path, [skipLayout(), measure(node.item, path.concat(0))]);
+          case "rep":
+            return branchLayout(path, [skipLayout(), loopLayout(measure(node.item, path.concat(0)))]);
+          case "rep1":
+            return loopLayout(measure(node.item, path.concat(0)));
+          default:
+            return { kind: "eps", path, w: 46, h: RR.boxH, ey: RR.boxH / 2 };
+        }
+      }
+
+      function place(layout, x, y) {
+        layout.ax = x;
+        layout.ay = y;
+        const entryY = y + layout.ey;
+        if (layout.kind === "seq") {
+          let cursor = x;
+          layout.kids.forEach((kid) => {
+            place(kid, cursor, entryY - kid.ey);
+            cursor += kid.w + RR.gap;
+          });
+        } else if (layout.kind === "alt") {
+          const innerX = x + RR.arc + RR.branch;
+          let cursor = y;
+          layout.kids.forEach((kid) => {
+            place(kid, innerX + (layout.inner - kid.w) / 2, cursor);
+            cursor += kid.h + RR.vGap;
+          });
+        } else if (layout.kind === "loop") {
+          place(layout.kid, x + RR.arc, y);
+        }
+      }
+
+      /* =====================================================================
+         THE DIAGRAM AS A GRAPH
+
+         A syntax diagram is a transition network: each component consumes one
+         symbol, an edge is a permitted succession, a forward edge is a choice
+         and a backward edge is repetition. That makes it a finite automaton
+         over the rule's symbols, which converts cleanly in both directions:
+         BNF -> graph by structural construction, graph -> BNF by eliminating
+         states. Everything below is those two conversions plus validation.
+         ===================================================================== */
+
+      let graphIdCounter = 0;
+      const freshId = (prefix) => prefix + (graphIdCounter += 1);
+      const sameShape = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+      const START_ID = "START";
+      const END_ID = "END";
+      const isTerminalNode = (node) => node.kind === "start" || node.kind === "end";
+
+      function graphFromAst(ast) {
+        const nodes = [];
+        const edges = [];
+        const addEdge = (from, to) => {
+          if (from === END_ID || to === START_ID) return;
+          if (!edges.some((edge) => edge.from === from && edge.to === to)) {
+            edges.push({ id: freshId("e"), from, to });
+          }
+        };
+        const connect = (froms, tos) => froms.forEach((from) => tos.forEach((to) => addEdge(from, to)));
+
+        const layout = measure(ast, []);
+        place(layout, 0, 0);
+        const positions = new Map();
+        (function walk(node) {
+          if ((node.kind === "lit" || node.kind === "ref") && node.path) {
+            positions.set(node.path.join("."), { x: node.ax + node.w / 2, y: node.ay + node.h / 2 });
+          }
+          (node.kids || []).forEach(walk);
+          if (node.kid) walk(node.kid);
+        })(layout);
+
+        function build(node, path) {
+          switch (node.t) {
+            case "lit":
+            case "ref": {
+              const id = freshId("n");
+              const at = positions.get(path.join(".")) || { x: 0, y: 0 };
+              nodes.push({ id, kind: node.t, value: node.v, x: at.x + 150, y: at.y + 80 });
+              return { ins: [id], outs: [id], nullable: false };
+            }
+            case "eps":
+              return { ins: [], outs: [], nullable: true };
+            case "seq": {
+              let acc = { ins: [], outs: [], nullable: true };
+              node.items.forEach((item, index) => {
+                const part = build(item, path.concat(index));
+                connect(acc.outs, part.ins);
+                acc = {
+                  ins: acc.nullable ? acc.ins.concat(part.ins) : acc.ins,
+                  outs: part.nullable ? acc.outs.concat(part.outs) : part.outs,
+                  nullable: acc.nullable && part.nullable,
+                };
+              });
+              return acc;
+            }
+            case "alt": {
+              const parts = node.items.map((item, index) => build(item, path.concat(index)));
+              return {
+                ins: parts.reduce((all, part) => all.concat(part.ins), []),
+                outs: parts.reduce((all, part) => all.concat(part.outs), []),
+                nullable: parts.some((part) => part.nullable),
+              };
+            }
+            case "opt": {
+              const part = build(node.item, path.concat(0));
+              return { ins: part.ins, outs: part.outs, nullable: true };
+            }
+            case "rep": {
+              const part = build(node.item, path.concat(0));
+              connect(part.outs, part.ins);
+              return { ins: part.ins, outs: part.outs, nullable: true };
+            }
+            case "rep1": {
+              const part = build(node.item, path.concat(0));
+              connect(part.outs, part.ins);
+              return part;
+            }
+            default:
+              return { ins: [], outs: [], nullable: true };
+          }
+        }
+
+        const top = build(ast, []);
+        const entryY = layout.ey + 80;
+        const rightmost = nodes.reduce((widest, node) => Math.max(widest, node.x), 150);
+        nodes.unshift({ id: START_ID, kind: "start", value: "start", x: 60, y: entryY });
+        nodes.push({ id: END_ID, kind: "end", value: "end", x: rightmost + 120, y: entryY });
+
+        connect([START_ID], top.ins);
+        connect(top.outs, [END_ID]);
+        if (top.nullable) addEdge(START_ID, END_ID);
+
+        return { nodes, edges };
+      }
+
+      /* ---------- Validation: is this component fully wired up? ---------- */
+
+      function validateGraph(graph, ruleNames) {
+        const issues = [];
+        const forward = new Map();
+        const backward = new Map();
+        graph.nodes.forEach((node) => { forward.set(node.id, []); backward.set(node.id, []); });
+        graph.edges.forEach((edge) => {
+          if (forward.has(edge.from)) forward.get(edge.from).push(edge.to);
+          if (backward.has(edge.to)) backward.get(edge.to).push(edge.from);
+        });
+
+        const reachable = (from, adjacency) => {
+          const seen = new Set([from]);
+          const queue = [from];
+          while (queue.length > 0) {
+            const current = queue.pop();
+            (adjacency.get(current) || []).forEach((next) => {
+              if (!seen.has(next)) { seen.add(next); queue.push(next); }
+            });
+          }
+          return seen;
+        };
+
+        const fromStart = reachable(START_ID, forward);
+        const toEnd = reachable(END_ID, backward);
+
+        graph.nodes.forEach((node) => {
+          if (isTerminalNode(node)) return;
+          const label = node.kind === "ref" ? "<" + node.value + ">" : '"' + node.value + '"';
+          if (node.value === "") {
+            issues.push({ id: node.id, blocking: true, text: "This component is empty. Give it some text before the rule can use it." });
+          } else if (node.kind === "ref" && !ruleNames.includes(node.value)) {
+            issues.push({ id: node.id, blocking: false, text: label + " is not a rule in this grammar yet." });
+          }
+          if (!fromStart.has(node.id)) {
+            issues.push({ id: node.id, blocking: true, text: "Nothing joins " + label + " to start, so it is left floating." });
+          } else if (!toEnd.has(node.id)) {
+            issues.push({ id: node.id, blocking: true, text: label + " has no connector leading on to end." });
+          }
+        });
+
+        if (!fromStart.has(END_ID)) {
+          issues.push({ id: null, blocking: true, text: "There is no route from start to end, so this rule cannot match anything yet." });
+        }
+
+        return issues;
+      }
+
+      /* ---------- Graph -> BNF, by eliminating states ---------- */
+
+      const EPS_RE = { r: "eps" };
+      const isEpsRe = (value) => Boolean(value) && value.r === "eps";
+      const partsOf = (value, kind) => (value.r === kind ? value.items : [value]);
+      let allowGrouping = true;
+
+      function reCat(left, right) {
+        if (!left || !right) return null;
+        if (isEpsRe(left)) return right;
+        if (isEpsRe(right)) return left;
+        return simplifyRe({ r: "cat", items: partsOf(left, "cat").concat(partsOf(right, "cat")) });
+      }
+
+      function reAlt(left, right) {
+        if (!left) return right;
+        if (!right) return left;
+        if (sameShape(left, right)) return left;
+        const merged = [];
+        partsOf(left, "alt").concat(partsOf(right, "alt")).forEach((item) => {
+          if (!merged.some((existing) => sameShape(existing, item))) merged.push(item);
+        });
+        return simplifyRe(merged.length === 1 ? merged[0] : { r: "alt", items: merged });
+      }
+
+      function reStar(value) {
+        if (!value || isEpsRe(value)) return EPS_RE;
+        if (value.r === "star") return value;
+        if (value.r === "plus") return { r: "star", item: value.item };
+        return { r: "star", item: value };
+      }
+
+      function simplifyRe(value) {
+        if (!value) return value;
+        if (value.r === "cat") {
+          const items = value.items.map(simplifyRe).filter((item) => !isEpsRe(item));
+          for (let i = 0; i < items.length - 1; i += 1) {
+            const left = items[i];
+            const right = items[i + 1];
+            if (right.r === "star" && sameShape(left, right.item)) { items.splice(i, 2, { r: "plus", item: left }); i = -1; continue; }
+            if (left.r === "star" && sameShape(right, left.item)) { items.splice(i, 2, { r: "plus", item: right }); i = -1; continue; }
+          }
+          if (items.length === 0) return EPS_RE;
+          if (items.length === 1) return items[0];
+          return { r: "cat", items };
+        }
+        if (value.r === "alt") {
+          let items = [];
+          value.items.map(simplifyRe).forEach((item) => {
+            if (!items.some((existing) => sameShape(existing, item))) items.push(item);
+          });
+          const epsAt = items.findIndex(isEpsRe);
+          if (epsAt >= 0) {
+            const plusAt = items.findIndex((item) => item.r === "plus");
+            if (plusAt >= 0) {
+              const rest = items
+                .filter((_, index) => index !== epsAt && index !== plusAt)
+                .concat([{ r: "star", item: items[plusAt].item }]);
+              return simplifyRe(rest.length === 1 ? rest[0] : { r: "alt", items: rest });
+            }
+          }
+          if (items.length === 1) return items[0];
+          const branches = items.map((item) => partsOf(item, "cat"));
+          if (allowGrouping && branches.length > 1 && branches.every((branch) => branch.length > 0)) {
+            let prefix = 0;
+            while (branches.every((branch) => branch.length > prefix && sameShape(branch[prefix], branches[0][prefix]))) prefix += 1;
+            let suffix = 0;
+            while (branches.every((branch) => (
+              branch.length > prefix + suffix &&
+              sameShape(branch[branch.length - 1 - suffix], branches[0][branches[0].length - 1 - suffix])
+            ))) suffix += 1;
+            if (prefix > 0 || suffix > 0) {
+              const head = branches[0].slice(0, prefix);
+              const tail = suffix > 0 ? branches[0].slice(branches[0].length - suffix) : [];
+              const middles = [];
+              branches.forEach((branch) => {
+                const inner = branch.slice(prefix, branch.length - suffix);
+                const value2 = inner.length === 0 ? EPS_RE : inner.length === 1 ? inner[0] : { r: "cat", items: inner };
+                if (!middles.some((existing) => sameShape(existing, value2))) middles.push(value2);
+              });
+              const middle = middles.length === 1 ? middles[0] : { r: "alt", items: middles };
+              const combined = head.concat([simplifyRe(middle)]).concat(tail).filter((item) => !isEpsRe(item));
+              if (combined.length === 0) return EPS_RE;
+              if (combined.length === 1) return combined[0];
+              return simplifyRe({ r: "cat", items: combined });
+            }
+          }
+          return { r: "alt", items };
+        }
+        if (value.r === "star") {
+          const inner = simplifyRe(value.item);
+          if (isEpsRe(inner)) return EPS_RE;
+          if (inner.r === "star") return inner;
+          if (inner.r === "plus") return { r: "star", item: inner.item };
+          return { r: "star", item: inner };
+        }
+        if (value.r === "plus") {
+          const inner = simplifyRe(value.item);
+          if (isEpsRe(inner)) return EPS_RE;
+          return { r: "plus", item: inner };
+        }
+        return value;
+      }
+
+      // Plain BNF cannot bracket anything, so its only normal form is a sum of
+      // products: multiply concatenation out over every alternation. Returns
+      // null when that would explode, and the caller falls back to EBNF.
+      function distributeRe(value) {
+        if (!value) return null;
+        if (value.r === "sym" || value.r === "eps") return value;
+        if (value.r === "star" || value.r === "plus") {
+          const inner = distributeRe(value.item);
+          return inner ? { r: value.r, item: inner } : null;
+        }
+        if (value.r === "alt") {
+          const parts = [];
+          for (const item of value.items) {
+            const flattened = distributeRe(item);
+            if (!flattened) return null;
+            partsOf(flattened, "alt").forEach((branch) => {
+              if (!parts.some((existing) => sameShape(existing, branch))) parts.push(branch);
+            });
+          }
+          return parts.length === 1 ? parts[0] : { r: "alt", items: parts };
+        }
+        if (value.r === "cat") {
+          let combinations = [[]];
+          for (const factor of value.items) {
+            const flattened = distributeRe(factor);
+            if (!flattened) return null;
+            const options = partsOf(flattened, "alt");
+            const next = [];
+            combinations.forEach((combo) => options.forEach((option) => {
+              next.push(combo.concat(partsOf(option, "cat")));
+            }));
+            combinations = next;
+            if (combinations.length > 48) return null;
+          }
+          const branches = [];
+          combinations.forEach((combo) => {
+            const items = combo.filter((item) => !isEpsRe(item));
+            const branch = items.length === 0 ? EPS_RE : items.length === 1 ? items[0] : { r: "cat", items };
+            if (!branches.some((existing) => sameShape(existing, branch))) branches.push(branch);
+          });
+          return branches.length === 1 ? branches[0] : { r: "alt", items: branches };
+        }
+        return value;
+      }
+
+      // Merging bisimilar states preserves the language and stops state
+      // elimination from exploding when the same symbol appears more than once.
+      function bisimulationClasses(states, accepting, moves) {
+        let classes = new Map();
+        states.forEach((state) => classes.set(state, accepting.has(state) ? 1 : 0));
+        for (let pass = 0; pass < states.length + 2; pass += 1) {
+          const signatures = new Map();
+          states.forEach((state) => {
+            const parts = [classes.get(state)];
+            const labels = [];
+            moves.forEach((_, key) => {
+              if (key.startsWith(state + "|")) {
+                const label = key.slice(state.length + 1);
+                if (!labels.includes(label)) labels.push(label);
+              }
+            });
+            labels.sort();
+            labels.forEach((label) => {
+              const targets = [];
+              (moves.get(state + "|" + label) || []).forEach((target) => {
+                const id = classes.get(target);
+                if (!targets.includes(id)) targets.push(id);
+              });
+              targets.sort((a, b) => a - b);
+              parts.push(label + ">" + targets.join(","));
+            });
+            signatures.set(state, parts.join(";"));
+          });
+          const ids = new Map();
+          let next = 0;
+          const updated = new Map();
+          states.forEach((state) => {
+            const signature = signatures.get(state);
+            if (!ids.has(signature)) { ids.set(signature, next); next += 1; }
+            updated.set(state, ids.get(signature));
+          });
+          let stable = true;
+          states.forEach((state) => { if (updated.get(state) !== classes.get(state)) stable = false; });
+          classes = updated;
+          if (stable) break;
+        }
+        return classes;
+      }
+
+      // A densely cross-connected diagram has a genuinely huge BNF form, so the
+      // work is capped rather than left to grow until the page stops responding.
+      const REGEX_BUDGET = 1200;
+      const MAX_COMPONENTS = 60;
+
+      function regexSize(value) {
+        if (!value) return 0;
+        if (value.items) return value.items.reduce((total, item) => total + regexSize(item), 1);
+        if (value.item) return regexSize(value.item) + 1;
+        return 1;
+      }
+
+      function eliminateStates(graph) {
+        const content = graph.nodes.filter((node) => !isTerminalNode(node));
+        if (content.length > MAX_COMPONENTS) return null;
+        // A sensible diagram has roughly as many connectors as components; a
+        // densely crossed one is rejected before the expensive work starts.
+        if (graph.edges.length > content.length * 8 + 40) return null;
+        const byId = new Map(content.map((node) => [node.id, node]));
+        const labelOf = (node) => (node.kind === "lit" ? "L:" : "R:") + node.value;
+        const states = [START_ID].concat(content.map((node) => node.id));
+        const accepting = new Set(graph.edges.filter((edge) => edge.to === END_ID).map((edge) => edge.from));
+        const moves = new Map();
+        graph.edges.forEach((edge) => {
+          if (edge.to === END_ID) return;
+          const target = byId.get(edge.to);
+          if (!target) return;
+          const key = edge.from + "|" + labelOf(target);
+          if (!moves.has(key)) moves.set(key, []);
+          moves.get(key).push(edge.to);
+        });
+
+        const classes = bisimulationClasses(states, accepting, moves);
+        const representative = new Map();
+        states.forEach((state) => {
+          const id = classes.get(state);
+          if (!representative.has(id)) representative.set(id, state);
+        });
+        const mapState = (state) => (state === START_ID ? START_ID : representative.get(classes.get(state)));
+
+        const transitions = new Map();
+        const key = (from, to) => from + "|" + to;
+        const get = (from, to) => transitions.get(key(from, to)) || null;
+        const set = (from, to, value) => {
+          if (value) transitions.set(key(from, to), value);
+          else transitions.delete(key(from, to));
+        };
+
+        graph.edges.forEach((edge) => {
+          const from = mapState(edge.from);
+          if (edge.to === END_ID) { set(from, "FINAL", reAlt(get(from, "FINAL"), EPS_RE)); return; }
+          const target = byId.get(edge.to);
+          if (!target) return;
+          const to = mapState(edge.to);
+          set(from, to, reAlt(get(from, to), { r: "sym", node: { t: target.kind, v: target.value } }));
+        });
+
+        let live = [];
+        states.map(mapState).forEach((state) => { if (!live.includes(state)) live.push(state); });
+        live = live.concat(["FINAL"]);
+        let pending = live.filter((state) => state !== START_ID && state !== "FINAL");
+
+        while (pending.length > 0) {
+          let chosen = pending[0];
+          let bestCost = Infinity;
+          pending.forEach((state) => {
+            const ins = live.filter((from) => from !== state && get(from, state)).length;
+            const outs = live.filter((to) => to !== state && get(state, to)).length;
+            if (ins * outs < bestCost) { bestCost = ins * outs; chosen = state; }
+          });
+          const loop = get(chosen, chosen);
+          const ins = live.filter((from) => from !== chosen && get(from, chosen));
+          const outs = live.filter((to) => to !== chosen && get(chosen, to));
+          ins.forEach((from) => outs.forEach((to) => {
+            const through = reCat(reCat(get(from, chosen), reStar(loop)), get(chosen, to));
+            set(from, to, reAlt(get(from, to), through));
+          }));
+          live.forEach((state) => { set(chosen, state, null); set(state, chosen, null); });
+          live = live.filter((state) => state !== chosen);
+          pending = pending.filter((state) => state !== chosen);
+
+          let budget = 0;
+          transitions.forEach((value) => { budget += regexSize(value); });
+          if (budget > REGEX_BUDGET) return null;
+        }
+
+        const selfLoop = get(START_ID, START_ID);
+        let result = get(START_ID, "FINAL");
+        if (selfLoop) result = reCat(reStar(selfLoop), result);
+        return result || null;
+      }
+
+      function regexToAst(value, ebnf) {
+        switch (value.r) {
+          case "eps":
+            return { t: "eps" };
+          case "sym":
+            return { t: value.node.t, v: value.node.v };
+          case "cat": {
+            const items = value.items.map((item) => regexToAst(item, ebnf)).filter((item) => item.t !== "eps");
+            if (items.length === 0) return { t: "eps" };
+            if (items.length === 1) return items[0];
+            return { t: "seq", items };
+          }
+          case "alt": {
+            const parts = value.items.map((item) => regexToAst(item, ebnf));
+            const hasEps = parts.some((part) => part.t === "eps");
+            const rest = parts.filter((part) => part.t !== "eps");
+            if (rest.length === 0) return { t: "eps" };
+            const body = rest.length === 1 ? rest[0] : { t: "alt", items: rest };
+            if (!hasEps) return body;
+            if (!ebnf) return { t: "alt", items: rest.concat([{ t: "eps" }]) };
+            if (body.t === "rep1") return { t: "rep", item: body.item };
+            if (body.t === "rep") return body;
+            return { t: "opt", item: body };
+          }
+          case "star": {
+            const inner = regexToAst(value.item, ebnf);
+            return inner.t === "eps" ? { t: "eps" } : { t: "rep", item: inner };
+          }
+          case "plus": {
+            const inner = regexToAst(value.item, ebnf);
+            return inner.t === "eps" ? { t: "eps" } : { t: "rep1", item: inner };
+          }
+          default:
+            return { t: "eps" };
+        }
+      }
+
+      function astFromGraph(graph, ebnf, grouping) {
+        const previous = allowGrouping;
+        allowGrouping = grouping !== false;
+        try {
+          const expression = eliminateStates(graph);
+          if (!expression) return null;
+          if (grouping === false) {
+            const flattened = distributeRe(expression);
+            return flattened ? regexToAst(simplifyRe(flattened), ebnf) : null;
+          }
+          return regexToAst(simplifyRe(expression), ebnf);
+        } finally {
+          allowGrouping = previous;
+        }
+      }
+
+      // The safety net for the whole two-way sync: a rule body is only ever
+      // written into the grammar if re-reading it under the current notation
+      // gives back exactly the structure it came from.
+      function roundTripsCleanly(bodyText, ast, ebnf) {
+        const { tokens, errors } = tokenizeBody(bodyText, ebnf);
+        if (errors.length > 0) return false;
+        const parseErrors = [];
+        const reparsed = parseTokens(tokens, parseErrors);
+        return parseErrors.length === 0 && sameShape(reparsed, ast);
+      }
+
+      function compileGraph(graph, ebnf) {
+        const factored = astFromGraph(graph, ebnf, true);
+        const flattened = astFromGraph(graph, ebnf, false);
+        const order = ebnf ? [factored, flattened] : [flattened, factored];
+        for (const candidate of order) {
+          if (!candidate) continue;
+          const body = serializeNode(candidate, "alt");
+          if (roundTripsCleanly(body, candidate, ebnf)) return { ast: candidate, body, requiresEbnf: false };
+        }
+        if (factored) {
+          const body = serializeNode(factored, "alt");
+          if (roundTripsCleanly(body, factored, true)) return { ast: factored, body, requiresEbnf: true };
+        }
+        return null;
+      }
+
+      /* =====================================================================
+         PRESET GRAMMARS
+         ===================================================================== */
+
+      const PRESETS = [
+        {
+          id: "number",
+          name: "Whole numbers",
+          ebnf: false,
+          start: "number",
+          grammar: [
+            "// A whole number is one or more digits.",
+            "<digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9",
+            "<number> ::= <digit> | <digit> <number>",
+          ].join("\n"),
+          tests: ["7", "2024", "007", "12a", "1 2"],
+        },
+        {
+          id: "identifier",
+          name: "Variable identifiers",
+          ebnf: false,
+          start: "identifier",
+          grammar: [
+            "// An identifier starts with a letter, then any letters or digits.",
+            "<letter>     ::= a | b | c | d | e | f | g | h | i | j | k | l | m",
+            "               | n | o | p | q | r | s | t | u | v | w | x | y | z",
+            "<digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9",
+            "<identifier> ::= <letter> | <identifier> <letter> | <identifier> <digit>",
+          ].join("\n"),
+          tests: ["x", "count2", "total", "2fast", "my_total"],
+        },
+        {
+          id: "expression",
+          name: "Arithmetic expressions",
+          ebnf: false,
+          start: "expr",
+          grammar: [
+            "// Left recursion makes + and - group from the left,",
+            "// and the separate <term> level gives * and / higher priority.",
+            "<digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9",
+            "<number> ::= <digit> | <digit> <number>",
+            '<factor> ::= <number> | "(" <expr> ")"',
+            "<term>   ::= <factor> | <term> * <factor> | <term> / <factor>",
+            "<expr>   ::= <term> | <expr> + <term> | <expr> - <term>",
+          ].join("\n"),
+          tests: ["1+2*3", "(4+5)/3", "10-2-3", "((7))", "2+"],
+        },
+        {
+          id: "integer",
+          name: "Signed integers (EBNF)",
+          ebnf: true,
+          start: "integer",
+          grammar: [
+            "// [ ] means optional and { } means repeat zero or more times.",
+            "<digit>   ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9",
+            "<sign>    ::= + | -",
+            "<integer> ::= [ <sign> ] <digit> { <digit> }",
+          ].join("\n"),
+          tests: ["42", "-7", "+100", "--5", "3.5"],
+        },
+        {
+          id: "assignment",
+          name: "Assignment statements (EBNF)",
+          ebnf: true,
+          start: "assignment",
+          grammar: [
+            "<letter>     ::= a | b | c | d | e | f | g | h | i | j | k | l | m",
+            "               | n | o | p | q | r | s | t | u | v | w | x | y | z",
+            "<digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9",
+            "<identifier> ::= <letter> { <letter> | <digit> }",
+            "<number>     ::= <digit> { <digit> }",
+            "<value>      ::= <identifier> | <number>",
+            '<assignment> ::= <identifier> "=" <value>',
+          ].join("\n"),
+          tests: ["count=0", "total=count", "x=99", "2x=1", "x="],
+        },
+        {
+          id: "blank",
+          name: "Start from scratch",
+          ebnf: false,
+          start: "start",
+          grammar: '<start> ::= ""\n',
+          tests: [""],
+        },
+      ];
+
+      /* =====================================================================
+         SHARED PRESENTATION
+         ===================================================================== */
+
+      const CARD = "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm";
+      const BTN = "inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 dark:focus-visible:ring-offset-slate-800";
+      const BTN_PRIMARY = BTN + " bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed";
+      const BTN_QUIET = BTN + " bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed";
+      const BTN_DANGER = BTN + " bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800 disabled:opacity-40 disabled:cursor-not-allowed";
+      const FIELD = "rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+
+      const Legend = () => (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600 dark:text-slate-300">
+          <span className="flex items-center gap-2">
+            <span className="mono legend-oval px-2.5 py-0.5">abc</span>
+            Oval = literal text to type
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="mono legend-rect px-2.5 py-0.5">rule</span>
+            Rectangle = another rule
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-300 font-bold" aria-hidden="true">{"▶"}</span>
+            Arrow pointing forward = a choice of route
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-amber-700 dark:text-amber-300 font-bold" aria-hidden="true">{"◀"}</span>
+            Arrow pointing back = repetition
+          </span>
+        </div>
+      );
+
+      const Problems = ({ problems }) => {
+        if (problems.length === 0) return null;
+        return (
+          <ul className="mt-3 space-y-1.5" aria-live="polite">
+            {problems.map((problem, index) => (
+              <li
+                key={index}
+                className={
+                  "text-sm rounded-md px-3 py-2 border " +
+                  (problem.kind === "error"
+                    ? "bg-rose-50 dark:bg-rose-900/25 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200"
+                    : "bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200")
+                }
+              >
+                <span className="font-semibold">{problem.kind === "error" ? "Error" : "Note"}</span>
+                {problem.line ? <span className="opacity-80"> (line {problem.line})</span> : null}
+                {": "}
+                {problem.text}
+              </li>
+            ))}
+          </ul>
+        );
+      };
+
+      const DerivationTree = ({ node, input, depth }) => {
+        const matched = input.slice(node.from, node.to);
+        return (
+          <div className={depth > 0 ? "pl-4 derivation-branch border-slate-300 dark:border-slate-600" : ""}>
+            <div className="py-0.5">
+              <span className="mono font-semibold text-indigo-700 dark:text-indigo-300">{"<" + node.nt + ">"}</span>
+              <span className="text-slate-500 dark:text-slate-400"> matches </span>
+              <span className="mono text-slate-800 dark:text-slate-100">
+                {matched === "" ? <em className="not-italic text-amber-700 dark:text-amber-300">{"ε"}</em> : '"' + matched + '"'}
+              </span>
+            </div>
+            {node.kids.map((kid, index) => (
+              kid.term !== undefined ? (
+                <div key={index} className="pl-4 derivation-branch border-slate-300 dark:border-slate-600 py-0.5">
+                  <span className="mono text-cyan-800 dark:text-cyan-200">{'"' + kid.term + '"'}</span>
+                  <span className="text-slate-500 dark:text-slate-400"> (literal)</span>
+                </div>
+              ) : (
+                <DerivationTree key={index} node={kid} input={input} depth={depth + 1} />
+              )
+            ))}
+          </div>
+        );
+      };
+
+      /* =====================================================================
+         THE DIAGRAM CANVAS
+         ===================================================================== */
+
+      const NODE_H = 34;
+
+      function nodeLabel(node) {
+        if (node.kind === "start") return "start";
+        if (node.kind === "end") return "end";
+        if (node.value === "") return "…";
+        return node.kind === "ref" ? node.value : literalLabel(node.value);
+      }
+
+      function nodeWidth(node) {
+        if (isTerminalNode(node)) return 60;
+        return Math.max(48, nodeLabel(node).length * 8 + 26);
+      }
+
+      function canvasSize(graph) {
+        let right = 0;
+        let bottom = 0;
+        graph.nodes.forEach((node) => {
+          right = Math.max(right, node.x + nodeWidth(node) / 2);
+          bottom = Math.max(bottom, node.y + NODE_H / 2);
+        });
+        return { width: Math.max(700, right + 90), height: Math.max(240, bottom + 120) };
+      }
+
+      function edgeGeometry(from, to) {
+        const round = (value) => Math.round(value * 10) / 10;
+        if (from.id === to.id) {
+          const top = from.y - NODE_H / 2;
+          const radius = 30;
+          const d =
+            "M " + round(from.x + 12) + " " + round(top) +
+            " C " + round(from.x + 12 + radius) + " " + round(top - radius) +
+            ", " + round(from.x - 12 - radius) + " " + round(top - radius) +
+            ", " + round(from.x - 12) + " " + round(top);
+          return { d, mx: from.x, my: top - 0.75 * radius, angle: 180, back: true };
+        }
+        const forward = to.x > from.x;
+        if (forward) {
+          const sx = from.x + nodeWidth(from) / 2;
+          const tx = to.x - nodeWidth(to) / 2;
+          const d = "M " + round(sx) + " " + round(from.y) + " L " + round(tx) + " " + round(to.y);
+          return {
+            d,
+            mx: (sx + tx) / 2,
+            my: (from.y + to.y) / 2,
+            angle: (Math.atan2(to.y - from.y, tx - sx) * 180) / Math.PI,
+            back: false,
+          };
+        }
+        const sy = from.y + NODE_H / 2;
+        const ty = to.y + NODE_H / 2;
+        const dip = 46;
+        const d =
+          "M " + round(from.x) + " " + round(sy) +
+          " C " + round(from.x) + " " + round(sy + dip) +
+          ", " + round(to.x) + " " + round(ty + dip) +
+          ", " + round(to.x) + " " + round(ty);
+        return {
+          d,
+          mx: (from.x + to.x) / 2,
+          my: (sy + 3 * (sy + dip) + 3 * (ty + dip) + ty) / 8,
+          angle: (Math.atan2(ty - sy, to.x - from.x) * 180) / Math.PI,
+          back: true,
+        };
+      }
+
+      const DiagramCanvas = ({ graph, badNodeIds, selection, connectFrom, tool, onSelect, onMoveNode, onNodeActivate, onBackground }) => {
+        const svgRef = useRef(null);
+        const [drag, setDrag] = useState(null);
+        const [pointer, setPointer] = useState(null);
+        const size = canvasSize(graph);
+        const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+
+        const toLocal = (event) => {
+          const rect = svgRef.current.getBoundingClientRect();
+          return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        };
+
+        const handlePointerDown = (event, node) => {
+          event.stopPropagation();
+          if (tool === "connect") { onNodeActivate(node.id); return; }
+          onSelect({ type: "node", id: node.id });
+          const at = toLocal(event);
+          setDrag({ id: node.id, dx: node.x - at.x, dy: node.y - at.y });
+          if (event.currentTarget.setPointerCapture) {
+            try { event.currentTarget.setPointerCapture(event.pointerId); } catch (error) { /* older browsers */ }
+          }
+        };
+
+        const handlePointerMove = (event) => {
+          const at = toLocal(event);
+          if (connectFrom) setPointer(at);
+          if (!drag) return;
+          onMoveNode(drag.id, Math.max(34, at.x + drag.dx), Math.max(26, at.y + drag.dy));
+        };
+
+        const endDrag = () => setDrag(null);
+
+        return (
+          <svg
+            ref={svgRef}
+            className={"sd-canvas " + (tool === "connect" ? "sd-connecting" : "")}
+            width={size.width}
+            height={size.height}
+            viewBox={"0 0 " + size.width + " " + size.height}
+            role="application"
+            aria-label="Syntax diagram editing surface"
+            onPointerMove={handlePointerMove}
+            onPointerUp={endDrag}
+            onPointerLeave={endDrag}
+            onPointerDown={() => onBackground()}
+          >
+            {graph.edges.map((edge) => {
+              const from = byId.get(edge.from);
+              const to = byId.get(edge.to);
+              if (!from || !to) return null;
+              const geometry = edgeGeometry(from, to);
+              const selected = selection && selection.type === "edge" && selection.id === edge.id;
+              return (
+                <g key={edge.id}>
+                  <path className={"sd-edge " + (geometry.back ? "sd-edge-back " : "") + (selected ? "sd-edge-selected" : "")} d={geometry.d} />
+                  <path
+                    className="sd-edge-hit"
+                    d={geometry.d}
+                    onPointerDown={(event) => { event.stopPropagation(); onSelect({ type: "edge", id: edge.id }); }}
+                  />
+                  <path
+                    className={"sd-arrow " + (geometry.back ? "sd-arrow-back " : "") + (selected ? "sd-arrow-selected" : "")}
+                    d="M -6 -5 L 6 0 L -6 5 Z"
+                    transform={"translate(" + geometry.mx + " " + geometry.my + ") rotate(" + geometry.angle + ")"}
+                  />
+                </g>
+              );
+            })}
+
+            {connectFrom && pointer && byId.get(connectFrom) ? (
+              <line
+                className="sd-rubber"
+                x1={byId.get(connectFrom).x}
+                y1={byId.get(connectFrom).y}
+                x2={pointer.x}
+                y2={pointer.y}
+              />
+            ) : null}
+
+            {graph.nodes.map((node) => {
+              const width = nodeWidth(node);
+              const label = nodeLabel(node);
+              const selected = selection && selection.type === "node" && selection.id === node.id;
+              const classes = [
+                "sd-node",
+                node.kind === "lit" ? "sd-lit" : node.kind === "ref" ? "sd-ref" : "sd-term",
+                selected ? "sd-node-selected" : "",
+                badNodeIds.has(node.id) ? "sd-node-bad" : "",
+                connectFrom === node.id ? "sd-node-source" : "",
+              ].join(" ");
+              return (
+                <g
+                  key={node.id}
+                  className={classes}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={(isTerminalNode(node) ? node.kind : node.kind === "ref" ? "rule reference " + node.value : "literal " + label) + " component"}
+                  onPointerDown={(event) => handlePointerDown(event, node)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    if (tool === "connect") onNodeActivate(node.id);
+                    else onSelect({ type: "node", id: node.id });
+                  }}
+                >
+                  <rect
+                    x={node.x - width / 2}
+                    y={node.y - NODE_H / 2}
+                    width={width}
+                    height={NODE_H}
+                    rx={node.kind === "lit" ? NODE_H / 2 : node.kind === "ref" ? 4 : 8}
+                  />
+                  <text
+                    className={node.value === "" && !isTerminalNode(node) ? "sd-placeholder" : ""}
+                    x={node.x}
+                    y={node.y + 4.5}
+                    textAnchor="middle"
+                  >
+                    {label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        );
+      };
+
+      /* =====================================================================
+         THE DESIGNER
+         ===================================================================== */
+
+      const DiagramDesigner = ({ rule, graph, ruleNames, ebnf, tooTangled, onChange, onAddRule, onRenameRule, onDeleteRule, rules, activeKey, onPick }) => {
+        const [tool, setTool] = useState("select");
+        const [connectFrom, setConnectFrom] = useState(null);
+        const [selection, setSelection] = useState(null);
+        const [message, setMessage] = useState("");
+        const [newRuleName, setNewRuleName] = useState("");
+        const [renaming, setRenaming] = useState(false);
+        const [renameDraft, setRenameDraft] = useState("");
+        const valueInput = useRef(null);
+        const focusNext = useRef(false);
+
+        useEffect(() => { setSelection(null); setConnectFrom(null); setTool("select"); setMessage(""); }, [activeKey]);
+
+        useEffect(() => {
+          if (focusNext.current && valueInput.current) {
+            valueInput.current.focus();
+            valueInput.current.select();
+            focusNext.current = false;
+          }
+        });
+
+        const issues = useMemo(() => (graph ? validateGraph(graph, ruleNames) : []), [graph, ruleNames.join("|")]);
+        const badNodeIds = useMemo(() => new Set(issues.filter((issue) => issue.id).map((issue) => issue.id)), [issues]);
+        const blocking = issues.filter((issue) => issue.blocking);
+
+        if (!graph) {
+          return (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              This rule cannot be read as BNF yet, so it has no diagram. Fix it on the BNF tab first.
+            </p>
+          );
+        }
+
+        const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+        const selectedNode = selection && selection.type === "node" ? byId.get(selection.id) : null;
+        const selectedEdge = selection && selection.type === "edge" ? graph.edges.find((edge) => edge.id === selection.id) : null;
+
+        const update = (next, structural) => onChange(next, structural);
+
+        const moveNode = (id, x, y) => {
+          update({
+            nodes: graph.nodes.map((node) => (node.id === id ? { ...node, x, y } : node)),
+            edges: graph.edges,
+          }, false);
+        };
+
+        const freeSpot = () => {
+          const content = graph.nodes.filter((node) => !isTerminalNode(node));
+          const start = byId.get(START_ID);
+          if (content.length === 0) return { x: (start ? start.x : 60) + 150, y: start ? start.y : 110 };
+          const rightmost = content.reduce((best, node) => (node.x > best.x ? node : best), content[0]);
+          return { x: rightmost.x, y: rightmost.y + 62 };
+        };
+
+        const addComponent = (kind) => {
+          const value = kind === "ref" ? (ruleNames.find((name) => name !== rule.name) || ruleNames[0] || "") : "";
+          const id = freshId("n");
+          let spot = freeSpot();
+          let edges = graph.edges;
+
+          // Drop the new component straight onto a chosen connector, or onto the
+          // bare start-to-end line, so it lands on the route rather than floating.
+          const target = selectedEdge
+            || (graph.nodes.every(isTerminalNode) ? graph.edges.find((edge) => edge.from === START_ID && edge.to === END_ID) : null);
+          if (target) {
+            const from = byId.get(target.from);
+            const to = byId.get(target.to);
+            if (from && to) {
+              spot = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+              edges = graph.edges
+                .filter((edge) => edge.id !== target.id)
+                .concat([{ id: freshId("e"), from: target.from, to: id }, { id: freshId("e"), from: id, to: target.to }]);
+            }
+          }
+
+          update({ nodes: graph.nodes.concat([{ id, kind, value, x: spot.x, y: spot.y }]), edges }, true);
+          setSelection({ type: "node", id });
+          focusNext.current = kind === "lit";
+          setMessage(target ? "" : "Now draw connectors so this joins the route from start to end.");
+        };
+
+        const setNodeValue = (id, value) => {
+          update({
+            nodes: graph.nodes.map((node) => (node.id === id ? { ...node, value } : node)),
+            edges: graph.edges,
+          }, true);
+        };
+
+        const deleteSelection = () => {
+          if (selectedEdge) {
+            update({ nodes: graph.nodes, edges: graph.edges.filter((edge) => edge.id !== selectedEdge.id) }, true);
+            setSelection(null);
+            return;
+          }
+          if (!selectedNode || isTerminalNode(selectedNode)) return;
+          update({
+            nodes: graph.nodes.filter((node) => node.id !== selectedNode.id),
+            edges: graph.edges.filter((edge) => edge.from !== selectedNode.id && edge.to !== selectedNode.id),
+          }, true);
+          setSelection(null);
+        };
+
+        const activateForConnect = (id) => {
+          if (!connectFrom) {
+            if (id === END_ID) { setMessage("A connector cannot start at end."); return; }
+            setConnectFrom(id);
+            setMessage("Now choose where the connector goes. Choose the same component again for a repetition loop.");
+            return;
+          }
+          if (id === START_ID) { setMessage("A connector cannot lead back into start."); return; }
+          if (graph.edges.some((edge) => edge.from === connectFrom && edge.to === id)) {
+            setMessage("Those two are already joined.");
+            setConnectFrom(null);
+            setTool("select");
+            return;
+          }
+          update({ nodes: graph.nodes, edges: graph.edges.concat([{ id: freshId("e"), from: connectFrom, to: id }]) }, true);
+          setConnectFrom(null);
+          setTool("select");
+          setMessage("");
+        };
+
+        const commitRename = () => {
+          setRenaming(false);
+          const name = renameDraft.trim();
+          if (!name || name === rule.name) return;
+          const problem = onRenameRule(rule, name);
+          if (problem) setMessage(problem);
+        };
+
+        const addRule = () => {
+          const problem = onAddRule(newRuleName.trim());
+          if (problem) { setMessage(problem); return; }
+          setNewRuleName("");
+          setMessage("");
+        };
+
+        return (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Rules</span>
+              {rules.map((entry) => (
+                <button
+                  key={entry.key}
+                  type="button"
+                  aria-pressed={entry.key === activeKey}
+                  onClick={() => onPick(entry.key)}
+                  className={
+                    "mono rounded-md px-2.5 py-1 text-sm font-semibold border " +
+                    (entry.key === activeKey
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700")
+                  }
+                >
+                  {"<" + entry.name + ">"}
+                </button>
+              ))}
+              <span className="grow" />
+              <input
+                type="text"
+                className={FIELD + " mono w-36"}
+                value={newRuleName}
+                spellCheck="false"
+                placeholder="new rule name"
+                aria-label="Name for a new rule"
+                onChange={(event) => setNewRuleName(event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Enter") addRule(); }}
+              />
+              <button type="button" className={BTN_QUIET} onClick={addRule}>Add rule</button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-2">
+              {renaming ? (
+                <input
+                  type="text"
+                  autoFocus
+                  className={FIELD + " mono w-40"}
+                  value={renameDraft}
+                  aria-label={"New name for the " + rule.name + " rule"}
+                  onChange={(event) => setRenameDraft(event.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitRename();
+                    if (event.key === "Escape") setRenaming(false);
+                  }}
+                />
+              ) : (
+                <h3 className="mono text-sm font-bold text-indigo-700 dark:text-indigo-300">{"<" + rule.name + ">"}</h3>
+              )}
+              <button type="button" className={BTN_QUIET} onClick={() => { setRenaming(true); setRenameDraft(rule.name); }}>Rename</button>
+              <button type="button" className={BTN_DANGER} onClick={() => onDeleteRule(rule)}>Delete rule</button>
+              <span className="grow" />
+              <button type="button" className={BTN_QUIET} onClick={() => addComponent("lit")}>Add an oval (literal)</button>
+              <button type="button" className={BTN_QUIET} disabled={ruleNames.length === 0} onClick={() => addComponent("ref")}>
+                Add a rectangle (rule)
+              </button>
+              <button
+                type="button"
+                aria-pressed={tool === "connect"}
+                className={tool === "connect" ? BTN_PRIMARY : BTN_QUIET}
+                onClick={() => {
+                  const next = tool === "connect" ? "select" : "connect";
+                  setTool(next);
+                  setConnectFrom(null);
+                  setMessage(next === "connect" ? "Choose the component the connector starts from." : "");
+                }}
+              >
+                {tool === "connect" ? "Stop drawing connectors" : "Draw a connector"}
+              </button>
+              <button type="button" className={BTN_DANGER} disabled={!selectedEdge && !(selectedNode && !isTerminalNode(selectedNode))} onClick={deleteSelection}>
+                Delete selected
+              </button>
+            </div>
+
+            {message ? (
+              <p className="text-sm rounded-md border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/30 text-sky-900 dark:text-sky-100 px-3 py-2">
+                {message}
+              </p>
+            ) : null}
+
+            <div className="sd-wrap">
+              <DiagramCanvas
+                graph={graph}
+                badNodeIds={badNodeIds}
+                selection={selection}
+                connectFrom={connectFrom}
+                tool={tool}
+                onSelect={setSelection}
+                onMoveNode={moveNode}
+                onNodeActivate={activateForConnect}
+                onBackground={() => { setSelection(null); if (connectFrom) { setConnectFrom(null); setMessage(""); } }}
+              />
+            </div>
+
+            {blocking.length === 0 && tooTangled ? (
+              <p className="text-sm rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 px-3 py-2">
+                <span className="font-semibold">This diagram is too tangled to write as a single BNF rule.</span>{" "}
+                Every route is joined up, but there are so many crossing connectors that the equivalent BNF would be enormous.
+                Split it into smaller rules, or remove some connectors, and the grammar will update again.
+              </p>
+            ) : blocking.length === 0 ? (
+              <p className="text-sm rounded-md border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 px-3 py-2">
+                <span className="font-semibold">This rule is fully connected.</span>{" "}
+                Every component sits on a route from start to end, and the BNF below matches it.
+              </p>
+            ) : (
+              <div className="rounded-md border border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/30 px-3 py-2">
+                <p className="text-sm font-semibold text-rose-900 dark:text-rose-100">
+                  This rule is not finished yet, so the grammar still uses the last working version.
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {blocking.map((issue, index) => (
+                    <li key={index} className="text-sm text-rose-800 dark:text-rose-200">
+                      {issue.id ? (
+                        <button
+                          type="button"
+                          className="underline underline-offset-2 hover:no-underline text-left"
+                          onClick={() => setSelection({ type: "node", id: issue.id })}
+                        >
+                          {issue.text}
+                        </button>
+                      ) : issue.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {issues.filter((issue) => !issue.blocking).map((issue, index) => (
+              <p key={index} className="text-sm rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-900 dark:text-amber-200 px-3 py-2">
+                {issue.text}
+              </p>
+            ))}
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-3">
+              {selectedNode && !isTerminalNode(selectedNode) ? (
+                <div className="flex flex-wrap items-end gap-3">
+                  {selectedNode.kind === "lit" ? (
+                    <label className="flex flex-col gap-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      Text this oval must match
+                      <input
+                        ref={valueInput}
+                        type="text"
+                        className={FIELD + " mono w-56"}
+                        value={selectedNode.value}
+                        spellCheck="false"
+                        placeholder="e.g. +"
+                        onChange={(event) => setNodeValue(selectedNode.id, event.target.value)}
+                      />
+                    </label>
+                  ) : (
+                    <label className="flex flex-col gap-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      Rule this rectangle stands for
+                      <select
+                        className={FIELD + " mono w-56"}
+                        value={ruleNames.includes(selectedNode.value) ? selectedNode.value : ""}
+                        onChange={(event) => setNodeValue(selectedNode.id, event.target.value)}
+                      >
+                        {ruleNames.includes(selectedNode.value) ? null : <option value="">{"<" + selectedNode.value + "> (not defined)"}</option>}
+                        {ruleNames.map((name) => <option key={name} value={name}>{"<" + name + ">"}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    className={BTN_QUIET}
+                    onClick={() => { setTool("connect"); setConnectFrom(selectedNode.id); setMessage("Now choose where the connector goes."); }}
+                  >
+                    Draw a connector from here
+                  </button>
+                  <button type="button" className={BTN_DANGER} onClick={deleteSelection}>Delete this component</button>
+                </div>
+              ) : selectedEdge ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-slate-700 dark:text-slate-200">
+                    Connector from{" "}
+                    <span className="mono font-semibold">{nodeLabel(byId.get(selectedEdge.from) || {})}</span>{" "}
+                    to <span className="mono font-semibold">{nodeLabel(byId.get(selectedEdge.to) || {})}</span>.
+                  </p>
+                  <button type="button" className={BTN_DANGER} onClick={deleteSelection}>Delete this connector</button>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Drag components to arrange them. Select one to change its text or delete it, or use
+                  <span className="font-semibold"> Draw a connector </span>
+                  to join two components with a directed arrow.
+                </p>
+              )}
+            </div>
+
+            <p className="mono text-xs text-slate-600 dark:text-slate-300 break-all">
+              {blocking.length === 0 && rule.ast ? serializeRule(rule.name, rule.ast) : ""}
+            </p>
+          </div>
+        );
+      };
+
+      /* =====================================================================
+         MAIN APP
+         ===================================================================== */
+
+      const App = () => {
+        const [presetId, setPresetId] = useState(PRESETS[0].id);
+        const [grammarText, setGrammarText] = useState(PRESETS[0].grammar);
+        const [ebnf, setEbnf] = useState(PRESETS[0].ebnf);
+        const [tests, setTests] = useState(PRESETS[0].tests);
+        const [startRule, setStartRule] = useState(PRESETS[0].start);
+        const [ignoreSpaces, setIgnoreSpaces] = useState(false);
+        const [openDerivations, setOpenDerivations] = useState({});
+        const [notice, setNotice] = useState("");
+        const [tab, setTab] = useState("bnf");
+        const [activeKey, setActiveKey] = useState(null);
+        const [tooTangled, setTooTangled] = useState(false);
+        const [graphVersion, setGraphVersion] = useState(0);
+        const graphCache = useRef(new Map());
+
+        const grammar = useMemo(() => parseGrammar(grammarText, ebnf), [grammarText, ebnf]);
+        const rules = grammar.rules;
+        const ruleNames = useMemo(() => {
+          const names = [];
+          rules.forEach((rule) => { if (!names.includes(rule.name)) names.push(rule.name); });
+          return names;
+        }, [rules]);
+
+        // A rule's diagram is rebuilt from its BNF only when that BNF actually
+        // changes, so hand-placed components keep their positions.
+        const graphs = useMemo(() => {
+          const map = new Map();
+          rules.forEach((rule) => {
+            if (!rule.ast) return;
+            const cached = graphCache.current.get(rule.key);
+            if (cached && cached.body === rule.body) { map.set(rule.key, cached.graph); return; }
+            const graph = graphFromAst(rule.ast);
+            graphCache.current.set(rule.key, { body: rule.body, graph });
+            map.set(rule.key, graph);
+          });
+          return map;
+        }, [rules, graphVersion]);
+
+        const productions = useMemo(() => buildProductions(rules), [rules]);
+        const fatalError = grammar.problems.some((problem) => problem.kind === "error");
+
+        useEffect(() => {
+          if (ruleNames.length === 0 || ruleNames.includes(startRule)) return;
+          setStartRule(ruleNames[ruleNames.length - 1]);
+        }, [ruleNames.join("|")]);
+
+        useEffect(() => {
+          if (rules.length === 0) { if (activeKey !== null) setActiveKey(null); return; }
+          if (!rules.some((rule) => rule.key === activeKey)) setActiveKey(rules[0].key);
+        }, [rules.map((rule) => rule.key).join("|")]);
+
+        const results = useMemo(() => {
+          if (fatalError || !startRule || productions.length === 0) return null;
+          return tests.map((test) => {
+            const input = ignoreSpaces ? test.replace(/\s+/g, "") : test;
+            return { raw: test, input, outcome: earleyParse(productions, startRule, input) };
+          });
+        }, [productions, startRule, tests, ignoreSpaces, fatalError]);
+
+        const acceptedCount = results ? results.filter((result) => result.outcome.ok).length : 0;
+        const activeRule = rules.find((rule) => rule.key === activeKey) || null;
+
+        const loadPreset = (id) => {
+          const preset = PRESETS.find((candidate) => candidate.id === id) || PRESETS[0];
+          graphCache.current.clear();
+          setPresetId(preset.id);
+          setGrammarText(preset.grammar);
+          setEbnf(preset.ebnf);
+          setTests(preset.tests.slice());
+          setStartRule(preset.start);
+          setOpenDerivations({});
+          setNotice("Loaded the " + preset.name.toLowerCase() + " example.");
+        };
+
+        const replaceRuleLines = (rule, replacement) => {
+          setGrammarText((current) => {
+            const lines = current.split(/\r?\n/);
+            return lines.slice(0, rule.line - 1).concat(replacement, lines.slice(rule.endLine)).join("\n");
+          });
+        };
+
+        // A diagram edit only rewrites the grammar when the diagram is complete;
+        // an unfinished one is kept on screen while the rule text stays put.
+        const commitGraph = (rule, nextGraph, structural) => {
+          const cached = graphCache.current.get(rule.key);
+          const currentBody = cached ? cached.body : rule.body;
+          const keepText = () => {
+            graphCache.current.set(rule.key, { body: currentBody, graph: nextGraph });
+            setGraphVersion((version) => version + 1);
+          };
+
+          if (!structural) { keepText(); return; }
+          if (validateGraph(nextGraph, ruleNames).some((issue) => issue.blocking)) { setTooTangled(false); keepText(); return; }
+
+          const compiled = compileGraph(nextGraph, ebnf);
+          if (!compiled) { setTooTangled(true); keepText(); return; }
+          setTooTangled(false);
+
+          graphCache.current.set(rule.key, { body: compiled.body, graph: nextGraph });
+          if (compiled.requiresEbnf && !ebnf) {
+            setEbnf(true);
+            setNotice("That diagram needs repetition or grouping, which plain BNF cannot write, so EBNF extensions have been switched on.");
+          } else {
+            setNotice("");
+          }
+          replaceRuleLines(rule, ["<" + rule.name + "> ::= " + compiled.body]);
+          setGraphVersion((version) => version + 1);
+        };
+
+        const addRule = (name) => {
+          if (!NAME_PATTERN.test(name)) return "Rule names must start with a letter, for example “digit”.";
+          if (ruleNames.includes(name)) return "<" + name + "> already exists.";
+          setGrammarText((current) => (current.replace(/\s+$/, "") + '\n<' + name + '> ::= ""').replace(/^\n/, ""));
+          setActiveKey(name);
+          setNotice("Added <" + name + ">. Build it up on the diagram.");
+          return null;
+        };
+
+        const renameRule = (rule, name) => {
+          if (!NAME_PATTERN.test(name)) return "Rule names must start with a letter, for example “digit”.";
+          if (ruleNames.includes(name)) return "<" + name + "> already exists.";
+          const escaped = rule.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          graphCache.current.delete(rule.key);
+          setGrammarText((current) => current.replace(new RegExp("<\\s*" + escaped + "\\s*>", "g"), "<" + name + ">"));
+          if (startRule === rule.name) setStartRule(name);
+          setActiveKey(name);
+          return null;
+        };
+
+        const deleteRule = (rule) => {
+          graphCache.current.delete(rule.key);
+          replaceRuleLines(rule, []);
+          setActiveKey(null);
+        };
+
+        const updateTest = (index, value) => setTests((current) => current.map((test, position) => (position === index ? value : test)));
+        const addTest = () => setTests((current) => current.concat([""]));
+        const removeTest = (index) => {
+          setTests((current) => current.filter((_, position) => position !== index));
+          setOpenDerivations({});
+        };
+
+        const usesEbnfSyntax = /[[\]{}]/.test(grammarText);
+        const tabClass = (name) => (
+          "px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 " +
+          (tab === name
+            ? "border-indigo-600 text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800"
+            : "border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100")
+        );
+
+        return (
+          <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+            <header
+              data-interactive-header
+              className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-4 md:px-6 py-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700"
+            >
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-50">BNF & Syntax Diagram Playground</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Write a grammar as BNF or draw it as a syntax diagram, then test strings against it
+                </p>
+              </div>
+              <div data-interactive-actions className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <span className="sr-only md:not-sr-only">Example</span>
+                  <select className={FIELD} aria-label="Example grammar" value={presetId} onChange={(event) => loadPreset(event.target.value)}>
+                    {PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+                  </select>
+                </label>
+              </div>
+            </header>
+
+            <main className="max-w-[96rem] mx-auto px-4 md:px-6 py-5 flex flex-col gap-5">
+              {notice ? (
+                <p className="text-sm rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100 px-3 py-2">
+                  {notice}
+                </p>
+              ) : null}
+
+              <section className={CARD + " min-w-0"} aria-labelledby="grammar-heading">
+                <h2 id="grammar-heading" className="sr-only">Grammar</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-5 pt-3 border-b border-slate-200 dark:border-slate-700">
+                  <div role="tablist" aria-label="Grammar view" className="flex gap-1">
+                    <button
+                      type="button"
+                      role="tab"
+                      id="tab-bnf"
+                      aria-selected={tab === "bnf"}
+                      aria-controls="panel-bnf"
+                      className={tabClass("bnf")}
+                      onClick={() => setTab("bnf")}
+                    >
+                      Write BNF
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      id="tab-diagram"
+                      aria-selected={tab === "diagram"}
+                      aria-controls="panel-diagram"
+                      className={tabClass("diagram")}
+                      onClick={() => setTab("diagram")}
+                    >
+                      Draw a syntax diagram
+                    </button>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer pb-2">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-indigo-600"
+                      checked={ebnf}
+                      onChange={(event) => { setEbnf(event.target.checked); setNotice(""); }}
+                    />
+                    Allow EBNF extensions
+                  </label>
+                </div>
+
+                {tab === "bnf" ? (
+                  <div id="panel-bnf" role="tabpanel" aria-labelledby="tab-bnf" className="p-4 md:p-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                    <div className="min-w-0">
+                      <label htmlFor="bnf-source" className="block text-sm font-semibold">Production rules</label>
+                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                        {ebnf
+                          ? "[ x ] is optional, { x } repeats zero or more times, { x }+ repeats one or more times, and ( x ) groups. Write those characters as literals with quotes, e.g. \"(\"."
+                          : "Plain BNF: one rule per line, alternatives separated by |, and recursion for repetition."}
+                      </p>
+                      <textarea
+                        id="bnf-source"
+                        className={"grammar-input mono mt-2 w-full h-72 resize-y " + FIELD}
+                        value={grammarText}
+                        spellCheck="false"
+                        wrap="off"
+                        onChange={(event) => { setGrammarText(event.target.value); setNotice(""); }}
+                      />
+                      {!ebnf && usesEbnfSyntax ? (
+                        <p className="mt-2 text-sm rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-900 dark:text-amber-200 px-3 py-2">
+                          {"EBNF extensions are switched off, so any [ ] and { } characters above are being treated as ordinary text to match."}
+                        </p>
+                      ) : null}
+                      <Problems problems={grammar.problems} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold">How to write the rules</h3>
+                      <div className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        <p>
+                          Every rule looks like <span className="mono">{"<name> ::= body"}</span>. Anything in angle brackets is a
+                          reference to another rule; anything else is literal text the string must contain.
+                        </p>
+                        <ul className="list-disc pl-5 space-y-1">
+                          <li><span className="mono">|</span> separates alternatives.</li>
+                          <li>Spaces between symbols just separate them; they are not matched. To match a real space write <span className="mono">{'" "'}</span>.</li>
+                          <li>Quote any literal that clashes with the notation, such as <span className="mono">{'"|"'}</span>, <span className="mono">{'"<"'}</span> or <span className="mono">{'"("'}</span>.</li>
+                          <li><span className="mono">{"ε"}</span> or <span className="mono">{'""'}</span> means match nothing.</li>
+                          <li>A rule may continue on the next line, which is handy for a long list of alternatives.</li>
+                          <li>Lines starting with <span className="mono">//</span> are comments.</li>
+                          <li>Left recursion such as <span className="mono">{"<expr> ::= <expr> + <term>"}</span> is fine here.</li>
+                        </ul>
+                        <p className="pt-1">
+                          Anything you write here appears on the diagram tab, and anything you draw there is written back into these
+                          rules once the diagram is fully connected.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div id="panel-diagram" role="tabpanel" aria-labelledby="tab-diagram" className="p-4 md:p-5">
+                    <div className="mb-3"><Legend /></div>
+                    {rules.length === 0 || !activeRule ? (
+                      <p className="text-sm text-slate-600 dark:text-slate-300">
+                        There are no rules yet. Add one on the BNF tab, or name one below and choose <strong>Add rule</strong>.
+                      </p>
+                    ) : (
+                      <DiagramDesigner
+                        rule={activeRule}
+                        graph={graphs.get(activeRule.key) || null}
+                        rules={rules}
+                        activeKey={activeKey}
+                        onPick={setActiveKey}
+                        ruleNames={ruleNames}
+                        ebnf={ebnf}
+                        tooTangled={tooTangled}
+                        onChange={(next, structural) => commitGraph(activeRule, next, structural)}
+                        onAddRule={addRule}
+                        onRenameRule={renameRule}
+                        onDeleteRule={deleteRule}
+                      />
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className={CARD + " p-4 md:p-5 min-w-0"} aria-labelledby="tests-heading">
+                <h2 id="tests-heading" className="text-lg font-bold">Test strings</h2>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                  Each string is checked against one rule. It passes only if the whole string can be derived from that rule.
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1 text-xs font-semibold">
+                    Start rule
+                    <select
+                      className={FIELD + " mono"}
+                      value={startRule}
+                      onChange={(event) => { setStartRule(event.target.value); setOpenDerivations({}); }}
+                    >
+                      {ruleNames.length === 0 ? <option value="">(no rules yet)</option> : null}
+                      {ruleNames.map((name) => <option key={name} value={name}>{"<" + name + ">"}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer pb-2">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-indigo-600"
+                      checked={ignoreSpaces}
+                      onChange={(event) => setIgnoreSpaces(event.target.checked)}
+                    />
+                    Ignore spaces in test strings
+                  </label>
+                </div>
+
+                {results ? (
+                  <p className="mt-3 text-sm font-semibold" aria-live="polite">
+                    {acceptedCount} of {results.length} {results.length === 1 ? "string is" : "strings are"} accepted by{" "}
+                    <span className="mono">{"<" + startRule + ">"}</span>.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-sm rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-900 dark:text-amber-200 px-3 py-2">
+                    {rules.length === 0 ? "Add at least one rule before testing strings." : "Fix the errors in the grammar before testing strings."}
+                  </p>
+                )}
+
+                <ul className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
+                  {tests.map((test, index) => {
+                    const result = results ? results[index] : null;
+                    const outcome = result ? result.outcome : null;
+                    const open = Boolean(openDerivations[index]);
+                    const tree = outcome && outcome.ok ? tidyTree(outcome.tree)[0] : null;
+                    return (
+                      <li key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-3 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            className={FIELD + " mono grow min-w-0"}
+                            value={test}
+                            spellCheck="false"
+                            aria-label={"Test string " + (index + 1)}
+                            placeholder="type a string to test"
+                            onChange={(event) => updateTest(index, event.target.value)}
+                          />
+                          {outcome ? (
+                            <span
+                              className={
+                                "shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-bold border " +
+                                (outcome.ok
+                                  ? "bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700"
+                                  : "bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-700")
+                              }
+                            >
+                              {outcome.ok ? "✓ Accepted" : "✗ Rejected"}
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="shrink-0 px-2 py-1 text-sm text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-200"
+                            aria-label={"Remove test string " + (index + 1)}
+                            onClick={() => removeTest(index)}
+                          >
+                            {"✕"}
+                          </button>
+                        </div>
+
+                        {outcome && !outcome.ok ? (
+                          <div className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                            {outcome.reason === "too-long" ? (
+                              <span>That string is longer than {INPUT_LIMIT} characters, which this playground does not test.</span>
+                            ) : outcome.reason === "too-complex" ? (
+                              <span>This grammar needed too many steps for that string. Try simplifying the rules or shortening the string.</span>
+                            ) : outcome.reason === "no-start" ? (
+                              <span>Choose a start rule that exists.</span>
+                            ) : result.input === "" ? (
+                              <span>The empty string cannot be derived from <span className="mono">{"<" + startRule + ">"}</span>.</span>
+                            ) : (
+                              <span>
+                                Matched{" "}
+                                <span className="mono bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-100 px-1 rounded">
+                                  {result.input.slice(0, outcome.furthest) || "∅"}
+                                </span>{" "}
+                                then could go no further at{" "}
+                                <span className="mono bg-rose-100 dark:bg-rose-900/50 text-rose-900 dark:text-rose-100 px-1 rounded">
+                                  {result.input.slice(outcome.furthest) || "the end of the string"}
+                                </span>.
+                              </span>
+                            )}
+                          </div>
+                        ) : null}
+
+                        {outcome && outcome.ok ? (
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              className={BTN_QUIET}
+                              aria-expanded={open}
+                              onClick={() => setOpenDerivations((current) => ({ ...current, [index]: !current[index] }))}
+                            >
+                              {open ? "Hide derivation" : "Show derivation"}
+                            </button>
+                            {open ? (
+                              <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-sm overflow-x-auto">
+                                {countTree(tree) > 600
+                                  ? <p className="text-slate-600 dark:text-slate-300">This derivation is too large to draw. Try a shorter string.</p>
+                                  : <DerivationTree node={tree} input={result.input} depth={0} />}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <div className="mt-3">
+                  <button type="button" className={BTN_QUIET} onClick={addTest}>Add a test string</button>
+                </div>
+              </section>
+            </main>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
