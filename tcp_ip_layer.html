@@ -51,6 +51,67 @@
         overflow-y: auto;
         max-height: 500px;
       }
+
+      /* Detail-level switch (Basic / Advanced), shown in the interactive title bar. */
+      .mode-switch {
+        align-items: center;
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        border-radius: 0.6rem;
+        display: inline-flex;
+        gap: 0.35rem;
+        padding: 3px 3px 3px 0.6rem;
+      }
+      .mode-switch-label {
+        color: #4338ca;
+        font: 600 0.75rem/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .mode-switch-btn {
+        background: transparent;
+        border: 0;
+        border-radius: 0.45rem;
+        color: #3730a3;
+        cursor: pointer;
+        font: 600 0.85rem/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        padding: 0.45rem 0.8rem;
+        white-space: nowrap;
+      }
+      .mode-switch-btn[aria-pressed="true"] { background: #4f46e5; color: #fff; }
+      .mode-switch-btn:focus-visible { outline: 2px solid #4f46e5; outline-offset: 2px; }
+      html.dark .mode-switch { background: #1e293b; border-color: #475569; }
+      html.dark .mode-switch-label { color: #bae6fd; }
+      html.dark .mode-switch-btn { color: #e2e8f0; }
+      html.dark .mode-switch-btn[aria-pressed="true"] { background: #38bdf8; color: #0f172a; }
+
+      /* Once the shared shell lifts the header into the indigo bar the switch sits on indigo. */
+      .interactive-shell-header .mode-switch {
+        background: rgb(255 255 255 / 0.12);
+        border-color: rgb(255 255 255 / 0.28);
+      }
+      .interactive-shell-header .mode-switch-label { color: #e0e7ff; }
+      .interactive-shell-header .mode-switch-btn { color: #fff; }
+      .interactive-shell-header .mode-switch-btn[aria-pressed="true"] { background: #fff; color: #312e81; }
+      .interactive-shell-header .mode-switch-btn:focus-visible { outline: 2px solid rgb(255 255 255 / 0.85); }
+
+      .hop-step { margin-bottom: 14px; }
+      .hop-step-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+      }
+      .routing-table { border-collapse: collapse; width: 100%; }
+      .routing-table th,
+      .routing-table td {
+        border: 1px solid rgba(100, 116, 139, 0.45);
+        padding: 4px 6px;
+        text-align: left;
+        white-space: nowrap;
+      }
+      .routing-table .chosen-route { font-weight: 700; }
     </style>
     <!-- Prevent FOUC -->
     <script>
@@ -71,13 +132,22 @@
 
     <div class="flex-1 flex flex-col items-center p-4 md:p-8">
       <div class="w-full max-w-5xl bg-white dark:bg-slate-800 shadow-2xl rounded-xl p-6 md:p-8">
-        <header class="mb-6 text-center">
-          <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-sky-400">
-            TCP/IP Protocol Stack Journey
-          </h1>
-          <p class="text-gray-600 dark:text-slate-400 mt-1">
-            Follow your data as it travels through the network layers!
-          </p>
+        <header data-interactive-header class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-sky-400">
+              TCP/IP Protocol Stack Journey
+            </h1>
+            <p class="text-gray-600 dark:text-slate-400 mt-1">
+              Follow your data as it travels through the network layers!
+            </p>
+          </div>
+          <div data-interactive-actions>
+            <div class="mode-switch" role="group" aria-label="Detail level">
+              <span class="mode-switch-label">Detail</span>
+              <button id="mode-basic" type="button" class="mode-switch-btn" aria-pressed="true">Basic</button>
+              <button id="mode-advanced" type="button" class="mode-switch-btn" aria-pressed="false">Advanced</button>
+            </div>
+          </div>
         </header>
 
         <section id="input-section" class="mb-6 p-6 bg-indigo-50 dark:bg-slate-700/50 rounded-lg shadow">
@@ -102,6 +172,7 @@
               </select>
             </div>
           </div>
+          <p id="mode-summary" class="mt-4 text-sm text-gray-600 dark:text-slate-300"></p>
           <button id="start-journey-btn"
             class="mt-4 w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105 control-button">
             Start Journey
@@ -109,15 +180,17 @@
         </section>
 
         <main id="demo-area" class="hidden">
+          <div id="journey-stage" class="hidden mb-4 flex flex-wrap items-center gap-2 text-xs"></div>
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg shadow-inner">
+            <div class="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg shadow-inner min-w-0">
               <h2 class="text-xl font-semibold text-indigo-700 dark:text-sky-400 mb-3">
                 Data Packet View
               </h2>
               <div id="packet-visualisation" class="packet-visualisation-area text-sm"></div>
             </div>
 
-            <div class="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg shadow-inner flex flex-col">
+            <div class="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg shadow-inner flex flex-col min-w-0">
               <div>
                 <h2 id="layer-name" class="text-xl font-semibold text-indigo-700 dark:text-sky-400 mb-1">Layer Name</h2>
                 <p id="layer-description" class="text-sm text-gray-600 dark:text-slate-300 mb-3 min-h-[100px] max-h-[200px] overflow-y-auto">
@@ -190,6 +263,10 @@
       const layerDescriptionEl = document.getElementById("layer-description");
       const layerProcessingEl = document.getElementById("layer-processing");
       const packetVisualisationEl = document.getElementById("packet-visualisation");
+      const journeyStageEl = document.getElementById("journey-stage");
+      const modeSummaryEl = document.getElementById("mode-summary");
+      const modeBasicBtn = document.getElementById("mode-basic");
+      const modeAdvancedBtn = document.getElementById("mode-advanced");
 
       const prevStepBtn = document.getElementById("prev-step-btn");
       const nextStepBtn = document.getElementById("next-step-btn");
@@ -200,6 +277,24 @@
       let originalMessage = "";
       let applicationProtocol = "";
       let packetSegments = [];
+      let detailMode = "basic";
+      let routerInfo = null;
+      let hostInfo = null;
+
+      // Packet 2 overtakes packet 1 because the router sends it by a shorter route.
+      const ARRIVAL_ORDER = [1, 0];
+
+      function isAdvanced() {
+        return detailMode === "advanced";
+      }
+
+      function esc(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
 
       function getDestPort(protocol) {
         switch (protocol) {
@@ -230,35 +325,255 @@
         return `0x${Math.floor(Math.random() * 0xffff).toString(16).toUpperCase().padStart(4, "0")}`;
       }
 
-      const steps = [
+      function destinationNetwork(ip) {
+        return `${ip.split(".").slice(0, 3).join(".")}.0/24`;
+      }
+
+      // Router R1 is the first hop out of the local network. Its two equal-cost
+      // routes let the demo show that every packet is routed independently.
+      function ensureRouterInfo() {
+        if (routerInfo) return routerInfo;
+        routerInfo = {
+          name: "Router R1",
+          ingressInterface: "eth0",
+          routes: [
+            { interface: "eth1", nextHop: "10.10.0.1", metric: 5, nextHopMAC: generateMAC(), egressMAC: generateMAC(), furtherHops: 2 },
+            { interface: "eth2", nextHop: "10.20.0.1", metric: 5, nextHopMAC: generateMAC(), egressMAC: generateMAC(), furtherHops: 1 },
+          ],
+          defaultRoute: { interface: "eth0", nextHop: "192.0.2.1", metric: 100 },
+        };
+        return routerInfo;
+      }
+
+      function ensureHostInfo() {
+        if (hostInfo) return hostInfo;
+        hostInfo = { nicMAC: generateMAC() };
+        return hostInfo;
+      }
+
+      function applyRouterHop(segment, index) {
+        const info = ensureRouterInfo();
+        if (segment.route) return;
+        segment.route = info.routes[index % info.routes.length];
+        segment.ttlAtRouter = segment.ttl - 1;
+        segment.hopSourceMAC = segment.route.egressMAC;
+        segment.hopDestMAC = segment.route.nextHopMAC;
+        segment.frameChecksumHop = generateChecksum();
+      }
+
+      function applyDelivery(segment) {
+        if (segment.deliveryFrameChecksum) return;
+        segment.ttlAtDestination = segment.ttlAtRouter - segment.route.furtherHops;
+        segment.lastHopMAC = generateMAC();
+        segment.hostMAC = ensureHostInfo().nicMAC;
+        segment.deliveryFrameChecksum = generateChecksum();
+      }
+
+      // --- Shared packet-view building blocks -----------------------------
+      function transportHeaderText(segment) {
+        let text = `Src Port: ${segment.sourcePort}, Dst Port: ${segment.destPort}`;
+        if (segment.transportProtocol === "TCP") text += `, Seq: ${segment.sequenceNumber}`;
+        text += `, Checksum: ${segment.checksumTransport}`;
+        return text;
+      }
+
+      function ipHeaderText(segment) {
+        let text = `Src IP: ${segment.sourceIP}, Dst IP: ${segment.destIP}`;
+        if (isAdvanced()) text += `, TTL: ${segment.ttl}`;
+        return text;
+      }
+
+      function trailerText(checksum) {
+        return isAdvanced()
+          ? `Frame Trailer (FCS &mdash; CRC checksum: ${checksum})`
+          : `Frame Trailer (FCS: ${checksum})`;
+      }
+
+      function appLayerBlock(segment, nested) {
+        return `
+          <div class="${nested ? "payload-block" : "layer-block"} border-blue-500 dark:border-blue-600 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 p-3 rounded-md shadow${nested ? " mt-2" : ""}">
+            <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
+            <div class="mt-1 p-2 bg-blue-50 dark:bg-blue-900/20 rounded break-all">Data: "${esc(segment.appData)}"</div>
+          </div>`;
+      }
+
+      function transportLayerBlock(segment, nested, options = {}) {
+        return `
+          <div class="${nested ? "payload-block" : "layer-block"} border-green-500 dark:border-green-600 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 p-3 rounded-md shadow${nested ? " mt-2" : ""}">
+            <div class="font-bold text-lg">Transport Layer (${segment.transportProtocol} Header)</div>
+            <div class="mt-1 p-2 bg-green-50 dark:bg-green-900/20 rounded break-all">${transportHeaderText(segment)}</div>
+            ${options.inner === undefined ? appLayerBlock(segment, true) : options.inner}
+            ${options.note || ""}
+          </div>`;
+      }
+
+      function internetLayerBlock(segment, nested, options = {}) {
+        return `
+          <div class="${nested ? "payload-block" : "layer-block"} border-yellow-500 dark:border-yellow-600 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 p-3 rounded-md shadow${nested ? " mt-2" : ""}">
+            <div class="font-bold text-lg">Internet Layer (IP Header)</div>
+            <div class="mt-1 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded break-all">${options.headerText || ipHeaderText(segment)}</div>
+            ${options.inner === undefined ? transportLayerBlock(segment, true) : options.inner}
+            ${options.note || ""}
+          </div>`;
+      }
+
+      function linkLayerBlock(segment, options = {}) {
+        const title = options.title || "Link Layer (Ethernet Frame Header &amp; Trailer)";
+        const sourceMAC = options.sourceMAC || segment.sourceMAC;
+        const destMAC = options.destMAC || segment.destMAC;
+        const checksum = options.checksum || segment.frameChecksum;
+        return `
+          <div class="layer-block border-red-500 dark:border-red-600 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 p-3 rounded-md shadow">
+            <div class="font-bold text-lg">${title}</div>
+            <div class="mt-1 p-2 bg-red-50 dark:bg-red-900/20 rounded break-all">Src MAC: ${sourceMAC}, Dst MAC: ${destMAC}</div>
+            ${options.inner === undefined ? internetLayerBlock(segment, true) : options.inner}
+            <div class="mt-1 p-2 bg-red-50 dark:bg-red-900/20 rounded font-semibold break-all">${trailerText(checksum)}</div>
+            ${options.note || ""}
+          </div>`;
+      }
+
+      function sealedPayloadBlock(text) {
+        return `
+          <div class="payload-block border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 p-3 rounded-md shadow mt-2">
+            <div class="font-semibold break-words">${text}</div>
+          </div>`;
+      }
+
+      function statusNote(kind, text) {
+        const styles = {
+          ok: "border-emerald-600 bg-emerald-100 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-900/40 dark:text-emerald-200",
+          wait: "border-amber-600 bg-amber-100 text-amber-900 dark:border-amber-500 dark:bg-amber-900/40 dark:text-amber-200",
+          info: "border-indigo-500 bg-indigo-100 text-indigo-900 dark:border-sky-500 dark:bg-sky-900/40 dark:text-sky-200",
+        };
+        return `<div class="mt-2 p-2 rounded border text-xs font-semibold break-words ${styles[kind]}">${text}</div>`;
+      }
+
+      function hopStep(number, label, inner) {
+        return `
+          <div class="hop-step">
+            <div class="hop-step-label text-indigo-700 dark:text-sky-300">Step ${number} &middot; ${label}</div>
+            ${inner}
+          </div>`;
+      }
+
+      function packetCaption(index, suffix) {
+        return `<div class="text-center font-semibold mb-1 text-indigo-600 dark:text-sky-400">Packet ${index + 1} of ${packetSegments.length}${suffix ? ` &mdash; ${suffix}` : ""}</div>`;
+      }
+
+      function routingTableBlock(segment) {
+        const info = ensureRouterInfo();
+        const network = destinationNetwork(segment.destIP);
+        const rows = info.routes.map((route) => {
+          const chosen = route === segment.route;
+          return `
+            <tr class="${chosen ? "chosen-route bg-indigo-100 dark:bg-sky-900/40" : ""}">
+              <td>${network}</td>
+              <td>${route.nextHop}</td>
+              <td>${route.interface}</td>
+              <td>${route.metric}</td>
+              <td>${chosen ? "&larr; chosen" : ""}</td>
+            </tr>`;
+        }).join("");
+        return `
+          <div class="layer-block border-indigo-400 dark:border-sky-600 bg-indigo-50 dark:bg-slate-800/70 text-indigo-900 dark:text-sky-200 p-3 rounded-md shadow">
+            <div class="font-bold">${info.name} routing table (extract)</div>
+            <div class="mt-2 overflow-x-auto">
+              <table class="routing-table text-xs">
+                <thead>
+                  <tr><th>Destination network</th><th>Next hop</th><th>Interface</th><th>Metric</th><th>Used</th></tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                  <tr><td>0.0.0.0/0 (default)</td><td>${info.defaultRoute.nextHop}</td><td>${info.defaultRoute.interface}</td><td>${info.defaultRoute.metric}</td><td></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mt-2 text-xs">Two equal-cost routes reach the destination network, so the router is free to send successive packets different ways.</div>
+          </div>`;
+      }
+
+      // TCP buffers and reorders; UDP does neither, so the panel has to say
+      // something different for each.
+      function usesSequenceNumbers() {
+        return Boolean(packetSegments[0]) && packetSegments[0].transportProtocol === "TCP";
+      }
+
+      function receiveBufferBlock(arrivedCount) {
+        const ordered = usesSequenceNumbers();
+        const rows = packetSegments.map((segment, index) => {
+          const hasArrived = ARRIVAL_ORDER.slice(0, arrivedCount).includes(index);
+          const label = ordered ? `Seq ${segment.sequenceNumber}` : `Datagram ${index + 1}`;
+          let state = "not yet arrived";
+          if (hasArrived) {
+            state = ordered
+              ? `received &mdash; "${esc(segment.appData)}"`
+              : `arrived and passed straight up &mdash; "${esc(segment.appData)}"`;
+          }
+          return `
+            <li class="flex flex-wrap gap-2 items-baseline">
+              <span class="font-semibold">${label}:</span>
+              <span>${state}</span>
+            </li>`;
+        }).join("");
+        const complete = arrivedCount >= packetSegments.length;
+        let note = statusNote("info", "UDP has no receive buffer and no sequence numbers: every datagram goes straight up to the application as it arrives. Coping with anything missing, duplicated or out of order is left to the application.");
+        if (ordered) {
+          note = complete
+            ? statusNote("ok", "All segments present &mdash; reassembled in sequence order and passed up to the application layer.")
+            : statusNote("wait", "Sequence incomplete &mdash; what has arrived is HELD here. Nothing is passed up to the application layer yet.");
+        }
+        return `
+          <div class="layer-block border-green-600 dark:border-green-500 bg-green-50 dark:bg-slate-800/70 text-green-900 dark:text-green-200 p-3 rounded-md shadow">
+            <div class="font-bold">${ordered ? "Transport layer receive buffer" : "Transport layer delivery (UDP)"}</div>
+            <ul class="mt-2 space-y-1 text-xs">${rows}</ul>
+            ${note}
+          </div>`;
+      }
+
+      // --- Steps -----------------------------------------------------------
+      const senderSteps = [
         {
           id: "application",
+          stage: "sender",
           layerName: "1. Application Layer",
-          description: "This layer interacts directly with software applications. It provides protocols that applications use to exchange data. Examples: HTTP for web, SMTP for email, FTP for file transfer.",
+          description: () => "This layer interacts directly with software applications. It provides protocols that applications use to exchange data. Examples: HTTP for web, SMTP for email, FTP for file transfer.",
           addLayerDataToPacket: () => {
             packetSegments = [];
+            routerInfo = null;
+            hostInfo = null;
           },
           getProcessExplanation: () =>
-            `Your message: "<strong>${originalMessage}</strong>"<br>Chosen protocol: <strong>${applicationProtocol}</strong><br>This is the raw data your application wants to send.`,
+            `Your message: "<strong>${esc(originalMessage)}</strong>"<br>Chosen protocol: <strong>${applicationProtocol}</strong><br>This is the raw data your application wants to send.`,
           renderVisual: (container) => {
             container.innerHTML = `
               <div class="layer-block border-blue-500 dark:border-blue-600 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 p-3 rounded-md shadow">
                 <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
-                <div class="mt-1 p-2 bg-blue-50 dark:bg-blue-900/20 rounded break-all">Data: "${originalMessage}"</div>
+                <div class="mt-1 p-2 bg-blue-50 dark:bg-blue-900/20 rounded break-all">Data: "${esc(originalMessage)}"</div>
               </div>`;
           },
         },
         {
           id: "transport",
+          stage: "sender",
           layerName: "2. Transport Layer",
-          description: "Responsible for process-to-process delivery. It segments data from the application layer, adds port numbers, sequence numbers (for TCP), and a checksum. For this demo, we split the message into two packets.",
+          description: () => {
+            let text = "Responsible for process-to-process delivery. It segments data from the application layer, adds port numbers, sequence numbers (for TCP), and a checksum. For this demo, we split the message into two packets.";
+            if (isAdvanced()) {
+              text += " The destination port says <em>which service</em> is wanted; the source port says <em>which program on this machine</em> the reply belongs to.";
+            }
+            return text;
+          },
           addLayerDataToPacket: () => {
             if (packetSegments.length === 0 && originalMessage) {
               const transportProto =
                 applicationProtocol === "HTTP" || applicationProtocol === "HTTPS" ||
                 applicationProtocol === "FTP" || applicationProtocol === "SMTP"
                   ? "TCP" : "UDP";
-              const commonSourcePort = Math.floor(Math.random() * (65535 - 1024)) + 1024;
+              // Advanced mode draws from the dynamic/ephemeral range so the
+              // explanation of how the source port is chosen stays accurate.
+              const commonSourcePort = isAdvanced()
+                ? Math.floor(Math.random() * (65535 - 49152)) + 49152
+                : Math.floor(Math.random() * (65535 - 1024)) + 1024;
               const commonDestPort = getDestPort(applicationProtocol);
               const midPoint = Math.ceil(originalMessage.length / 2);
               const data1 = originalMessage.substring(0, midPoint);
@@ -288,7 +603,7 @@
             let explanation = `The data is split and encapsulated into <strong>${packetSegments[0].transportProtocol}</strong> ${packetSegments[0].transportProtocol === "TCP" ? "Segments" : "Datagrams"}.<br><br>`;
             packetSegments.forEach((seg, index) => {
               explanation += `<strong>Packet ${index + 1}:</strong><br>
-                Data: "<strong>${seg.appData}</strong>"<br>
+                Data: "<strong>${esc(seg.appData)}</strong>"<br>
                 Source Port: <strong>${seg.sourcePort}</strong><br>
                 Destination Port: <strong>${seg.destPort}</strong>`;
               if (seg.transportProtocol === "TCP") {
@@ -296,34 +611,36 @@
               }
               explanation += `<br>Checksum: <strong>${seg.checksumTransport}</strong><br><br>`;
             });
+            if (isAdvanced()) {
+              const seg = packetSegments[0];
+              explanation += `<strong>How the port numbers were chosen</strong><br>
+                <strong>Destination port ${seg.destPort}</strong> is the <em>well-known port</em> fixed for ${applicationProtocol} (HTTP 80, HTTPS 443, FTP 21, SMTP 25, DNS 53). Well-known ports run from 0&ndash;1023, so a client always knows where to knock.<br>
+                <strong>Source port ${seg.sourcePort}</strong> is an <em>ephemeral port</em>: the operating system picks any currently unused number from the dynamic range 49152&ndash;65535. The reply comes back addressed to that number, which is how the operating system knows which of the many running programs the data belongs to.<br><br>
+                <strong>The checksum</strong> is calculated over the ${seg.transportProtocol} header and the data. The destination recalculates it and compares. A mismatch means corruption: with TCP the segment is discarded and retransmitted, with UDP it is simply dropped.`;
+            }
             return explanation;
           },
           renderVisual: (container) => {
             container.innerHTML = "";
             if (!packetSegments || packetSegments.length === 0) return;
-            packetSegments.forEach((seg, index) => {
-              let headerInfo = `Src Port: ${seg.sourcePort}, Dst Port: ${seg.destPort}`;
-              if (seg.transportProtocol === "TCP") headerInfo += `, Seq: ${seg.sequenceNumber}`;
-              headerInfo += `, Checksum: ${seg.checksumTransport}`;
-              container.innerHTML += `
-                <div class="packet-container">
-                  <div class="text-center font-semibold mb-1 text-indigo-600 dark:text-sky-400">Packet ${index + 1} of ${packetSegments.length}</div>
-                  <div class="layer-block border-green-500 dark:border-green-600 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 p-3 rounded-md shadow">
-                    <div class="font-bold text-lg">Transport Layer (${seg.transportProtocol} Header)</div>
-                    <div class="mt-1 p-2 bg-green-50 dark:bg-green-900/20 rounded break-all">${headerInfo}</div>
-                    <div class="payload-block border-blue-500 dark:border-blue-600 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 p-3 rounded-md shadow mt-2">
-                      <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
-                      <div class="mt-1 p-2 bg-blue-50 dark:bg-blue-900/20 rounded break-all">Data: "${seg.appData}"</div>
-                    </div>
-                  </div>
-                </div>`;
-            });
+            container.innerHTML = packetSegments.map((seg, index) => `
+              <div class="packet-container">
+                ${packetCaption(index)}
+                ${transportLayerBlock(seg, false)}
+              </div>`).join("");
           },
         },
         {
           id: "internet",
+          stage: "sender",
           layerName: "3. Internet Layer (Also known as Network Layer)",
-          description: "Responsible for logical addressing (IP addresses) and routing. Each Transport Layer segment gets an IP header, turning it into an IP Packet.",
+          description: () => {
+            let text = "Responsible for logical addressing (IP addresses) and routing. Each Transport Layer segment gets an IP header, turning it into an IP Packet.";
+            if (isAdvanced()) {
+              text += " The IP header also carries a Time To Live (TTL) counter, which every router on the path reduces by one.";
+            }
+            return text;
+          },
           addLayerDataToPacket: () => {
             if (!packetSegments || packetSegments.length === 0) return;
             const commonSourceIP = packetSegments[0].sourceIP || generateMockIP("source");
@@ -331,6 +648,7 @@
             packetSegments.forEach((seg) => {
               seg.sourceIP = seg.sourceIP || commonSourceIP;
               seg.destIP = seg.destIP || commonDestIP;
+              if (seg.ttl === undefined) seg.ttl = 64;
             });
           },
           getProcessExplanation: () => {
@@ -339,40 +657,38 @@
             packetSegments.forEach((seg, index) => {
               explanation += `<strong>Packet ${index + 1}:</strong><br>
                 Source IP Address: <strong>${seg.sourceIP}</strong><br>
-                Destination IP Address: <strong>${seg.destIP}</strong><br><br>`;
+                Destination IP Address: <strong>${seg.destIP}</strong><br>`;
+              if (isAdvanced()) explanation += `Time To Live (TTL): <strong>${seg.ttl}</strong><br>`;
+              explanation += "<br>";
             });
+            if (isAdvanced()) {
+              explanation += `<strong>Time To Live</strong><br>
+                TTL is set to <strong>64</strong> as the packet leaves this computer. Every router that forwards it subtracts 1. If TTL ever reaches 0 the router throws the packet away and sends an ICMP "Time Exceeded" message back to the sender, so a packet with a bad or looping route cannot circle the internet forever. How far TTL has fallen on arrival tells you how many routers the packet crossed &mdash; that is exactly how <code>traceroute</code> works.<br><br>
+                The IP addresses are written here once and stay the same the whole way. Only the layer below them changes at each hop.`;
+            }
             return explanation;
           },
           renderVisual: (container) => {
             container.innerHTML = "";
             if (!packetSegments || packetSegments.length === 0) return;
-            packetSegments.forEach((seg, index) => {
-              let transportHeaderInfo = `Src Port: ${seg.sourcePort}, Dst Port: ${seg.destPort}`;
-              if (seg.transportProtocol === "TCP") transportHeaderInfo += `, Seq: ${seg.sequenceNumber}`;
-              transportHeaderInfo += `, Checksum: ${seg.checksumTransport}`;
-              container.innerHTML += `
-                <div class="packet-container">
-                  <div class="text-center font-semibold mb-1 text-indigo-600 dark:text-sky-400">Packet ${index + 1} of ${packetSegments.length}</div>
-                  <div class="layer-block border-yellow-500 dark:border-yellow-600 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 p-3 rounded-md shadow">
-                    <div class="font-bold text-lg">Internet Layer (IP Header)</div>
-                    <div class="mt-1 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded break-all">Src IP: ${seg.sourceIP}, Dst IP: ${seg.destIP}</div>
-                    <div class="payload-block border-green-500 dark:border-green-600 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 p-3 rounded-md shadow mt-2">
-                      <div class="font-bold text-lg">Transport Layer (${seg.transportProtocol} Header)</div>
-                      <div class="mt-1 p-2 bg-green-50 dark:bg-green-900/20 rounded break-all">${transportHeaderInfo}</div>
-                      <div class="payload-block border-blue-500 dark:border-blue-600 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 p-3 rounded-md shadow mt-2">
-                        <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
-                        <div class="mt-1 p-2 bg-blue-50 dark:bg-blue-900/20 rounded break-all">Data: "${seg.appData}"</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>`;
-            });
+            container.innerHTML = packetSegments.map((seg, index) => `
+              <div class="packet-container">
+                ${packetCaption(index)}
+                ${internetLayerBlock(seg, false)}
+              </div>`).join("");
           },
         },
         {
           id: "link",
+          stage: "sender",
           layerName: "4. Link Layer (Part I: phsyical addressing)",
-          description: "Handles physical addressing (MAC addresses). Each IP packet is encapsulated in a \"frame\" (e.g., Ethernet frame) with source and destination MAC addresses for the current network segment.",
+          description: () => {
+            let text = "Handles physical addressing (MAC addresses). Each IP packet is encapsulated in a \"frame\" (e.g., Ethernet frame) with source and destination MAC addresses for the current network segment.";
+            if (isAdvanced()) {
+              text += " The frame also gains a trailer holding a CRC (Cyclic Redundancy Check) value, checked by the device at the other end of this one hop.";
+            }
+            return text;
+          },
           addLayerDataToPacket: () => {
             if (!packetSegments || packetSegments.length === 0) return;
             const commonSourceMAC = packetSegments[0].sourceMAC || generateMAC();
@@ -393,43 +709,29 @@
                 Destination MAC Address: <strong>${seg.destMAC}</strong> (next hop)<br>
                 Frame Check Sequence (FCS): <strong>${seg.frameChecksum}</strong><br><br>`;
             });
+            if (isAdvanced()) {
+              explanation += `<strong>The trailer is a CRC checksum</strong><br>
+                The Frame Check Sequence is a <strong>Cyclic Redundancy Check</strong> calculated across the whole frame. The device at the far end of the link recalculates it and compares: if the two values disagree the frame was corrupted in transmission and it is dropped immediately.<br><br>
+                This is a <em>per-hop</em> check, not an end-to-end one. Because every router builds a brand-new frame with a brand-new CRC, the CRC is recalculated and re-checked on <strong>every single link</strong> of the journey. The transport-layer checksum, by contrast, is written once by the sender and checked once by the final destination.<br><br>
+                The destination MAC above is not the far-away server &mdash; it is the router on this local network, one hop away.`;
+            }
             return explanation;
           },
           renderVisual: (container) => {
             container.innerHTML = "";
             if (!packetSegments || packetSegments.length === 0) return;
-            packetSegments.forEach((seg, index) => {
-              let transportHeaderInfo = `Src Port: ${seg.sourcePort}, Dst Port: ${seg.destPort}`;
-              if (seg.transportProtocol === "TCP") transportHeaderInfo += `, Seq: ${seg.sequenceNumber}`;
-              transportHeaderInfo += `, Checksum: ${seg.checksumTransport}`;
-              container.innerHTML += `
-                <div class="packet-container">
-                  <div class="text-center font-semibold mb-1 text-indigo-600 dark:text-sky-400">Packet ${index + 1} of ${packetSegments.length}</div>
-                  <div class="layer-block border-red-500 dark:border-red-600 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 p-3 rounded-md shadow">
-                    <div class="font-bold text-lg">Link Layer (Ethernet Frame Header &amp; Trailer)</div>
-                    <div class="mt-1 p-2 bg-red-50 dark:bg-red-900/20 rounded break-all">Src MAC: ${seg.sourceMAC}, Dst MAC: ${seg.destMAC}</div>
-                    <div class="payload-block border-yellow-500 dark:border-yellow-600 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 p-3 rounded-md shadow mt-2">
-                      <div class="font-bold text-lg">Internet Layer (IP Header)</div>
-                      <div class="mt-1 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded break-all">Src IP: ${seg.sourceIP}, Dst IP: ${seg.destIP}</div>
-                      <div class="payload-block border-green-500 dark:border-green-600 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 p-3 rounded-md shadow mt-2">
-                        <div class="font-bold text-lg">Transport Layer (${seg.transportProtocol} Header)</div>
-                        <div class="mt-1 p-2 bg-green-50 dark:bg-green-900/20 rounded break-all">${transportHeaderInfo}</div>
-                        <div class="payload-block border-blue-500 dark:border-blue-600 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 p-3 rounded-md shadow mt-2">
-                          <div class="font-bold text-lg">Application Layer (${applicationProtocol})</div>
-                          <div class="mt-1 p-2 bg-blue-50 dark:bg-blue-900/20 rounded break-all">Data: "${seg.appData}"</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="mt-1 p-2 bg-red-50 dark:bg-red-900/20 rounded font-semibold break-all">Frame Trailer (FCS: ${seg.frameChecksum})</div>
-                  </div>
-                </div>`;
-            });
+            container.innerHTML = packetSegments.map((seg, index) => `
+              <div class="packet-container">
+                ${packetCaption(index)}
+                ${linkLayerBlock(seg)}
+              </div>`).join("");
           },
         },
         {
           id: "physical",
+          stage: "sender",
           layerName: "5. Link Layer (Part II: sometimes called Physical)",
-          description: "This layer finally transmits raw bits (0s and 1s) over a physical medium. Each frame is converted into signals.",
+          description: () => "This layer finally transmits raw bits (0s and 1s) over a physical medium. Each frame is converted into signals.",
           addLayerDataToPacket: () => {
             if (!packetSegments || packetSegments.length === 0) return;
             packetSegments.forEach((seg) => {
@@ -449,36 +751,280 @@
             packetSegments.forEach((seg, index) => {
               explanation += `<strong>Packet ${index + 1} Bits:</strong> <strong class="font-mono break-all">${seg.bitsRepresentation}</strong><br><br>`;
             });
+            if (isAdvanced()) {
+              explanation += `Both frames now travel down the cable to the first device on the path: <strong>Router R1</strong>. From here on, follow each packet separately &mdash; the router treats them as two completely independent packets.`;
+            }
             return explanation;
           },
           renderVisual: (container) => {
             container.innerHTML = "";
             if (!packetSegments || packetSegments.length === 0) return;
-            packetSegments.forEach((seg, index) => {
-              container.innerHTML += `
-                <div class="packet-container">
-                  <div class="text-center font-semibold mb-1 text-indigo-600 dark:text-sky-400">Packet ${index + 1} of ${packetSegments.length}</div>
-                  <div class="layer-block border-purple-500 dark:border-purple-600 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 p-3 rounded-md shadow">
-                    <div class="font-bold text-lg">Link Layer (Bits on the Wire)</div>
-                    <div class="mt-1 p-2 bg-purple-50 dark:bg-purple-900/20 rounded font-mono break-all text-xs">${seg.bitsRepresentation}</div>
-                    <div class="text-center mt-3 text-sm italic">
-                      (Represents Packet ${index + 1}'s frame encoded as signals)
-                    </div>
+            container.innerHTML = packetSegments.map((seg, index) => `
+              <div class="packet-container">
+                ${packetCaption(index)}
+                <div class="layer-block border-purple-500 dark:border-purple-600 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 p-3 rounded-md shadow">
+                  <div class="font-bold text-lg">Link Layer (Bits on the Wire)</div>
+                  <div class="mt-1 p-2 bg-purple-50 dark:bg-purple-900/20 rounded font-mono break-all text-xs">${seg.bitsRepresentation}</div>
+                  <div class="text-center mt-3 text-sm italic">
+                    (Represents the frame for packet ${index + 1} encoded as signals)
                   </div>
-                </div>`;
-            });
+                </div>
+              </div>`).join("");
           },
         },
       ];
 
+      // A router only climbs as far as the internet layer, and it decides
+      // where to send every packet separately.
+      function routerStep(packetIndex, stepNumber) {
+        return {
+          id: `router-${packetIndex}`,
+          stage: "router",
+          layerName: `${stepNumber}. Router R1 &mdash; Packet ${packetIndex + 1} is forwarded`,
+          description: () => "A router is an Internet-layer device: it unwraps the arriving frame only as far as the IP header. It checks the frame CRC, discards the frame, reads the destination IP address, looks it up in its routing table, reduces the TTL by one, then wraps the very same IP packet in a brand-new frame addressed to the next hop. It never opens the transport segment, and it makes this decision independently for every packet.",
+          addLayerDataToPacket: () => {
+            const segment = packetSegments[packetIndex];
+            if (segment) applyRouterHop(segment, packetIndex);
+          },
+          getProcessExplanation: () => {
+            const seg = packetSegments[packetIndex];
+            if (!seg || !seg.route) return "No data to process.";
+            const info = ensureRouterInfo();
+            const otherIndex = packetIndex === 0 ? 1 : 0;
+            let explanation = `<strong>1 &middot; Frame arrives on ${info.ingressInterface} (link layer)</strong><br>
+              The CRC is recalculated across the received frame and compared with the trailer value <strong>${seg.frameChecksum}</strong> &mdash; they match, so the frame is accepted. (Had they differed, the frame would simply be dropped here.) The frame header and trailer are then removed: <em>decapsulation</em>. Their job is finished, because they only ever described the hop from the sending computer to this router.<br><br>
+              <strong>2 &middot; IP header is read (internet layer &mdash; as far up as a router goes)</strong><br>
+              Destination <strong>${seg.destIP}</strong> is looked up in the routing table. It matches the entry for <strong>${destinationNetwork(seg.destIP)}</strong>, so this packet leaves by interface <strong>${seg.route.interface}</strong> towards next hop <strong>${seg.route.nextHop}</strong>.<br>
+              TTL is decreased: <strong>${seg.ttl} &rarr; ${seg.ttlAtRouter}</strong>.<br>
+              The ${seg.transportProtocol} segment inside is <strong>not opened</strong> &mdash; port numbers, sequence numbers and the transport checksum mean nothing to a router.<br><br>
+              <strong>3 &middot; A new frame is built and transmitted (back down to the link layer)</strong><br>
+              Src MAC <strong>${seg.hopSourceMAC}</strong> (the ${seg.route.interface} interface of the router), Dst MAC <strong>${seg.hopDestMAC}</strong> (the next hop), and a freshly calculated CRC <strong>${seg.frameChecksumHop}</strong>.<br>
+              Notice that the <strong>IP addresses never change</strong> but the <strong>MAC addresses change at every hop</strong>: MAC addresses only ever identify the two ends of a single link.<br><br>`;
+            if (packetIndex === 0) {
+              explanation += `Packet ${otherIndex + 1} has not been dealt with yet; when it arrives it will be looked up in the routing table all over again.`;
+            } else {
+              explanation += `Packet ${otherIndex + 1} was sent out of <strong>${info.routes[0].interface}</strong>, but this one is going out of <strong>${info.routes[1].interface}</strong>. Both routes reach the destination network and both cost the same, so the router is free to choose either. <strong>Each packet is routed independently</strong>: the two halves of your message are now taking different paths across the internet, and the ${info.routes[1].interface} path is shorter, so packet 2 will arrive first.`;
+            }
+            return explanation;
+          },
+          renderVisual: (container) => {
+            const seg = packetSegments[packetIndex];
+            if (!seg || !seg.route) { container.innerHTML = ""; return; }
+            const info = ensureRouterInfo();
+            container.innerHTML = `
+              <div class="packet-container">
+                ${packetCaption(packetIndex, `at ${info.name}`)}
+                ${hopStep(1, `Frame received on ${info.ingressInterface}`, linkLayerBlock(seg, {
+                  title: "Link Layer (frame received)",
+                  inner: sealedPayloadBlock("IP packet inside &mdash; passed up to the internet layer"),
+                  note: statusNote("ok", `CRC recalculated as ${seg.frameChecksum} &mdash; it matches the trailer, so the frame is accepted, then its header and trailer are removed.`),
+                }))}
+                ${hopStep(2, "Internet layer: routing decision", internetLayerBlock(seg, false, {
+                  headerText: `Src IP: ${seg.sourceIP}, Dst IP: ${seg.destIP}, TTL: ${seg.ttl} &rarr; ${seg.ttlAtRouter}`,
+                  inner: sealedPayloadBlock(`${seg.transportProtocol} segment + application data &mdash; carried unchanged, never opened by the router`),
+                  note: statusNote("info", `Routing table lookup: ${destinationNetwork(seg.destIP)} via next hop ${seg.route.nextHop} out of ${seg.route.interface}. TTL is now ${seg.ttlAtRouter}.`),
+                }))}
+                ${hopStep(3, `New frame transmitted on ${seg.route.interface}`, linkLayerBlock(seg, {
+                  title: "Link Layer (new frame for the next hop)",
+                  sourceMAC: seg.hopSourceMAC,
+                  destMAC: seg.hopDestMAC,
+                  checksum: seg.frameChecksumHop,
+                  inner: sealedPayloadBlock(`The same IP packet, TTL now ${seg.ttlAtRouter}`),
+                  note: statusNote("info", "Brand-new MAC addresses and a brand-new CRC, for this one hop only. The IP addresses are untouched."),
+                }))}
+                ${routingTableBlock(seg)}
+              </div>`;
+          },
+        };
+      }
+
+      // Arrival at the destination host: up the stack, stripping one header per
+      // layer. The first packet to arrive is the one the router sent the short way.
+      function arrivalStep(arrivalPosition, stepNumber) {
+        const packetIndex = ARRIVAL_ORDER[arrivalPosition];
+        const isFirstArrival = arrivalPosition === 0;
+        return {
+          id: `arrival-${packetIndex}`,
+          stage: "destination",
+          layerName: `${stepNumber}. Destination Host &mdash; Packet ${packetIndex + 1} arrives${isFirstArrival ? " first" : ""}`,
+          description: () => isFirstArrival
+            ? "At the destination the data climbs back up the stack, and each layer strips off the header its opposite number added on the way down. The link layer checks the CRC and removes the frame, the internet layer confirms the destination IP and removes the IP header, and the transport layer verifies its own checksum. Because packets are routed independently they can arrive out of order, so the transport layer must hold what it has until the sequence is complete."
+            : "The missing segment now arrives and climbs the stack in exactly the same way. With every sequence number present, the transport layer can put the segments back into the original order and pass the complete data up to the application layer.",
+          addLayerDataToPacket: () => {
+            const segment = packetSegments[packetIndex];
+            if (segment && segment.route) applyDelivery(segment);
+          },
+          getProcessExplanation: () => {
+            const seg = packetSegments[packetIndex];
+            if (!seg || !seg.route) return "No data to process.";
+            const hopsCrossed = 1 + seg.route.furtherHops;
+            let explanation = `<strong>1 &middot; Link layer</strong><br>
+              A frame arrives from the last router on the path: Src MAC <strong>${seg.lastHopMAC}</strong>, Dst MAC <strong>${seg.hostMAC}</strong> (the network card of this computer). The MAC addresses are different again &mdash; they only ever described that final hop. The CRC <strong>${seg.deliveryFrameChecksum}</strong> is recalculated and matches, so the frame is accepted and its header and trailer are stripped off.<br><br>
+              <strong>2 &middot; Internet layer</strong><br>
+              Destination IP <strong>${seg.destIP}</strong> matches this host, so the packet is for us. TTL arrived at <strong>${seg.ttlAtDestination}</strong>, down from 64, so ${hopsCrossed} router${hopsCrossed === 1 ? "" : "s"} decreased it on the way. The IP header is stripped off and the payload is handed up to <strong>${seg.transportProtocol}</strong>.<br><br>
+              <strong>3 &middot; Transport layer</strong><br>
+              The checksum is recalculated over the header and data and compared with <strong>${seg.checksumTransport}</strong> &mdash; it matches, so the data is not corrupt. This is the <em>end-to-end</em> check, unlike the CRC, which was redone on every hop. Destination port <strong>${seg.destPort}</strong> identifies which listening application the data belongs to.<br><br>`;
+            if (seg.transportProtocol === "TCP") {
+              if (isFirstArrival) {
+                const otherIndex = packetIndex === 0 ? 1 : 0;
+                explanation += `This is <strong>Seq ${seg.sequenceNumber}</strong>, but <strong>Seq ${packetSegments[otherIndex].sequenceNumber}</strong> has not arrived yet, because it took the longer route through more routers. The transport layer therefore <strong>holds this segment in its receive buffer</strong>. Nothing at all goes up to the application layer, because the application has to be given the bytes in their original order.<br><br>
+                  This is what TCP means by reliable, ordered delivery: sequence numbers let the receiver put out-of-order packets back in order, and let it spot a packet that is genuinely missing and ask for it again.`;
+              } else {
+                explanation += `This is <strong>Seq ${seg.sequenceNumber}</strong>, the segment that was missing. Every sequence number is now present, so the transport layer <strong>reassembles the segments into order</strong> (Seq 1 then Seq 2) and acknowledges receipt to the sender. The complete byte stream is ready to go up through the socket on port ${seg.destPort}.`;
+              }
+            } else {
+              explanation += isFirstArrival
+                ? `UDP has no sequence numbers, so it cannot reorder anything: this datagram is passed straight up, and the application itself has to cope with anything that arrives late, out of order, or not at all.`
+                : `The second datagram is passed straight up as well. With UDP it is the application, not the transport layer, that has to make sense of the order.`;
+            }
+            return explanation;
+          },
+          renderVisual: (container) => {
+            const seg = packetSegments[packetIndex];
+            if (!seg || !seg.route) { container.innerHTML = ""; return; }
+            const held = isFirstArrival && seg.transportProtocol === "TCP";
+            container.innerHTML = `
+              <div class="packet-container">
+                ${packetCaption(packetIndex, "arriving at the destination host")}
+                ${hopStep(1, "Link layer: frame checked and removed", linkLayerBlock(seg, {
+                  title: "Link Layer (frame from the final hop)",
+                  sourceMAC: seg.lastHopMAC,
+                  destMAC: seg.hostMAC,
+                  checksum: seg.deliveryFrameChecksum,
+                  inner: sealedPayloadBlock("IP packet inside &mdash; passed up to the internet layer"),
+                  note: statusNote("ok", "CRC check passed. Frame header and trailer stripped off."),
+                }))}
+                ${hopStep(2, "Internet layer: IP header removed", internetLayerBlock(seg, false, {
+                  headerText: `Src IP: ${seg.sourceIP}, Dst IP: ${seg.destIP}, TTL: ${seg.ttlAtDestination}`,
+                  inner: sealedPayloadBlock(`${seg.transportProtocol} segment &mdash; passed up to the transport layer`),
+                  note: statusNote("ok", `Destination IP matches this host, so the IP header is stripped off. TTL fell from 64 to ${seg.ttlAtDestination}, so the packet crossed ${1 + seg.route.furtherHops} router${seg.route.furtherHops === 0 ? "" : "s"}.`),
+                }))}
+                ${hopStep(3, seg.transportProtocol === "TCP" ? "Transport layer: checksum and sequencing" : "Transport layer: checksum", transportLayerBlock(seg, false, {
+                  inner: appLayerBlock(seg, true),
+                  note: `${statusNote("ok", `Checksum verified against ${seg.checksumTransport} &mdash; data intact. Destination port ${seg.destPort} identifies the listening application.`)}
+                    ${held
+                      ? statusNote("wait", `HELD: this is Seq ${seg.sequenceNumber} and the sequence is not yet complete, so nothing is passed up to the application layer.`)
+                      : statusNote("ok", seg.transportProtocol === "TCP"
+                        ? "Sequence now complete &mdash; the segments can be reassembled in order and acknowledged."
+                        : "UDP: passed straight up, with no reordering.")}`,
+                }))}
+                ${receiveBufferBlock(arrivalPosition + 1)}
+              </div>`;
+          },
+        };
+      }
+
+      const deliveryStep = {
+        id: "delivery",
+        stage: "destination",
+        layerName: "10. Application Layer (Destination)",
+        description: () => usesSequenceNumbers()
+          ? "The transport layer hands the reassembled data through the socket to the application listening on the destination port. That application sees only the original message: the headers, the two separate journeys and the out-of-order arrival are all hidden from it."
+          : "UDP hands each datagram through the socket to the application listening on the destination port, in whatever order they turned up. Nothing puts them back into the order they were sent, so here the application, not the transport layer, has to deal with the consequences of independent routing.",
+        addLayerDataToPacket: () => {},
+        getProcessExplanation: () => {
+          if (!packetSegments || packetSegments.length === 0) return "No data to process.";
+          const seg = packetSegments[0];
+          const ordered = usesSequenceNumbers();
+          const deliveryOrder = ordered ? packetSegments.map((part, index) => index) : ARRIVAL_ORDER;
+          const pieces = deliveryOrder.map((index) => `"${esc(packetSegments[index].appData)}"`).join(" + ");
+          const received = deliveryOrder.map((index) => packetSegments[index].appData).join("");
+          let explanation = ordered
+            ? `The segments are joined in sequence order: ${pieces} &rarr; "<strong>${esc(received)}</strong>".<br><br>`
+            : `The datagrams are passed up in the order they arrived: ${pieces} &rarr; "<strong>${esc(received)}</strong>". Compare that with the message that was sent, "<strong>${esc(originalMessage)}</strong>" &mdash; UDP has not restored the order, because it has no sequence numbers to restore it with. Sorting that out is the job of the application, and it is exactly the problem TCP solves for you.<br><br>`;
+          explanation += `This is delivered through the socket on port <strong>${seg.destPort}</strong> to the <strong>${applicationProtocol}</strong> server application.<br><br>
+            <strong>What the journey involved</strong><br>
+            &bull; The message was split into ${packetSegments.length} packets, and each one was routed independently.<br>
+            &bull; They crossed different numbers of routers and arrived in the wrong order.<br>
+            &bull; A CRC was recalculated on every hop; the transport checksum was verified once, end to end.<br>
+            &bull; Every header added on the way down was removed by the matching layer on the way up.<br><br>`;
+          explanation += ordered
+            ? "The receiving application simply reads the message that was typed &mdash; which is the whole point of a layered model."
+            : "Every layer still did its own job, but only the application layer is left to notice that the parts are the wrong way round.";
+          return explanation;
+        },
+        renderVisual: (container) => {
+          if (!packetSegments || packetSegments.length === 0) { container.innerHTML = ""; return; }
+          const seg = packetSegments[0];
+          const ordered = usesSequenceNumbers();
+          const deliveryOrder = ordered ? packetSegments.map((part, index) => index) : ARRIVAL_ORDER;
+          const received = deliveryOrder.map((index) => packetSegments[index].appData).join("");
+          const pieces = deliveryOrder.map((index) => `
+            <div class="p-2 bg-green-50 dark:bg-green-900/20 rounded break-all text-green-800 dark:text-green-200">
+              ${ordered ? `Seq ${packetSegments[index].sequenceNumber}` : `Datagram ${index + 1}`}: "${esc(packetSegments[index].appData)}"
+            </div>`).join("");
+          container.innerHTML = `
+            <div class="packet-container">
+              <div class="text-center font-semibold mb-1 text-indigo-600 dark:text-sky-400">${ordered ? "Reassembled message delivered" : "Datagrams delivered in arrival order"}</div>
+              <div class="layer-block border-green-500 dark:border-green-600 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 p-3 rounded-md shadow">
+                <div class="font-bold text-lg">Transport Layer (${ordered ? "reassembly in sequence order" : "no reassembly &mdash; arrival order"})</div>
+                <div class="mt-2 grid gap-2">${pieces}</div>
+                ${ordered
+                  ? statusNote("ok", "All segments present, checksums verified, original order restored. Passing the complete data up through the socket.")
+                  : statusNote("wait", "Checksums verified, but UDP does not reorder: the parts go up in the order they arrived.")}
+              </div>
+              <div class="layer-block border-blue-500 dark:border-blue-600 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 p-3 rounded-md shadow">
+                <div class="font-bold text-lg">Application Layer (${applicationProtocol}) at the destination</div>
+                <div class="mt-1 p-2 bg-blue-50 dark:bg-blue-900/20 rounded break-all">Data received: "${esc(received)}"</div>
+                ${ordered
+                  ? statusNote("info", `Delivered to the application listening on port ${seg.destPort}. Identical to the message that was sent.`)
+                  : statusNote("info", `Delivered to the application listening on port ${seg.destPort}. Sent as "${esc(originalMessage)}" &mdash; the application has to put the parts back in order itself.`)}
+              </div>
+            </div>`;
+        },
+      };
+
+      function getSteps() {
+        if (!isAdvanced()) return senderSteps;
+        return senderSteps.concat([
+          routerStep(0, 6),
+          routerStep(1, 7),
+          arrivalStep(0, 8),
+          arrivalStep(1, 9),
+          deliveryStep,
+        ]);
+      }
+
+      const STAGES = [
+        { id: "sender", label: "Sender host" },
+        { id: "router", label: "Router R1" },
+        { id: "destination", label: "Destination host" },
+      ];
+
+      function renderStage(step) {
+        if (!isAdvanced()) {
+          journeyStageEl.classList.add("hidden");
+          journeyStageEl.innerHTML = "";
+          return;
+        }
+        journeyStageEl.classList.remove("hidden");
+        journeyStageEl.innerHTML = STAGES.map((stage, index) => {
+          const active = stage.id === step.stage;
+          const arrow = index ? `<span aria-hidden="true" class="text-gray-400 dark:text-slate-500">&rarr;</span>` : "";
+          const classes = active
+            ? "border-indigo-700 bg-indigo-700 text-white dark:border-sky-400 dark:bg-sky-500 dark:text-slate-900 font-bold"
+            : "border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-400";
+          return `${arrow}<span ${active ? 'aria-current="step"' : ""} class="px-3 py-1 rounded-full border ${classes}">${active ? "&#9654; " : ""}${stage.label}</span>`;
+        }).join("");
+      }
+
+      function updateModeSummary() {
+        modeSummaryEl.innerHTML = isAdvanced()
+          ? "<strong>Advanced:</strong> the whole journey &mdash; encapsulation at the sender, an independent routing decision per packet at a router (with TTL), out-of-order arrival, per-hop CRC checks and the end-to-end transport checksum, then reassembly and delivery at the destination."
+          : "<strong>Basic:</strong> encapsulation only &mdash; the message travels down the layers of the sending computer and out onto the transmission medium.";
+      }
+
       function renderStep() {
+        const steps = getSteps();
         if (currentStepIndex < 0 || currentStepIndex >= steps.length) return;
         const step = steps[currentStepIndex];
         step.addLayerDataToPacket();
-        layerNameEl.textContent = step.layerName;
-        layerDescriptionEl.innerHTML = step.description;
+        layerNameEl.innerHTML = step.layerName;
+        layerDescriptionEl.innerHTML = typeof step.description === "function" ? step.description() : step.description;
         layerProcessingEl.innerHTML = step.getProcessExplanation();
         step.renderVisual(packetVisualisationEl);
+        renderStage(step);
+        packetVisualisationEl.scrollTop = 0;
 
         prevStepBtn.disabled = currentStepIndex === 0;
         prevStepBtn.classList.toggle("opacity-50", prevStepBtn.disabled);
@@ -488,6 +1034,30 @@
         nextStepBtn.classList.toggle("opacity-50", nextStepBtn.disabled);
         nextStepBtn.classList.toggle("cursor-not-allowed", nextStepBtn.disabled);
       }
+
+      function clearJourneyState() {
+        packetSegments = [];
+        routerInfo = null;
+        hostInfo = null;
+      }
+
+      function setDetailMode(mode) {
+        if (mode === detailMode) return;
+        detailMode = mode;
+        modeBasicBtn.setAttribute("aria-pressed", String(mode === "basic"));
+        modeAdvancedBtn.setAttribute("aria-pressed", String(mode === "advanced"));
+        updateModeSummary();
+        // Changing the level of detail restarts the journey, so the packets are
+        // rebuilt with (or without) the advanced fields from the very first step.
+        if (currentStepIndex >= 0) {
+          clearJourneyState();
+          currentStepIndex = 0;
+          renderStep();
+        }
+      }
+
+      modeBasicBtn.addEventListener("click", () => setDetailMode("basic"));
+      modeAdvancedBtn.addEventListener("click", () => setDetailMode("advanced"));
 
       startJourneyBtn.addEventListener("click", () => {
         const message = userMessageInput.value.trim();
@@ -502,7 +1072,7 @@
         }
         originalMessage = message;
         applicationProtocol = appProtocolSelect.value;
-        packetSegments = [];
+        clearJourneyState();
         currentStepIndex = 0;
         inputSection.classList.add("hidden");
         demoArea.classList.remove("hidden");
@@ -510,7 +1080,7 @@
       });
 
       nextStepBtn.addEventListener("click", () => {
-        if (currentStepIndex < steps.length - 1) {
+        if (currentStepIndex < getSteps().length - 1) {
           currentStepIndex++;
           renderStep();
         }
@@ -519,7 +1089,7 @@
       prevStepBtn.addEventListener("click", () => {
         if (currentStepIndex > 0) {
           currentStepIndex--;
-          if (currentStepIndex === 0) packetSegments = [];
+          if (currentStepIndex === 0) clearJourneyState();
           renderStep();
         }
       });
@@ -528,17 +1098,20 @@
         currentStepIndex = -1;
         originalMessage = "";
         applicationProtocol = "";
-        packetSegments = [];
+        clearJourneyState();
         userMessageInput.value = "GET www.perse.co.uk";
         appProtocolSelect.value = "HTTP";
         inputSection.classList.remove("hidden");
         demoArea.classList.add("hidden");
+        journeyStageEl.classList.add("hidden");
+        journeyStageEl.innerHTML = "";
         layerNameEl.textContent = "Layer Name";
         layerDescriptionEl.textContent = "Description of the layer...";
         layerProcessingEl.textContent = "What happens to the data...";
         packetVisualisationEl.innerHTML = "";
       });
 
+      updateModeSummary();
       inputSection.classList.remove("hidden");
       demoArea.classList.add("hidden");
     </script>

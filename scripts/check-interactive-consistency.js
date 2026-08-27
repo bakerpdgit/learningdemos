@@ -500,6 +500,28 @@ if (!/bg-amber-100 dark:bg-amber-900\/40 ring-1 ring-amber-300 dark:ring-amber-6
   failures.push('recursion_and_the_call_stack.html: the current pseudocode line must use the stable light/dark amber highlight without an arrow');
 }
 
+// Advanced mode must carry the journey past transmission: an independent
+// routing decision per packet, out-of-order arrival with the incomplete
+// sequence held at the transport layer, then reassembly and delivery. Basic
+// mode must stop at the transmission medium, and switching mode must restart.
+const tcpIpSource = fs.readFileSync(path.join(root, 'tcp_ip_layer.html'), 'utf8');
+if (!/function getSteps\(\)[\s\S]{0,320}isAdvanced\(\)[\s\S]{0,320}routerStep\(0[\s\S]{0,120}routerStep\(1[\s\S]{0,120}arrivalStep\(0[\s\S]{0,120}arrivalStep\(1[\s\S]{0,120}deliveryStep/.test(tcpIpSource)
+  || !/function setDetailMode\([\s\S]{0,600}currentStepIndex = 0;\s*\n\s*renderStep\(\);/.test(tcpIpSource)
+  || !/applyRouterHop[\s\S]{0,400}ttlAtRouter = segment\.ttl - 1/.test(tcpIpSource)
+  || !/const ARRIVAL_ORDER = \[1, 0\]/.test(tcpIpSource)
+  || !/HELD: this is Seq \$\{seg\.sequenceNumber\}/.test(tcpIpSource)) {
+  failures.push('tcp_ip_layer.html: advanced mode must add per-packet router hops with TTL, out-of-order arrival held at the transport layer, and reassembly, and changing mode must restart the journey');
+}
+const tcpIpTrailer = tcpIpSource.slice(
+  tcpIpSource.indexOf('function trailerText'),
+  tcpIpSource.indexOf('function appLayerBlock'),
+);
+if (!/isAdvanced\(\)/.test(tcpIpTrailer)
+  || !/CRC checksum: \$\{checksum\}/.test(tcpIpTrailer)
+  || !/ephemeral port/.test(tcpIpSource)) {
+  failures.push('tcp_ip_layer.html: advanced mode must label the frame trailer as a CRC checksum and explain the ephemeral source port');
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));
