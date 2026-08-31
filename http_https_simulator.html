@@ -1,0 +1,1916 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: HTTP &amp; Web Servers Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Full-height app shell. The production site navigation bar is 58px
+         tall, so the built page must subtract it or the action row falls
+         below the viewport. */
+      .protocol-lab {
+        min-height: 100vh;
+      }
+      @media (min-width: 1024px) {
+        .protocol-lab {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .protocol-lab {
+          height: calc(100vh - 58px);
+        }
+      }
+
+      .mono {
+        font-family: "Consolas", "Menlo", "Courier New", monospace;
+      }
+      .wire-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .browser-chrome {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.7),
+          0 12px 26px rgba(15, 23, 42, 0.08);
+      }
+      .dark .browser-chrome {
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+      }
+      .wire-enter {
+        animation: wire-in 260ms ease-out;
+      }
+      @keyframes wire-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wire-enter {
+          animation: none;
+        }
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+      /* ---------------------------------------------------------------
+         Fictional estate. Every host is inside example.com (RFC 2606)
+         and every address is inside 192.0.2.0/24 (RFC 5737), so nothing
+         here can ever resolve to or be routed at a real third party.
+         --------------------------------------------------------------- */
+      const HOST = "mysite.example.com";
+      const IP = "192.0.2.34";
+
+      const DEVIATION_MESSAGE =
+        "That is not the action for this step. Follow the simulation instructions exactly — enter the command shown in the instruction panel.";
+
+      const PAGE_HTML = [
+        "<!doctype html>",
+        "<html>",
+        "  <head><title>Example Site</title></head>",
+        "  <body>",
+        "    <h1>Example Site</h1>",
+        "    <p>Welcome to the demonstration web server.</p>",
+        '    <img src="/images/logo.png" alt="Example Site logo">',
+        "  </body>",
+        "</html>",
+      ].join("\n");
+
+      const SERVER_FILES = [
+        { path: "/index.html", type: "text/html", size: "1.2 KB", access: "public" },
+        { path: "/style.css", type: "text/css", size: "0.4 KB", access: "public" },
+        { path: "/images/logo.png", type: "image/png", size: "18.0 KB", access: "public" },
+        { path: "/secret.txt", type: "text/plain", size: "0.1 KB", access: "forbidden" },
+      ];
+
+      /* --------------------------- helpers --------------------------- */
+
+      const norm = (value) => String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+
+      const matchesExpectation = (expect, value) => {
+        if (expect instanceof RegExp) return expect.test(value);
+        return norm(expect).toLowerCase() === value.toLowerCase();
+      };
+
+      // Deterministic stand-in for ciphertext: same plaintext always gives
+      // the same gibberish, so the pane does not churn between renders.
+      const cipherText = (plain) => {
+        const alphabet =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let h = 2166136261;
+        let out = "";
+        for (let i = 0; i < plain.length; i += 1) {
+          h ^= plain.charCodeAt(i);
+          h = Math.imul(h, 16777619) >>> 0;
+          out += alphabet[h % 64];
+          if (out.length > 0 && out.length % 65 === 64) out += "\n";
+        }
+        return out;
+      };
+
+      // Tiny inline formatter so the teaching text can carry **bold** and
+      // `code` without raw HTML.
+      const renderRich = (text) => {
+        const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+        return parts.map((part, index) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={index} className="font-bold">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+              <code
+                key={index}
+                className="mono rounded bg-slate-200 px-1 py-0.5 text-[0.92em] text-slate-900 dark:bg-slate-700 dark:text-slate-50"
+              >
+                {part.slice(1, -1)}
+              </code>
+            );
+          }
+          return part;
+        });
+      };
+
+      /* ----------------------- step construction ----------------------
+         Each exercise builds its own step list per view. The terminal view
+         types every protocol line by hand; the application view composes the
+         whole request in one go, because that is what a browser does. Both
+         views share the server-side steps, where the learner works out what
+         the server does with the request. */
+
+      const requestLineFor = (path) => "GET " + path + " HTTP/1.1";
+      const HOST_LINE = "Host: " + HOST;
+      const NO_FILE = "__none__";
+
+      const okHtmlResponse = [
+        "HTTP/1.1 200 OK",
+        "Content-Type: text/html; charset=utf-8",
+        "Content-Length: 214",
+        "Connection: keep-alive",
+        "",
+        PAGE_HTML,
+      ].join("\n");
+
+      const okImageResponse = [
+        "HTTP/1.1 200 OK",
+        "Content-Type: image/png",
+        "Content-Length: 18432",
+        "Connection: keep-alive",
+        "",
+        "‹binary image data, 18,432 bytes›",
+      ].join("\n");
+
+      const notFoundResponse = [
+        "HTTP/1.1 404 Not Found",
+        "Content-Type: text/html; charset=utf-8",
+        "Connection: keep-alive",
+        "",
+        "<html><body><h1>404 Not Found</h1></body></html>",
+      ].join("\n");
+
+      const forbiddenResponse = [
+        "HTTP/1.1 403 Forbidden",
+        "Content-Type: text/html; charset=utf-8",
+        "Connection: keep-alive",
+        "",
+        "<html><body><h1>403 Forbidden</h1></body></html>",
+      ].join("\n");
+
+      /* -- client-side: composing the request -- */
+
+      const typeRequestLineStep = ({ path, teach }) => ({
+        id: "get" + path,
+        teach,
+        terminal: {
+          instruction: "Type: " + requestLineFor(path),
+          expect: requestLineFor(path),
+          display: requestLineFor(path),
+          misstep: [
+            {
+              match: /^GET\s+\S+$/i,
+              message:
+                "Nearly — an HTTP request line must also state the protocol version. Add HTTP/1.1 to the end.",
+            },
+          ],
+        },
+        app: null,
+        effect: () => ({
+          term: [{ type: "command", text: requestLineFor(path) }],
+          set: { pending: [requestLineFor(path)] },
+        }),
+      });
+
+      const typeHostStep = (teach) => ({
+        id: "host",
+        teach,
+        terminal: {
+          instruction: "Type: " + HOST_LINE,
+          expect: HOST_LINE,
+          display: HOST_LINE,
+          misstep: [
+            {
+              match: /^host\s*[^:]/i,
+              message:
+                "An HTTP header is written as a name, a colon, then the value — for example " + HOST_LINE,
+            },
+          ],
+        },
+        app: null,
+        effect: (state) => ({
+          term: [{ type: "command", text: HOST_LINE }],
+          set: { pending: [...state.pending, HOST_LINE] },
+        }),
+      });
+
+      const sendBlankLineStep = (teach) => ({
+        id: "send",
+        teach,
+        terminal: {
+          instruction: "Press Enter on an empty line to send the request.",
+          expect: /^$/,
+          display: "",
+          misstep: [
+            {
+              match: /^./,
+              message:
+                "The headers are ended by a blank line. Clear the box and press Enter without typing anything.",
+            },
+          ],
+        },
+        app: null,
+        effect: (state) => ({
+          wire: [
+            {
+              dir: "c2s",
+              port: state.port,
+              secure: state.secure,
+              label: "Request",
+              text: state.pending.join("\r\n") + "\r\n",
+            },
+          ],
+          term: [{ type: "info", text: "(blank line sent — end of headers)" }],
+          set: {
+            sentRequest: state.pending.slice(),
+            pending: [],
+            awaitingServer: true,
+          },
+        }),
+      });
+
+      // Application view: the browser builds the whole request, shows it, and
+      // the learner sends it. One step instead of three.
+      const composeAndSendStep = ({ path, teach }) => ({
+        id: "compose" + path,
+        teach,
+        previewLines: [requestLineFor(path), HOST_LINE],
+        terminal: null,
+        app: {
+          instruction:
+            "Check the request the browser has built, then click Send request.",
+          control: "send",
+        },
+        effect: (state) => {
+          const lines = [requestLineFor(path), HOST_LINE];
+          return {
+            wire: [
+              {
+                dir: "c2s",
+                port: state.port,
+                secure: state.secure,
+                label: "Request",
+                text: lines.join("\r\n") + "\r\n",
+              },
+            ],
+            term: [
+              ...lines.map((line) => ({ type: "command", text: line })),
+              { type: "info", text: "(blank line sent — end of headers)" },
+            ],
+            set: { sentRequest: lines, pending: [], awaitingServer: true },
+          };
+        },
+      });
+
+      /* -- server-side: what the server does with the request -- */
+
+      const serveStep = ({ teach, expectPick, responseText, logLine, set, pickPrompt }) => ({
+        id: "serve-" + (expectPick || "none"),
+        teach,
+        terminal: null,
+        app: null,
+        serverPick: {
+          expect: expectPick,
+          prompt: pickPrompt,
+          wrongFile:
+            expectPick === NO_FILE
+              ? "Look again — compare the path in the request with the Path column. No file in the store has that path."
+              : "That is not the resource the request asked for. Read the path in the request line and pick the file that matches it exactly.",
+          wrongNone:
+            "That file does exist in the store. Look at the Access column to work out what the server will do with it.",
+        },
+        effect: (state) => ({
+          wire: [
+            {
+              dir: "s2c",
+              port: state.port,
+              secure: state.secure,
+              label: "Response",
+              text: responseText,
+              pickable: responseText === okHtmlResponse,
+            },
+          ],
+          term: responseText.split("\n").map((line) => ({ type: "recv", text: line })),
+          log: [logLine],
+          set: { awaitingServer: false, sentRequest: [], ...(set || {}) },
+        }),
+      });
+
+      const parseStep = (teach) => ({
+        id: "parse",
+        teach,
+        terminal: null,
+        app: null,
+        sourcePick: {
+          expect: /<img\b/i,
+          prompt:
+            "Click the line of the returned page that names a resource the browser does not yet have.",
+          wrong:
+            "That line does not name another file. Look for a tag whose attribute gives the path of a separate resource.",
+        },
+        effect: () => ({
+          term: [
+            {
+              type: "info",
+              text: "(the page references /images/logo.png — a second request is needed)",
+            },
+          ],
+          set: { highlightImg: true, showSource: true },
+        }),
+      });
+
+      /* -- shared connection steps -- */
+
+      const connectStep = (port) => ({
+        id: "resolve-connect",
+        teach:
+          "Two things happen before any HTTP is sent. First the **domain name service (DNS)** maps the **fully qualified domain name** `" +
+          HOST +
+          "` onto the IP address `" +
+          IP +
+          "` — the full recursive resolution is covered in the DNS simulator. Then a **TCP connection** is opened to **port " +
+          port +
+          "**, the **well-known port** for " +
+          (port === 443 ? "HTTPS" : "HTTP") +
+          ". An IP address together with a port number forms a **socket**: `" +
+          IP +
+          ":" +
+          port +
+          "`.",
+        terminal: null,
+        app: null,
+        effect: () => ({
+          wire: [
+            {
+              dir: "c2s",
+              port,
+              secure: false,
+              label: "TCP connection",
+              text: "SYN  →\nSYN-ACK  ←\nACK  →",
+            },
+          ],
+          term: [
+            { type: "info", text: "Resolving " + HOST + " ... " + IP },
+            { type: "info", text: "Connected to " + IP + ":" + port + "." },
+          ],
+          set: { resolved: true, connected: true, port },
+        }),
+      });
+
+      const tlsStep = {
+        id: "tls",
+        teach:
+          "The server sends its **digital certificate**, containing its public key and its identity, signed by a trusted **certificate authority (CA)**. The browser checks that signature to confirm it really is talking to `" +
+          HOST +
+          "`. The two ends then agree a shared **session key** and switch to symmetric encryption, so everything from here on is **ciphertext**. The certificate and signature process itself is covered in the Encryption interactive.",
+        terminal: null,
+        app: null,
+        effect: () => ({
+          wire: [
+            {
+              dir: "s2c",
+              port: 443,
+              secure: false,
+              label: "TLS handshake",
+              text:
+                "Certificate\n  Subject:  CN=" +
+                HOST +
+                "\n  Issuer:   CN=Example Trust CA\n  Valid to: 2027-01-01\n  Public key: RSA 2048",
+            },
+            {
+              dir: "c2s",
+              port: 443,
+              secure: false,
+              label: "TLS handshake",
+              text: "Certificate verified — session key agreed\nCipher: TLS_AES_128_GCM_SHA256",
+            },
+          ],
+          term: [{ type: "info", text: "Encrypted session established." }],
+          set: { certified: true, secure: true, padlock: true },
+        }),
+      };
+
+      const renderStep = {
+        id: "render",
+        teach:
+          "The browser now holds every resource the page refers to, so it can **render** the complete page. The role of a **web browser** is to retrieve web pages and web page resources and **render them accordingly** — turning the text it received into what you see on screen.",
+        terminal: null,
+        app: null,
+        effect: () => ({
+          term: [{ type: "info", text: "(page fully rendered)" }],
+          set: { render: "complete", showSource: false },
+        }),
+      };
+
+      /* --------------------------- exercises -------------------------- */
+
+      const openConnectionStep = ({ port, addressValue, addressExpect, addressMisstep, terminalCommand, terminalMisstep, teach }) => ({
+        id: "connect",
+        teach,
+        terminal: {
+          instruction: "Type: " + terminalCommand,
+          expect: terminalCommand,
+          display: terminalCommand,
+          misstep: terminalMisstep,
+        },
+        app: {
+          instruction: "Type " + addressValue + " into the address bar and press Go.",
+          control: "address",
+          expect: addressExpect,
+          misstep: addressMisstep,
+        },
+        effect: () => ({
+          term: [{ type: "command", text: terminalCommand }],
+          set: { address: addressValue },
+        }),
+      });
+
+      const quitStep = {
+        id: "quit",
+        teach:
+          "The exchange is finished, so the connection can be closed. HTTP is a **stateless** protocol: once the connection ends the server keeps no memory of this conversation.",
+        terminal: { instruction: "Type: quit", expect: "quit", display: "quit" },
+        app: null,
+        effect: () => ({
+          term: [{ type: "info", text: "Connection closed." }],
+          set: { connected: false },
+        }),
+      };
+
+      const closeStep = {
+        id: "close",
+        teach:
+          "The browser closes the connection when it has finished with it. HTTP is a **stateless** protocol: once the connection ends the server keeps no memory of this conversation.",
+        terminal: null,
+        app: null,
+        effect: () => ({
+          term: [{ type: "info", text: "Connection closed." }],
+          set: { connected: false },
+        }),
+      };
+
+      const TEACH = {
+        getIndex:
+          "**HTTP (Hypertext Transfer Protocol)** is the application layer protocol used to request web pages and web page resources. `GET` is an HTTP **method** — a request for one named resource. The request line states the method, the path, and the protocol version.",
+        host:
+          "HTTP/1.1 requires a `Host:` header, because a single web server at one IP address may serve many different domain names. The header tells the server which site the request is for.",
+        blank:
+          "A **blank line** marks the end of the request headers. Sending it tells the server the request is complete. Watch the whole request move from the composing panel onto the wire.",
+        composeIndex:
+          "**HTTP (Hypertext Transfer Protocol)** is the application layer protocol used to request web pages and web page resources. The browser has built the complete request for you — read it in the panel below the browser. It is the **request line** (`GET`, the path, the version), then a `Host:` header (needed because one server at one IP address may serve many domain names), then a **blank line** that ends the headers.",
+        composeImage:
+          "The browser builds a second request in exactly the same shape, changing only the path. Read it, then send it.",
+        serveIndex:
+          "The request has arrived at the web server. The server's job is to take the **path** out of the request line and find the matching resource in its file store. Read the request in the panel on the left, then click the file the server should send back.",
+        serveImage:
+          "A second request has arrived. The server does exactly the same thing again: read the path, find the matching file, return it. Click the file this request asks for.",
+        parse:
+          "The server returned the page **in text form**. The role of a **web server** is to store web pages and serve them up as text; it does not render anything. The browser now **parses** that text looking for resources the page depends on.",
+        getImage:
+          "Images, stylesheets and scripts are each retrieved by their own separate request. A page made of ten resources needs ten requests.",
+        hostAgain:
+          "Every request on the connection carries the `Host:` header, not just the first one.",
+        blankAgain:
+          "The same blank line ends these headers. Both requests travelled over the **same TCP connection** — `Connection: keep-alive` avoids the cost of opening a new connection for every resource.",
+      };
+
+      const EXERCISES = [
+        {
+          id: "http",
+          label: "A: Fetching a web page over HTTP",
+          startPort: 80,
+          examPoints: [
+            "A web server serves up web pages in text form; it does not render them.",
+            "A web browser retrieves web pages and web page resources and renders them accordingly.",
+            "The server maps the path in the request line onto a resource in its file store.",
+            "Each resource referenced by a page needs its own separate HTTP request.",
+            "Port 80 is the well-known port for HTTP; an IP address plus a port number is a socket.",
+          ],
+          buildSteps: (view) => {
+            const open = openConnectionStep({
+              port: 80,
+              addressValue: HOST,
+              addressExpect: /^(http:\/\/)?mysite\.example\.com\/?$/i,
+              addressMisstep: [
+                {
+                  match: /^https:\/\//i,
+                  message:
+                    "This exercise uses plain HTTP. Exercise B fetches the very same page over HTTPS.",
+                },
+              ],
+              terminalCommand: "telnet " + HOST + " 80",
+              terminalMisstep: [
+                {
+                  match: /^telnet\s+\S+$/i,
+                  message:
+                    "Name the port as well as the host, so the client knows which service to connect to: telnet " +
+                    HOST +
+                    " 80",
+                },
+              ],
+              teach:
+                "A **URL** identifies a resource on the web. `" +
+                HOST +
+                "` is a **fully qualified domain name (FQDN)**: `mysite` is the host name and `example.com` is the domain name. In the terminal you open the connection yourself; in a browser you simply type the address.",
+            });
+            const serveIndex = serveStep({
+              teach: TEACH.serveIndex,
+              expectPick: "/index.html",
+              responseText: okHtmlResponse,
+              logLine: "GET /index.html — 200 OK — 214 bytes",
+              set: { render: "html", sourceAvailable: true },
+              pickPrompt: "Which file should the server return?",
+            });
+            const serveImage = serveStep({
+              teach: TEACH.serveImage,
+              expectPick: "/images/logo.png",
+              responseText: okImageResponse,
+              logLine: "GET /images/logo.png — 200 OK — 18,432 bytes",
+              set: { imageLoaded: true },
+              pickPrompt: "Which file should the server return this time?",
+            });
+
+            if (view === "terminal") {
+              return [
+                open,
+                connectStep(80),
+                typeRequestLineStep({ path: "/index.html", teach: TEACH.getIndex }),
+                typeHostStep(TEACH.host),
+                sendBlankLineStep(TEACH.blank),
+                serveIndex,
+                parseStep(TEACH.parse),
+                typeRequestLineStep({ path: "/images/logo.png", teach: TEACH.getImage }),
+                typeHostStep(TEACH.hostAgain),
+                sendBlankLineStep(TEACH.blankAgain),
+                serveImage,
+                renderStep,
+                quitStep,
+              ];
+            }
+            return [
+              open,
+              connectStep(80),
+              composeAndSendStep({ path: "/index.html", teach: TEACH.composeIndex }),
+              serveIndex,
+              parseStep(TEACH.parse),
+              composeAndSendStep({ path: "/images/logo.png", teach: TEACH.composeImage }),
+              serveImage,
+              renderStep,
+              closeStep,
+            ];
+          },
+        },
+        {
+          id: "https",
+          label: "B: The same page over HTTPS",
+          startPort: 443,
+          examPoints: [
+            "HTTPS is HTTP sent over an encrypted TLS connection — the same GET request and the same 200 OK response.",
+            "Port 443 is the well-known port for HTTPS; port 80 is the well-known port for HTTP.",
+            "The server proves its identity with a digital certificate signed by a certificate authority.",
+            "Encryption protects the message in transit; it does not change what the protocol says.",
+          ],
+          buildSteps: (view) => {
+            const open = openConnectionStep({
+              port: 443,
+              addressValue: "https://" + HOST,
+              addressExpect: /^https:\/\/mysite\.example\.com\/?$/i,
+              addressMisstep: [
+                {
+                  match: /^(http:\/\/)?mysite\.example\.com\/?$/i,
+                  message:
+                    "This exercise uses the secure version. Include the https:// scheme so the browser requests port 443.",
+                },
+              ],
+              terminalCommand: "openssl s_client -connect " + HOST + ":443",
+              terminalMisstep: [
+                {
+                  match: /^telnet\b/i,
+                  message:
+                    "telnet sends plain text, so it cannot start an encrypted connection. Use the TLS client shown in the instruction.",
+                },
+              ],
+              teach:
+                "**HTTPS (Hypertext Transfer Protocol Secure)** is not a different application layer protocol. It is ordinary HTTP carried inside an **encrypted TLS connection**, so the connection must be encrypted before any HTTP is sent.",
+            });
+            const serveIndex = serveStep({
+              teach:
+                TEACH.serveIndex +
+                " The encryption makes no difference to this: the server reads exactly the same request.",
+              expectPick: "/index.html",
+              responseText: okHtmlResponse,
+              logLine: "GET /index.html — 200 OK — 214 bytes (TLS)",
+              set: { render: "html", sourceAvailable: true },
+              pickPrompt: "Which file should the server return?",
+            });
+            const serveImage = serveStep({
+              teach: TEACH.serveImage,
+              expectPick: "/images/logo.png",
+              responseText: okImageResponse,
+              logLine: "GET /images/logo.png — 200 OK — 18,432 bytes (TLS)",
+              set: { imageLoaded: true },
+              pickPrompt: "Which file should the server return this time?",
+            });
+            const composeTeach =
+              "Now the HTTP conversation begins — and it is **exactly the same conversation** as over plain HTTP. The same `GET` method, the same request line, the same `Host:` header. Only the carriage has changed. Once it is sent, look at the wire pane: the message is now **ciphertext**, and the toggle above it reveals what the two ends actually see.";
+
+            if (view === "terminal") {
+              return [
+                open,
+                connectStep(443),
+                tlsStep,
+                typeRequestLineStep({ path: "/index.html", teach: composeTeach }),
+                typeHostStep(
+                  "The `Host:` header is still required. TLS encrypts the message; it does not change what the message says.",
+                ),
+                sendBlankLineStep(
+                  "The blank line ends the headers, exactly as before. On the wire the whole request is now encrypted.",
+                ),
+                serveIndex,
+                parseStep(
+                  TEACH.parse +
+                    " Encryption changes nothing about this: the browser decrypts the response and then parses ordinary HTML.",
+                ),
+                typeRequestLineStep({ path: "/images/logo.png", teach: TEACH.getImage }),
+                typeHostStep(TEACH.hostAgain),
+                sendBlankLineStep(
+                  "The second request travels inside the same encrypted connection — the session key does not have to be agreed again.",
+                ),
+                serveImage,
+                renderStep,
+              ];
+            }
+            return [
+              open,
+              connectStep(443),
+              tlsStep,
+              composeAndSendStep({ path: "/index.html", teach: composeTeach }),
+              serveIndex,
+              parseStep(
+                TEACH.parse +
+                  " Encryption changes nothing about this: the browser decrypts the response and then parses ordinary HTML.",
+              ),
+              composeAndSendStep({
+                path: "/images/logo.png",
+                teach:
+                  "The second request travels inside the same encrypted connection — the session key does not have to be agreed again.",
+              }),
+              serveImage,
+              renderStep,
+            ];
+          },
+        },
+        {
+          id: "errors",
+          label: "C: When the resource isn't served",
+          startPort: 80,
+          examPoints: [
+            "A web server maps the path in a request onto a resource it holds and reports the outcome with a status code.",
+            "200 OK means the resource was served; 404 Not Found means no such resource; 403 Forbidden means access was refused.",
+            "The status code comes from the server — the browser only displays it.",
+          ],
+          buildSteps: (view) => {
+            const open = openConnectionStep({
+              port: 80,
+              addressValue: HOST + "/missing.html",
+              addressExpect: /^(http:\/\/)?mysite\.example\.com\/missing\.html$/i,
+              terminalCommand: "telnet " + HOST + " 80",
+              teach:
+                "A web server maps the **path** in a request onto a file it holds, and reports the outcome with a **status code**. This exercise asks for two paths that will not be served.",
+            });
+            const serveMissing = serveStep({
+              teach:
+                "The request has arrived. Compare the path in the request with the server's file store. Click the file the server should return — or, if there is no such file, say so.",
+              expectPick: NO_FILE,
+              responseText: notFoundResponse,
+              logLine: "GET /missing.html — 404 Not Found",
+              set: { render: "notfound", sourceAvailable: false },
+              pickPrompt: "Which file matches the requested path?",
+            });
+            const serveSecret = serveStep({
+              teach:
+                "This time the path **does** match a file in the store. Click it, and watch what the server does about the permission recorded against it.",
+              expectPick: "/secret.txt",
+              responseText: forbiddenResponse,
+              logLine: "GET /secret.txt — 403 Forbidden",
+              set: { render: "forbidden" },
+              pickPrompt: "Which file matches the requested path?",
+            });
+            const afterMissing = {
+              id: "after-404",
+              teach:
+                "The server searched its store, found nothing at that path, and replied **404 Not Found**. The request itself was perfectly valid — the *resource* did not exist. Now ask for a file that **does** exist but that the server is configured not to release.",
+              terminal: null,
+              app: {
+                instruction:
+                  "Type " + HOST + "/secret.txt into the address bar and press Go.",
+                control: "address",
+                expect: /^(http:\/\/)?mysite\.example\.com\/secret\.txt$/i,
+              },
+              effect: () => ({ set: { address: HOST + "/secret.txt" } }),
+            };
+            const review = {
+              id: "review",
+              teach:
+                "Look at the server's **access log**: every request has been recorded with its path and its status code, whether or not a file was served. This log is how a server administrator sees what a site is being asked for.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                term: [{ type: "info", text: "(see the web server access log)" }],
+                set: {},
+              }),
+            };
+
+            if (view === "terminal") {
+              return [
+                open,
+                connectStep(80),
+                typeRequestLineStep({
+                  path: "/missing.html",
+                  teach:
+                    "Ask for a page the server does not hold. The request itself is perfectly valid — the server will still process it and reply.",
+                }),
+                typeHostStep(TEACH.host),
+                sendBlankLineStep(TEACH.blank),
+                serveMissing,
+                typeRequestLineStep({
+                  path: "/secret.txt",
+                  teach:
+                    "The server replied **404 Not Found**: nothing in its store had that path. Now ask for a file that **does** exist but that the server is configured not to release.",
+                }),
+                typeHostStep(TEACH.hostAgain),
+                sendBlankLineStep(TEACH.blankAgain),
+                serveSecret,
+                review,
+              ];
+            }
+            return [
+              open,
+              connectStep(80),
+              composeAndSendStep({
+                path: "/missing.html",
+                teach:
+                  "The browser builds the request for a page the server does not hold. The request itself is perfectly valid — the server will still process it and reply.",
+              }),
+              serveMissing,
+              afterMissing,
+              composeAndSendStep({
+                path: "/secret.txt",
+                teach: TEACH.composeImage,
+              }),
+              serveSecret,
+              review,
+            ];
+          },
+        },
+      ];
+      /* -------------------------- presentation ------------------------ */
+
+      const TERM_LINE_CLASS = {
+        command: "text-sky-800 dark:text-sky-300",
+        recv: "text-emerald-800 dark:text-emerald-300",
+        info: "text-slate-600 dark:text-slate-400",
+        error: "text-red-700 dark:text-red-400",
+      };
+      const TERM_LINE_PREFIX = {
+        command: "$ ",
+        recv: "< ",
+        info: "  ",
+        error: "! ",
+      };
+
+      const makeSimState = (exercise) => ({
+        step: 0,
+        wire: [],
+        term: [
+          {
+            type: "info",
+            text: "Simulated client ready. Follow the instructions above.",
+          },
+        ],
+        log: [],
+        pending: [],
+        sentRequest: [],
+        awaitingServer: false,
+        port: exercise.startPort,
+        secure: false,
+        resolved: false,
+        connected: false,
+        certified: false,
+        padlock: false,
+        render: "blank",
+        sourceAvailable: false,
+        showSource: false,
+        highlightImg: false,
+        imageLoaded: false,
+        address: "",
+      });
+
+      function LogoMark({ className }) {
+        return (
+          <svg
+            viewBox="0 0 120 120"
+            role="img"
+            aria-label="Example Site logo"
+            className={className}
+          >
+            <rect x="4" y="4" width="112" height="112" rx="18" fill="#4338ca" />
+            <circle cx="60" cy="46" r="20" fill="#a5b4fc" />
+            <path d="M24 100c6-20 20-30 36-30s30 10 36 30z" fill="#e0e7ff" />
+          </svg>
+        );
+      }
+
+      function ErrorBar({ message }) {
+        if (!message) return null;
+        return (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border-y border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200"
+          >
+            <span aria-hidden="true" className="shrink-0">
+              &#9888;
+            </span>
+            <span>{message}</span>
+          </div>
+        );
+      }
+
+      function InstructionPanel({ exercise, stepNumber, totalSteps, step, input, pickPrompt }) {
+        const percent = Math.round((stepNumber / totalSteps) * 100);
+        return (
+          <section
+            aria-labelledby="instruction-heading"
+            className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <h2
+                id="instruction-heading"
+                className="text-sm font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300"
+              >
+                {exercise.label}
+              </h2>
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                Step {Math.min(stepNumber + 1, totalSteps)} of {totalSteps}
+              </span>
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={totalSteps}
+                aria-valuenow={stepNumber}
+                aria-label="Exercise progress"
+                className="h-2 w-32 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              >
+                <div
+                  className="h-full rounded-full bg-indigo-600 dark:bg-indigo-400"
+                  style={{ width: percent + "%" }}
+                />
+              </div>
+            </div>
+            <p className="max-w-4xl text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+              {renderRich(step.teach)}
+            </p>
+            <p className="mt-2 flex flex-wrap items-baseline gap-2 text-sm">
+              <span className="rounded bg-indigo-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white dark:bg-indigo-500">
+                Now do this
+              </span>
+              <span className="font-semibold text-slate-900 dark:text-slate-50">
+                {input
+                  ? input.instruction
+                  : pickPrompt
+                    ? pickPrompt
+                    : "Press Continue."}
+              </span>
+            </p>
+          </section>
+        );
+      }
+
+      function RecapCard({ exercise, view, onRestart, onSwapView }) {
+        return (
+          <section
+            aria-labelledby="recap-heading"
+            className="border-b border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/50"
+          >
+            <h2
+              id="recap-heading"
+              className="text-sm font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200"
+            >
+              Exercise complete — {exercise.label}
+            </h2>
+            <ul className="mt-2 max-w-4xl list-disc space-y-1 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+              {exercise.examPoints.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onSwapView}
+                className="shrink-0 whitespace-nowrap rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-emerald-950"
+              >
+                Run this exercise in {view === "terminal" ? "the application" : "the terminal"} view
+              </button>
+              <button
+                type="button"
+                onClick={onRestart}
+                className="shrink-0 whitespace-nowrap rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-900"
+              >
+                Restart this exercise
+              </button>
+            </div>
+          </section>
+        );
+      }
+
+      function BrowserView({ sim, draft, setDraft, onGo, onViewSource }) {
+        const secure = sim.padlock;
+        return (
+          <div className="browser-chrome flex min-h-[24rem] flex-1 flex-col overflow-hidden lg:min-h-0 rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <span className="flex shrink-0 gap-1.5" aria-hidden="true">
+                <span className="h-3 w-3 rounded-full bg-red-400" />
+                <span className="h-3 w-3 rounded-full bg-amber-400" />
+                <span className="h-3 w-3 rounded-full bg-green-400" />
+              </span>
+              <form
+                className="flex min-w-0 flex-1 items-center gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onGo(draft);
+                }}
+              >
+                <label htmlFor="address-bar" className="sr-only">
+                  Address bar
+                </label>
+                <span
+                  className={
+                    secure
+                      ? "shrink-0 text-sm font-bold text-emerald-700 dark:text-emerald-400"
+                      : "shrink-0 text-sm text-slate-400 dark:text-slate-500"
+                  }
+                  title={secure ? "Connection is encrypted" : "Connection is not encrypted"}
+                >
+                  {secure ? "\u{1F512} Secure" : "\u{1F513}"}
+                </span>
+                <input
+                  id="address-bar"
+                  type="text"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      onGo(draft);
+                    }
+                  }}
+                  placeholder="Enter a web address"
+                  className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
+                >
+                  Go
+                </button>
+              </form>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900">
+              <span className="text-slate-500 dark:text-slate-400">
+                Rendered page
+              </span>
+              <button
+                type="button"
+                onClick={onViewSource}
+                aria-pressed={sim.showSource}
+                disabled={!sim.sourceAvailable}
+                className={
+                  sim.showSource
+                    ? "shrink-0 whitespace-nowrap rounded border border-indigo-600 bg-indigo-600 px-2 py-1 font-bold text-white disabled:opacity-40"
+                    : "shrink-0 whitespace-nowrap rounded border border-slate-400 px-2 py-1 font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+                }
+              >
+                View source
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto bg-white p-4 dark:bg-slate-950">
+              {sim.showSource && sim.sourceAvailable ? (
+                <pre className="mono wire-text text-xs text-slate-800 dark:text-slate-200">
+                  {PAGE_HTML.split("\n").map((line) => (
+                    <div
+                      key={line}
+                      className={
+                        sim.highlightImg && line.includes("<img")
+                          ? "rounded bg-amber-200 font-bold text-amber-950 dark:bg-amber-500/40 dark:text-amber-100"
+                          : ""
+                      }
+                    >
+                      {line}
+                    </div>
+                  ))}
+                </pre>
+              ) : sim.render === "blank" ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  No page loaded yet.
+                </p>
+              ) : sim.render === "notfound" ? (
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">
+                    404 Not Found
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                    The server has no resource at that path.
+                  </p>
+                </div>
+              ) : sim.render === "forbidden" ? (
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">
+                    403 Forbidden
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                    The resource exists but the server refused to release it.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-slate-50">
+                    Example Site
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                    Welcome to the demonstration web server.
+                  </p>
+                  <div className="mt-3">
+                    {sim.imageLoaded ? (
+                      <LogoMark className="h-24 w-24" />
+                    ) : (
+                      <div className="flex h-24 w-24 flex-col items-center justify-center rounded border-2 border-dashed border-slate-400 text-center text-[10px] font-bold text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                        <span aria-hidden="true" className="text-lg">
+                          &#128443;
+                        </span>
+                        image not yet retrieved
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function TerminalView({ sim, draft, setDraft, onSubmit, onHistory, inputRef, promptLabel }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.term.length]);
+
+        return (
+          <div className="flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-slate-50 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {promptLabel}
+            </div>
+            <div
+              ref={scrollRef}
+              role="log"
+              aria-live="polite"
+              aria-label="Terminal output"
+              className="mono min-h-0 flex-1 overflow-auto px-3 py-2 text-xs leading-relaxed"
+            >
+              {sim.term.map((line, index) => (
+                <div
+                  key={index}
+                  className={"wire-text " + (TERM_LINE_CLASS[line.type] || TERM_LINE_CLASS.info)}
+                >
+                  <span aria-hidden="true">{TERM_LINE_PREFIX[line.type] || "  "}</span>
+                  {line.text}
+                </div>
+              ))}
+            </div>
+            <form
+              onSubmit={onSubmit}
+              className="border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <label
+                htmlFor="terminal-input"
+                className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+              >
+                Command
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <span aria-hidden="true" className="mono shrink-0 font-bold text-indigo-700 dark:text-indigo-300">
+                  $
+                </span>
+                <input
+                  id="terminal-input"
+                  ref={inputRef}
+                  type="text"
+                  autoComplete="off"
+                  spellCheck="false"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      onHistory("up");
+                    } else if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      onHistory("down");
+                    } else if (event.key === "Enter") {
+                      event.preventDefault();
+                      onSubmit(event);
+                    }
+                  }}
+                  className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Enter
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      }
+
+      function WirePane({ sim, showPlain, setShowPlain, pickMode, onPickLine }) {
+        const scrollRef = useRef(null);
+        const hasEncrypted = sim.wire.some((entry) => entry.secure);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.wire.length]);
+
+        return (
+          <section
+            aria-labelledby="wire-heading"
+            className="flex min-h-[16rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="wire-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                On the wire
+              </h2>
+              {hasEncrypted && (
+                <button
+                  type="button"
+                  onClick={() => setShowPlain(!showPlain)}
+                  aria-pressed={showPlain}
+                  className={
+                    showPlain
+                      ? "shrink-0 whitespace-nowrap rounded border border-amber-600 bg-amber-500 px-2 py-1 text-xs font-bold text-amber-950"
+                      : "shrink-0 whitespace-nowrap rounded border border-slate-400 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-700"
+                  }
+                >
+                  Show what each end sees
+                </button>
+              )}
+            </div>
+            <div
+              ref={scrollRef}
+              aria-live="polite"
+              className="min-h-0 flex-1 space-y-2 overflow-auto p-3"
+            >
+              {pickMode && (
+                <p className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {pickMode.prompt}
+                </p>
+              )}
+              {sim.wire.length === 0 && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Nothing has been sent yet.
+                </p>
+              )}
+              {sim.wire.map((entry, index) => (
+                <article
+                  key={index}
+                  className="wire-enter rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-white dark:bg-slate-600">
+                      {entry.dir === "c2s" ? "Client → Server" : "Server → Client"}
+                    </span>
+                    <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                      port {entry.port}
+                    </span>
+                    <span className="text-slate-500 dark:text-slate-400">{entry.label}</span>
+                    {entry.secure ? (
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                        encrypted
+                      </span>
+                    ) : (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/70 dark:text-amber-100">
+                        plain text
+                      </span>
+                    )}
+                  </div>
+                  {pickMode && entry.pickable ? (
+                    <div>
+                      {entry.secure && (
+                        <p className="mb-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                          Shown decrypted &mdash; this is what the browser sees.
+                        </p>
+                      )}
+                      <div className="mono space-y-0.5 text-[11px]">
+                        {entry.text.split(String.fromCharCode(10)).map((line, lineIndex) => (
+                          <button
+                            key={lineIndex}
+                            type="button"
+                            onClick={() => onPickLine(line)}
+                            className="block w-full rounded border border-dashed border-slate-300 px-1 text-left hover:border-indigo-500 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:hover:border-indigo-400 dark:hover:bg-indigo-950"
+                          >
+                            <span className="wire-text text-slate-800 dark:text-slate-200">
+                              {line === "" ? String.fromCharCode(160) : line}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <pre className="mono wire-text text-[11px] leading-relaxed text-slate-800 dark:text-slate-200">
+                      {entry.secure && !showPlain ? cipherText(entry.text) : entry.text}
+                    </pre>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      function ServerPane({ sim, pick, onPick }) {
+        return (
+          <section
+            aria-labelledby="server-heading"
+            className="flex min-h-[16rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="server-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Web server &mdash; {HOST} ({IP})
+              </h2>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto p-3">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Files held by the server
+              </h3>
+              {pick && (
+                <p className="mt-1 rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {pick.prompt}
+                </p>
+              )}
+              <div className="mt-1 overflow-x-auto">
+                <table className="w-full min-w-[320px] text-left text-xs">
+                  <thead>
+                    <tr className="text-slate-500 dark:text-slate-400">
+                      <th className="py-1 pr-2 font-bold">Path</th>
+                      <th className="py-1 pr-2 font-bold">Content type</th>
+                      <th className="py-1 pr-2 font-bold">Size</th>
+                      <th className="py-1 font-bold">Access</th>
+                    </tr>
+                  </thead>
+                  <tbody className="mono">
+                    {SERVER_FILES.map((file) => (
+                      <tr
+                        key={file.path}
+                        className="border-t border-slate-200 text-slate-800 dark:border-slate-700 dark:text-slate-200"
+                      >
+                        <td className="py-1 pr-2">
+                          {pick ? (
+                            <button
+                              type="button"
+                              onClick={() => onPick(file.path)}
+                              className="rounded border border-indigo-400 px-2 py-0.5 font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                            >
+                              {file.path}
+                            </button>
+                          ) : (
+                            file.path
+                          )}
+                        </td>
+                        <td className="py-1 pr-2">{file.type}</td>
+                        <td className="py-1 pr-2">{file.size}</td>
+                        <td className="py-1">
+                          {file.access === "public" ? (
+                            <span className="text-emerald-700 dark:text-emerald-300">public</span>
+                          ) : (
+                            <span className="text-red-700 dark:text-red-400">403 denied</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {pick && (
+                <button
+                  type="button"
+                  onClick={() => onPick("__none__")}
+                  className="mt-2 shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  No file matches this path
+                </button>
+              )}
+
+              <h3 className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Access log
+              </h3>
+              {sim.log.length === 0 ? (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  No requests received yet.
+                </p>
+              ) : (
+                <ul className="mono mt-1 space-y-1 text-xs text-slate-800 dark:text-slate-200">
+                  {sim.log.map((line, index) => (
+                    <li
+                      key={index}
+                      className="rounded border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-950"
+                    >
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+
+      // Makes the request visible while it is being built, so the learner can
+      // read exactly what is about to travel, and read it again while the
+      // server is deciding what to do with it.
+      function RequestPanel({ sim, previewLines, canSend, onSend }) {
+        const composing = sim.pending.length > 0;
+        const built = !composing && Boolean(previewLines && previewLines.length);
+        const sent = !composing && !built && sim.sentRequest.length > 0;
+        const lines = composing
+          ? sim.pending
+          : built
+            ? previewLines
+            : sent
+              ? sim.sentRequest
+              : [];
+        const heading = composing
+          ? "Request being composed"
+          : built
+            ? "Request the browser has built"
+            : sent
+              ? "Request sent — this is what the server is reading"
+              : "Request";
+
+        return (
+          <section
+            aria-labelledby="request-heading"
+            className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-100 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+              <h3
+                id="request-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                {heading}
+              </h3>
+              {canSend && (
+                <button
+                  type="button"
+                  onClick={onSend}
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
+                >
+                  Send request
+                </button>
+              )}
+            </div>
+            <div className="px-3 py-2">
+              {lines.length === 0 ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Nothing composed yet.
+                </p>
+              ) : (
+                <div className="mono text-[11px] leading-relaxed">
+                  {lines.map((line, index) => (
+                    <div
+                      key={index}
+                      className="wire-text text-slate-800 dark:text-slate-200"
+                    >
+                      {line}
+                    </div>
+                  ))}
+                  <div
+                    className={
+                      composing
+                        ? "text-slate-500 dark:text-slate-400"
+                        : "text-emerald-700 dark:text-emerald-300"
+                    }
+                  >
+                    {composing
+                      ? "(a blank line will end the headers)"
+                      : "(blank line — ends the headers)"}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      /* ------------------------------ app ----------------------------- */
+
+      const ADDRESS_HINT = {
+        http: HOST,
+        https: "https://" + HOST,
+        errors: HOST + "/missing.html",
+      };
+
+      function App() {
+        const [exerciseId, setExerciseId] = useState(EXERCISES[0].id);
+        const exercise = useMemo(
+          () => EXERCISES.find((item) => item.id === exerciseId) || EXERCISES[0],
+          [exerciseId],
+        );
+        const [view, setView] = useState("app");
+        const [sim, setSim] = useState(() => makeSimState(EXERCISES[0]));
+        const [error, setError] = useState(null);
+        const [draft, setDraft] = useState("");
+        const [addressDraft, setAddressDraft] = useState("");
+        const [showPlain, setShowPlain] = useState(false);
+        const [history, setHistory] = useState([]);
+        const [historyIndex, setHistoryIndex] = useState(null);
+        const inputRef = useRef(null);
+
+        // The two views are different walkthroughs of the same protocol, so
+        // they have different step lists and switching restarts the exercise.
+        const steps = useMemo(() => exercise.buildSteps(view), [exercise, view]);
+        const done = sim.step >= steps.length;
+        const step = done ? null : steps[sim.step];
+        const input = step ? (view === "terminal" ? step.terminal : step.app) : null;
+        const serverPick = step ? step.serverPick : null;
+        const sourcePick = step ? step.sourcePick : null;
+        const needsAction = Boolean(input || serverPick || sourcePick);
+
+        useEffect(() => {
+          if (view === "terminal" && step && step.terminal && inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, [view, sim.step, step]);
+
+        const resetState = useCallback((target) => {
+          setSim(makeSimState(target));
+          setError(null);
+          setDraft("");
+          setAddressDraft("");
+          setShowPlain(false);
+          setHistory([]);
+          setHistoryIndex(null);
+        }, []);
+
+        const changeExercise = (nextId) => {
+          const target = EXERCISES.find((item) => item.id === nextId) || EXERCISES[0];
+          setExerciseId(target.id);
+          resetState(target);
+        };
+
+        const changeView = (nextView) => {
+          if (nextView === view) return;
+          setView(nextView);
+          resetState(exercise);
+        };
+
+        const commit = useCallback(
+          (extraSet) => {
+            setSim((state) => {
+              const current = steps[state.step];
+              if (!current) return state;
+              const out = current.effect ? current.effect(state) : {};
+              return {
+                ...state,
+                ...(extraSet || {}),
+                ...(out.set || {}),
+                wire: out.wire ? [...state.wire, ...out.wire] : state.wire,
+                term: out.term ? [...state.term, ...out.term] : state.term,
+                log: out.log ? [...state.log, ...out.log] : state.log,
+                step: state.step + 1,
+              };
+            });
+            setError(null);
+          },
+          [steps],
+        );
+
+        const missteppedMessage = (value) => {
+          const list = (input && input.misstep) || (step && step.misstep) || [];
+          const hit = list.find((entry) => entry.match.test(value));
+          return hit ? hit.message : DEVIATION_MESSAGE;
+        };
+
+        const submitTerminal = (event) => {
+          event.preventDefault();
+          if (!step) return;
+          const raw = draft;
+          const value = norm(raw);
+          if (!input) {
+            setDraft("");
+            setError(
+              serverPick || sourcePick
+                ? "This step is not a command. Carry out the action described in the instruction panel."
+                : "This step does not need a command. Press Continue to carry on.",
+            );
+            return;
+          }
+          if (value) setHistory((list) => [...list, value]);
+          setHistoryIndex(null);
+          setDraft("");
+          if (matchesExpectation(input.expect, value)) {
+            commit();
+            return;
+          }
+          const message = missteppedMessage(value);
+          setSim((state) => ({
+            ...state,
+            term: [
+              ...state.term,
+              { type: "command", text: raw },
+              { type: "error", text: message },
+            ],
+          }));
+          setError(message);
+        };
+
+        const recallHistory = (direction) => {
+          if (history.length === 0) return;
+          const current = historyIndex == null ? history.length : historyIndex;
+          const next =
+            direction === "up"
+              ? Math.max(0, current - 1)
+              : Math.min(history.length, current + 1);
+          setHistoryIndex(next);
+          setDraft(next === history.length ? "" : history[next]);
+        };
+
+        const attemptAddress = (value) => {
+          if (!step) return;
+          if (!input || input.control !== "address") {
+            setError(
+              input && input.control === "send"
+                ? "The address is already entered. Send the request the browser has built."
+                : "This step does not need the address bar. Carry out the action described in the instruction panel.",
+            );
+            return;
+          }
+          const normalised = norm(value);
+          if (matchesExpectation(input.expect, normalised)) {
+            commit();
+            return;
+          }
+          setError(missteppedMessage(normalised));
+        };
+
+        const attemptSend = () => {
+          if (step && input && input.control === "send") {
+            commit();
+            return;
+          }
+          setError(DEVIATION_MESSAGE);
+        };
+
+        const attemptServerPick = (picked) => {
+          if (!serverPick) return;
+          if (picked === serverPick.expect) {
+            commit();
+            return;
+          }
+          setError(picked === "__none__" ? serverPick.wrongNone : serverPick.wrongFile);
+        };
+
+        const attemptSourcePick = (line) => {
+          if (!sourcePick) return;
+          if (sourcePick.expect.test(line)) {
+            commit();
+            return;
+          }
+          setError(sourcePick.wrong);
+        };
+
+        const toggleViewSource = () => {
+          if (sim.sourceAvailable) {
+            setSim((state) => ({ ...state, showSource: !state.showSource }));
+          }
+        };
+
+        const updateDraft = (value) => {
+          setDraft(value);
+          if (error) setError(null);
+        };
+        const updateAddress = (value) => {
+          setAddressDraft(value);
+          if (error) setError(null);
+        };
+
+        const swapView = () => changeView(view === "terminal" ? "app" : "terminal");
+
+        const fillForMe = () => {
+          if (!input) return;
+          if (view === "terminal") {
+            updateDraft(input.display === undefined ? "" : input.display);
+            if (inputRef.current) inputRef.current.focus();
+          } else if (input.control === "address") {
+            updateAddress(
+              step && step.id === "after-404"
+                ? HOST + "/secret.txt"
+                : ADDRESS_HINT[exercise.id] || HOST,
+            );
+          }
+        };
+
+        const canFill =
+          Boolean(input) && (view === "terminal" || input.control === "address");
+
+        const promptLabel = sim.connected
+          ? "Raw TCP client — connected to " + IP + ":" + sim.port
+          : "Local terminal";
+
+        const toggleClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-sm font-bold text-indigo-700 shadow"
+            : "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold text-white/90 hover:bg-white/20";
+
+        return (
+          <div className="protocol-lab flex flex-col bg-slate-100 dark:bg-slate-950">
+            <header
+              data-interactive-header
+              className="flex flex-wrap items-center justify-between gap-4"
+            >
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">HTTP &amp; Web Servers</h1>
+                <p className="text-sm opacity-90">
+                  Drive a real HTTP request — as a browser, or by hand
+                </p>
+              </div>
+              <div data-interactive-actions className="flex flex-wrap items-center gap-2">
+                <select
+                  id="exercise-select"
+                  aria-label="Exercise"
+                  value={exerciseId}
+                  onChange={(event) => changeExercise(event.target.value)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {EXERCISES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  role="group"
+                  aria-label="Client view"
+                  className="flex shrink-0 items-center gap-1 rounded-lg bg-black/25 p-1"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={view === "app"}
+                    onClick={() => changeView("app")}
+                    className={toggleClass(view === "app")}
+                  >
+                    Application
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={view === "terminal"}
+                    onClick={() => changeView("terminal")}
+                    className={toggleClass(view === "terminal")}
+                  >
+                    Terminal
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {done ? (
+              <RecapCard
+                exercise={exercise}
+                view={view}
+                onRestart={() => resetState(exercise)}
+                onSwapView={swapView}
+              />
+            ) : (
+              <InstructionPanel
+                exercise={exercise}
+                stepNumber={sim.step}
+                totalSteps={steps.length}
+                step={step}
+                input={input}
+                pickPrompt={
+                  serverPick ? serverPick.prompt : sourcePick ? sourcePick.prompt : null
+                }
+              />
+            )}
+
+            <ErrorBar message={error} />
+
+            <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-2 lg:overflow-hidden">
+              <section
+                aria-label="Client"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client — {view === "terminal" ? "terminal" : "web browser"}
+                </h2>
+                {view === "terminal" ? (
+                  <TerminalView
+                    sim={sim}
+                    draft={draft}
+                    setDraft={updateDraft}
+                    onSubmit={submitTerminal}
+                    onHistory={recallHistory}
+                    inputRef={inputRef}
+                    promptLabel={promptLabel}
+                  />
+                ) : (
+                  <BrowserView
+                    sim={sim}
+                    draft={addressDraft}
+                    setDraft={updateAddress}
+                    onGo={attemptAddress}
+                    onViewSource={toggleViewSource}
+                  />
+                )}
+                <RequestPanel
+                  sim={sim}
+                  previewLines={step ? step.previewLines : null}
+                  canSend={Boolean(input && input.control === "send")}
+                  onSend={attemptSend}
+                />
+              </section>
+
+              <section
+                aria-label="Behind the scenes"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Behind the scenes
+                </h2>
+                <WirePane
+                  sim={sim}
+                  showPlain={showPlain}
+                  setShowPlain={setShowPlain}
+                  pickMode={sourcePick}
+                  onPickLine={attemptSourcePick}
+                />
+                <ServerPane sim={sim} pick={serverPick} onPick={attemptServerPick} />
+              </section>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => resetState(exercise)}
+                className="shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Restart exercise
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {canFill && (
+                  <button
+                    type="button"
+                    onClick={fillForMe}
+                    className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                  >
+                    Type it for me
+                  </button>
+                )}
+                {!done && !needsAction && (
+                  <button
+                    type="button"
+                    onClick={() => commit()}
+                    className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    Continue &#9654;
+                  </button>
+                )}
+                {!done && needsAction && (
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Complete the action above to continue.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

@@ -522,6 +522,87 @@ if (!/isAdvanced\(\)/.test(tcpIpTrailer)
   failures.push('tcp_ip_layer.html: advanced mode must label the frame trailer as a CRC checksum and explain the ephemeral source port');
 }
 
+// Application layer protocol simulators (AQA 4.9.4.2). Each page is a guided
+// two-view simulator; the suite grows one page at a time, so pages that do
+// not exist yet are skipped rather than failing.
+const protocolLabPages = [
+  'http_https_simulator.html',
+  'dns_simulator.html',
+  'email_smtp_pop3_simulator.html',
+  'ftp_simulator.html',
+  'ssh_simulator.html',
+];
+const protocolLabDeviation = 'That is not the action for this step. Follow the simulation instructions exactly — enter the command shown in the instruction panel.';
+
+protocolLabPages.forEach((page) => {
+  const pagePath = path.join(root, page);
+  if (!fs.existsSync(pagePath)) return;
+  const source = fs.readFileSync(pagePath, 'utf8');
+
+  if (!source.includes(protocolLabDeviation)) {
+    failures.push(`${page}: the shared deviation message must be identical across the protocol simulators`);
+  }
+
+  // The site bar is 58px, so the viewport-locked layout must subtract it, and
+  // must only apply once the two columns sit side by side.
+  if (!/\.protocol-lab\s*\{[^}]*height:\s*100vh/.test(source)
+    || !/body\[data-site-page="interactive"\]\s*\.protocol-lab\s*\{[^}]*height:\s*calc\(100vh - 58px\)/.test(source)
+    || !/@media \(min-width: 1024px\)/.test(source)
+    || /protocol-lab[^"']*\bh-screen\b/.test(source)) {
+    failures.push(`${page}: the app root must subtract the built site bar and lock to the viewport only at the two-column breakpoint`);
+  }
+
+  // Both views of the same protocol must stay available and announced.
+  if (!/aria-pressed=\{view === "app"\}/.test(source)
+    || !/aria-pressed=\{view === "terminal"\}/.test(source)
+    || !/>\s*Application\s*</.test(source)
+    || !/>\s*Terminal\s*</.test(source)) {
+    failures.push(`${page}: the Application and Terminal view toggle must be present with aria-pressed state`);
+  }
+
+  // A placeholder is a hint, not a label.
+  if (!/htmlFor="terminal-input"/.test(source) || !/id="terminal-input"/.test(source)) {
+    failures.push(`${page}: the terminal command input must have a visible associated label`);
+  }
+
+  // Enter must submit; implicit form submission alone is not relied on.
+  if (!/event\.key === "Enter"/.test(source)) {
+    failures.push(`${page}: pressing Enter in the command input must submit it for keyboard users`);
+  }
+
+  if (/\balert\s*\(/.test(source)) {
+    failures.push(`${page}: feedback must be inline, not a JavaScript alert`);
+  }
+
+  // Documentation-only names and addresses (RFC 2606 / RFC 5737), so nothing
+  // in these pages can point at a real host.
+  const domains = source.match(/\b[a-z0-9-]+\.(?:com|net|org|uk|io|co\.uk)\b/gi) || [];
+  const allowedHosts = new Set(['googletagmanager.com', 'tailwindcss.com', 'unpkg.com']);
+  const badDomain = domains.find((domain) => {
+    const lower = domain.toLowerCase();
+    return !allowedHosts.has(lower) && !/^example\.(com|net|org)$/.test(lower);
+  });
+  if (badDomain) {
+    failures.push(`${page}: use only RFC 2606 documentation domains (example.com/.net/.org), found "${badDomain}"`);
+  }
+  const addresses = source.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g) || [];
+  const badAddress = addresses.find((address) => !/^(?:192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)/.test(address));
+  if (badAddress) {
+    failures.push(`${page}: use only RFC 5737 documentation IP ranges, found "${badAddress}"`);
+  }
+});
+
+// The SSH page exists to correct the "SSH is just logging in" misconception,
+// so it must actually execute an administrative command and show the wire.
+const sshSimulatorPath = path.join(root, 'ssh_simulator.html');
+if (fs.existsSync(sshSimulatorPath)) {
+  const sshSimulatorSource = fs.readFileSync(sshSimulatorPath, 'utf8');
+  if (!/systemctl restart webserver/.test(sshSimulatorSource)
+    || !/Show what the two ends see/.test(sshSimulatorSource)) {
+    failures.push('ssh_simulator.html: must include a remote administrative command and the encrypted/plaintext wire toggle');
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));

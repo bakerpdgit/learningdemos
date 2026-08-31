@@ -1,0 +1,1866 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: SSH Remote Management Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Full-height app shell. The production site navigation bar is 58px
+         tall, so the built page must subtract it or the action row falls
+         below the viewport. Locked to the viewport only once the two
+         columns sit side by side; narrower than that the page scrolls. */
+      .protocol-lab {
+        min-height: 100vh;
+      }
+      @media (min-width: 1024px) {
+        .protocol-lab {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .protocol-lab {
+          height: calc(100vh - 58px);
+        }
+      }
+
+      .mono {
+        font-family: "Consolas", "Menlo", "Courier New", monospace;
+      }
+      .wire-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .device-chrome {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.7),
+          0 12px 26px rgba(15, 23, 42, 0.08);
+      }
+      .dark .device-chrome {
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+      }
+      .wire-enter {
+        animation: wire-in 260ms ease-out;
+      }
+      @keyframes wire-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wire-enter {
+          animation: none;
+        }
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+      /* ---------------------------------------------------------------
+         Fictional estate, shared with the other protocol simulators.
+         Names are inside example.com (RFC 2606) and every address is
+         inside the RFC 5737 documentation ranges.
+         --------------------------------------------------------------- */
+      const SERVER = "server.example.com";
+      const SERVER_IP = "192.0.2.50";
+      const WEB_HOST = "mysite.example.com";
+      const WEB_IP = "192.0.2.34";
+      const MAIL_HOST = "mail.example.com";
+      const MAIL_IP = "192.0.2.40";
+      const USER = "pbaker";
+      const PASSWORD = "not-a-real-password";
+      const FINGERPRINT = "SHA256:9f2b7c1e4a6d8035bc19ef77a204d5e8";
+
+      const DEVIATION_MESSAGE =
+        "That is not the action for this step. Follow the simulation instructions exactly — enter the command shown in the instruction panel.";
+
+      /* --------------------------- helpers --------------------------- */
+
+      const norm = (value) =>
+        String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+
+      const matchesExpectation = (expect, value) => {
+        if (expect instanceof RegExp) return expect.test(value);
+        return norm(expect).toLowerCase() === value.toLowerCase();
+      };
+
+      // Deterministic stand-in for ciphertext, so the pane does not churn
+      // between renders.
+      const cipherText = (plain) => {
+        const alphabet =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let h = 2166136261;
+        let out = "";
+        for (let i = 0; i < plain.length; i += 1) {
+          h ^= plain.charCodeAt(i);
+          h = Math.imul(h, 16777619) >>> 0;
+          out += alphabet[h % 64];
+          if (out.length > 0 && out.length % 57 === 56) out += String.fromCharCode(10);
+        }
+        return out;
+      };
+
+      const renderRich = (text) => {
+        const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+        return parts.map((part, index) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={index} className="font-bold">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+              <code
+                key={index}
+                className="mono rounded bg-slate-200 px-1 py-0.5 text-[0.92em] text-slate-900 dark:bg-slate-700 dark:text-slate-50"
+              >
+                {part.slice(1, -1)}
+              </code>
+            );
+          }
+          return part;
+        });
+      };
+
+      /* ----------------------- step construction ----------------------
+         Everything the learner types is executed by the REMOTE machine,
+         and the remote state panel has to visibly change as a result —
+         that is the whole point of the page. */
+
+      const wireEntry = (from, to, text, secure, port) => ({
+        from,
+        to,
+        text,
+        secure,
+        port,
+      });
+
+      const cmdStep = ({ id, teach, command, output, misstep, patch, port, host, secure, examNote, noWire }) => ({
+        id,
+        teach,
+        examNote,
+        terminal: {
+          instruction: "Type: " + command,
+          expect: command,
+          display: command,
+          misstep,
+        },
+        app: null,
+        effect: (state) => ({
+          wire: noWire
+            ? []
+            : [
+                wireEntry("Admin machine", host || SERVER, command, secure !== false, port || 22),
+                ...(output && output.length
+                  ? [
+                      wireEntry(
+                        host || SERVER,
+                        "Admin machine",
+                        output.join(String.fromCharCode(10)),
+                        secure !== false,
+                        port || 22,
+                      ),
+                    ]
+                  : []),
+              ],
+          term: [
+            { type: "command", text: command },
+            ...(output || []).map((line) => ({ type: "recv", text: line })),
+          ],
+          set: patch ? patch(state) : undefined,
+        }),
+      });
+
+      // Ties the whole suite together: every port the other simulators used.
+      const WELL_KNOWN_PORTS = [
+        { port: 20, name: "FTP data connection" },
+        { port: 21, name: "FTP control connection" },
+        { port: 22, name: "SSH" },
+        { port: 25, name: "SMTP — sending email" },
+        { port: 53, name: "DNS" },
+        { port: 80, name: "HTTP" },
+        { port: 110, name: "POP3 — retrieving email" },
+        { port: 443, name: "HTTPS" },
+      ];
+
+      const START_SERVICES = [
+        { id: "webserver", label: "webserver", status: "stopped" },
+        { id: "sshd", label: "sshd (the SSH service itself)", status: "running" },
+        { id: "database", label: "database", status: "running" },
+      ];
+
+      const START_FILES = [
+        { path: "/var/log/access.log.old", size: "4.2 GB", note: "rotated log, no longer needed" },
+        { path: "/var/log/syslog", size: "12 MB", note: "current system log" },
+        {
+          path: "/var/www/html/index.html",
+          size: "1.2 KB",
+          note: "the page the web server serves",
+          content: "<h1>Example Site</h1>",
+        },
+      ];
+
+      const NEW_PAGE = "<h1>Example Site — back online</h1>";
+
+      const classifyStep = ({ id, teach, prompt, options, expect, wrong, examNote }) => ({
+        id,
+        teach,
+        examNote,
+        terminal: null,
+        app: null,
+        classify: { prompt, options, expect, wrong },
+        effect: () => ({}),
+      });
+
+      const portStep = ({ id, teach, expect, prompt, wrong }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        portPick: { expect, prompt, wrong },
+        effect: () => ({ set: { chosenPort: expect } }),
+      });
+
+      /* --------------------------- exercises -------------------------- */
+
+      const EXERCISES = [
+        {
+          id: "login",
+          label: "A: Connecting securely",
+          examPoints: [
+            "SSH (Secure Shell) provides an encrypted channel to a remote computer, on well-known port 22.",
+            "The host key fingerprint lets the client confirm it is talking to the right server.",
+            "Authentication happens inside the encrypted channel, so the password never crosses the network in clear text.",
+            "Anyone intercepting an SSH connection sees only ciphertext — unlike FTP and POP3, which send credentials in the clear.",
+          ],
+          initial: {},
+          buildSteps: (view) => [
+            view === "terminal"
+              ? {
+                  id: "connect",
+                  teach:
+                    "**SSH (Secure Shell)** is the application layer protocol used to work on a remote computer securely. The client opens a TCP connection to the server's **well-known port 22**.",
+                  terminal: {
+                    instruction: "Type: ssh " + USER + "@" + SERVER,
+                    expect: "ssh " + USER + "@" + SERVER,
+                    display: "ssh " + USER + "@" + SERVER,
+                    misstep: [
+                      {
+                        match: /^telnet\b/i,
+                        message:
+                          "telnet sends everything in clear text. SSH is the secure equivalent: ssh " +
+                          USER +
+                          "@" +
+                          SERVER,
+                      },
+                    ],
+                  },
+                  app: null,
+                  effect: () => ({
+                    wire: [
+                      wireEntry("Admin machine", SERVER, "TCP connection to " + SERVER_IP + ":22", false, 22),
+                    ],
+                    term: [
+                      { type: "command", text: "ssh " + USER + "@" + SERVER },
+                      { type: "info", text: "Connecting to " + SERVER_IP + ":22 ..." },
+                    ],
+                    set: { connected: true, port: 22, peer: SERVER },
+                  }),
+                }
+              : {
+                  id: "connect",
+                  teach:
+                    "**SSH client software** such as PuTTY starts with a connection dialog: the host name, the port, and the connection type. **SSH** uses the **well-known port 22**.",
+                  terminal: null,
+                  app: {
+                    instruction:
+                      "Type " + SERVER + " into Host Name, leave the type as SSH, and click Open.",
+                    control: "open",
+                    expect: SERVER,
+                    display: SERVER,
+                    requireType: "ssh",
+                  },
+                  effect: () => ({
+                    wire: [
+                      wireEntry("Admin machine", SERVER, "TCP connection to " + SERVER_IP + ":22", false, 22),
+                    ],
+                    term: [
+                      { type: "info", text: "Connecting to " + SERVER_IP + ":22 ..." },
+                    ],
+                    set: { connected: true, port: 22, peer: SERVER },
+                  }),
+                },
+            {
+              id: "hostkey",
+              teach:
+                "Before anything else the server proves which machine it is, by presenting its **host key**. The client shows you the key's **fingerprint** so you can check you have reached the right server and not an impostor. Accepting it stores the key for next time.",
+              terminal: {
+                instruction: "Type: yes",
+                expect: "yes",
+                display: "yes",
+              },
+              app: null,
+              effect: () => ({
+                wire: [
+                  wireEntry(SERVER, "Admin machine", "Host key fingerprint " + FINGERPRINT, false, 22),
+                  wireEntry("Admin machine", SERVER, "Key exchange — session key agreed", false, 22),
+                ],
+                term: [
+                  { type: "recv", text: "The authenticity of host '" + SERVER + "' can't be established." },
+                  { type: "recv", text: "Key fingerprint is " + FINGERPRINT + "." },
+                  { type: "recv", text: "Are you sure you want to continue connecting (yes/no)?" },
+                  { type: "command", text: "yes" },
+                  { type: "info", text: "Warning: permanently added '" + SERVER + "' to the list of known hosts." },
+                ],
+                set: { secure: true },
+              }),
+            },
+            {
+              id: "password",
+              teach:
+                "Only **now** is the password asked for — and this is the crucial difference. The encrypted channel already exists, so the password is sent **inside** it. Look at the wire panel: it is ciphertext. Compare that with FTP and POP3, which send the password in clear text.",
+              terminal: {
+                instruction: "Type the password: " + PASSWORD,
+                expect: PASSWORD,
+                display: PASSWORD,
+                mask: true,
+              },
+              app: null,
+              effect: () => ({
+                wire: [
+                  wireEntry("Admin machine", SERVER, "PASSWORD " + PASSWORD, true, 22),
+                  wireEntry(SERVER, "Admin machine", "Authentication accepted for " + USER, true, 22),
+                ],
+                term: [
+                  { type: "recv", text: USER + "@" + SERVER + "'s password:" },
+                  { type: "command", text: "**********" },
+                  { type: "info", text: "Authenticated. Last login: today." },
+                ],
+                set: { authenticated: true },
+              }),
+            },
+            classifyStep({
+              id: "classify",
+              teach:
+                "Suppose someone is capturing every packet on the network between these two machines.",
+              prompt: "What can an eavesdropper read from this connection?",
+              options: [
+                { id: "cipher", label: "Only ciphertext — nothing useful" },
+                { id: "commands", label: "The commands and their output, in plain text" },
+                { id: "password", label: "Everything except the password" },
+              ],
+              expect: "cipher",
+              wrong:
+                "Everything after the key exchange is encrypted — the password, the commands you type, and all the output. Use the toggle on the wire panel to see the difference between what travels and what the two ends see.",
+            }),
+            {
+              id: "shell",
+              teach:
+                "The shell prompt appears. You are now typing on your own keyboard, but **the commands will be carried out by the remote server**. Exercise B does something useful with that.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                term: [{ type: "info", text: USER + "@server:~$ ready" }],
+                set: { shell: true },
+              }),
+            },
+          ],
+        },
+        {
+          id: "admin",
+          label: "B: Remote administration — fixing a live server",
+          examPoints: [
+            "SSH is used for remote management: administrative commands are executed by the remote server, not by your own computer.",
+            "Only the text of the command and its output cross the network, and both are encrypted.",
+            "Changes made over SSH persist on the server after the connection closes.",
+            "The server records who ran what in its audit log.",
+          ],
+          initial: { connected: true, secure: true, authenticated: true, shell: true, port: 22, peer: SERVER },
+          buildSteps: () => [
+            cmdStep({
+              id: "status",
+              teach:
+                "The school website has stopped responding. You are already logged in over SSH. Start by asking the server what state the web server service is in. **This command runs on the remote machine** — watch the remote state panel, not your own computer.",
+              command: "systemctl status webserver",
+              output: ["webserver.service — Example web server", "   Active: inactive (dead)"],
+            }),
+            cmdStep({
+              id: "df",
+              teach:
+                "The service is dead. A very common cause is a full disk, so ask the server how much space is left.",
+              command: "df -h",
+              output: [
+                "Filesystem      Size  Used Avail Use%  Mounted on",
+                "/dev/sda1        50G   49G  1.0G  98%  /var",
+              ],
+            }),
+            cmdStep({
+              id: "ls",
+              teach: "98% full. Look inside the log directory to find what is taking the space.",
+              command: "ls -lh /var/log",
+              output: [
+                "-rw-r--r-- 1 root root 4.2G access.log.old",
+                "-rw-r--r-- 1 root root  12M syslog",
+              ],
+            }),
+            {
+              id: "pickfile",
+              teach:
+                "One of these files is a rotated log that is no longer needed; the other is the live system log and must be kept. Choose carefully — this deletes a real file on a real server.",
+              terminal: null,
+              app: null,
+              filePick: {
+                expect: "/var/log/access.log.old",
+                prompt: "Which file should be removed to free the space?",
+                wrong:
+                  "That file is still in use. Look for the rotated log that is no longer needed — and check the sizes.",
+              },
+              effect: () => ({ set: { targetFile: "/var/log/access.log.old" } }),
+            },
+            cmdStep({
+              id: "rm",
+              teach:
+                "Now remove it. Watch the remote state panel: the disk gauge drops and the file disappears **on the server**. Nothing has changed on your own computer.",
+              command: "rm /var/log/access.log.old",
+              output: [],
+              patch: (state) => ({
+                diskUsed: 41,
+                files: state.files.filter((file) => file.path !== "/var/log/access.log.old"),
+                audit: [...state.audit, USER + " ran: rm /var/log/access.log.old"],
+              }),
+            }),
+            {
+              id: "pickservice",
+              teach:
+                "There is space again, so the service can be started. Pick the one that is not running — and note that restarting the wrong one could cut off your own connection.",
+              terminal: null,
+              app: null,
+              servicePick: {
+                expect: "webserver",
+                prompt: "Which service needs restarting?",
+                wrong:
+                  "That service is already running. Restarting sshd would in fact drop your own SSH session. Look for the one shown as stopped.",
+              },
+              effect: () => ({ set: {} }),
+            },
+            cmdStep({
+              id: "restart",
+              teach: "Restart it. The service list changes on the server as the command runs.",
+              command: "systemctl restart webserver",
+              output: [],
+              patch: (state) => ({
+                services: state.services.map((service) =>
+                  service.id === "webserver" ? { ...service, status: "running" } : service,
+                ),
+                audit: [...state.audit, USER + " ran: systemctl restart webserver"],
+              }),
+            }),
+            cmdStep({
+              id: "confirm",
+              teach: "Confirm it really is running before moving on. Never assume.",
+              command: "systemctl status webserver",
+              output: ["webserver.service — Example web server", "   Active: active (running)"],
+            }),
+            cmdStep({
+              id: "edit",
+              teach:
+                "Administration is not only starting and stopping services. Edit the page the web server serves — again, the file being changed is **on the server**.",
+              command: 'echo "' + NEW_PAGE + '" > /var/www/html/index.html',
+              output: [],
+              patch: (state) => ({
+                files: state.files.map((file) =>
+                  file.path === "/var/www/html/index.html"
+                    ? { ...file, content: NEW_PAGE }
+                    : file,
+                ),
+                audit: [...state.audit, USER + " edited /var/www/html/index.html"],
+              }),
+            }),
+            cmdStep({
+              id: "cat",
+              teach:
+                "Read it back to check. This is the file the HTTP simulator's web server would now return for `GET /index.html`.",
+              command: "cat /var/www/html/index.html",
+              output: [NEW_PAGE],
+            }),
+            cmdStep({
+              id: "exit",
+              teach:
+                "Close the session. **The commands you typed were executed by the remote server's processor, not by your own computer.** Only the text of each command and its output crossed the network, and both were encrypted. The changes stay on the server after you disconnect — which is exactly why SSH is used for **remote management**.",
+              command: "exit",
+              output: ["Connection to " + SERVER + " closed."],
+              patch: () => ({ connected: false, shell: false }),
+            }),
+          ],
+        },
+        {
+          id: "raw-http",
+          label: "C: Sending HTTP commands to a port by hand",
+          examPoints: [
+            "A client can make a TCP connection to a port on a remote server and send commands using application level protocols, such as GET for HTTP.",
+            "HTTP is a text protocol — a browser is simply a program that sends these lines and renders what comes back.",
+            "An SSH connection on port 22 is encrypted; the same client software in Raw mode on port 80 is not.",
+            "Well-known ports are how a client knows which port to connect to for each service.",
+          ],
+          initial: {},
+          buildSteps: (view) => [
+            portStep({
+              id: "port",
+              teach:
+                "The specification puts it like this: *a client can make a TCP connection to a port on a remote server in order to send commands to that port using application level protocols — such as `GET` for HTTP, SMTP commands for sending email, and POP3 commands for retrieving email.* First decide which port to knock on.",
+              expect: 80,
+              prompt: "Which well-known port should the connection use to speak HTTP?",
+              wrong:
+                "That port belongs to a different service. Find HTTP in the well-known ports table.",
+            }),
+            view === "terminal"
+              ? {
+                  id: "connect",
+                  teach:
+                    "Open a plain TCP connection to that port. **Read this carefully:** an SSH connection on port 22 is encrypted, but this is a *raw* connection on port 80 and is **not** encrypted. It is the same idea — a client opening a socket and typing protocol commands — but without SSH's protection.",
+                  terminal: {
+                    instruction: "Type: telnet " + WEB_HOST + " 80",
+                    expect: "telnet " + WEB_HOST + " 80",
+                    display: "telnet " + WEB_HOST + " 80",
+                  },
+                  app: null,
+                  effect: () => ({
+                    term: [
+                      { type: "command", text: "telnet " + WEB_HOST + " 80" },
+                      { type: "info", text: "Connected to " + WEB_IP + ":80 (not encrypted)." },
+                    ],
+                    set: { connected: true, secure: false, rawMode: true, port: 80, peer: WEB_HOST },
+                  }),
+                }
+              : {
+                  id: "connect",
+                  teach:
+                    "SSH client software can also open a **plain TCP connection** to any port — PuTTY calls this **Raw** mode. **Read this carefully:** an SSH connection on port 22 is encrypted, but a Raw connection on port 80 is **not**. Same client program, different connection type.",
+                  terminal: null,
+                  app: {
+                    instruction:
+                      "Set Host Name to " + WEB_HOST + ", choose the Raw connection type, and click Open.",
+                    control: "open",
+                    expect: WEB_HOST,
+                    display: WEB_HOST,
+                    requireType: "raw",
+                  },
+                  effect: () => ({
+                    term: [{ type: "info", text: "Connected to " + WEB_IP + ":80 (not encrypted)." }],
+                    set: { connected: true, secure: false, rawMode: true, port: 80, peer: WEB_HOST },
+                  }),
+                },
+            cmdStep({
+              id: "get",
+              teach:
+                "Now type an HTTP request by hand. `GET` is an HTTP **method** — a request for one named resource — followed by the path and the protocol version.",
+              command: "GET /index.html HTTP/1.1",
+              output: [],
+              host: WEB_HOST,
+              noWire: true,
+              port: 80,
+              secure: false,
+            }),
+            cmdStep({
+              id: "host",
+              teach:
+                "HTTP/1.1 requires a `Host:` header, because one server at one IP address may serve many domain names.",
+              command: "Host: " + WEB_HOST,
+              output: [],
+              host: WEB_HOST,
+              noWire: true,
+              port: 80,
+              secure: false,
+            }),
+            {
+              id: "blank",
+              teach:
+                "A **blank line** ends the headers and sends the request. The reply arrives as ordinary text.",
+              terminal: {
+                instruction: "Press Enter on an empty line to send the request.",
+                expect: /^$/,
+                display: "",
+                misstep: [
+                  {
+                    match: /^./,
+                    message:
+                      "The headers are ended by a blank line. Clear the box and press Enter without typing anything.",
+                  },
+                ],
+              },
+              app: null,
+              effect: () => ({
+                wire: [
+                  wireEntry(
+                    "Admin machine",
+                    WEB_HOST,
+                    "GET /index.html HTTP/1.1" + String.fromCharCode(10) + "Host: " + WEB_HOST,
+                    false,
+                    80,
+                  ),
+                  wireEntry(
+                    WEB_HOST,
+                    "Admin machine",
+                    [
+                      "HTTP/1.1 200 OK",
+                      "Content-Type: text/html; charset=utf-8",
+                      "",
+                      "<h1>Example Site</h1>",
+                    ].join(String.fromCharCode(10)),
+                    false,
+                    80,
+                  ),
+                ],
+                term: [
+                  { type: "info", text: "(blank line sent — end of headers)" },
+                  { type: "recv", text: "HTTP/1.1 200 OK" },
+                  { type: "recv", text: "Content-Type: text/html; charset=utf-8" },
+                  { type: "recv", text: "" },
+                  { type: "recv", text: "<h1>Example Site</h1>" },
+                ],
+                set: { gotResponse: true },
+              }),
+            },
+            classifyStep({
+              id: "classify",
+              teach:
+                "You have just done, by hand, exactly what a web browser does for you thousands of times a day.",
+              prompt: "Is the traffic on this connection encrypted?",
+              options: [
+                { id: "no", label: "No — it is a raw connection on port 80" },
+                { id: "yes", label: "Yes — the client is an SSH client" },
+              ],
+              expect: "no",
+              wrong:
+                "It is the encryption that makes SSH secure, not the client program. This connection is on port 80 in Raw mode, so nothing is encrypted — check the wire panel badges.",
+            }),
+            {
+              id: "recap",
+              teach:
+                "**HTTP is a text protocol.** A web browser is simply a program that sends these same lines and renders what comes back — which is what the HTTP simulator shows from the browser's side. The same trick works for any text-based application layer protocol, as Exercise D demonstrates with email.",
+              terminal: null,
+              app: null,
+              effect: () => ({ set: {} }),
+            },
+          ],
+        },
+        {
+          id: "raw-smtp",
+          label: "D: Sending email commands to a port by hand",
+          examPoints: [
+            "SMTP commands can be sent to port 25 by hand, with no email client involved.",
+            "MAIL FROM declares the sender and RCPT TO the recipient; DATA introduces the message, ended by a single full stop.",
+            "An email client is just a program that sends these commands for you.",
+            "A raw connection on port 25 is not encrypted.",
+          ],
+          initial: {},
+          buildSteps: (view) => [
+            portStep({
+              id: "port",
+              teach:
+                "The same technique, this time for email. Sending mail uses **SMTP (Simple Mail Transfer Protocol)**.",
+              expect: 25,
+              prompt: "Which well-known port should the connection use to send email?",
+              wrong:
+                "That port belongs to a different service. Port 110 is for *retrieving* mail with POP3; find the one for *sending* with SMTP.",
+            }),
+            view === "terminal"
+              ? {
+                  id: "connect",
+                  teach:
+                    "Open a raw TCP connection to the mail server on that port. The server greets you with a **220** reply.",
+                  terminal: {
+                    instruction: "Type: telnet " + MAIL_HOST + " 25",
+                    expect: "telnet " + MAIL_HOST + " 25",
+                    display: "telnet " + MAIL_HOST + " 25",
+                  },
+                  app: null,
+                  effect: () => ({
+                    wire: [
+                      wireEntry(MAIL_HOST, "Admin machine", "220 " + MAIL_HOST + " ESMTP ready", false, 25),
+                    ],
+                    term: [
+                      { type: "command", text: "telnet " + MAIL_HOST + " 25" },
+                      { type: "info", text: "Connected to " + MAIL_IP + ":25 (not encrypted)." },
+                      { type: "recv", text: "220 " + MAIL_HOST + " ESMTP ready" },
+                    ],
+                    set: { connected: true, secure: false, rawMode: true, port: 25, peer: MAIL_HOST },
+                  }),
+                }
+              : {
+                  id: "connect",
+                  teach:
+                    "Open the client in **Raw** mode again, this time to the mail server. The server greets you with a **220** reply.",
+                  terminal: null,
+                  app: {
+                    instruction:
+                      "Set Host Name to " + MAIL_HOST + ", choose the Raw connection type, and click Open.",
+                    control: "open",
+                    expect: MAIL_HOST,
+                    display: MAIL_HOST,
+                    requireType: "raw",
+                  },
+                  effect: () => ({
+                    wire: [
+                      wireEntry(MAIL_HOST, "Admin machine", "220 " + MAIL_HOST + " ESMTP ready", false, 25),
+                    ],
+                    term: [
+                      { type: "info", text: "Connected to " + MAIL_IP + ":25 (not encrypted)." },
+                      { type: "recv", text: "220 " + MAIL_HOST + " ESMTP ready" },
+                    ],
+                    set: { connected: true, secure: false, rawMode: true, port: 25, peer: MAIL_HOST },
+                  }),
+                },
+            cmdStep({
+              id: "helo",
+              teach: "Identify the client with `HELO`. Every SMTP reply starts with a three digit code.",
+              command: "HELO admin.example.com",
+              output: ["250 Hello admin.example.com"],
+              host: MAIL_HOST,
+              port: 25,
+              secure: false,
+            }),
+            cmdStep({
+              id: "mailfrom",
+              teach: "`MAIL FROM:` declares the **sender** — the start of the message envelope.",
+              command: "MAIL FROM:<" + USER + "@example.com>",
+              output: ["250 OK"],
+              host: MAIL_HOST,
+              port: 25,
+              secure: false,
+              misstep: [
+                {
+                  match: /^rcpt\s+to/i,
+                  message:
+                    "SMTP requires the sender to be declared with MAIL FROM: before the recipient is declared with RCPT TO:",
+                },
+              ],
+            }),
+            cmdStep({
+              id: "rcptto",
+              teach: "`RCPT TO:` declares the **recipient**.",
+              command: "RCPT TO:<bob@example.net>",
+              output: ["250 OK"],
+              host: MAIL_HOST,
+              port: 25,
+              secure: false,
+            }),
+            cmdStep({
+              id: "data",
+              teach: "`DATA` says the envelope is finished and the message itself follows.",
+              command: "DATA",
+              output: ["354 Start mail input; end with <CRLF>.<CRLF>"],
+              host: MAIL_HOST,
+              port: 25,
+              secure: false,
+            }),
+            cmdStep({
+              id: "body",
+              teach: "Type the message content.",
+              command: "The web server is back online.",
+              output: [],
+              host: MAIL_HOST,
+              port: 25,
+              secure: false,
+            }),
+            cmdStep({
+              id: "dot",
+              teach:
+                "A single **full stop on a line of its own** ends the message and the server accepts it for delivery. You have just sent an email with no email client at all.",
+              command: ".",
+              output: ["250 Message accepted for delivery"],
+              host: MAIL_HOST,
+              port: 25,
+              secure: false,
+            }),
+            cmdStep({
+              id: "quit",
+              teach:
+                "`QUIT` closes the connection. **An email client is simply a program that types these commands for you** — which is exactly what the email simulator shows from the client's side. The same is true of a web browser and of FTP client software: every one of them is a program speaking a text protocol to a well-known port.",
+              command: "QUIT",
+              output: ["221 Bye"],
+              host: MAIL_HOST,
+              port: 25,
+              secure: false,
+              patch: () => ({ connected: false }),
+            }),
+          ],
+        },
+      ];
+
+      /* -------------------------- presentation ------------------------ */
+
+      const TERM_LINE_CLASS = {
+        command: "text-sky-800 dark:text-sky-300",
+        recv: "text-emerald-800 dark:text-emerald-300",
+        info: "text-slate-600 dark:text-slate-400",
+        error: "text-red-700 dark:text-red-400",
+      };
+      const TERM_LINE_PREFIX = { command: "$ ", recv: "< ", info: "  ", error: "! " };
+
+      const makeSimState = (exercise) => ({
+        step: 0,
+        wire: [],
+        term: [{ type: "info", text: "Ready. Follow the instructions above." }],
+        connected: false,
+        secure: false,
+        authenticated: false,
+        shell: false,
+        rawMode: false,
+        peer: null,
+        port: null,
+        chosenPort: null,
+        diskUsed: 98,
+        services: START_SERVICES.map((service) => ({ ...service })),
+        files: START_FILES.map((file) => ({ ...file })),
+        audit: [],
+        targetFile: null,
+        gotResponse: false,
+        ...(exercise.initial || {}),
+      });
+
+      function ErrorBar({ message }) {
+        if (!message) return null;
+        return (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border-y border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200"
+          >
+            <span aria-hidden="true" className="shrink-0">
+              &#9888;
+            </span>
+            <span>{message}</span>
+          </div>
+        );
+      }
+
+      function InstructionPanel({ exercise, stepNumber, totalSteps, step, input, pickPrompt }) {
+        const percent = Math.round((stepNumber / totalSteps) * 100);
+        return (
+          <section
+            aria-labelledby="instruction-heading"
+            className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <h2
+                id="instruction-heading"
+                className="text-sm font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300"
+              >
+                {exercise.label}
+              </h2>
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                Step {Math.min(stepNumber + 1, totalSteps)} of {totalSteps}
+              </span>
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={totalSteps}
+                aria-valuenow={stepNumber}
+                aria-label="Exercise progress"
+                className="h-2 w-32 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              >
+                <div
+                  className="h-full rounded-full bg-indigo-600 dark:bg-indigo-400"
+                  style={{ width: percent + "%" }}
+                />
+              </div>
+            </div>
+            <p className="max-w-4xl text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+              {renderRich(step.teach)}
+            </p>
+            <p className="mt-2 flex flex-wrap items-baseline gap-2 text-sm">
+              <span className="rounded bg-indigo-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white dark:bg-indigo-500">
+                Now do this
+              </span>
+              <span className="font-semibold text-slate-900 dark:text-slate-50">
+                {input ? input.instruction : pickPrompt ? pickPrompt : "Press Continue."}
+              </span>
+            </p>
+          </section>
+        );
+      }
+
+      function RecapCard({ exercise, view, onRestart, onSwapView }) {
+        return (
+          <section
+            aria-labelledby="recap-heading"
+            className="border-b border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/50"
+          >
+            <h2
+              id="recap-heading"
+              className="text-sm font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200"
+            >
+              Exercise complete — {exercise.label}
+            </h2>
+            <ul className="mt-2 max-w-4xl list-disc space-y-1 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+              {exercise.examPoints.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onSwapView}
+                className="shrink-0 whitespace-nowrap rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-emerald-950"
+              >
+                Run this exercise in {view === "terminal" ? "the application" : "the terminal"} view
+              </button>
+              <button
+                type="button"
+                onClick={onRestart}
+                className="shrink-0 whitespace-nowrap rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-900"
+              >
+                Restart this exercise
+              </button>
+            </div>
+          </section>
+        );
+      }
+
+      // The application view of an SSH client is a connection dialog. Once
+      // the session opens you are in a terminal either way — which is the
+      // honest answer, and worth the learner noticing.
+      function ClientDialog({ hostDraft, setHostDraft, connType, setConnType, onOpen }) {
+        const radioClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-md border border-indigo-500 bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white"
+            : "shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800";
+        return (
+          <div className="device-chrome flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                SSH client — connection settings
+              </p>
+            </div>
+            <form
+              className="min-h-0 flex-1 overflow-auto p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onOpen(hostDraft, connType);
+              }}
+            >
+              <label
+                htmlFor="host-input"
+                className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+              >
+                Host Name (or IP address)
+              </label>
+              <input
+                id="host-input"
+                type="text"
+                autoComplete="off"
+                spellCheck="false"
+                value={hostDraft}
+                onChange={(event) => setHostDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onOpen(hostDraft, connType);
+                  }
+                }}
+                className="mono mt-1 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+              />
+
+              <p className="mt-3 text-xs font-bold text-slate-600 dark:text-slate-300">
+                Connection type
+              </p>
+              <div role="group" aria-label="Connection type" className="mt-1 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-pressed={connType === "ssh"}
+                  onClick={() => setConnType("ssh")}
+                  className={radioClass(connType === "ssh")}
+                >
+                  SSH — port 22, encrypted
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={connType === "raw"}
+                  onClick={() => setConnType("raw")}
+                  className={radioClass(connType === "raw")}
+                >
+                  Raw — any port, not encrypted
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                className="mt-4 shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+              >
+                Open
+              </button>
+            </form>
+          </div>
+        );
+      }
+
+      function TerminalView({ sim, draft, setDraft, onSubmit, onHistory, inputRef, masked }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.term.length]);
+
+        const label = !sim.connected
+          ? "Local terminal"
+          : sim.rawMode
+            ? "Raw connection to " + sim.peer + ":" + sim.port + " — NOT encrypted"
+            : "SSH session — " + sim.peer + ":" + sim.port + " — encrypted";
+
+        return (
+          <div className="flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-slate-50 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950">
+            <div
+              className={
+                "border-b px-3 py-2 text-xs font-bold uppercase tracking-wide " +
+                (sim.connected && !sim.rawMode
+                  ? "border-emerald-300 bg-emerald-100 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100"
+                  : sim.rawMode
+                    ? "border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+                    : "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300")
+              }
+            >
+              {label}
+            </div>
+            <div
+              ref={scrollRef}
+              role="log"
+              aria-live="polite"
+              aria-label="Terminal output"
+              className="mono min-h-0 flex-1 overflow-auto px-3 py-2 text-xs leading-relaxed"
+            >
+              {sim.term.map((line, index) => (
+                <div
+                  key={index}
+                  className={"wire-text " + (TERM_LINE_CLASS[line.type] || TERM_LINE_CLASS.info)}
+                >
+                  <span aria-hidden="true">{TERM_LINE_PREFIX[line.type] || "  "}</span>
+                  {line.text}
+                </div>
+              ))}
+            </div>
+            <form
+              onSubmit={onSubmit}
+              className="border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <label
+                htmlFor="terminal-input"
+                className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+              >
+                Command
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="mono shrink-0 font-bold text-indigo-700 dark:text-indigo-300"
+                >
+                  {sim.shell ? USER + "@server:~$" : "$"}
+                </span>
+                <input
+                  id="terminal-input"
+                  ref={inputRef}
+                  type={masked ? "password" : "text"}
+                  autoComplete="off"
+                  spellCheck="false"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      onHistory("up");
+                    } else if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      onHistory("down");
+                    } else if (event.key === "Enter") {
+                      event.preventDefault();
+                      onSubmit(event);
+                    }
+                  }}
+                  className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Enter
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      }
+
+      function PortsPanel({ portPick, onPortPick }) {
+        return (
+          <section
+            aria-labelledby="ports-heading"
+            className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+              <h3
+                id="ports-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Well-known ports
+              </h3>
+            </div>
+            <div className="px-3 py-2">
+              {portPick && (
+                <p className="mb-1 rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {portPick.prompt}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {WELL_KNOWN_PORTS.map((entry) =>
+                  portPick ? (
+                    <button
+                      key={entry.port}
+                      type="button"
+                      onClick={() => onPortPick(entry.port)}
+                      className="mono shrink-0 whitespace-nowrap rounded border border-indigo-400 px-1.5 py-0.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                    >
+                      {entry.port} {entry.name}
+                    </button>
+                  ) : (
+                    <span
+                      key={entry.port}
+                      className="mono shrink-0 whitespace-nowrap rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    >
+                      {entry.port} {entry.name}
+                    </span>
+                  ),
+                )}
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      function WirePane({ sim, showPlain, setShowPlain, classify, onClassify }) {
+        const scrollRef = useRef(null);
+        const hasEncrypted = sim.wire.some((entry) => entry.secure);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.wire.length]);
+
+        return (
+          <section
+            aria-labelledby="wire-heading"
+            className="flex min-h-[14rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="wire-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                On the wire
+              </h2>
+              {hasEncrypted && (
+                <button
+                  type="button"
+                  onClick={() => setShowPlain(!showPlain)}
+                  aria-pressed={showPlain}
+                  className={
+                    showPlain
+                      ? "shrink-0 whitespace-nowrap rounded border border-amber-600 bg-amber-500 px-2 py-1 text-xs font-bold text-amber-950"
+                      : "shrink-0 whitespace-nowrap rounded border border-slate-400 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-700"
+                  }
+                >
+                  Show what the two ends see
+                </button>
+              )}
+            </div>
+            <div
+              ref={scrollRef}
+              aria-live="polite"
+              className="min-h-0 flex-1 space-y-2 overflow-auto p-3"
+            >
+              {sim.wire.length === 0 && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Nothing has been sent yet.
+                </p>
+              )}
+              {sim.wire.map((entry, index) => (
+                <article
+                  key={index}
+                  className="wire-enter rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] font-bold">
+                    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-white dark:bg-slate-600">
+                      {entry.from} &rarr; {entry.to}
+                    </span>
+                    <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                      port {entry.port}
+                    </span>
+                    {entry.secure ? (
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100">
+                        encrypted
+                      </span>
+                    ) : (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-950 dark:bg-amber-900/70 dark:text-amber-100">
+                        plain text
+                      </span>
+                    )}
+                  </div>
+                  <pre className="mono wire-text text-[11px] leading-relaxed text-slate-800 dark:text-slate-200">
+                    {entry.secure && !showPlain ? cipherText(entry.text) : entry.text}
+                  </pre>
+                </article>
+              ))}
+              {classify && (
+                <div className="rounded-md border border-indigo-300 bg-indigo-50 p-2 dark:border-indigo-700 dark:bg-indigo-950">
+                  <p className="text-xs font-bold text-indigo-900 dark:text-indigo-100">
+                    {classify.prompt}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {classify.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => onClassify(option.id)}
+                        className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      function ServerStatePane({ sim, filePick, onFilePick, servicePick, onServicePick }) {
+        const diskClass =
+          sim.diskUsed >= 90
+            ? "bg-red-500"
+            : sim.diskUsed >= 70
+              ? "bg-amber-500"
+              : "bg-emerald-500";
+        return (
+          <section
+            aria-labelledby="server-heading"
+            className="flex min-h-[16rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="server-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Remote server state — {SERVER} ({SERVER_IP})
+              </h2>
+            </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
+              {(filePick || servicePick) && (
+                <p className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {(filePick || servicePick).prompt}
+                </p>
+              )}
+
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Disk usage on /var
+                </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div
+                      className={"h-full rounded-full " + diskClass}
+                      style={{ width: sim.diskUsed + "%" }}
+                    />
+                  </div>
+                  <span className="mono shrink-0 text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                    {sim.diskUsed}%
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Services
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {sim.services.map((service) => (
+                    <li key={service.id} className="text-[11px]">
+                      {servicePick ? (
+                        <button
+                          type="button"
+                          onClick={() => onServicePick(service.id)}
+                          className="flex w-full flex-wrap items-center gap-2 rounded border border-indigo-400 px-1.5 py-1 text-left hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:hover:bg-indigo-950"
+                        >
+                          <span className="mono font-bold text-indigo-700 dark:text-indigo-300">
+                            {service.label}
+                          </span>
+                          <span
+                            className={
+                              service.status === "running"
+                                ? "rounded bg-emerald-200 px-1.5 py-0.5 font-bold text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50"
+                                : "rounded bg-red-200 px-1.5 py-0.5 font-bold text-red-900 dark:bg-red-800 dark:text-red-50"
+                            }
+                          >
+                            {service.status}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="mono text-slate-800 dark:text-slate-200">
+                            {service.label}
+                          </span>
+                          <span
+                            className={
+                              service.status === "running"
+                                ? "rounded bg-emerald-200 px-1.5 py-0.5 font-bold text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50"
+                                : "rounded bg-red-200 px-1.5 py-0.5 font-bold text-red-900 dark:bg-red-800 dark:text-red-50"
+                            }
+                          >
+                            {service.status}
+                          </span>
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  File system
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {sim.files.map((file) => (
+                    <li key={file.path} className="text-[11px]">
+                      {filePick ? (
+                        <button
+                          type="button"
+                          onClick={() => onFilePick(file.path)}
+                          className="block w-full rounded border border-indigo-400 px-1.5 py-1 text-left hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:hover:bg-indigo-950"
+                        >
+                          <span className="mono font-bold text-indigo-700 dark:text-indigo-300">
+                            {file.path}
+                          </span>
+                          <span className="mono ml-2 text-slate-500 dark:text-slate-400">
+                            {file.size}
+                          </span>
+                          <span className="block text-slate-500 dark:text-slate-400">
+                            {file.note}
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="rounded bg-slate-50 px-1.5 py-1 dark:bg-slate-950">
+                          <span className="mono text-slate-800 dark:text-slate-200">
+                            {file.path}
+                          </span>
+                          <span className="mono ml-2 text-slate-500 dark:text-slate-400">
+                            {file.size}
+                          </span>
+                          {file.content && (
+                            <span className="mono block text-emerald-700 dark:text-emerald-300">
+                              contents: {file.content}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Server audit log
+                </p>
+                {sim.audit.length === 0 ? (
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    No administrative commands recorded yet.
+                  </p>
+                ) : (
+                  <ul className="mono mt-1 space-y-1 text-[11px] text-slate-800 dark:text-slate-200">
+                    {sim.audit.map((entry, index) => (
+                      <li
+                        key={index}
+                        className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 dark:border-slate-700 dark:bg-slate-950"
+                      >
+                        {entry}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      /* ------------------------------ app ----------------------------- */
+
+      function App() {
+        const [exerciseId, setExerciseId] = useState(EXERCISES[0].id);
+        const exercise = useMemo(
+          () => EXERCISES.find((item) => item.id === exerciseId) || EXERCISES[0],
+          [exerciseId],
+        );
+        const [view, setView] = useState("app");
+        const [sim, setSim] = useState(() => makeSimState(EXERCISES[0]));
+        const [error, setError] = useState(null);
+        const [draft, setDraft] = useState("");
+        const [hostDraft, setHostDraft] = useState("");
+        const [connType, setConnType] = useState("ssh");
+        const [showPlain, setShowPlain] = useState(false);
+        const [history, setHistory] = useState([]);
+        const [historyIndex, setHistoryIndex] = useState(null);
+        const inputRef = useRef(null);
+
+        const steps = useMemo(() => exercise.buildSteps(view), [exercise, view]);
+        const done = sim.step >= steps.length;
+        const step = done ? null : steps[sim.step];
+
+        // Once an SSH session is open there is no separate application UI —
+        // the client hands you a terminal. So a step with no app-specific
+        // input falls back to the terminal input in both views.
+        const input = step
+          ? view === "terminal"
+            ? step.terminal
+            : step.app || step.terminal
+          : null;
+        const showDialog = view === "app" && Boolean(input && input.control === "open");
+
+        const classify = step ? step.classify : null;
+        const filePick = step ? step.filePick : null;
+        const servicePick = step ? step.servicePick : null;
+        const portPick = step ? step.portPick : null;
+        const needsAction = Boolean(input || classify || filePick || servicePick || portPick);
+
+        useEffect(() => {
+          if (!showDialog && input && input.expect !== undefined && inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, [view, sim.step, showDialog, input]);
+
+        const resetState = useCallback((target) => {
+          setSim(makeSimState(target));
+          setError(null);
+          setDraft("");
+          setHostDraft("");
+          setConnType("ssh");
+          setShowPlain(false);
+          setHistory([]);
+          setHistoryIndex(null);
+        }, []);
+
+        const changeExercise = (nextId) => {
+          const target = EXERCISES.find((item) => item.id === nextId) || EXERCISES[0];
+          setExerciseId(target.id);
+          resetState(target);
+        };
+
+        const changeView = (nextView) => {
+          if (nextView === view) return;
+          setView(nextView);
+          resetState(exercise);
+        };
+
+        const commit = useCallback(
+          (extraSet) => {
+            setSim((state) => {
+              const current = steps[state.step];
+              if (!current) return state;
+              const out = current.effect ? current.effect(state) : {};
+              return {
+                ...state,
+                ...(extraSet || {}),
+                ...(out.set || {}),
+                wire: out.wire ? [...state.wire, ...out.wire] : state.wire,
+                term: out.term ? [...state.term, ...out.term] : state.term,
+                step: state.step + 1,
+              };
+            });
+            setError(null);
+          },
+          [steps],
+        );
+
+        const missteppedMessage = (value) => {
+          const list = (input && input.misstep) || (step && step.misstep) || [];
+          const hit = list.find((entry) => entry.match.test(value));
+          return hit ? hit.message : DEVIATION_MESSAGE;
+        };
+
+        const submitTerminal = (event) => {
+          event.preventDefault();
+          if (!step) return;
+          const raw = draft;
+          const value = norm(raw);
+          if (!input || input.control === "open") {
+            setDraft("");
+            setError(
+              needsAction
+                ? "This step is not a command. Carry out the action described in the instruction panel."
+                : "This step does not need a command. Press Continue to carry on.",
+            );
+            return;
+          }
+          if (value && !input.mask) setHistory((list) => [...list, value]);
+          setHistoryIndex(null);
+          setDraft("");
+          if (matchesExpectation(input.expect, value)) {
+            commit();
+            return;
+          }
+          const message = missteppedMessage(value);
+          setSim((state) => ({
+            ...state,
+            term: [
+              ...state.term,
+              { type: "command", text: input.mask ? "*".repeat(raw.length) : raw },
+              { type: "error", text: message },
+            ],
+          }));
+          setError(message);
+        };
+
+        const recallHistory = (direction) => {
+          if (history.length === 0) return;
+          const current = historyIndex == null ? history.length : historyIndex;
+          const next =
+            direction === "up"
+              ? Math.max(0, current - 1)
+              : Math.min(history.length, current + 1);
+          setHistoryIndex(next);
+          setDraft(next === history.length ? "" : history[next]);
+        };
+
+        const attemptOpen = (host, type) => {
+          if (!step || !input || input.control !== "open") {
+            setError("This step does not need the connection dialog. Follow the instruction panel.");
+            return;
+          }
+          if (input.requireType && type !== input.requireType) {
+            setError(
+              input.requireType === "raw"
+                ? "This exercise needs a plain TCP connection to a different port, so choose the Raw connection type."
+                : "This exercise needs an encrypted session, so choose the SSH connection type.",
+            );
+            return;
+          }
+          if (matchesExpectation(input.expect, norm(host))) {
+            commit();
+            return;
+          }
+          setError(missteppedMessage(norm(host)));
+        };
+
+        const attemptClassify = (optionId) => {
+          if (!classify) return;
+          if (optionId === classify.expect) {
+            commit();
+            return;
+          }
+          setError(classify.wrong);
+        };
+
+        const attemptFilePick = (path) => {
+          if (!filePick) return;
+          if (path === filePick.expect) {
+            commit();
+            return;
+          }
+          setError(filePick.wrong);
+        };
+
+        const attemptServicePick = (id) => {
+          if (!servicePick) return;
+          if (id === servicePick.expect) {
+            commit();
+            return;
+          }
+          setError(servicePick.wrong);
+        };
+
+        const attemptPortPick = (port) => {
+          if (!portPick) return;
+          if (port === portPick.expect) {
+            commit();
+            return;
+          }
+          setError(portPick.wrong);
+        };
+
+        const updateDraft = (value) => {
+          setDraft(value);
+          if (error) setError(null);
+        };
+        const updateHost = (value) => {
+          setHostDraft(value);
+          if (error) setError(null);
+        };
+
+        const swapView = () => changeView(view === "terminal" ? "app" : "terminal");
+
+        const fillForMe = () => {
+          if (!input) return;
+          if (input.control === "open") {
+            updateHost(input.display || "");
+            if (input.requireType) setConnType(input.requireType);
+            return;
+          }
+          updateDraft(input.display === undefined ? "" : input.display);
+          if (inputRef.current) inputRef.current.focus();
+        };
+
+        const canFill = Boolean(input);
+
+        const pickPrompt = classify
+          ? classify.prompt
+          : filePick
+            ? filePick.prompt
+            : servicePick
+              ? servicePick.prompt
+              : portPick
+                ? portPick.prompt
+                : null;
+
+        const toggleClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-sm font-bold text-indigo-700 shadow"
+            : "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold text-white/90 hover:bg-white/20";
+
+        return (
+          <div className="protocol-lab flex flex-col bg-slate-100 dark:bg-slate-950">
+            <header
+              data-interactive-header
+              className="flex flex-wrap items-center justify-between gap-4"
+            >
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">SSH Remote Management</h1>
+                <p className="text-sm opacity-90">
+                  Run administrative commands on a remote server over an encrypted channel
+                </p>
+              </div>
+              <div data-interactive-actions className="flex flex-wrap items-center gap-2">
+                <select
+                  id="exercise-select"
+                  aria-label="Exercise"
+                  value={exerciseId}
+                  onChange={(event) => changeExercise(event.target.value)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {EXERCISES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  role="group"
+                  aria-label="Client view"
+                  className="flex shrink-0 items-center gap-1 rounded-lg bg-black/25 p-1"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={view === "app"}
+                    onClick={() => changeView("app")}
+                    className={toggleClass(view === "app")}
+                  >
+                    Application
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={view === "terminal"}
+                    onClick={() => changeView("terminal")}
+                    className={toggleClass(view === "terminal")}
+                  >
+                    Terminal
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {done ? (
+              <RecapCard
+                exercise={exercise}
+                view={view}
+                onRestart={() => resetState(exercise)}
+                onSwapView={swapView}
+              />
+            ) : (
+              <InstructionPanel
+                exercise={exercise}
+                stepNumber={sim.step}
+                totalSteps={steps.length}
+                step={step}
+                input={input}
+                pickPrompt={pickPrompt}
+              />
+            )}
+
+            <ErrorBar message={error} />
+
+            <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-2 lg:overflow-hidden">
+              <section
+                aria-label="Client"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Administrator&rsquo;s computer &mdash;{" "}
+                  {showDialog ? "SSH client dialog" : "terminal session"}
+                </h2>
+                {showDialog ? (
+                  <ClientDialog
+                    hostDraft={hostDraft}
+                    setHostDraft={updateHost}
+                    connType={connType}
+                    setConnType={setConnType}
+                    onOpen={attemptOpen}
+                  />
+                ) : (
+                  <TerminalView
+                    sim={sim}
+                    draft={draft}
+                    setDraft={updateDraft}
+                    onSubmit={submitTerminal}
+                    onHistory={recallHistory}
+                    inputRef={inputRef}
+                    masked={Boolean(input && input.mask)}
+                  />
+                )}
+                <PortsPanel portPick={portPick} onPortPick={attemptPortPick} />
+              </section>
+
+              <section
+                aria-label="Behind the scenes"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Behind the scenes
+                </h2>
+                <WirePane
+                  sim={sim}
+                  showPlain={showPlain}
+                  setShowPlain={setShowPlain}
+                  classify={classify}
+                  onClassify={attemptClassify}
+                />
+                <ServerStatePane
+                  sim={sim}
+                  filePick={filePick}
+                  onFilePick={attemptFilePick}
+                  servicePick={servicePick}
+                  onServicePick={attemptServicePick}
+                />
+              </section>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => resetState(exercise)}
+                className="shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Restart exercise
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {canFill && (
+                  <button
+                    type="button"
+                    onClick={fillForMe}
+                    className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                  >
+                    Type it for me
+                  </button>
+                )}
+                {!done && !needsAction && (
+                  <button
+                    type="button"
+                    onClick={() => commit()}
+                    className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    Continue &#9654;
+                  </button>
+                )}
+                {!done && needsAction && (
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Complete the action above to continue.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

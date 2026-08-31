@@ -1,0 +1,1880 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: FTP File Transfer Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Full-height app shell. The production site navigation bar is 58px
+         tall, so the built page must subtract it or the action row falls
+         below the viewport. Locked to the viewport only once the two
+         columns sit side by side; narrower than that the page scrolls. */
+      .protocol-lab {
+        min-height: 100vh;
+      }
+      @media (min-width: 1024px) {
+        .protocol-lab {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .protocol-lab {
+          height: calc(100vh - 58px);
+        }
+      }
+
+      .mono {
+        font-family: "Consolas", "Menlo", "Courier New", monospace;
+      }
+      .wire-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .device-chrome {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.7),
+          0 12px 26px rgba(15, 23, 42, 0.08);
+      }
+      .dark .device-chrome {
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+      }
+      .wire-enter {
+        animation: wire-in 260ms ease-out;
+      }
+      @keyframes wire-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wire-enter {
+          animation: none;
+        }
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+      /* ---------------------------------------------------------------
+         Fictional estate, shared with the other protocol simulators.
+         Names are inside example.com (RFC 2606) and every address is
+         inside the RFC 5737 documentation ranges.
+         --------------------------------------------------------------- */
+      const HOST = "ftp.example.com";
+      const IP = "192.0.2.45";
+      const USER = "pbaker";
+      const PASSWORD = "not-a-real-password";
+      const ANON_PASSWORD = "student@example.com";
+
+      const DEVIATION_MESSAGE =
+        "That is not the action for this step. Follow the simulation instructions exactly — enter the command shown in the instruction panel.";
+
+      const NONE = "__none__";
+
+      // The server's directories, with the access each one allows. This is
+      // what makes anonymous and non-anonymous access visibly different.
+      const DIRECTORIES = [
+        {
+          path: "/pub",
+          access: "anonymous",
+          note: "world readable — anonymous login permitted",
+        },
+        {
+          path: "/home/pbaker",
+          access: "owner",
+          note: "requires the account pbaker to be logged in",
+        },
+        {
+          path: "/upload",
+          access: "write",
+          note: "authenticated users may write here",
+        },
+      ];
+
+      const START_REMOTE = [
+        { name: "readme.txt", dir: "/pub", size: "1.4 KB", type: "ascii" },
+        { name: "prospectus.pdf", dir: "/pub", size: "820 KB", type: "binary" },
+        { name: "notes.txt", dir: "/pub", size: "2.1 KB", type: "ascii" },
+      ];
+
+      const START_LOCAL = [
+        { name: "coursework.zip", size: "4.6 MB", type: "binary" },
+        { name: "logo.png", size: "18.0 KB", type: "binary" },
+      ];
+
+      /* --------------------------- helpers --------------------------- */
+
+      const norm = (value) =>
+        String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+
+      const matchesExpectation = (expect, value) => {
+        if (expect instanceof RegExp) return expect.test(value);
+        return norm(expect).toLowerCase() === value.toLowerCase();
+      };
+
+      const renderRich = (text) => {
+        const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+        return parts.map((part, index) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={index} className="font-bold">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+              <code
+                key={index}
+                className="mono rounded bg-slate-200 px-1 py-0.5 text-[0.92em] text-slate-900 dark:bg-slate-700 dark:text-slate-50"
+              >
+                {part.slice(1, -1)}
+              </code>
+            );
+          }
+          return part;
+        });
+      };
+
+      /* ----------------------- step construction ----------------------
+         FTP keeps two connections open: a control connection on port 21
+         that carries commands and numbered replies for the whole session,
+         and a separate data connection that opens for one transfer and
+         closes again. Both are drawn separately in the connection pane. */
+
+      const ctrl = (from, to, text, kind) => ({
+        from,
+        to,
+        text,
+        kind,
+        channel: "control",
+        port: 21,
+      });
+      const data = (from, to, text, kind) => ({
+        from,
+        to,
+        text,
+        kind,
+        channel: "data",
+        port: 20,
+      });
+
+      const lineStep = ({ id, teach, command, reply, misstep, set, extraWire, extraTerm }) => ({
+        id,
+        teach,
+        terminal: {
+          instruction: "Type: " + command,
+          expect: command,
+          display: command,
+          misstep,
+        },
+        app: null,
+        effect: () => ({
+          wire: [
+            ctrl("FTP client", HOST, command, "cmd"),
+            ...(reply ? [ctrl(HOST, "FTP client", reply, "reply")] : []),
+            ...(extraWire || []),
+          ],
+          term: [
+            { type: "command", text: command },
+            ...(reply ? [{ type: "recv", text: reply }] : []),
+            ...(extraTerm || []),
+          ],
+          set,
+        }),
+      });
+
+      const dirStep = ({ id, teach, expect, prompt, wrong, onPick }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        dirPick: { expect, prompt, wrong },
+        effect: onPick,
+      });
+
+      const fileStep = ({ id, teach, expect, side, prompt, wrong, onPick }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        filePick: { expect, side, prompt, wrong },
+        effect: onPick || (() => ({ set: { selectedFile: expect } })),
+      });
+
+      const typeStep = ({ id, teach, expect, prompt, wrong }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        typePick: {
+          expect,
+          prompt,
+          wrong,
+          options: [
+            { id: "A", label: "TYPE A — ASCII (text)" },
+            { id: "I", label: "TYPE I — image (binary)" },
+          ],
+        },
+        effect: () => ({ set: { chosenType: expect } }),
+      });
+
+      const transferWire = (verb, filename) => [
+        ctrl("FTP client", HOST, verb + " " + filename, "cmd"),
+        ctrl(HOST, "FTP client", "150 Opening data connection for " + filename, "reply"),
+        data("FTP client", HOST, "‹file contents transferred on the data connection›", "cmd"),
+        ctrl(HOST, "FTP client", "226 Transfer complete — data connection closed", "reply"),
+      ];
+
+      /* --------------------------- exercises -------------------------- */
+
+      const CONNECT_CMD = "ftp " + HOST;
+
+      const EXERCISES = [
+        {
+          id: "anonymous",
+          label: "A: Anonymous access — downloading a file",
+          examPoints: [
+            "FTP (File Transfer Protocol) transfers files between an FTP client and an FTP server.",
+            "Anonymous access lets any user log in without an account, by convention with the username anonymous and an email address as the password.",
+            "Anonymous access normally grants read-only access to public directories only.",
+            "FTP uses two connections: a control connection on port 21 for commands and replies, and a separate data connection for each transfer.",
+          ],
+          initial: {},
+          buildSteps: (view) => {
+            const pickPub = dirStep({
+              id: "pickdir",
+              teach:
+                "The server holds several directories, and each one allows different access. An anonymous user has **no account**, so the server will only let it into a directory that is marked as publicly readable. Read the access column and choose the one anonymous may enter.",
+              expect: "/pub",
+              prompt: "Which directory may an anonymous user enter?",
+              wrong:
+                "That directory needs a real account. Anonymous access is only granted to publicly readable directories — check the access column.",
+              onPick: () => ({
+                wire: [
+                  ctrl("FTP client", HOST, "CWD /pub", "cmd"),
+                  ctrl(HOST, "FTP client", "250 Directory changed to /pub", "reply"),
+                  ctrl("FTP client", HOST, "LIST", "cmd"),
+                  ctrl(HOST, "FTP client", "150 Opening data connection for directory listing", "reply"),
+                  data(HOST, "FTP client", "readme.txt  prospectus.pdf  notes.txt", "reply"),
+                  ctrl(HOST, "FTP client", "226 Directory listing complete", "reply"),
+                ],
+                term: [
+                  { type: "recv", text: "250 Directory changed to /pub" },
+                  { type: "recv", text: "226 Directory listing complete" },
+                ],
+                set: { cwd: "/pub", listed: true },
+              }),
+            });
+            const pickFile = fileStep({
+              id: "pickfile",
+              teach:
+                "The listing arrived over the **data connection**, which then closed again. Now choose the file to download — the client will name it in a `RETR` command on the control connection.",
+              expect: "readme.txt",
+              side: "remote",
+              prompt: "Click readme.txt in the server's /pub directory.",
+              wrong:
+                "This exercise downloads readme.txt. Click that file in the /pub directory.",
+            });
+            const denied = dirStep({
+              id: "denied",
+              teach:
+                "Finally, see what anonymous access does **not** allow. Click the directory belonging to a real user account and watch the server's reply.",
+              expect: "/home/pbaker",
+              prompt: "Click /home/pbaker to try to enter it.",
+              wrong:
+                "For this step click /home/pbaker — the directory that belongs to a real account.",
+              onPick: () => ({
+                wire: [
+                  ctrl("FTP client", HOST, "CWD /home/pbaker", "cmd"),
+                  ctrl(HOST, "FTP client", "550 Permission denied", "reply"),
+                ],
+                term: [{ type: "error", text: "550 Permission denied" }],
+                set: { denied: true },
+              }),
+            });
+
+            if (view === "terminal") {
+              return [
+                {
+                  id: "connect",
+                  teach:
+                    "**FTP (File Transfer Protocol)** transfers files between an **FTP client** and an **FTP server**. The client first opens a **control connection** to the server's well-known port, **21**. This connection stays open for the whole session and carries commands and numbered replies.",
+                  terminal: {
+                    instruction: "Type: " + CONNECT_CMD,
+                    expect: CONNECT_CMD,
+                    display: CONNECT_CMD,
+                  },
+                  app: null,
+                  effect: () => ({
+                    wire: [ctrl(HOST, "FTP client", "220 Service ready for new user", "reply")],
+                    term: [
+                      { type: "command", text: CONNECT_CMD },
+                      { type: "info", text: "Connected to " + IP + ":21." },
+                      { type: "recv", text: "220 Service ready for new user" },
+                    ],
+                    set: { controlOpen: true },
+                  }),
+                },
+                lineStep({
+                  id: "user",
+                  teach:
+                    "**Anonymous access** means logging in without an account. By convention the username is literally `anonymous`. Read the server's reply carefully — it says what to send as the password.",
+                  command: "USER anonymous",
+                  reply: "331 Guest login ok, send your email address as your password",
+                }),
+                lineStep({
+                  id: "pass",
+                  teach:
+                    "For anonymous access the password is a courtesy: an email address, so the administrator knows who is using the service. It is not checked. Note that FTP sends it in **clear text**.",
+                  command: "PASS " + ANON_PASSWORD,
+                  reply: "230 User logged in — anonymous access granted",
+                  set: { loggedIn: "anonymous" },
+                }),
+                pickPub,
+                pickFile,
+                {
+                  id: "retr",
+                  teach:
+                    "`RETR` asks the server to send a file. Watch the connection panel: the control connection stays open while a **separate data connection opens on port 20**, carries the file, and closes again. Every transfer gets its own data connection.",
+                  terminal: {
+                    instruction: "Type: RETR readme.txt",
+                    expect: "RETR readme.txt",
+                    display: "RETR readme.txt",
+                    misstep: [
+                      {
+                        match: /^get\b/i,
+                        message:
+                          "`get` is what a friendly FTP program calls it. The protocol command itself is RETR readme.txt",
+                      },
+                    ],
+                  },
+                  app: null,
+                  effect: (state) => ({
+                    wire: transferWire("RETR", "readme.txt"),
+                    term: [
+                      { type: "command", text: "RETR readme.txt" },
+                      { type: "recv", text: "150 Opening data connection for readme.txt" },
+                      { type: "recv", text: "226 Transfer complete" },
+                    ],
+                    set: {
+                      localFiles: [
+                        ...state.localFiles,
+                        { name: "readme.txt", size: "1.4 KB", type: "ascii" },
+                      ],
+                      lastTransfer: "readme.txt",
+                    },
+                  }),
+                },
+                denied,
+                {
+                  id: "quit",
+                  teach:
+                    "`QUIT` closes the control connection and ends the session.",
+                  terminal: { instruction: "Type: QUIT", expect: "QUIT", display: "QUIT" },
+                  app: null,
+                  effect: () => ({
+                    wire: [
+                      ctrl("FTP client", HOST, "QUIT", "cmd"),
+                      ctrl(HOST, "FTP client", "221 Goodbye", "reply"),
+                    ],
+                    term: [{ type: "recv", text: "221 Goodbye" }],
+                    set: { controlOpen: false, loggedIn: null },
+                  }),
+                },
+              ];
+            }
+            return [
+              {
+                id: "connect",
+                teach:
+                  "**FTP client software** hides the protocol behind a two-pane window: your own files on one side, the server's on the other. Underneath it opens a **control connection** to port **21** and logs in. For **anonymous access** the username is `anonymous` and the password is an email address.",
+                terminal: null,
+                app: {
+                  instruction:
+                    "Type " + HOST + " into the Host box and click Quickconnect.",
+                  control: "connect",
+                  expect: HOST,
+                  display: HOST,
+                },
+                effect: () => ({
+                  wire: [
+                    ctrl(HOST, "FTP client", "220 Service ready for new user", "reply"),
+                    ctrl("FTP client", HOST, "USER anonymous", "cmd"),
+                    ctrl(HOST, "FTP client", "331 Guest login ok, send your email address as your password", "reply"),
+                    ctrl("FTP client", HOST, "PASS " + ANON_PASSWORD, "cmd"),
+                    ctrl(HOST, "FTP client", "230 User logged in — anonymous access granted", "reply"),
+                  ],
+                  term: [{ type: "info", text: "Client logged in anonymously to " + HOST + ":21" }],
+                  set: { controlOpen: true, loggedIn: "anonymous" },
+                }),
+              },
+              pickPub,
+              pickFile,
+              {
+                id: "download",
+                teach:
+                  "Clicking Download makes the client send `RETR readme.txt`. Watch the connection panel: the control connection stays open while a **separate data connection opens on port 20**, carries the file, and closes again.",
+                terminal: null,
+                app: {
+                  instruction: "Click Download in the FTP client.",
+                  control: "download",
+                },
+                effect: (state) => ({
+                  wire: transferWire("RETR", "readme.txt"),
+                  term: [{ type: "recv", text: "226 Transfer complete" }],
+                  set: {
+                    localFiles: [
+                      ...state.localFiles,
+                      { name: "readme.txt", size: "1.4 KB", type: "ascii" },
+                    ],
+                    lastTransfer: "readme.txt",
+                  },
+                }),
+              },
+              denied,
+              {
+                id: "disconnect",
+                teach:
+                  "Disconnecting sends `QUIT` and closes the control connection.",
+                terminal: null,
+                app: null,
+                effect: () => ({
+                  wire: [
+                    ctrl("FTP client", HOST, "QUIT", "cmd"),
+                    ctrl(HOST, "FTP client", "221 Goodbye", "reply"),
+                  ],
+                  set: { controlOpen: false, loggedIn: null },
+                }),
+              },
+            ];
+          },
+        },
+        {
+          id: "authenticated",
+          label: "B: Non-anonymous access — uploading a file",
+          examPoints: [
+            "Non-anonymous access requires a valid username and password for an account on the server.",
+            "The account determines which directories the user may read from and write to.",
+            "Plain FTP sends the username and password in clear text; SFTP or FTPS carry FTP over an encrypted connection.",
+            "TYPE I (binary) must be set for non-text files; TYPE A (ASCII) is for text.",
+            "STOR uploads a file, again over a separate data connection.",
+          ],
+          initial: {},
+          buildSteps: (view) => {
+            const pickType = typeStep({
+              id: "type",
+              teach:
+                "Before any transfer the client must tell the server **how** to treat the bytes. **TYPE A (ASCII)** is for text files and lets the server convert line endings between systems. **TYPE I (image, meaning binary)** sends the bytes through completely untouched. `coursework.zip` is a compressed archive.",
+              expect: "I",
+              prompt: "Which transfer type should be set for coursework.zip?",
+              wrong:
+                "ASCII mode may alter line endings, which would corrupt a compressed archive. A non-text file must be sent in binary.",
+            });
+            const pickFile = fileStep({
+              id: "pickfile",
+              teach:
+                "Now choose the file on **this computer** to send to the server. The client will name it in a `STOR` command.",
+              expect: "coursework.zip",
+              side: "local",
+              prompt: "Click coursework.zip in your local files.",
+              wrong: "This exercise uploads coursework.zip. Click that file in your local files.",
+            });
+            const pickUpload = dirStep({
+              id: "pickdir",
+              teach:
+                "A file can only be uploaded into a directory the account is allowed to **write** to. Read the access column again and pick the writable one.",
+              expect: "/upload",
+              prompt: "Which directory may an authenticated user write to?",
+              wrong:
+                "That directory is not writable. Look for the one whose access allows authenticated users to write.",
+              onPick: () => ({
+                wire: [
+                  ctrl("FTP client", HOST, "CWD /upload", "cmd"),
+                  ctrl(HOST, "FTP client", "250 Directory changed to /upload", "reply"),
+                ],
+                term: [{ type: "recv", text: "250 Directory changed to /upload" }],
+                set: { cwd: "/upload" },
+              }),
+            });
+
+            if (view === "terminal") {
+              return [
+                {
+                  id: "connect",
+                  teach:
+                    "The same control connection to port **21**, but this time the session will log in as a real account. This is **non-anonymous access**.",
+                  terminal: {
+                    instruction: "Type: " + CONNECT_CMD,
+                    expect: CONNECT_CMD,
+                    display: CONNECT_CMD,
+                  },
+                  app: null,
+                  effect: () => ({
+                    wire: [ctrl(HOST, "FTP client", "220 Service ready for new user", "reply")],
+                    term: [
+                      { type: "command", text: CONNECT_CMD },
+                      { type: "recv", text: "220 Service ready for new user" },
+                    ],
+                    set: { controlOpen: true },
+                  }),
+                },
+                lineStep({
+                  id: "user",
+                  teach:
+                    "**Non-anonymous access** requires a username that exists on the server. The reply is different from the anonymous one: this time a real password is demanded.",
+                  command: "USER " + USER,
+                  reply: "331 Password required for " + USER,
+                }),
+                lineStep({
+                  id: "pass",
+                  teach:
+                    "The password is sent. Look at the wire panel: **plain FTP sends it in clear text**, so anyone able to read the traffic could capture it. The secure alternatives are **SFTP** (file transfer over SSH) and **FTPS** (FTP over TLS) — see the SSH simulator for how an encrypted channel works.",
+                  command: "PASS " + PASSWORD,
+                  reply: "230 User " + USER + " logged in",
+                  set: { loggedIn: USER },
+                }),
+                pickType,
+                lineStep({
+                  id: "typecmd",
+                  teach: "`TYPE I` puts the session into binary mode for the transfer that follows.",
+                  command: "TYPE I",
+                  reply: "200 Type set to I",
+                }),
+                pickUpload,
+                pickFile,
+                {
+                  id: "stor",
+                  teach:
+                    "`STOR` uploads a file. As with `RETR`, the command travels on the control connection and the file itself travels on a **separate data connection** that opens and closes for this one transfer. Watch the server's directory gain the file.",
+                  terminal: {
+                    instruction: "Type: STOR coursework.zip",
+                    expect: "STOR coursework.zip",
+                    display: "STOR coursework.zip",
+                    misstep: [
+                      {
+                        match: /^put\b/i,
+                        message:
+                          "`put` is what a friendly FTP program calls it. The protocol command itself is STOR coursework.zip",
+                      },
+                      {
+                        match: /^retr\b/i,
+                        message:
+                          "RETR downloads from the server. To send a file to the server the command is STOR.",
+                      },
+                    ],
+                  },
+                  app: null,
+                  effect: (state) => ({
+                    wire: transferWire("STOR", "coursework.zip"),
+                    term: [
+                      { type: "recv", text: "150 Opening data connection for coursework.zip" },
+                      { type: "recv", text: "226 Transfer complete" },
+                    ],
+                    set: {
+                      remoteFiles: [
+                        ...state.remoteFiles,
+                        { name: "coursework.zip", dir: "/upload", size: "4.6 MB", type: "binary" },
+                      ],
+                      lastTransfer: "coursework.zip",
+                    },
+                  }),
+                },
+                {
+                  id: "quit",
+                  teach: "`QUIT` closes the control connection and ends the session.",
+                  terminal: { instruction: "Type: QUIT", expect: "QUIT", display: "QUIT" },
+                  app: null,
+                  effect: () => ({
+                    wire: [
+                      ctrl("FTP client", HOST, "QUIT", "cmd"),
+                      ctrl(HOST, "FTP client", "221 Goodbye", "reply"),
+                    ],
+                    set: { controlOpen: false, loggedIn: null },
+                  }),
+                },
+              ];
+            }
+            return [
+              {
+                id: "connect",
+                teach:
+                  "This time the client logs in with a real account. **Non-anonymous access** requires a username and password, and the account decides which directories may be read and written.",
+                terminal: null,
+                app: {
+                  instruction:
+                    "Type " + USER + " into the Username box and click Quickconnect.",
+                  control: "connectuser",
+                  expect: USER,
+                  display: USER,
+                },
+                effect: () => ({
+                  wire: [
+                    ctrl(HOST, "FTP client", "220 Service ready for new user", "reply"),
+                    ctrl("FTP client", HOST, "USER " + USER, "cmd"),
+                    ctrl(HOST, "FTP client", "331 Password required for " + USER, "reply"),
+                    ctrl("FTP client", HOST, "PASS " + PASSWORD, "cmd"),
+                    ctrl(HOST, "FTP client", "230 User " + USER + " logged in", "reply"),
+                  ],
+                  term: [{ type: "info", text: "Client logged in as " + USER }],
+                  set: { controlOpen: true, loggedIn: USER },
+                }),
+              },
+              pickType,
+              pickUpload,
+              pickFile,
+              {
+                id: "upload",
+                teach:
+                  "Clicking Upload makes the client send `STOR coursework.zip`. The command goes on the control connection; the file goes on a **separate data connection** that opens and closes for this transfer.",
+                terminal: null,
+                app: {
+                  instruction: "Click Upload in the FTP client.",
+                  control: "upload",
+                },
+                effect: (state) => ({
+                  wire: transferWire("STOR", "coursework.zip"),
+                  term: [{ type: "recv", text: "226 Transfer complete" }],
+                  set: {
+                    remoteFiles: [
+                      ...state.remoteFiles,
+                      { name: "coursework.zip", dir: "/upload", size: "4.6 MB", type: "binary" },
+                    ],
+                    lastTransfer: "coursework.zip",
+                  },
+                }),
+              },
+              {
+                id: "disconnect",
+                teach: "Disconnecting sends `QUIT` and closes the control connection.",
+                terminal: null,
+                app: null,
+                effect: () => ({
+                  wire: [
+                    ctrl("FTP client", HOST, "QUIT", "cmd"),
+                    ctrl(HOST, "FTP client", "221 Goodbye", "reply"),
+                  ],
+                  set: { controlOpen: false, loggedIn: null },
+                }),
+              },
+            ];
+          },
+        },
+        {
+          id: "sync",
+          label: "C: Keeping local and remote in step",
+          examPoints: [
+            "FTP is used to synchronise files and folders between a client and a server.",
+            "Compare the two listings to see what is missing from each side.",
+            "TYPE A (ASCII) is for text files; TYPE I (binary) is for everything else.",
+            "Transferring a binary file in ASCII mode corrupts it.",
+          ],
+          // Both sides already share two files, so exactly one file is
+          // missing from each side and the comparison has a single answer.
+          initial: {
+            controlOpen: true,
+            loggedIn: USER,
+            cwd: "/pub",
+            listed: true,
+            localFiles: [
+              { name: "readme.txt", size: "1.4 KB", type: "ascii" },
+              { name: "prospectus.pdf", size: "820 KB", type: "binary" },
+              { name: "logo.png", size: "18.0 KB", type: "binary" },
+            ],
+          },
+          buildSteps: (view) => {
+            const pickMissingLocal = fileStep({
+              id: "missing-local",
+              teach:
+                "**FTP is used to synchronise files and folders between a client and a server.** Compare the two listings. One file is on the server but not on this computer, so it needs downloading.",
+              expect: "notes.txt",
+              side: "remote",
+              prompt: "Which file is on the server but missing from this computer?",
+              wrong:
+                "Compare the two lists carefully — that file is already on both sides.",
+            });
+            const typeA = typeStep({
+              id: "typea",
+              teach:
+                "`notes.txt` is a **text** file. Choose the transfer type that lets the server translate line endings between systems.",
+              expect: "A",
+              prompt: "Which transfer type should be used for notes.txt?",
+              wrong:
+                "Binary mode would work, but ASCII mode is the correct choice for a text file: it converts line endings between the two systems.",
+            });
+            const pickMissingRemote = fileStep({
+              id: "missing-remote",
+              teach:
+                "Now the other direction. One file is on this computer but not on the server, so it needs uploading.",
+              expect: "logo.png",
+              side: "local",
+              prompt: "Which file is on this computer but missing from the server?",
+              wrong: "Compare the two lists again — that file is already on the server.",
+            });
+            const typeI = typeStep({
+              id: "typei",
+              teach:
+                "`logo.png` is an **image**, not text. Choose the transfer type that sends every byte through untouched.",
+              expect: "I",
+              prompt: "Which transfer type should be used for logo.png?",
+              wrong:
+                "In ASCII mode the server would alter byte sequences that look like line endings, and the image would arrive corrupted. A non-text file must be sent in binary.",
+            });
+            const download = {
+              id: "download",
+              teach:
+                "The file comes down over a data connection opened just for it, and appears in the local listing.",
+              terminal: {
+                instruction: "Type: RETR notes.txt",
+                expect: "RETR notes.txt",
+                display: "RETR notes.txt",
+              },
+              app: { instruction: "Click Download in the FTP client.", control: "download" },
+              effect: (state) => ({
+                wire: [
+                  ctrl("FTP client", HOST, "TYPE A", "cmd"),
+                  ctrl(HOST, "FTP client", "200 Type set to A", "reply"),
+                  ...transferWire("RETR", "notes.txt"),
+                ],
+                term: [{ type: "recv", text: "226 Transfer complete — notes.txt" }],
+                set: {
+                  localFiles: [
+                    ...state.localFiles,
+                    { name: "notes.txt", size: "2.1 KB", type: "ascii" },
+                  ],
+                  lastTransfer: "notes.txt",
+                },
+              }),
+            };
+            const upload = {
+              id: "upload",
+              teach:
+                "And the same in reverse. Both listings now match: the folders are synchronised.",
+              terminal: {
+                instruction: "Type: STOR logo.png",
+                expect: "STOR logo.png",
+                display: "STOR logo.png",
+              },
+              app: { instruction: "Click Upload in the FTP client.", control: "upload" },
+              effect: (state) => ({
+                wire: [
+                  ctrl("FTP client", HOST, "TYPE I", "cmd"),
+                  ctrl(HOST, "FTP client", "200 Type set to I", "reply"),
+                  ...transferWire("STOR", "logo.png"),
+                ],
+                term: [{ type: "recv", text: "226 Transfer complete — logo.png" }],
+                set: {
+                  remoteFiles: [
+                    ...state.remoteFiles,
+                    { name: "logo.png", dir: "/pub", size: "18.0 KB", type: "binary" },
+                  ],
+                  lastTransfer: "logo.png",
+                },
+              }),
+            };
+
+            return [
+              pickMissingLocal,
+              typeA,
+              download,
+              pickMissingRemote,
+              typeI,
+              upload,
+              {
+                id: "review",
+                teach:
+                  "The local and remote listings now hold the same files. That is what synchronising folders with FTP means in practice: compare the two sides, then transfer whatever is missing in each direction — choosing **TYPE A** for text and **TYPE I** for everything else.",
+                terminal: null,
+                app: null,
+                effect: () => ({ set: {} }),
+              },
+            ];
+          },
+        },
+      ];
+
+      /* -------------------------- presentation ------------------------ */
+
+      const TERM_LINE_CLASS = {
+        command: "text-sky-800 dark:text-sky-300",
+        recv: "text-emerald-800 dark:text-emerald-300",
+        info: "text-slate-600 dark:text-slate-400",
+        error: "text-red-700 dark:text-red-400",
+      };
+      const TERM_LINE_PREFIX = { command: "$ ", recv: "< ", info: "  ", error: "! " };
+
+      const ACCESS_LABEL = {
+        anonymous: "public — anonymous may read",
+        owner: "account pbaker only",
+        write: "authenticated users may write",
+      };
+      const ACCESS_CLASS = {
+        anonymous: "bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50",
+        owner: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-50",
+        write: "bg-amber-200 text-amber-950 dark:bg-amber-700 dark:text-amber-50",
+      };
+
+      const makeSimState = (exercise) => ({
+        step: 0,
+        wire: [],
+        term: [{ type: "info", text: "Ready. Follow the instructions above." }],
+        controlOpen: false,
+        loggedIn: null,
+        cwd: null,
+        listed: false,
+        localFiles: START_LOCAL.slice(),
+        remoteFiles: START_REMOTE.slice(),
+        selectedFile: null,
+        chosenType: null,
+        denied: false,
+        lastTransfer: null,
+        ...(exercise.initial || {}),
+      });
+
+      function ErrorBar({ message }) {
+        if (!message) return null;
+        return (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border-y border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200"
+          >
+            <span aria-hidden="true" className="shrink-0">
+              &#9888;
+            </span>
+            <span>{message}</span>
+          </div>
+        );
+      }
+
+      function InstructionPanel({ exercise, stepNumber, totalSteps, step, input, pickPrompt }) {
+        const percent = Math.round((stepNumber / totalSteps) * 100);
+        return (
+          <section
+            aria-labelledby="instruction-heading"
+            className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <h2
+                id="instruction-heading"
+                className="text-sm font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300"
+              >
+                {exercise.label}
+              </h2>
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                Step {Math.min(stepNumber + 1, totalSteps)} of {totalSteps}
+              </span>
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={totalSteps}
+                aria-valuenow={stepNumber}
+                aria-label="Exercise progress"
+                className="h-2 w-32 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              >
+                <div
+                  className="h-full rounded-full bg-indigo-600 dark:bg-indigo-400"
+                  style={{ width: percent + "%" }}
+                />
+              </div>
+            </div>
+            <p className="max-w-4xl text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+              {renderRich(step.teach)}
+            </p>
+            <p className="mt-2 flex flex-wrap items-baseline gap-2 text-sm">
+              <span className="rounded bg-indigo-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white dark:bg-indigo-500">
+                Now do this
+              </span>
+              <span className="font-semibold text-slate-900 dark:text-slate-50">
+                {input ? input.instruction : pickPrompt ? pickPrompt : "Press Continue."}
+              </span>
+            </p>
+          </section>
+        );
+      }
+
+      function RecapCard({ exercise, view, onRestart, onSwapView }) {
+        return (
+          <section
+            aria-labelledby="recap-heading"
+            className="border-b border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/50"
+          >
+            <h2
+              id="recap-heading"
+              className="text-sm font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200"
+            >
+              Exercise complete — {exercise.label}
+            </h2>
+            <ul className="mt-2 max-w-4xl list-disc space-y-1 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+              {exercise.examPoints.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onSwapView}
+                className="shrink-0 whitespace-nowrap rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-emerald-950"
+              >
+                Run this exercise in {view === "terminal" ? "the application" : "the terminal"} view
+              </button>
+              <button
+                type="button"
+                onClick={onRestart}
+                className="shrink-0 whitespace-nowrap rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-900"
+              >
+                Restart this exercise
+              </button>
+            </div>
+          </section>
+        );
+      }
+
+      function TerminalView({ sim, draft, setDraft, onSubmit, onHistory, inputRef }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.term.length]);
+
+        return (
+          <div className="flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-slate-50 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {sim.controlOpen
+                ? "FTP client — control connection to " + IP + ":21"
+                : "Local terminal"}
+            </div>
+            <div
+              ref={scrollRef}
+              role="log"
+              aria-live="polite"
+              aria-label="Terminal output"
+              className="mono min-h-0 flex-1 overflow-auto px-3 py-2 text-xs leading-relaxed"
+            >
+              {sim.term.map((line, index) => (
+                <div
+                  key={index}
+                  className={"wire-text " + (TERM_LINE_CLASS[line.type] || TERM_LINE_CLASS.info)}
+                >
+                  <span aria-hidden="true">{TERM_LINE_PREFIX[line.type] || "  "}</span>
+                  {line.text}
+                </div>
+              ))}
+            </div>
+            <form
+              onSubmit={onSubmit}
+              className="border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <label
+                htmlFor="terminal-input"
+                className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+              >
+                Command
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="mono shrink-0 font-bold text-indigo-700 dark:text-indigo-300"
+                >
+                  $
+                </span>
+                <input
+                  id="terminal-input"
+                  ref={inputRef}
+                  type="text"
+                  autoComplete="off"
+                  spellCheck="false"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      onHistory("up");
+                    } else if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      onHistory("down");
+                    } else if (event.key === "Enter") {
+                      event.preventDefault();
+                      onSubmit(event);
+                    }
+                  }}
+                  className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Enter
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      }
+
+      function FtpClientView({ sim, hostDraft, setHostDraft, userDraft, setUserDraft, onConnect, onTransfer, transferAction }) {
+        return (
+          <div className="device-chrome flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                FTP client software
+              </p>
+            </div>
+            <form
+              className="border-b border-slate-200 px-3 py-2 dark:border-slate-700"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onConnect(hostDraft, userDraft);
+              }}
+            >
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <label
+                    htmlFor="host-input"
+                    className="block text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                  >
+                    Host
+                  </label>
+                  <input
+                    id="host-input"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck="false"
+                    value={hostDraft}
+                    onChange={(event) => setHostDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onConnect(hostDraft, userDraft);
+                      }
+                    }}
+                    className="mono mt-0.5 w-full min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label
+                    htmlFor="user-input"
+                    className="block text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                  >
+                    Username
+                  </label>
+                  <input
+                    id="user-input"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck="false"
+                    value={userDraft}
+                    onChange={(event) => setUserDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onConnect(hostDraft, userDraft);
+                      }
+                    }}
+                    className="mono mt-0.5 w-full min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Quickconnect
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Status:{" "}
+                {sim.loggedIn
+                  ? "logged in as " + sim.loggedIn + (sim.cwd ? " — remote directory " + sim.cwd : "")
+                  : "not connected"}
+              </p>
+            </form>
+
+            <div className="min-h-0 flex-1 overflow-auto p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Remote site {sim.cwd ? "— " + sim.cwd : ""}
+              </p>
+              {!sim.listed ? (
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  No directory listed yet.
+                </p>
+              ) : (
+                <ul className="mono mt-1 space-y-0.5 text-xs text-slate-800 dark:text-slate-200">
+                  {sim.remoteFiles
+                    .filter((file) => file.dir === sim.cwd)
+                    .map((file) => (
+                      <li key={file.name}>
+                        {file.name}
+                        <span className="ml-2 text-slate-500 dark:text-slate-400">
+                          {file.size}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+              {transferAction && (
+                <button
+                  type="button"
+                  onClick={onTransfer}
+                  className="mt-3 shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  {transferAction === "download" ? "Download" : "Upload"}
+                </button>
+              )}
+              {sim.lastTransfer && (
+                <p className="mt-2 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100">
+                  Transfer queue: {sim.lastTransfer} — complete
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function LocalPanel({ sim, filePick, onFilePick }) {
+        const pickable = filePick && filePick.side === "local";
+        return (
+          <section
+            aria-labelledby="local-heading"
+            className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+              <h3
+                id="local-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Local site — files on this computer
+              </h3>
+            </div>
+            <div className="px-3 py-2">
+              {pickable && (
+                <p className="mb-1 rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {filePick.prompt}
+                </p>
+              )}
+              <ul className="mono space-y-0.5 text-xs">
+                {sim.localFiles.map((file) => (
+                  <li key={file.name}>
+                    {pickable ? (
+                      <button
+                        type="button"
+                        onClick={() => onFilePick(file.name)}
+                        className="w-full rounded border border-indigo-400 px-1.5 py-0.5 text-left font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                      >
+                        {file.name}
+                        <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
+                          {file.size} · {file.type}
+                        </span>
+                      </button>
+                    ) : (
+                      <span className="text-slate-800 dark:text-slate-200">
+                        {file.name}
+                        <span className="ml-2 text-slate-500 dark:text-slate-400">
+                          {file.size} · {file.type}
+                        </span>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        );
+      }
+
+      // The two-connection model is the thing students most often miss, so
+      // it gets its own strip rather than being buried in the log.
+      function ConnectionStrip({ sim, typePick, onTypePick }) {
+        return (
+          <section
+            aria-labelledby="conn-heading"
+            className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+              <h3
+                id="conn-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                FTP uses two connections
+              </h3>
+            </div>
+            <div className="space-y-1 px-3 py-2 text-[11px]">
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="mono font-bold text-slate-800 dark:text-slate-100">
+                  Control connection · port 21
+                </span>
+                <span
+                  className={
+                    sim.controlOpen
+                      ? "rounded bg-emerald-200 px-1.5 py-0.5 font-bold text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50"
+                      : "rounded bg-slate-200 px-1.5 py-0.5 font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-100"
+                  }
+                >
+                  {sim.controlOpen ? "OPEN for the whole session" : "closed"}
+                </span>
+              </p>
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="mono font-bold text-slate-800 dark:text-slate-100">
+                  Data connection · port 20
+                </span>
+                <span
+                  className={
+                    sim.lastTransfer
+                      ? "rounded bg-amber-200 px-1.5 py-0.5 font-bold text-amber-950 dark:bg-amber-700 dark:text-amber-50"
+                      : "rounded bg-slate-200 px-1.5 py-0.5 font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-100"
+                  }
+                >
+                  {sim.lastTransfer
+                    ? "opened and closed again for " + sim.lastTransfer
+                    : "closed — opens only for a transfer"}
+                </span>
+              </p>
+              <p className="text-slate-500 dark:text-slate-400">
+                Commands and replies travel on the control connection; file
+                contents and directory listings travel on a data connection that
+                is created for one transfer and then closed.
+              </p>
+              {sim.chosenType && (
+                <p className="mono text-slate-700 dark:text-slate-200">
+                  Transfer type: TYPE {sim.chosenType} (
+                  {sim.chosenType === "A" ? "ASCII — text" : "image — binary"})
+                </p>
+              )}
+              {typePick && (
+                <div className="rounded-md border border-indigo-300 bg-indigo-50 p-2 dark:border-indigo-700 dark:bg-indigo-950">
+                  <p className="font-bold text-indigo-900 dark:text-indigo-100">
+                    {typePick.prompt}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {typePick.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => onTypePick(option.id)}
+                        className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 bg-white px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      function ServerPane({ sim, dirPick, onDirPick, filePick, onFilePick }) {
+        const pickable = filePick && filePick.side === "remote";
+        return (
+          <section
+            aria-labelledby="server-heading"
+            className="flex min-h-[16rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="server-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                FTP server — {HOST} ({IP})
+              </h2>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
+              {(dirPick || pickable) && (
+                <p className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {(dirPick || filePick).prompt}
+                </p>
+              )}
+              {DIRECTORIES.map((directory) => {
+                const files = sim.remoteFiles.filter((file) => file.dir === directory.path);
+                return (
+                  <div
+                    key={directory.path}
+                    className={
+                      "rounded-md border p-2 " +
+                      (sim.cwd === directory.path
+                        ? "border-indigo-400 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-950/50"
+                        : "border-slate-200 dark:border-slate-700")
+                    }
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      {dirPick ? (
+                        <button
+                          type="button"
+                          onClick={() => onDirPick(directory.path)}
+                          className="mono rounded border border-indigo-400 px-1.5 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                        >
+                          {directory.path}
+                        </button>
+                      ) : (
+                        <span className="mono text-xs font-bold text-slate-800 dark:text-slate-100">
+                          {directory.path}
+                        </span>
+                      )}
+                      <span
+                        className={
+                          "rounded px-1.5 py-0.5 text-[10px] font-bold " +
+                          ACCESS_CLASS[directory.access]
+                        }
+                      >
+                        {ACCESS_LABEL[directory.access]}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {directory.note}
+                    </p>
+                    {files.length > 0 && (
+                      <ul className="mono mt-1 space-y-0.5 text-[11px]">
+                        {files.map((file) => (
+                          <li key={file.name}>
+                            {pickable ? (
+                              <button
+                                type="button"
+                                onClick={() => onFilePick(file.name)}
+                                className="w-full rounded border border-indigo-400 px-1.5 py-0.5 text-left font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                              >
+                                {file.name}
+                                <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
+                                  {file.size} · {file.type}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-700 dark:text-slate-200">
+                                {file.name}
+                                <span className="ml-2 text-slate-500 dark:text-slate-400">
+                                  {file.size} · {file.type}
+                                </span>
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      }
+
+      function WirePane({ sim }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.wire.length]);
+
+        return (
+          <section
+            aria-labelledby="wire-heading"
+            className="flex min-h-[12rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="wire-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                On the wire — every line sent in clear text
+              </h2>
+            </div>
+            <div
+              ref={scrollRef}
+              aria-live="polite"
+              className="min-h-0 flex-1 space-y-1 overflow-auto p-3"
+            >
+              {sim.wire.length === 0 && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Nothing has been sent yet.
+                </p>
+              )}
+              {sim.wire.map((entry, index) => (
+                <div
+                  key={index}
+                  className="wire-enter rounded-md border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-white dark:bg-slate-600">
+                      {entry.from} &rarr; {entry.to}
+                    </span>
+                    <span
+                      className={
+                        entry.channel === "data"
+                          ? "rounded bg-amber-200 px-1.5 py-0.5 text-amber-950 dark:bg-amber-700 dark:text-amber-50"
+                          : "rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
+                      }
+                    >
+                      {entry.channel} connection · port {entry.port}
+                    </span>
+                  </div>
+                  <pre className="mono wire-text mt-0.5 text-[11px] text-slate-800 dark:text-slate-200">
+                    {entry.text}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      /* ------------------------------ app ----------------------------- */
+
+      function App() {
+        const [exerciseId, setExerciseId] = useState(EXERCISES[0].id);
+        const exercise = useMemo(
+          () => EXERCISES.find((item) => item.id === exerciseId) || EXERCISES[0],
+          [exerciseId],
+        );
+        const [view, setView] = useState("app");
+        const [sim, setSim] = useState(() => makeSimState(EXERCISES[0]));
+        const [error, setError] = useState(null);
+        const [draft, setDraft] = useState("");
+        const [hostDraft, setHostDraft] = useState("");
+        const [userDraft, setUserDraft] = useState("anonymous");
+        const [history, setHistory] = useState([]);
+        const [historyIndex, setHistoryIndex] = useState(null);
+        const inputRef = useRef(null);
+
+        const steps = useMemo(() => exercise.buildSteps(view), [exercise, view]);
+        const done = sim.step >= steps.length;
+        const step = done ? null : steps[sim.step];
+        const input = step ? (view === "terminal" ? step.terminal : step.app) : null;
+        const dirPick = step ? step.dirPick : null;
+        const filePick = step ? step.filePick : null;
+        const typePick = step ? step.typePick : null;
+        const needsAction = Boolean(input || dirPick || filePick || typePick);
+
+        useEffect(() => {
+          if (view === "terminal" && step && step.terminal && inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, [view, sim.step, step]);
+
+        const resetState = useCallback((target) => {
+          setSim(makeSimState(target));
+          setError(null);
+          setDraft("");
+          setHostDraft("");
+          setUserDraft(target.id === "authenticated" ? "" : "anonymous");
+          setHistory([]);
+          setHistoryIndex(null);
+        }, []);
+
+        const changeExercise = (nextId) => {
+          const target = EXERCISES.find((item) => item.id === nextId) || EXERCISES[0];
+          setExerciseId(target.id);
+          resetState(target);
+        };
+
+        const changeView = (nextView) => {
+          if (nextView === view) return;
+          setView(nextView);
+          resetState(exercise);
+        };
+
+        const commit = useCallback(
+          (extraSet) => {
+            setSim((state) => {
+              const current = steps[state.step];
+              if (!current) return state;
+              const out = current.effect ? current.effect(state) : {};
+              return {
+                ...state,
+                ...(extraSet || {}),
+                ...(out.set || {}),
+                wire: out.wire ? [...state.wire, ...out.wire] : state.wire,
+                term: out.term ? [...state.term, ...out.term] : state.term,
+                step: state.step + 1,
+              };
+            });
+            setError(null);
+          },
+          [steps],
+        );
+
+        const missteppedMessage = (value) => {
+          const list = (input && input.misstep) || (step && step.misstep) || [];
+          const hit = list.find((entry) => entry.match.test(value));
+          return hit ? hit.message : DEVIATION_MESSAGE;
+        };
+
+        const submitTerminal = (event) => {
+          event.preventDefault();
+          if (!step) return;
+          const raw = draft;
+          const value = norm(raw);
+          if (!input) {
+            setDraft("");
+            setError(
+              needsAction
+                ? "This step is not a command. Carry out the action described in the instruction panel."
+                : "This step does not need a command. Press Continue to carry on.",
+            );
+            return;
+          }
+          if (value) setHistory((list) => [...list, value]);
+          setHistoryIndex(null);
+          setDraft("");
+          if (matchesExpectation(input.expect, value)) {
+            commit();
+            return;
+          }
+          const message = missteppedMessage(value);
+          setSim((state) => ({
+            ...state,
+            term: [
+              ...state.term,
+              { type: "command", text: raw },
+              { type: "error", text: message },
+            ],
+          }));
+          setError(message);
+        };
+
+        const recallHistory = (direction) => {
+          if (history.length === 0) return;
+          const current = historyIndex == null ? history.length : historyIndex;
+          const next =
+            direction === "up"
+              ? Math.max(0, current - 1)
+              : Math.min(history.length, current + 1);
+          setHistoryIndex(next);
+          setDraft(next === history.length ? "" : history[next]);
+        };
+
+        const attemptConnect = (host, user) => {
+          if (!step || !input || (input.control !== "connect" && input.control !== "connectuser")) {
+            setError("This step does not need Quickconnect. Follow the instruction panel.");
+            return;
+          }
+          const value = norm(input.control === "connect" ? host : user);
+          if (matchesExpectation(input.expect, value)) {
+            commit();
+            return;
+          }
+          setError(missteppedMessage(value));
+        };
+
+        const attemptTransfer = () => {
+          if (
+            step &&
+            input &&
+            (input.control === "download" || input.control === "upload")
+          ) {
+            commit();
+            return;
+          }
+          setError("This step does not need a transfer. Follow the instruction panel.");
+        };
+
+        const attemptDirPick = (path) => {
+          if (!dirPick) return;
+          if (path === dirPick.expect) {
+            commit();
+            return;
+          }
+          setError(dirPick.wrong);
+        };
+
+        const attemptFilePick = (name) => {
+          if (!filePick) return;
+          if (name === filePick.expect) {
+            commit();
+            return;
+          }
+          setError(filePick.wrong);
+        };
+
+        const attemptTypePick = (id) => {
+          if (!typePick) return;
+          if (id === typePick.expect) {
+            commit();
+            return;
+          }
+          setError(typePick.wrong);
+        };
+
+        const updateDraft = (value) => {
+          setDraft(value);
+          if (error) setError(null);
+        };
+        const updateHost = (value) => {
+          setHostDraft(value);
+          if (error) setError(null);
+        };
+        const updateUser = (value) => {
+          setUserDraft(value);
+          if (error) setError(null);
+        };
+
+        const swapView = () => changeView(view === "terminal" ? "app" : "terminal");
+
+        const fillForMe = () => {
+          if (!input) return;
+          if (view === "terminal") {
+            updateDraft(input.display === undefined ? "" : input.display);
+            if (inputRef.current) inputRef.current.focus();
+          } else if (input.control === "connect") {
+            updateHost(input.display || "");
+          } else if (input.control === "connectuser") {
+            updateUser(input.display || "");
+          }
+        };
+
+        const canFill =
+          Boolean(input) &&
+          (view === "terminal" ||
+            input.control === "connect" ||
+            input.control === "connectuser");
+
+        const pickPrompt = dirPick
+          ? dirPick.prompt
+          : filePick
+            ? filePick.prompt
+            : typePick
+              ? typePick.prompt
+              : null;
+
+        const transferAction =
+          input && (input.control === "download" || input.control === "upload")
+            ? input.control
+            : null;
+
+        const toggleClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-sm font-bold text-indigo-700 shadow"
+            : "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold text-white/90 hover:bg-white/20";
+
+        return (
+          <div className="protocol-lab flex flex-col bg-slate-100 dark:bg-slate-950">
+            <header
+              data-interactive-header
+              className="flex flex-wrap items-center justify-between gap-4"
+            >
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">FTP File Transfer</h1>
+                <p className="text-sm opacity-90">
+                  Two connections, two kinds of login — driven by client or by hand
+                </p>
+              </div>
+              <div data-interactive-actions className="flex flex-wrap items-center gap-2">
+                <select
+                  id="exercise-select"
+                  aria-label="Exercise"
+                  value={exerciseId}
+                  onChange={(event) => changeExercise(event.target.value)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {EXERCISES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  role="group"
+                  aria-label="Client view"
+                  className="flex shrink-0 items-center gap-1 rounded-lg bg-black/25 p-1"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={view === "app"}
+                    onClick={() => changeView("app")}
+                    className={toggleClass(view === "app")}
+                  >
+                    Application
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={view === "terminal"}
+                    onClick={() => changeView("terminal")}
+                    className={toggleClass(view === "terminal")}
+                  >
+                    Terminal
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {done ? (
+              <RecapCard
+                exercise={exercise}
+                view={view}
+                onRestart={() => resetState(exercise)}
+                onSwapView={swapView}
+              />
+            ) : (
+              <InstructionPanel
+                exercise={exercise}
+                stepNumber={sim.step}
+                totalSteps={steps.length}
+                step={step}
+                input={input}
+                pickPrompt={pickPrompt}
+              />
+            )}
+
+            <ErrorBar message={error} />
+
+            <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-2 lg:overflow-hidden">
+              <section
+                aria-label="Client"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client — {view === "terminal" ? "terminal" : "FTP client software"}
+                </h2>
+                {view === "terminal" ? (
+                  <TerminalView
+                    sim={sim}
+                    draft={draft}
+                    setDraft={updateDraft}
+                    onSubmit={submitTerminal}
+                    onHistory={recallHistory}
+                    inputRef={inputRef}
+                  />
+                ) : (
+                  <FtpClientView
+                    sim={sim}
+                    hostDraft={hostDraft}
+                    setHostDraft={updateHost}
+                    userDraft={userDraft}
+                    setUserDraft={updateUser}
+                    onConnect={attemptConnect}
+                    onTransfer={attemptTransfer}
+                    transferAction={transferAction}
+                  />
+                )}
+                <LocalPanel sim={sim} filePick={filePick} onFilePick={attemptFilePick} />
+              </section>
+
+              <section
+                aria-label="Behind the scenes"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Behind the scenes
+                </h2>
+                <ConnectionStrip sim={sim} typePick={typePick} onTypePick={attemptTypePick} />
+                <ServerPane
+                  sim={sim}
+                  dirPick={dirPick}
+                  onDirPick={attemptDirPick}
+                  filePick={filePick}
+                  onFilePick={attemptFilePick}
+                />
+                <WirePane sim={sim} />
+              </section>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => resetState(exercise)}
+                className="shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Restart exercise
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {canFill && (
+                  <button
+                    type="button"
+                    onClick={fillForMe}
+                    className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                  >
+                    Type it for me
+                  </button>
+                )}
+                {!done && !needsAction && (
+                  <button
+                    type="button"
+                    onClick={() => commit()}
+                    className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    Continue &#9654;
+                  </button>
+                )}
+                {!done && needsAction && (
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Complete the action above to continue.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,2013 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: DNS Name Resolution Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Full-height app shell. The production site navigation bar is 58px
+         tall, so the built page must subtract it or the action row falls
+         below the viewport. Locked to the viewport only once the two
+         columns sit side by side; narrower than that the page scrolls. */
+      .protocol-lab {
+        min-height: 100vh;
+      }
+      @media (min-width: 1024px) {
+        .protocol-lab {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .protocol-lab {
+          height: calc(100vh - 58px);
+        }
+      }
+
+      .mono {
+        font-family: "Consolas", "Menlo", "Courier New", monospace;
+      }
+      .wire-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .device-chrome {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.7),
+          0 12px 26px rgba(15, 23, 42, 0.08);
+      }
+      .dark .device-chrome {
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+      }
+      .wire-enter {
+        animation: wire-in 260ms ease-out;
+      }
+      @keyframes wire-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wire-enter {
+          animation: none;
+        }
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+      /* ---------------------------------------------------------------
+         Fictional estate, shared with the other protocol simulators.
+         Every name is inside example.com (RFC 2606) and every address is
+         inside the RFC 5737 documentation ranges, so nothing here can
+         resolve to or be routed at a real third party.
+         --------------------------------------------------------------- */
+      const TARGET = "mysite.example.com";
+      const TARGET_IP = "192.0.2.34";
+      const SPOOF_IP = "192.0.2.99";
+      const MISSING = "missing.example.com";
+
+      const DEVIATION_MESSAGE =
+        "That is not the action for this step. Follow the simulation instructions exactly — enter the command shown in the instruction panel.";
+
+      const NONE = "__none__";
+
+      // The chain a name walks along. Order matters: resolution always
+      // starts on the local machine and only then leaves it.
+      const NODES = [
+        {
+          id: "hosts",
+          label: "hosts file",
+          sub: "local text file on this computer",
+          scope: "local",
+        },
+        {
+          id: "cache",
+          label: "Local DNS cache",
+          sub: "held by this computer",
+          scope: "local",
+        },
+        {
+          id: "resolver",
+          label: "ISP DNS resolver",
+          sub: "203.0.113.10 — resolves on your behalf",
+          scope: "network",
+        },
+        {
+          id: "root",
+          label: "Root name server (.)",
+          sub: "198.51.100.1 — top of the hierarchy",
+          scope: "network",
+        },
+        {
+          id: "tld",
+          label: ".com TLD name server",
+          sub: "198.51.100.20 — knows the .com zone",
+          scope: "network",
+        },
+        {
+          id: "auth",
+          label: "Authoritative name server for example.com",
+          sub: "192.0.2.2 — holds the zone records",
+          scope: "network",
+        },
+      ];
+
+      // The authoritative server's zone database. The other hosts appear
+      // here too, which is where the FTP, SSH and email simulators live.
+      const ZONE = [
+        { name: "mysite.example.com", type: "A", value: TARGET_IP, ttl: 3600 },
+        { name: "mail.example.com", type: "A", value: "192.0.2.40", ttl: 3600 },
+        { name: "ftp.example.com", type: "A", value: "192.0.2.45", ttl: 3600 },
+        { name: "server.example.com", type: "A", value: "192.0.2.50", ttl: 3600 },
+        { name: "example.com", type: "MX", value: "10 mail.example.com", ttl: 3600 },
+      ];
+
+      const HOSTS_PATH = "C:\\Windows\\System32\\drivers\\etc\\hosts";
+
+      /* --------------------------- helpers --------------------------- */
+
+      const norm = (value) =>
+        String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+
+      const matchesExpectation = (expect, value) => {
+        if (expect instanceof RegExp) return expect.test(value);
+        return norm(expect).toLowerCase() === value.toLowerCase();
+      };
+
+      // Tiny inline formatter so the teaching text can carry **bold** and
+      // `code` without raw HTML.
+      const renderRich = (text) => {
+        const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+        return parts.map((part, index) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={index} className="font-bold">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+              <code
+                key={index}
+                className="mono rounded bg-slate-200 px-1 py-0.5 text-[0.92em] text-slate-900 dark:bg-slate-700 dark:text-slate-50"
+              >
+                {part.slice(1, -1)}
+              </code>
+            );
+          }
+          return part;
+        });
+      };
+
+      /* ----------------------- step construction ----------------------
+         The learner drives resolution by clicking the next place to look,
+         so the order of resolution is something they carry out rather
+         than read. The application and terminal views differ only where
+         a real user would genuinely do something different. */
+
+      const nodeStep = ({ id, nodeId, teach, prompt, wrong, wrongMap, query, status, set }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        nodePick: {
+          expect: nodeId,
+          prompt,
+          wrongMap: wrongMap || null,
+          wrong:
+            wrong ||
+            "That is not the next place to look. Re-read the order of resolution in the instruction panel.",
+        },
+        effect: (state) => ({
+          queries: query ? [query] : [],
+          term: query ? [{ type: query.kind === "miss" ? "info" : "recv", text: query.line }] : [],
+          set: {
+            nodeStatus: { ...state.nodeStatus, [nodeId]: status },
+            activeNode: nodeId,
+            ...(set || {}),
+          },
+        }),
+      });
+
+      const classifyStep = ({ id, teach, prompt, options, expect, wrong }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        classify: { prompt, options, expect, wrong },
+        effect: () => ({}),
+      });
+
+      const recordStep = ({ id, teach, prompt, expect, wrongRecord, wrongNone, query, set }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        recordPick: { expect, prompt, wrongRecord, wrongNone },
+        effect: (state) => ({
+          queries: query ? [query] : [],
+          term: query ? [{ type: "recv", text: query.line }] : [],
+          set: {
+            nodeStatus: { ...state.nodeStatus, auth: expect === NONE ? "error" : "authoritative" },
+            ...(set || {}),
+          },
+        }),
+      });
+
+      const lookupStep = ({ id, name, teach }) => ({
+        id,
+        teach,
+        terminal: {
+          instruction: "Type: nslookup " + name,
+          expect: "nslookup " + name,
+          display: "nslookup " + name,
+          misstep: [
+            {
+              match: /^nslookup$/i,
+              message: "nslookup needs the name you want resolving: nslookup " + name,
+            },
+          ],
+        },
+        app: {
+          instruction: "Type " + name + " into the lookup box and click Look up.",
+          control: "lookup",
+          expect: name,
+          display: name,
+        },
+        effect: () => ({
+          term: [{ type: "command", text: "nslookup " + name }],
+          set: { lookupName: name, utilityTab: "lookup" },
+        }),
+      });
+
+      /* --------------------------- exercises -------------------------- */
+
+      const CACHED_ENTRY = { name: TARGET, ip: TARGET_IP, ttl: 2840 };
+
+      const EXERCISES = [
+        {
+          id: "cold",
+          label: "A: Cold lookup — full resolution",
+          examPoints: [
+            "The domain name service is a distributed, hierarchical database mapping fully qualified domain names onto IP addresses.",
+            "Resolution is checked locally first — hosts file, then local cache — before any query leaves the computer.",
+            "No single name server holds every mapping; the root and TLD servers return referrals, not answers.",
+            "Resolution continues until an authoritative name server is reached: the one holding the actual record in its own zone database.",
+            "The answer is cached on the way back, for the length of the record's TTL.",
+          ],
+          initial: {},
+          buildSteps: () => [
+            lookupStep({
+              id: "start",
+              name: TARGET,
+              teach:
+                "A program needs the **IP address** behind `" +
+                TARGET +
+                "`. The **domain name service (DNS)** provides a distributed, hierarchical database that maps **fully qualified domain names** onto IP addresses. No single server holds every mapping, so finding one is a journey.",
+            }),
+            nodeStep({
+              id: "hosts",
+              nodeId: "hosts",
+              teach:
+                "Resolution always begins on this computer. The first thing checked is the **hosts file**: a plain text file that maps names directly onto addresses. If the name were listed there, no DNS query would be sent at all.",
+              prompt: "Click the first place the computer looks.",
+              wrong:
+                "Resolution starts locally, before any query leaves the computer. Which local source is checked first?",
+              status: "miss",
+              query: {
+                from: "Client",
+                to: "hosts file",
+                question: TARGET,
+                answer: "no entry",
+                kind: "miss",
+                line: "hosts file: no entry for " + TARGET,
+              },
+            }),
+            nodeStep({
+              id: "cache",
+              nodeId: "cache",
+              teach:
+                "Next the computer checks its **local DNS cache** — the answers it has been given recently. The cache is empty, so this name has not been looked up recently on this machine.",
+              prompt: "Click the second place the computer looks.",
+              wrong:
+                "There is one more place on this computer to check before a query is sent over the network.",
+              status: "miss",
+              query: {
+                from: "Client",
+                to: "local DNS cache",
+                question: TARGET,
+                answer: "not cached",
+                kind: "miss",
+                line: "local cache: no entry for " + TARGET,
+              },
+            }),
+            nodeStep({
+              id: "resolver",
+              nodeId: "resolver",
+              teach:
+                "With no local answer, the computer sends a DNS query to its configured **DNS resolver**, usually run by the ISP, on **port 53**. The resolver carries out resolution *on the client's behalf* — which is why it is called a **recursive resolver**. Its own cache is empty too, so it must go and find the answer.",
+              prompt: "Click the server the query is sent to.",
+              wrong:
+                "The client does not query the root directly. It hands the whole job to one server, which resolves on its behalf.",
+              status: "asked",
+              query: {
+                from: "Client",
+                to: "ISP resolver (203.0.113.10:53)",
+                question: "A? " + TARGET,
+                answer: "not cached — resolving",
+                kind: "miss",
+                line: "query sent to 203.0.113.10:53 — A? " + TARGET,
+              },
+            }),
+            nodeStep({
+              id: "root",
+              nodeId: "root",
+              teach:
+                "The resolver starts at the **top of the hierarchy**: a **root name server**. The root does not know the address of `" +
+                TARGET +
+                "` — no single server does. It knows only which name servers are responsible for the `.com` **top-level domain**.",
+              prompt: "Click the server the resolver asks first.",
+              wrong:
+                "Resolution works down the hierarchy from the top. Which server sits at the very top of the domain name hierarchy?",
+              status: "referral",
+              query: {
+                from: "ISP resolver",
+                to: "Root name server (.)",
+                question: "A? " + TARGET,
+                answer: "referral → .com name servers (198.51.100.20)",
+                kind: "referral",
+                line: "root (.) → referral to .com name servers",
+              },
+            }),
+            classifyStep({
+              id: "classify-root",
+              teach:
+                "Being told *where to ask next* is not the same as being given the answer. This distinction is worth being precise about.",
+              prompt: "What kind of response did the root name server give?",
+              options: [
+                { id: "referral", label: "A referral" },
+                { id: "authoritative", label: "An authoritative answer" },
+              ],
+              expect: "referral",
+              wrong:
+                "An authoritative answer contains the record itself. This response only names other servers to ask, so it is a referral.",
+            }),
+            nodeStep({
+              id: "tld",
+              nodeId: "tld",
+              teach:
+                "The resolver follows the referral and asks a **.com name server**. It knows which name servers hold the zone for `example.com`, but not the records inside that zone — so it returns **another referral**.",
+              prompt: "Click the server the referral points to.",
+              status: "referral",
+              query: {
+                from: "ISP resolver",
+                to: ".com TLD name server",
+                question: "A? " + TARGET,
+                answer: "referral → name servers for example.com (192.0.2.2)",
+                kind: "referral",
+                line: ".com → referral to name servers for example.com",
+              },
+            }),
+            nodeStep({
+              id: "auth",
+              nodeId: "auth",
+              teach:
+                "The resolver follows the second referral. This server holds the **zone** for `example.com` in its own database, which makes it the **authoritative name server** for that domain — the server that holds the actual records rather than a pointer to somewhere else.",
+              prompt: "Click the server the second referral points to.",
+              status: "asked",
+              query: {
+                from: "ISP resolver",
+                to: "Authoritative NS for example.com",
+                question: "A? " + TARGET,
+                answer: "searching its zone database",
+                kind: "ask",
+                line: "querying authoritative name server 192.0.2.2",
+              },
+            }),
+            recordStep({
+              id: "record",
+              teach:
+                "The authoritative server now looks the name up in its **zone database**: the records it is responsible for. This is the end of the journey — whatever this server says is the definitive answer.",
+              prompt: "Which record answers the query for " + TARGET + "?",
+              expect: TARGET,
+              wrongRecord:
+                "That record is for a different name, or a different record type. The query asked for the A record — the IPv4 address — of " +
+                TARGET +
+                ".",
+              wrongNone:
+                "Look again: this server is authoritative for example.com, and the name is listed in its zone.",
+              query: {
+                from: "Authoritative NS",
+                to: "ISP resolver",
+                question: "A? " + TARGET,
+                answer: TARGET_IP + " (authoritative, TTL 3600)",
+                kind: "authoritative",
+                line: "authoritative answer: " + TARGET + " has address " + TARGET_IP,
+              },
+              set: { result: { ip: TARGET_IP } },
+            }),
+            {
+              id: "cache-back",
+              teach:
+                "The answer travels back down the chain. The resolver stores it in its cache, and so does the client, each for the length of the record's **TTL (time to live)** — 3600 seconds here. The application finally has the address `" +
+                TARGET_IP +
+                "` and can open a TCP connection to it, which is exactly where the HTTP simulator begins.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                term: [
+                  { type: "recv", text: "Name:    " + TARGET },
+                  { type: "recv", text: "Address: " + TARGET_IP },
+                  { type: "info", text: "(answer cached by the resolver and by this computer, TTL 3600)" },
+                ],
+                set: {
+                  clientCache: [{ name: TARGET, ip: TARGET_IP, ttl: 3600 }],
+                  resolverCache: [{ name: TARGET, ip: TARGET_IP, ttl: 3600 }],
+                },
+              }),
+            },
+          ],
+        },
+        {
+          id: "warm",
+          label: "B: Warm lookup — answered from the cache",
+          examPoints: [
+            "A cached answer is returned without any DNS query leaving the computer.",
+            "Each record is cached only for its TTL (time to live), after which it must be looked up again.",
+            "Caching is what stops every name lookup walking the whole hierarchy.",
+          ],
+          initial: { clientCache: [CACHED_ENTRY], resolverCache: [CACHED_ENTRY] },
+          buildSteps: () => [
+            lookupStep({
+              id: "start",
+              name: TARGET,
+              teach:
+                "The same name is looked up again, shortly after Exercise A. Watch how far the query has to travel this time.",
+            }),
+            nodeStep({
+              id: "hosts",
+              nodeId: "hosts",
+              teach:
+                "The order of resolution never changes: the **hosts file** is always checked first, cache or no cache.",
+              prompt: "Click the first place the computer looks.",
+              status: "miss",
+              query: {
+                from: "Client",
+                to: "hosts file",
+                question: TARGET,
+                answer: "no entry",
+                kind: "miss",
+                line: "hosts file: no entry for " + TARGET,
+              },
+            }),
+            nodeStep({
+              id: "cache",
+              nodeId: "cache",
+              teach:
+                "Now the **local DNS cache** is checked — and this time the record is there, put in by the previous lookup. The answer is returned immediately and **no DNS query leaves this computer at all**. Compare that with the six exchanges Exercise A needed.",
+              prompt: "Click the second place the computer looks.",
+              status: "hit",
+              query: {
+                from: "Client",
+                to: "local DNS cache",
+                question: TARGET,
+                answer: TARGET_IP + " (cache hit, " + CACHED_ENTRY.ttl + "s of TTL left)",
+                kind: "hit",
+                line: "local cache HIT: " + TARGET + " has address " + TARGET_IP,
+              },
+              set: { result: { ip: TARGET_IP } },
+            }),
+            {
+              id: "inspect",
+              teach:
+                "The cache is not magic — you can look inside it. Each entry carries the **TTL** it was given by the authoritative server, counting down. When it reaches zero the entry is discarded and the name must be resolved again from scratch.",
+              terminal: {
+                instruction: "Type: ipconfig /displaydns",
+                expect: "ipconfig /displaydns",
+                display: "ipconfig /displaydns",
+              },
+              app: {
+                instruction: "Open the Local DNS cache tab in the network utility.",
+                control: "tab",
+                expect: "cache",
+              },
+              effect: () => ({
+                term: [
+                  { type: "recv", text: "Record Name . . . . . : " + TARGET },
+                  { type: "recv", text: "Record Type . . . . . : 1 (A)" },
+                  { type: "recv", text: "Time To Live  . . . . : " + CACHED_ENTRY.ttl },
+                  { type: "recv", text: "A (Host) Record . . . : " + TARGET_IP },
+                ],
+                set: { utilityTab: "cache" },
+              }),
+            },
+            {
+              id: "flush",
+              teach:
+                "A cached entry can also be discarded deliberately. Flushing the cache is the same thing that happens automatically once the TTL expires.",
+              terminal: {
+                instruction: "Type: ipconfig /flushdns",
+                expect: "ipconfig /flushdns",
+                display: "ipconfig /flushdns",
+              },
+              app: {
+                instruction: "Click Flush cache in the network utility.",
+                control: "flush",
+              },
+              effect: () => ({
+                term: [{ type: "recv", text: "Successfully flushed the DNS Resolver Cache." }],
+                set: { clientCache: [], utilityTab: "cache" },
+              }),
+            },
+            nodeStep({
+              id: "verify",
+              nodeId: "cache",
+              teach:
+                "Check the cache once more. It is empty, so the next lookup of this name will have to walk the whole hierarchy again — hosts file, cache, resolver, root, TLD, authoritative server.",
+              prompt: "Click the local DNS cache to check it again.",
+              status: "miss",
+              query: {
+                from: "Client",
+                to: "local DNS cache",
+                question: TARGET,
+                answer: "empty — entry discarded",
+                kind: "miss",
+                line: "local cache: empty",
+              },
+              set: { result: null },
+            }),
+          ],
+        },
+        {
+          id: "hosts-override",
+          label: "C: The hosts file wins",
+          examPoints: [
+            "The hosts file is consulted before the cache and before any DNS query is sent.",
+            "An entry in the hosts file overrides whatever the authoritative name server says.",
+            "This is why altering the hosts file is a way of redirecting a machine to the wrong server.",
+          ],
+          initial: { utilityTab: "hosts" },
+          buildSteps: () => [
+            {
+              id: "add",
+              teach:
+                "The **hosts file** is a plain text file of name-to-address mappings. Anything listed in it is used directly. Add an entry that points `" +
+                TARGET +
+                "` at a completely different address.",
+              terminal: {
+                instruction:
+                  "Type: echo " + SPOOF_IP + " " + TARGET + " >> " + HOSTS_PATH,
+                expect: "echo " + SPOOF_IP + " " + TARGET + " >> " + HOSTS_PATH,
+                display: "echo " + SPOOF_IP + " " + TARGET + " >> " + HOSTS_PATH,
+              },
+              app: {
+                instruction:
+                  "In the hosts file tab, type " +
+                  SPOOF_IP +
+                  " " +
+                  TARGET +
+                  " and click Add entry.",
+                control: "hostsadd",
+                expect: SPOOF_IP + " " + TARGET,
+                display: SPOOF_IP + " " + TARGET,
+              },
+              effect: () => ({
+                term: [{ type: "info", text: "Entry appended to " + HOSTS_PATH }],
+                set: {
+                  hostsFile: [{ name: TARGET, ip: SPOOF_IP }],
+                  utilityTab: "hosts",
+                },
+              }),
+            },
+            lookupStep({
+              id: "start",
+              name: TARGET,
+              teach:
+                "Now resolve the name as normal. Nothing about the lookup itself has changed.",
+            }),
+            nodeStep({
+              id: "hosts",
+              nodeId: "hosts",
+              teach:
+                "The **hosts file** is checked first, exactly as always — and this time it has an entry. The address in the file is returned straight away and **resolution stops**. No DNS query is sent, and none of the name servers is ever asked.",
+              prompt: "Click the first place the computer looks.",
+              status: "hit",
+              query: {
+                from: "Client",
+                to: "hosts file",
+                question: TARGET,
+                answer: SPOOF_IP + " (local entry)",
+                kind: "hit",
+                line: "hosts file HIT: " + TARGET + " has address " + SPOOF_IP,
+              },
+              set: { result: { ip: SPOOF_IP } },
+            }),
+            classifyStep({
+              id: "classify-source",
+              teach:
+                "The address returned was `" +
+                SPOOF_IP +
+                "`, not the `" +
+                TARGET_IP +
+                "` held by the authoritative name server. It is worth being clear about where that answer actually came from.",
+              prompt: "Which source supplied this answer?",
+              options: [
+                { id: "hosts", label: "The local hosts file" },
+                { id: "resolver", label: "The ISP's DNS resolver" },
+                { id: "auth", label: "The authoritative name server" },
+              ],
+              expect: "hosts",
+              wrong:
+                "No query left the computer, so no name server was involved. Look at which node in the chain lit up.",
+            }),
+            {
+              id: "reflect",
+              teach:
+                "The browser will now connect to `" +
+                SPOOF_IP +
+                "` believing it is `" +
+                TARGET +
+                "`. Because the hosts file is consulted **before** the cache and before any DNS query, an entry there overrides the real answer completely — which is exactly why malware sometimes edits it, and why the file is protected by the operating system.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                term: [{ type: "info", text: "(resolution stopped at the hosts file)" }],
+                set: {},
+              }),
+            },
+          ],
+        },
+        {
+          id: "nxdomain",
+          label: "D: Domain not found",
+          examPoints: [
+            "Only the authoritative name server can state for certain that a name does not exist.",
+            "NXDOMAIN means the domain has no record; it is not a network failure.",
+            "A cached referral lets the resolver skip the root and TLD servers next time.",
+            "The browser only reports the failure — the answer came from the name server.",
+          ],
+          initial: { resolverKnowsNs: true },
+          buildSteps: () => [
+            lookupStep({
+              id: "start",
+              name: MISSING,
+              teach:
+                "This time the name being resolved is `" +
+                MISSING +
+                "`. Everything about the process is the same — right up until the last step.",
+            }),
+            nodeStep({
+              id: "hosts",
+              nodeId: "hosts",
+              teach: "The **hosts file** is checked first, as always. There is no entry.",
+              prompt: "Click the first place the computer looks.",
+              status: "miss",
+              query: {
+                from: "Client",
+                to: "hosts file",
+                question: MISSING,
+                answer: "no entry",
+                kind: "miss",
+                line: "hosts file: no entry for " + MISSING,
+              },
+            }),
+            nodeStep({
+              id: "cache",
+              nodeId: "cache",
+              teach: "The **local DNS cache** has never held this name either.",
+              prompt: "Click the second place the computer looks.",
+              status: "miss",
+              query: {
+                from: "Client",
+                to: "local DNS cache",
+                question: MISSING,
+                answer: "not cached",
+                kind: "miss",
+                line: "local cache: no entry for " + MISSING,
+              },
+            }),
+            nodeStep({
+              id: "auth",
+              nodeId: "auth",
+              teach:
+                "The resolver still holds the **referral** it learned during the earlier lookup: it already knows which name servers are authoritative for `example.com`. Cached referrals are why repeated lookups within a domain do not keep starting from the top of the hierarchy.",
+              prompt: "Click the server the resolver can go straight to.",
+              wrongMap: {
+                root: "The resolver cached the referral it was given earlier, so it already knows which servers are authoritative for example.com. It does not need to start at the root again.",
+                tld: "The resolver does not need the .com servers either — it cached the referral they gave it last time.",
+              },
+              status: "asked",
+              query: {
+                from: "ISP resolver",
+                to: "Authoritative NS for example.com",
+                question: "A? " + MISSING,
+                answer: "searching its zone database",
+                kind: "ask",
+                line: "querying authoritative name server 192.0.2.2 (referral cached)",
+              },
+            }),
+            recordStep({
+              id: "record",
+              teach:
+                "The authoritative name server searches the **zone database** it is responsible for. This is the one server in the world that can say for certain whether this name exists.",
+              prompt: "Which record answers the query for " + MISSING + "?",
+              expect: NONE,
+              wrongRecord:
+                "That record is for a different name. Compare each entry with " +
+                MISSING +
+                " exactly.",
+              wrongNone: "",
+              query: {
+                from: "Authoritative NS",
+                to: "ISP resolver",
+                question: "A? " + MISSING,
+                answer: "NXDOMAIN — no such name in this zone",
+                kind: "error",
+                line: "*** authoritative answer: NXDOMAIN (non-existent domain)",
+              },
+              set: { result: { error: "NXDOMAIN" } },
+            }),
+            {
+              id: "report",
+              teach:
+                "**NXDOMAIN** (non-existent domain) travels back down the chain to the client, and the browser reports that the address could not be found. Note carefully where that verdict came from: the **authoritative name server**, not the browser and not the resolver. Reaching a name server is not the same as getting an answer, and a failure here is a statement about the domain, not about the network.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                term: [
+                  { type: "error", text: "*** No internal type for both IPv4 and IPv6 Addresses (A/AAAA) records available for " + MISSING },
+                ],
+                set: {},
+              }),
+            },
+          ],
+        },
+      ];
+
+      /* -------------------------- presentation ------------------------ */
+
+      const TERM_LINE_CLASS = {
+        command: "text-sky-800 dark:text-sky-300",
+        recv: "text-emerald-800 dark:text-emerald-300",
+        info: "text-slate-600 dark:text-slate-400",
+        error: "text-red-700 dark:text-red-400",
+      };
+      const TERM_LINE_PREFIX = { command: "$ ", recv: "< ", info: "  ", error: "! " };
+
+      const STATUS_LABEL = {
+        miss: "no entry",
+        hit: "answer found here",
+        asked: "queried",
+        referral: "returned a referral",
+        authoritative: "authoritative answer",
+        error: "no such name",
+      };
+      const STATUS_CLASS = {
+        miss: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100",
+        hit: "bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50",
+        asked: "bg-sky-200 text-sky-900 dark:bg-sky-800 dark:text-sky-50",
+        referral: "bg-amber-200 text-amber-950 dark:bg-amber-700 dark:text-amber-50",
+        authoritative: "bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50",
+        error: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-50",
+      };
+      const QUERY_KIND_CLASS = {
+        miss: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100",
+        hit: "bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50",
+        ask: "bg-sky-200 text-sky-900 dark:bg-sky-800 dark:text-sky-50",
+        referral: "bg-amber-200 text-amber-950 dark:bg-amber-700 dark:text-amber-50",
+        authoritative: "bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50",
+        error: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-50",
+      };
+      const QUERY_KIND_LABEL = {
+        miss: "no answer here",
+        hit: "cache hit",
+        ask: "query",
+        referral: "referral",
+        authoritative: "authoritative answer",
+        error: "NXDOMAIN",
+      };
+
+      const makeSimState = (exercise) => ({
+        step: 0,
+        queries: [],
+        term: [
+          {
+            type: "info",
+            text: "Ready. Follow the instructions above.",
+          },
+        ],
+        hostsFile: [],
+        clientCache: [],
+        resolverCache: [],
+        resolverKnowsNs: false,
+        nodeStatus: {},
+        lookupName: "",
+        result: null,
+        utilityTab: "lookup",
+        activeNode: null,
+        ...(exercise.initial || {}),
+      });
+
+      function ErrorBar({ message }) {
+        if (!message) return null;
+        return (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border-y border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200"
+          >
+            <span aria-hidden="true" className="shrink-0">
+              &#9888;
+            </span>
+            <span>{message}</span>
+          </div>
+        );
+      }
+
+      function InstructionPanel({ exercise, stepNumber, totalSteps, step, input, pickPrompt }) {
+        const percent = Math.round((stepNumber / totalSteps) * 100);
+        return (
+          <section
+            aria-labelledby="instruction-heading"
+            className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <h2
+                id="instruction-heading"
+                className="text-sm font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300"
+              >
+                {exercise.label}
+              </h2>
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                Step {Math.min(stepNumber + 1, totalSteps)} of {totalSteps}
+              </span>
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={totalSteps}
+                aria-valuenow={stepNumber}
+                aria-label="Exercise progress"
+                className="h-2 w-32 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              >
+                <div
+                  className="h-full rounded-full bg-indigo-600 dark:bg-indigo-400"
+                  style={{ width: percent + "%" }}
+                />
+              </div>
+            </div>
+            <p className="max-w-4xl text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+              {renderRich(step.teach)}
+            </p>
+            <p className="mt-2 flex flex-wrap items-baseline gap-2 text-sm">
+              <span className="rounded bg-indigo-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white dark:bg-indigo-500">
+                Now do this
+              </span>
+              <span className="font-semibold text-slate-900 dark:text-slate-50">
+                {input ? input.instruction : pickPrompt ? pickPrompt : "Press Continue."}
+              </span>
+            </p>
+          </section>
+        );
+      }
+
+      function RecapCard({ exercise, view, onRestart, onSwapView }) {
+        return (
+          <section
+            aria-labelledby="recap-heading"
+            className="border-b border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/50"
+          >
+            <h2
+              id="recap-heading"
+              className="text-sm font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200"
+            >
+              Exercise complete — {exercise.label}
+            </h2>
+            <ul className="mt-2 max-w-4xl list-disc space-y-1 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+              {exercise.examPoints.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onSwapView}
+                className="shrink-0 whitespace-nowrap rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-emerald-950"
+              >
+                Run this exercise in {view === "terminal" ? "the application" : "the terminal"} view
+              </button>
+              <button
+                type="button"
+                onClick={onRestart}
+                className="shrink-0 whitespace-nowrap rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-900"
+              >
+                Restart this exercise
+              </button>
+            </div>
+          </section>
+        );
+      }
+
+      function NetworkUtilityView({
+        sim,
+        lookupDraft,
+        setLookupDraft,
+        hostsDraft,
+        setHostsDraft,
+        onLookup,
+        onTab,
+        onFlush,
+        onHostsAdd,
+      }) {
+        const tabClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-t-md border-x border-t border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 dark:border-slate-600 dark:bg-slate-900 dark:text-indigo-300"
+            : "shrink-0 whitespace-nowrap rounded-t-md px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700";
+
+        return (
+          <div className="device-chrome flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Network utility
+              </p>
+            </div>
+
+            <div className="flex gap-1 border-b border-slate-200 bg-slate-100 px-2 pt-1 dark:border-slate-700 dark:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => onTab("lookup")}
+                aria-pressed={sim.utilityTab === "lookup"}
+                className={tabClass(sim.utilityTab === "lookup")}
+              >
+                Name lookup
+              </button>
+              <button
+                type="button"
+                onClick={() => onTab("hosts")}
+                aria-pressed={sim.utilityTab === "hosts"}
+                className={tabClass(sim.utilityTab === "hosts")}
+              >
+                hosts file
+              </button>
+              <button
+                type="button"
+                onClick={() => onTab("cache")}
+                aria-pressed={sim.utilityTab === "cache"}
+                className={tabClass(sim.utilityTab === "cache")}
+              >
+                Local DNS cache
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-3">
+              {sim.utilityTab === "lookup" && (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    onLookup(lookupDraft);
+                  }}
+                >
+                  <label
+                    htmlFor="lookup-input"
+                    className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+                  >
+                    Domain name to resolve
+                  </label>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <input
+                      id="lookup-input"
+                      type="text"
+                      autoComplete="off"
+                      spellCheck="false"
+                      value={lookupDraft}
+                      onChange={(event) => setLookupDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          onLookup(lookupDraft);
+                        }
+                      }}
+                      className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                    <button
+                      type="submit"
+                      className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                    >
+                      Look up
+                    </button>
+                  </div>
+                  <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Result
+                    </p>
+                    {sim.result && sim.result.ip ? (
+                      <p className="mono mt-1 text-sm text-emerald-800 dark:text-emerald-300">
+                        {sim.lookupName} has address {sim.result.ip}
+                      </p>
+                    ) : sim.result && sim.result.error ? (
+                      <p className="mono mt-1 text-sm text-red-700 dark:text-red-400">
+                        {sim.result.error} — server can&rsquo;t find {sim.lookupName}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        No answer yet.
+                      </p>
+                    )}
+                  </div>
+                </form>
+              )}
+
+              {sim.utilityTab === "hosts" && (
+                <div>
+                  <p className="mono text-[11px] text-slate-500 dark:text-slate-400">
+                    {HOSTS_PATH}
+                  </p>
+                  {sim.hostsFile.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                      No entries. Every name will have to be resolved through DNS.
+                    </p>
+                  ) : (
+                    <ul className="mono mt-2 space-y-1 text-xs">
+                      {sim.hostsFile.map((entry) => (
+                        <li
+                          key={entry.name}
+                          className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-950 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-100"
+                        >
+                          {entry.ip}&nbsp;&nbsp;{entry.name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <form
+                    className="mt-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      onHostsAdd(hostsDraft);
+                    }}
+                  >
+                    <label
+                      htmlFor="hosts-input"
+                      className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+                    >
+                      New entry (address then name)
+                    </label>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <input
+                        id="hosts-input"
+                        type="text"
+                        autoComplete="off"
+                        spellCheck="false"
+                        value={hostsDraft}
+                        onChange={(event) => setHostsDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            onHostsAdd(hostsDraft);
+                          }
+                        }}
+                        className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                      />
+                      <button
+                        type="submit"
+                        className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                      >
+                        Add entry
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {sim.utilityTab === "cache" && (
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Cached records on this computer
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onFlush}
+                      className="shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      Flush cache
+                    </button>
+                  </div>
+                  {sim.clientCache.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                      The cache is empty.
+                    </p>
+                  ) : (
+                    <ul className="mono mt-2 space-y-1 text-xs">
+                      {sim.clientCache.map((entry) => (
+                        <li
+                          key={entry.name}
+                          className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                        >
+                          {entry.name} &rarr; {entry.ip}
+                          <span className="ml-2 text-slate-500 dark:text-slate-400">
+                            TTL {entry.ttl}s
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function TerminalView({ sim, draft, setDraft, onSubmit, onHistory, inputRef }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.term.length]);
+
+        return (
+          <div className="flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-slate-50 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              Command prompt
+            </div>
+            <div
+              ref={scrollRef}
+              role="log"
+              aria-live="polite"
+              aria-label="Terminal output"
+              className="mono min-h-0 flex-1 overflow-auto px-3 py-2 text-xs leading-relaxed"
+            >
+              {sim.term.map((line, index) => (
+                <div
+                  key={index}
+                  className={"wire-text " + (TERM_LINE_CLASS[line.type] || TERM_LINE_CLASS.info)}
+                >
+                  <span aria-hidden="true">{TERM_LINE_PREFIX[line.type] || "  "}</span>
+                  {line.text}
+                </div>
+              ))}
+            </div>
+            <form
+              onSubmit={onSubmit}
+              className="border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <label
+                htmlFor="terminal-input"
+                className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+              >
+                Command
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="mono shrink-0 font-bold text-indigo-700 dark:text-indigo-300"
+                >
+                  $
+                </span>
+                <input
+                  id="terminal-input"
+                  ref={inputRef}
+                  type="text"
+                  autoComplete="off"
+                  spellCheck="false"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      onHistory("up");
+                    } else if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      onHistory("down");
+                    } else if (event.key === "Enter") {
+                      event.preventDefault();
+                      onSubmit(event);
+                    }
+                  }}
+                  className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Enter
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      }
+
+      // Shows what is being resolved and what is known so far, so the
+      // learner can always see the question the chain is answering.
+      function LookupPanel({ sim }) {
+        return (
+          <section
+            aria-labelledby="lookup-heading"
+            className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+              <h3
+                id="lookup-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Name being resolved
+              </h3>
+            </div>
+            <div className="px-3 py-2">
+              {sim.lookupName ? (
+                <p className="mono text-sm text-slate-800 dark:text-slate-200">
+                  {sim.lookupName}
+                  <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                    (A record — IPv4 address)
+                  </span>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  No lookup started yet.
+                </p>
+              )}
+              {sim.result && sim.result.ip && (
+                <p className="mono mt-1 text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                  &rarr; {sim.result.ip}
+                </p>
+              )}
+              {sim.result && sim.result.error && (
+                <p className="mono mt-1 text-sm font-bold text-red-700 dark:text-red-400">
+                  &rarr; {sim.result.error}
+                </p>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      function NodeContents({ node, sim, recordPick, onRecordPick }) {
+        if (node.id === "hosts") {
+          return sim.hostsFile.length === 0 ? (
+            <p className="mono mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              (no entries)
+            </p>
+          ) : (
+            <ul className="mono mt-1 text-[11px] text-amber-900 dark:text-amber-200">
+              {sim.hostsFile.map((entry) => (
+                <li key={entry.name}>
+                  {entry.ip}&nbsp;&nbsp;{entry.name}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (node.id === "cache") {
+          return sim.clientCache.length === 0 ? (
+            <p className="mono mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              (empty)
+            </p>
+          ) : (
+            <ul className="mono mt-1 text-[11px] text-slate-700 dark:text-slate-200">
+              {sim.clientCache.map((entry) => (
+                <li key={entry.name}>
+                  {entry.name} &rarr; {entry.ip} (TTL {entry.ttl}s)
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (node.id === "resolver") {
+          return (
+            <div className="mono mt-1 text-[11px] text-slate-700 dark:text-slate-200">
+              {sim.resolverCache.length === 0 ? (
+                <p className="text-slate-500 dark:text-slate-400">(cache empty)</p>
+              ) : (
+                sim.resolverCache.map((entry) => (
+                  <p key={entry.name}>
+                    {entry.name} &rarr; {entry.ip} (TTL {entry.ttl}s)
+                  </p>
+                ))
+              )}
+              {sim.resolverKnowsNs && (
+                <p className="text-amber-800 dark:text-amber-300">
+                  cached referral: name servers for example.com
+                </p>
+              )}
+            </div>
+          );
+        }
+        if (node.id === "root") {
+          return (
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              Holds: which name servers are responsible for each top-level domain
+              (.com, .uk, .org &hellip;). Holds no addresses for individual hosts.
+            </p>
+          );
+        }
+        if (node.id === "tld") {
+          return (
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              Holds: which name servers are responsible for each domain inside
+              .com. Holds no records from inside those domains.
+            </p>
+          );
+        }
+        // Authoritative server: its zone database is the end of the journey.
+        return (
+          <div className="mt-1">
+            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+              Zone database for example.com
+            </p>
+            <div className="mt-1 overflow-x-auto">
+              <table className="w-full min-w-[300px] text-left text-[11px]">
+                <thead>
+                  <tr className="text-slate-500 dark:text-slate-400">
+                    <th className="py-0.5 pr-2 font-bold">Name</th>
+                    <th className="py-0.5 pr-2 font-bold">Type</th>
+                    <th className="py-0.5 font-bold">Value</th>
+                  </tr>
+                </thead>
+                <tbody className="mono">
+                  {ZONE.map((record) => (
+                    <tr
+                      key={record.name + record.type}
+                      className="border-t border-slate-200 text-slate-800 dark:border-slate-700 dark:text-slate-200"
+                    >
+                      <td className="py-0.5 pr-2">
+                        {recordPick ? (
+                          <button
+                            type="button"
+                            onClick={() => onRecordPick(record.name, record.type)}
+                            className="rounded border border-indigo-400 px-1.5 py-0.5 font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                          >
+                            {record.name}
+                          </button>
+                        ) : (
+                          record.name
+                        )}
+                      </td>
+                      <td className="py-0.5 pr-2">{record.type}</td>
+                      <td className="py-0.5">{record.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {recordPick && (
+              <button
+                type="button"
+                onClick={() => onRecordPick(NONE, null)}
+                className="mt-2 shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                No matching record in this zone
+              </button>
+            )}
+          </div>
+        );
+      }
+
+      function ChainPane({ sim, nodePick, onNodePick, recordPick, onRecordPick }) {
+        return (
+          <section
+            aria-labelledby="chain-heading"
+            className="flex min-h-[18rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="chain-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Resolution chain — local sources first, then the hierarchy
+              </h2>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
+              {nodePick && (
+                <p className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {nodePick.prompt}
+                </p>
+              )}
+              {NODES.map((node, index) => {
+                const status = sim.nodeStatus[node.id];
+                const body = (
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                        {index + 1}. {node.label}
+                      </span>
+                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-100">
+                        {node.scope === "local" ? "on this computer" : "over the network"}
+                      </span>
+                      {status && (
+                        <span
+                          className={
+                            "rounded px-1.5 py-0.5 text-[10px] font-bold " +
+                            (STATUS_CLASS[status] || STATUS_CLASS.miss)
+                          }
+                        >
+                          {STATUS_LABEL[status] || status}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {node.sub}
+                    </p>
+                    <NodeContents
+                      node={node}
+                      sim={sim}
+                      recordPick={recordPick}
+                      onRecordPick={onRecordPick}
+                    />
+                  </div>
+                );
+                if (nodePick) {
+                  return (
+                    <button
+                      key={node.id}
+                      type="button"
+                      onClick={() => onNodePick(node.id)}
+                      className="block w-full rounded-md border-2 border-dashed border-slate-300 p-2 text-left hover:border-indigo-500 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:hover:border-indigo-400 dark:hover:bg-indigo-950"
+                    >
+                      {body}
+                    </button>
+                  );
+                }
+                return (
+                  <div
+                    key={node.id}
+                    className={
+                      "rounded-md border p-2 " +
+                      (sim.activeNode === node.id
+                        ? "border-indigo-400 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-950/50"
+                        : "border-slate-200 dark:border-slate-700")
+                    }
+                  >
+                    {body}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      }
+
+      function QueryLogPane({ sim, classify, onClassify }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.queries.length]);
+
+        return (
+          <section
+            aria-labelledby="querylog-heading"
+            className="flex min-h-[14rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="querylog-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Queries and responses
+              </h2>
+            </div>
+            <div
+              ref={scrollRef}
+              aria-live="polite"
+              className="min-h-0 flex-1 space-y-2 overflow-auto p-3"
+            >
+              {sim.queries.length === 0 && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Nothing has been asked yet.
+                </p>
+              )}
+              {sim.queries.map((query, index) => (
+                <article
+                  key={index}
+                  className="wire-enter rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-white dark:bg-slate-600">
+                      {query.from} &rarr; {query.to}
+                    </span>
+                    <span
+                      className={
+                        "rounded px-1.5 py-0.5 " +
+                        (QUERY_KIND_CLASS[query.kind] || QUERY_KIND_CLASS.miss)
+                      }
+                    >
+                      {QUERY_KIND_LABEL[query.kind] || query.kind}
+                    </span>
+                  </div>
+                  <p className="mono wire-text text-[11px] text-slate-800 dark:text-slate-200">
+                    asked: {query.question}
+                  </p>
+                  <p className="mono wire-text text-[11px] text-slate-800 dark:text-slate-200">
+                    got: {query.answer}
+                  </p>
+                </article>
+              ))}
+              {classify && (
+                <div className="rounded-md border border-indigo-300 bg-indigo-50 p-2 dark:border-indigo-700 dark:bg-indigo-950">
+                  <p className="text-xs font-bold text-indigo-900 dark:text-indigo-100">
+                    {classify.prompt}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {classify.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => onClassify(option.id)}
+                        className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      /* ------------------------------ app ----------------------------- */
+
+      function App() {
+        const [exerciseId, setExerciseId] = useState(EXERCISES[0].id);
+        const exercise = useMemo(
+          () => EXERCISES.find((item) => item.id === exerciseId) || EXERCISES[0],
+          [exerciseId],
+        );
+        const [view, setView] = useState("app");
+        const [sim, setSim] = useState(() => makeSimState(EXERCISES[0]));
+        const [error, setError] = useState(null);
+        const [draft, setDraft] = useState("");
+        const [lookupDraft, setLookupDraft] = useState("");
+        const [hostsDraft, setHostsDraft] = useState("");
+        const [history, setHistory] = useState([]);
+        const [historyIndex, setHistoryIndex] = useState(null);
+        const inputRef = useRef(null);
+
+        const steps = useMemo(() => exercise.buildSteps(view), [exercise, view]);
+        const done = sim.step >= steps.length;
+        const step = done ? null : steps[sim.step];
+        const input = step ? (view === "terminal" ? step.terminal : step.app) : null;
+        const nodePick = step ? step.nodePick : null;
+        const recordPick = step ? step.recordPick : null;
+        const classify = step ? step.classify : null;
+        const needsAction = Boolean(input || nodePick || recordPick || classify);
+
+        useEffect(() => {
+          if (view === "terminal" && step && step.terminal && inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, [view, sim.step, step]);
+
+        const resetState = useCallback((target) => {
+          setSim(makeSimState(target));
+          setError(null);
+          setDraft("");
+          setLookupDraft("");
+          setHostsDraft("");
+          setHistory([]);
+          setHistoryIndex(null);
+        }, []);
+
+        const changeExercise = (nextId) => {
+          const target = EXERCISES.find((item) => item.id === nextId) || EXERCISES[0];
+          setExerciseId(target.id);
+          resetState(target);
+        };
+
+        const changeView = (nextView) => {
+          if (nextView === view) return;
+          setView(nextView);
+          resetState(exercise);
+        };
+
+        const commit = useCallback(
+          (extraSet) => {
+            setSim((state) => {
+              const current = steps[state.step];
+              if (!current) return state;
+              const out = current.effect ? current.effect(state) : {};
+              return {
+                ...state,
+                ...(extraSet || {}),
+                ...(out.set || {}),
+                queries: out.queries ? [...state.queries, ...out.queries] : state.queries,
+                term: out.term ? [...state.term, ...out.term] : state.term,
+                step: state.step + 1,
+              };
+            });
+            setError(null);
+          },
+          [steps],
+        );
+
+        const missteppedMessage = (value) => {
+          const list = (input && input.misstep) || (step && step.misstep) || [];
+          const hit = list.find((entry) => entry.match.test(value));
+          return hit ? hit.message : DEVIATION_MESSAGE;
+        };
+
+        const submitTerminal = (event) => {
+          event.preventDefault();
+          if (!step) return;
+          const raw = draft;
+          const value = norm(raw);
+          if (!input) {
+            setDraft("");
+            setError(
+              needsAction
+                ? "This step is not a command. Carry out the action described in the instruction panel."
+                : "This step does not need a command. Press Continue to carry on.",
+            );
+            return;
+          }
+          if (value) setHistory((list) => [...list, value]);
+          setHistoryIndex(null);
+          setDraft("");
+          if (matchesExpectation(input.expect, value)) {
+            commit();
+            return;
+          }
+          const message = missteppedMessage(value);
+          setSim((state) => ({
+            ...state,
+            term: [
+              ...state.term,
+              { type: "command", text: raw },
+              { type: "error", text: message },
+            ],
+          }));
+          setError(message);
+        };
+
+        const recallHistory = (direction) => {
+          if (history.length === 0) return;
+          const current = historyIndex == null ? history.length : historyIndex;
+          const next =
+            direction === "up"
+              ? Math.max(0, current - 1)
+              : Math.min(history.length, current + 1);
+          setHistoryIndex(next);
+          setDraft(next === history.length ? "" : history[next]);
+        };
+
+        const wrongControl = (needed) =>
+          setError(
+            needed
+              ? "This step needs the " + needed + ". Follow the instruction panel."
+              : "This step does not need that control. Follow the instruction panel.",
+          );
+
+        const attemptLookup = (value) => {
+          if (!step) return;
+          if (!input || input.control !== "lookup") {
+            wrongControl(null);
+            return;
+          }
+          if (matchesExpectation(input.expect, norm(value))) {
+            commit();
+            return;
+          }
+          setError(missteppedMessage(norm(value)));
+        };
+
+        const attemptTab = (tab) => {
+          // Browsing the tabs is always allowed; it only advances the
+          // exercise when this step asked for that tab.
+          setSim((state) => ({ ...state, utilityTab: tab }));
+          if (step && input && input.control === "tab" && input.expect === tab) {
+            commit({ utilityTab: tab });
+          }
+        };
+
+        const attemptFlush = () => {
+          if (step && input && input.control === "flush") {
+            commit();
+            return;
+          }
+          wrongControl(null);
+        };
+
+        const attemptHostsAdd = (value) => {
+          if (!step) return;
+          if (!input || input.control !== "hostsadd") {
+            wrongControl(null);
+            return;
+          }
+          if (matchesExpectation(input.expect, norm(value))) {
+            setHostsDraft("");
+            commit();
+            return;
+          }
+          setError(missteppedMessage(norm(value)));
+        };
+
+        const attemptNodePick = (nodeId) => {
+          if (!nodePick) return;
+          if (nodeId === nodePick.expect) {
+            commit();
+            return;
+          }
+          const specific = nodePick.wrongMap && nodePick.wrongMap[nodeId];
+          setError(specific || nodePick.wrong);
+        };
+
+        const attemptRecordPick = (name) => {
+          if (!recordPick) return;
+          if (name === recordPick.expect) {
+            commit();
+            return;
+          }
+          setError(name === NONE ? recordPick.wrongNone : recordPick.wrongRecord);
+        };
+
+        const attemptClassify = (optionId) => {
+          if (!classify) return;
+          if (optionId === classify.expect) {
+            commit();
+            return;
+          }
+          setError(classify.wrong);
+        };
+
+        const updateDraft = (value) => {
+          setDraft(value);
+          if (error) setError(null);
+        };
+        const updateLookup = (value) => {
+          setLookupDraft(value);
+          if (error) setError(null);
+        };
+        const updateHosts = (value) => {
+          setHostsDraft(value);
+          if (error) setError(null);
+        };
+
+        const swapView = () => changeView(view === "terminal" ? "app" : "terminal");
+
+        const fillForMe = () => {
+          if (!input) return;
+          if (view === "terminal") {
+            updateDraft(input.display === undefined ? "" : input.display);
+            if (inputRef.current) inputRef.current.focus();
+          } else if (input.control === "lookup") {
+            updateLookup(input.display || "");
+          } else if (input.control === "hostsadd") {
+            updateHosts(input.display || "");
+          }
+        };
+
+        const canFill =
+          Boolean(input) &&
+          (view === "terminal" ||
+            input.control === "lookup" ||
+            input.control === "hostsadd");
+
+        const pickPrompt = nodePick
+          ? nodePick.prompt
+          : recordPick
+            ? recordPick.prompt
+            : classify
+              ? classify.prompt
+              : null;
+
+        const toggleClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-sm font-bold text-indigo-700 shadow"
+            : "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold text-white/90 hover:bg-white/20";
+
+        return (
+          <div className="protocol-lab flex flex-col bg-slate-100 dark:bg-slate-950">
+            <header
+              data-interactive-header
+              className="flex flex-wrap items-center justify-between gap-4"
+            >
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">DNS Name Resolution</h1>
+                <p className="text-sm opacity-90">
+                  Walk a domain name up the hierarchy until a server can answer
+                </p>
+              </div>
+              <div data-interactive-actions className="flex flex-wrap items-center gap-2">
+                <select
+                  id="exercise-select"
+                  aria-label="Exercise"
+                  value={exerciseId}
+                  onChange={(event) => changeExercise(event.target.value)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {EXERCISES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  role="group"
+                  aria-label="Client view"
+                  className="flex shrink-0 items-center gap-1 rounded-lg bg-black/25 p-1"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={view === "app"}
+                    onClick={() => changeView("app")}
+                    className={toggleClass(view === "app")}
+                  >
+                    Application
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={view === "terminal"}
+                    onClick={() => changeView("terminal")}
+                    className={toggleClass(view === "terminal")}
+                  >
+                    Terminal
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {done ? (
+              <RecapCard
+                exercise={exercise}
+                view={view}
+                onRestart={() => resetState(exercise)}
+                onSwapView={swapView}
+              />
+            ) : (
+              <InstructionPanel
+                exercise={exercise}
+                stepNumber={sim.step}
+                totalSteps={steps.length}
+                step={step}
+                input={input}
+                pickPrompt={pickPrompt}
+              />
+            )}
+
+            <ErrorBar message={error} />
+
+            <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-2 lg:overflow-hidden">
+              <section
+                aria-label="Client"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client — {view === "terminal" ? "terminal" : "network utility"}
+                </h2>
+                {view === "terminal" ? (
+                  <TerminalView
+                    sim={sim}
+                    draft={draft}
+                    setDraft={updateDraft}
+                    onSubmit={submitTerminal}
+                    onHistory={recallHistory}
+                    inputRef={inputRef}
+                  />
+                ) : (
+                  <NetworkUtilityView
+                    sim={sim}
+                    lookupDraft={lookupDraft}
+                    setLookupDraft={updateLookup}
+                    hostsDraft={hostsDraft}
+                    setHostsDraft={updateHosts}
+                    onLookup={attemptLookup}
+                    onTab={attemptTab}
+                    onFlush={attemptFlush}
+                    onHostsAdd={attemptHostsAdd}
+                  />
+                )}
+                <LookupPanel sim={sim} />
+              </section>
+
+              <section
+                aria-label="Behind the scenes"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Behind the scenes
+                </h2>
+                <ChainPane
+                  sim={sim}
+                  nodePick={nodePick}
+                  onNodePick={attemptNodePick}
+                  recordPick={recordPick}
+                  onRecordPick={attemptRecordPick}
+                />
+                <QueryLogPane sim={sim} classify={classify} onClassify={attemptClassify} />
+              </section>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => resetState(exercise)}
+                className="shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Restart exercise
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {canFill && (
+                  <button
+                    type="button"
+                    onClick={fillForMe}
+                    className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                  >
+                    Type it for me
+                  </button>
+                )}
+                {!done && !needsAction && (
+                  <button
+                    type="button"
+                    onClick={() => commit()}
+                    className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    Continue &#9654;
+                  </button>
+                )}
+                {!done && needsAction && (
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Complete the action above to continue.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

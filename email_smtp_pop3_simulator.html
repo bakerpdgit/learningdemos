@@ -1,0 +1,1967 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Email SMTP &amp; POP3 Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Full-height app shell. The production site navigation bar is 58px
+         tall, so the built page must subtract it or the action row falls
+         below the viewport. Locked to the viewport only once the two
+         columns sit side by side; narrower than that the page scrolls. */
+      .protocol-lab {
+        min-height: 100vh;
+      }
+      @media (min-width: 1024px) {
+        .protocol-lab {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .protocol-lab {
+          height: calc(100vh - 58px);
+        }
+      }
+
+      .mono {
+        font-family: "Consolas", "Menlo", "Courier New", monospace;
+      }
+      .wire-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .device-chrome {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.7),
+          0 12px 26px rgba(15, 23, 42, 0.08);
+      }
+      .dark .device-chrome {
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+      }
+      .wire-enter {
+        animation: wire-in 260ms ease-out;
+      }
+      @keyframes wire-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wire-enter {
+          animation: none;
+        }
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+      /* ---------------------------------------------------------------
+         Fictional estate, shared with the other protocol simulators.
+         Names are inside example.com / example.net (RFC 2606) and every
+         address is inside the RFC 5737 documentation ranges.
+         --------------------------------------------------------------- */
+      const ALICE = "alice@example.com";
+      const ALICE_HOST = "alice-pc.example.com";
+      const BOB = "bob@example.net";
+      const UNKNOWN = "robert@example.net";
+      const SEND_SERVER = "mail.example.com";
+      const SEND_IP = "192.0.2.40";
+      const RECV_SERVER = "mail.example.net";
+      const RECV_IP = "198.51.100.7";
+      const SUBJECT = "Timetable change";
+      const BODY_TEXT = "The meeting has moved to 3pm on Friday.";
+      const PASSWORD = "hunter-2-not-real";
+
+      const DEVIATION_MESSAGE =
+        "That is not the action for this step. Follow the simulation instructions exactly — enter the command shown in the instruction panel.";
+
+      const NONE = "__none__";
+
+      // The sending server has to ask DNS where mail for a domain goes.
+      const MX_RECORDS = [
+        { id: "net", name: "example.net", type: "MX", value: "10 " + RECV_SERVER },
+        { id: "com", name: "example.com", type: "MX", value: "10 " + SEND_SERVER },
+        { id: "org", name: "example.org", type: "MX", value: "10 mail.example.org" },
+      ];
+
+      const MAILBOXES = [
+        { id: "bob", address: BOB },
+        { id: "postmaster", address: "postmaster@example.net" },
+      ];
+
+      /* --------------------------- helpers --------------------------- */
+
+      const norm = (value) =>
+        String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+
+      const matchesExpectation = (expect, value) => {
+        if (expect instanceof RegExp) return expect.test(value);
+        return norm(expect).toLowerCase() === value.toLowerCase();
+      };
+
+      const renderRich = (text) => {
+        const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+        return parts.map((part, index) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={index} className="font-bold">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+              <code
+                key={index}
+                className="mono rounded bg-slate-200 px-1 py-0.5 text-[0.92em] text-slate-900 dark:bg-slate-700 dark:text-slate-50"
+              >
+                {part.slice(1, -1)}
+              </code>
+            );
+          }
+          return part;
+        });
+      };
+
+      // Bob's mailbox already holds one older message, so the POP3 message
+      // numbers are worth reading rather than guessing.
+      const WELCOME = {
+        num: 1,
+        from: "postmaster@example.net",
+        to: BOB,
+        subject: "Welcome to example.net",
+        body: "Your mailbox is ready to use.",
+        size: 812,
+      };
+
+      const MESSAGE = {
+        num: 2,
+        from: ALICE,
+        to: BOB,
+        subject: SUBJECT,
+        body: BODY_TEXT,
+        size: 2451,
+      };
+
+      /* ----------------------- step construction ----------------------
+         The dialogue is held as data so both views stay in step: the
+         terminal view types one line at a time, the application view
+         runs the whole exchange when the learner clicks Send. */
+
+      const dlg = (from, to, text, kind, port) => ({ from, to, text, kind, port });
+
+      const smtpLines = (recipient) => [
+        { cmd: "HELO " + ALICE_HOST, reply: "250 Hello " + ALICE_HOST },
+        { cmd: "MAIL FROM:<" + ALICE + ">", reply: "250 OK" },
+        { cmd: "RCPT TO:<" + recipient + ">", reply: "250 OK" },
+        { cmd: "DATA", reply: "354 Start mail input; end with <CRLF>.<CRLF>" },
+        { cmd: BODY_TEXT, reply: null },
+        { cmd: ".", reply: "250 Message accepted for delivery" },
+      ];
+
+      const POP3_LINES = [
+        { cmd: "USER bob", reply: "+OK" },
+        { cmd: "PASS " + PASSWORD, reply: "+OK mailbox locked and ready", mask: true },
+        { cmd: "STAT", reply: "+OK 2 " + (WELCOME.size + MESSAGE.size) },
+        { cmd: "LIST", reply: "+OK 2 messages\n1 " + WELCOME.size + "\n2 " + MESSAGE.size + "\n." },
+      ];
+
+      // One typed protocol line, with the server's numbered reply.
+      const lineStep = ({ id, teach, line, peer, port, client, misstep, set }) => ({
+        id,
+        teach,
+        terminal: {
+          instruction: "Type: " + line.cmd,
+          expect: line.cmd,
+          display: line.cmd,
+          misstep,
+        },
+        app: null,
+        effect: () => ({
+          dialogue: [
+            dlg(client, peer, line.mask ? "PASS " + PASSWORD : line.cmd, "cmd", port),
+            ...(line.reply ? [dlg(peer, client, line.reply, "reply", port)] : []),
+          ],
+          term: [
+            { type: "command", text: line.mask ? "PASS " + "*".repeat(10) : line.cmd },
+            ...(line.reply
+              ? line.reply.split("\n").map((text) => ({ type: "recv", text }))
+              : []),
+          ],
+          set,
+        }),
+      });
+
+      const connectStep = ({ id, teach, host, ip, port, greeting, client, terminalCommand, set }) => ({
+        id,
+        teach,
+        terminal: {
+          instruction: "Type: " + terminalCommand,
+          expect: terminalCommand,
+          display: terminalCommand,
+          misstep: [
+            {
+              match: /^telnet\s+\S+$/i,
+              message:
+                "Name the port as well as the host, so the client connects to the right service: " +
+                terminalCommand,
+            },
+          ],
+        },
+        app: null,
+        effect: () => ({
+          dialogue: [dlg(host, client, greeting, "reply", port)],
+          term: [
+            { type: "command", text: terminalCommand },
+            { type: "info", text: "Connected to " + ip + ":" + port + "." },
+            { type: "recv", text: greeting },
+          ],
+          set: { connected: true, port, peer: host, ...(set || {}) },
+        }),
+      });
+
+      const mxStep = (teach) => ({
+        id: "mx",
+        teach,
+        terminal: null,
+        app: null,
+        mxPick: {
+          expect: "net",
+          prompt: "Which MX record tells the server where to deliver this message?",
+          wrong:
+            "Read the domain part of the recipient address — the part after the @ — and find the MX record for that domain.",
+        },
+        effect: () => ({
+          dialogue: [
+            dlg(SEND_SERVER, "DNS", "MX? example.net", "cmd", 53),
+            dlg("DNS", SEND_SERVER, "10 " + RECV_SERVER + " (" + RECV_IP + ")", "reply", 53),
+          ],
+          term: [{ type: "info", text: "MX lookup: example.net → " + RECV_SERVER }],
+          set: { mxResolved: true },
+        }),
+      });
+
+      const mailboxStep = ({ teach, expect, wrongMailbox, wrongNone, onDeliver }) => ({
+        id: "mailbox",
+        teach,
+        terminal: null,
+        app: null,
+        mailboxPick: {
+          expect,
+          prompt: "Which mailbox on " + RECV_SERVER + " should this message go into?",
+          wrongMailbox:
+            wrongMailbox ||
+            "That is not the address the message was addressed to. Read the RCPT TO line in the envelope.",
+          wrongNone:
+            wrongNone ||
+            "That mailbox does exist on this server. Compare it with the RCPT TO address.",
+        },
+        effect: (state) => onDeliver(state),
+      });
+
+      /* --------------------------- exercises -------------------------- */
+
+      const TELNET_SMTP = "telnet " + SEND_SERVER + " 25";
+      const TELNET_POP3 = "telnet " + RECV_SERVER + " 110";
+
+      const relayDialogue = (recipient, accepted) => [
+        dlg(SEND_SERVER, RECV_SERVER, "HELO " + SEND_SERVER, "cmd", 25),
+        dlg(RECV_SERVER, SEND_SERVER, "250 Hello " + SEND_SERVER, "reply", 25),
+        dlg(SEND_SERVER, RECV_SERVER, "MAIL FROM:<" + ALICE + ">", "cmd", 25),
+        dlg(RECV_SERVER, SEND_SERVER, "250 OK", "reply", 25),
+        dlg(SEND_SERVER, RECV_SERVER, "RCPT TO:<" + recipient + ">", "cmd", 25),
+        ...(accepted
+          ? [dlg(RECV_SERVER, SEND_SERVER, "250 OK", "reply", 25)]
+          : []),
+      ];
+
+      const EXERCISES = [
+        {
+          id: "send",
+          label: "A: Sending an email (SMTP)",
+          machine: "alice",
+          examPoints: [
+            "SMTP (Simple Mail Transfer Protocol) is used to send email; port 25 is its well-known port.",
+            "MAIL FROM declares the sender and RCPT TO declares the recipient — the message envelope.",
+            "SMTP is a push protocol, used client-to-server and then server-to-server to relay the message.",
+            "The sending mail server uses a DNS MX record to find the recipient domain's mail server.",
+            "SMTP cannot deliver to the recipient's computer: the message waits in a mailbox until the recipient's client collects it.",
+          ],
+          initial: { mailbox: [WELCOME] },
+          buildSteps: (view) => {
+            const lines = smtpLines(BOB);
+            const mx = mxStep(
+              "The message has been accepted by Alice's own mail server, but that server is not the destination. It must now find out **which server handles mail for `example.net`**, and it does that by asking DNS for the domain's **MX (mail exchanger) record**.",
+            );
+            const relay = {
+              id: "relay",
+              teach:
+                "Alice's mail server now opens **its own SMTP connection** to `" +
+                RECV_SERVER +
+                "` on port 25 and repeats the same dialogue — HELO, MAIL FROM, RCPT TO, DATA. This is the key point: **SMTP is used server-to-server as well as client-to-server**, and it is a **push** protocol, always moving the message forward towards the recipient.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                dialogue: relayDialogue(BOB, true),
+                term: [
+                  { type: "info", text: "relaying to " + RECV_SERVER + ":25 ..." },
+                  { type: "recv", text: "250 OK — recipient accepted" },
+                ],
+                set: { activeLeg: "relay" },
+              }),
+            };
+            const deliver = mailboxStep({
+              teach:
+                "The recipient's mail server has accepted the message and must now file it. It reads the **RCPT TO** address and puts the message into the matching **mailbox**, where it will sit until it is collected.",
+              expect: "bob",
+              onDeliver: () => ({
+                dialogue: [
+                  dlg(SEND_SERVER, RECV_SERVER, "DATA … message …", "cmd", 25),
+                  dlg(RECV_SERVER, SEND_SERVER, "250 Message stored in mailbox bob", "reply", 25),
+                ],
+                term: [{ type: "recv", text: "250 Message stored in mailbox bob" }],
+                set: { mailbox: [WELCOME, MESSAGE], activeLeg: "stored", deliveredTo: "bob" },
+              }),
+            });
+            const waits = {
+              id: "waits",
+              teach:
+                "The message is now sitting in Bob's **mailbox on the recipient's mail server**. SMTP has done everything it can: **it cannot push the message onto Bob's computer**. Bob's own mail client has to connect and collect it, which is what Exercise B does with POP3.",
+              terminal: null,
+              app: null,
+              effect: () => ({ set: { activeLeg: "waiting" } }),
+            };
+
+            if (view === "terminal") {
+              return [
+                connectStep({
+                  id: "connect",
+                  teach:
+                    "**SMTP (Simple Mail Transfer Protocol)** is the application layer protocol used to **send** email. Its **well-known port is 25**. Typing the protocol by hand shows that an email client is simply a program that sends these commands for you.",
+                  host: SEND_SERVER,
+                  ip: SEND_IP,
+                  port: 25,
+                  greeting: "220 " + SEND_SERVER + " ESMTP ready",
+                  client: "Alice's terminal",
+                  terminalCommand: TELNET_SMTP,
+                  set: { envelope: { from: null, to: null, subject: SUBJECT, body: BODY_TEXT } },
+                }),
+                lineStep({
+                  id: "helo",
+                  teach:
+                    "The client identifies itself with `HELO` and the server acknowledges. Every SMTP reply begins with a **three digit code**: 2xx means the command succeeded.",
+                  line: lines[0],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                }),
+                lineStep({
+                  id: "mailfrom",
+                  teach:
+                    "`MAIL FROM:` declares the **sender**. This is the start of the message **envelope** — the addressing information the mail servers actually use to route the message.",
+                  line: lines[1],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                  misstep: [
+                    {
+                      match: /^rcpt\s+to/i,
+                      message:
+                        "SMTP requires the sender to be declared with MAIL FROM: before the recipient is declared with RCPT TO:",
+                    },
+                  ],
+                  set: { envelope: { from: ALICE, to: null, subject: SUBJECT, body: BODY_TEXT } },
+                }),
+                lineStep({
+                  id: "rcptto",
+                  teach:
+                    "`RCPT TO:` declares the **recipient**. A message may have several RCPT TO lines, one per recipient. Watch the envelope panel fill in.",
+                  line: lines[2],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                  set: { envelope: { from: ALICE, to: BOB, subject: SUBJECT, body: BODY_TEXT } },
+                }),
+                lineStep({
+                  id: "data",
+                  teach:
+                    "`DATA` tells the server the envelope is complete and the message itself follows. The server replies **354** to invite the content.",
+                  line: lines[3],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                }),
+                lineStep({
+                  id: "body",
+                  teach:
+                    "Now the message content is typed. In a real message the headers (Subject, Date and so on) come first, then a blank line, then the body.",
+                  line: lines[4],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                }),
+                lineStep({
+                  id: "dot",
+                  teach:
+                    "A single **full stop on a line of its own** marks the end of the message. The server replies **250 Message accepted for delivery** — note the wording: accepted for delivery, not delivered.",
+                  line: lines[5],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                  set: { sentAccepted: true, activeLeg: "submitted" },
+                }),
+                mx,
+                relay,
+                deliver,
+                lineStep({
+                  id: "quit",
+                  teach:
+                    "`QUIT` closes the connection to Alice's mail server. The message has left her computer entirely.",
+                  line: { cmd: "QUIT", reply: "221 Bye" },
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                }),
+                waits,
+              ];
+            }
+            return [
+              {
+                id: "compose",
+                teach:
+                  "**SMTP (Simple Mail Transfer Protocol)** is the application layer protocol used to **send** email, on **port 25**. The mail client will run the whole SMTP dialogue for you — read the envelope panel below to see what it will actually say to the server.",
+                terminal: null,
+                app: {
+                  instruction:
+                    "Type " + BOB + " into the To field and click Send.",
+                  control: "compose",
+                  expect: BOB,
+                  display: BOB,
+                },
+                previewEnvelope: { from: ALICE, to: BOB, subject: SUBJECT, body: BODY_TEXT },
+                effect: () => ({
+                  dialogue: [
+                    dlg(SEND_SERVER, "Alice's client", "220 " + SEND_SERVER + " ESMTP ready", "reply", 25),
+                    ...lines.flatMap((line) => [
+                      dlg("Alice's client", SEND_SERVER, line.cmd, "cmd", 25),
+                      ...(line.reply
+                        ? [dlg(SEND_SERVER, "Alice's client", line.reply, "reply", 25)]
+                        : []),
+                    ]),
+                  ],
+                  term: [
+                    { type: "info", text: "Mail client ran the SMTP dialogue with " + SEND_SERVER + ":25" },
+                    { type: "recv", text: "250 Message accepted for delivery" },
+                  ],
+                  set: {
+                    connected: true,
+                    port: 25,
+                    peer: SEND_SERVER,
+                    sentAccepted: true,
+                    activeLeg: "submitted",
+                    envelope: { from: ALICE, to: BOB, subject: SUBJECT, body: BODY_TEXT },
+                  },
+                }),
+              },
+              mx,
+              relay,
+              deliver,
+              waits,
+            ];
+          },
+        },
+        {
+          id: "retrieve",
+          label: "B: Retrieving email (POP3)",
+          machine: "bob",
+          examPoints: [
+            "POP3 (Post Office Protocol v3) is used to retrieve email from a mailbox; port 110 is its well-known port.",
+            "The client authenticates with USER and PASS, which POP3 sends in clear text unless the connection is secured.",
+            "STAT and LIST report what is waiting; RETR downloads a numbered message.",
+            "DELE marks a message for deletion and QUIT commits it — POP3 normally removes mail from the server, leaving it on one device only.",
+            "The email server's second role is to store incoming mail in mailboxes and serve it to clients on request.",
+          ],
+          initial: { mailbox: [WELCOME, MESSAGE], activeLeg: "waiting" },
+          buildSteps: (view) => {
+            const pick = {
+              id: "pick",
+              teach:
+                "`LIST` reported two messages with their sizes, but not who they are from. Bob wants the one from Alice. Click it in the mailbox to find out **which number** it has — that number is what `RETR` needs.",
+              terminal: null,
+              app: null,
+              messagePick: {
+                expect: 2,
+                prompt: "Click the message from " + ALICE + " in Bob's mailbox.",
+                wrong:
+                  "That is a different message. Look at the sender of each message in the mailbox.",
+              },
+              effect: () => ({
+                term: [{ type: "info", text: "(the message from " + ALICE + " is number 2)" }],
+                set: { selectedMessage: 2 },
+              }),
+            };
+            const retrieved = {
+              id: "retrieved",
+              teach:
+                "The whole message — headers and body — is downloaded into Bob's mail client. It now exists in **two places**: on the server and on this computer.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                dialogue: [
+                  dlg("Bob's client", RECV_SERVER, "RETR 2", "cmd", 110),
+                  dlg(RECV_SERVER, "Bob's client", "+OK " + MESSAGE.size + " octets", "reply", 110),
+                ],
+                term: [{ type: "recv", text: "+OK " + MESSAGE.size + " octets" }],
+                set: { inbox: [MESSAGE], clientTab: "inbox" },
+              }),
+            };
+            const removed = {
+              id: "removed",
+              teach:
+                "`DELE 2` marks the message for deletion and `QUIT` commits it. Watch the server mailbox: **POP3 downloads the message to the client and then removes it from the server**, so the mail now exists only on Bob's computer. (IMAP works differently, leaving mail on the server and synchronising it; the specification names POP3.)",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                dialogue: [
+                  dlg("Bob's client", RECV_SERVER, "DELE 2", "cmd", 110),
+                  dlg(RECV_SERVER, "Bob's client", "+OK message 2 marked for deletion", "reply", 110),
+                  dlg("Bob's client", RECV_SERVER, "QUIT", "cmd", 110),
+                  dlg(RECV_SERVER, "Bob's client", "+OK deletions committed", "reply", 110),
+                ],
+                term: [{ type: "recv", text: "+OK deletions committed" }],
+                set: { mailbox: [WELCOME], activeLeg: "collected" },
+              }),
+            };
+
+            if (view === "terminal") {
+              return [
+                connectStep({
+                  id: "connect",
+                  teach:
+                    "**POP3 (Post Office Protocol version 3)** is the application layer protocol used to **retrieve** email from a mailbox. Its **well-known port is 110**. Note that this is a different server from the one Alice sent through: Bob collects from **his own** mail server.",
+                  host: RECV_SERVER,
+                  ip: RECV_IP,
+                  port: 110,
+                  greeting: "+OK POP3 server ready",
+                  client: "Bob's terminal",
+                  terminalCommand: TELNET_POP3,
+                }),
+                lineStep({
+                  id: "user",
+                  teach:
+                    "POP3 replies are words, not numbers: `+OK` for success and `-ERR` for failure. `USER` gives the mailbox name.",
+                  line: POP3_LINES[0],
+                  peer: RECV_SERVER,
+                  port: 110,
+                  client: "Bob's terminal",
+                }),
+                lineStep({
+                  id: "pass",
+                  teach:
+                    "`PASS` gives the password. The terminal masks what you type, but look at the dialogue panel: **POP3 sends the password across the network in clear text** unless the connection is secured. Anyone able to read the traffic could read it. Compare this with SSH, where authentication happens inside an encrypted channel.",
+                  line: POP3_LINES[1],
+                  peer: RECV_SERVER,
+                  port: 110,
+                  client: "Bob's terminal",
+                  set: { authenticated: true },
+                }),
+                lineStep({
+                  id: "stat",
+                  teach:
+                    "`STAT` reports how many messages are in the mailbox and their total size in octets (bytes).",
+                  line: POP3_LINES[2],
+                  peer: RECV_SERVER,
+                  port: 110,
+                  client: "Bob's terminal",
+                }),
+                lineStep({
+                  id: "list",
+                  teach:
+                    "`LIST` gives each waiting message a **number** and a size. The numbers are how the client refers to messages for the rest of the session.",
+                  line: POP3_LINES[3],
+                  peer: RECV_SERVER,
+                  port: 110,
+                  client: "Bob's terminal",
+                }),
+                pick,
+                {
+                  id: "retr",
+                  teach:
+                    "`RETR` followed by the message number downloads that whole message — headers and body — to the client.",
+                  terminal: {
+                    instruction: "Type: RETR 2",
+                    expect: "RETR 2",
+                    display: "RETR 2",
+                    misstep: [
+                      {
+                        match: /^retr\s+1$/i,
+                        message:
+                          "Message 1 is the welcome message from postmaster. The message from Alice is number 2.",
+                      },
+                      {
+                        match: /^retr$/i,
+                        message: "RETR needs the number of the message to fetch, for example RETR 2",
+                      },
+                    ],
+                  },
+                  app: null,
+                  effect: () => ({
+                    dialogue: [
+                      dlg("Bob's terminal", RECV_SERVER, "RETR 2", "cmd", 110),
+                      dlg(RECV_SERVER, "Bob's terminal", "+OK " + MESSAGE.size + " octets", "reply", 110),
+                    ],
+                    term: [
+                      { type: "command", text: "RETR 2" },
+                      { type: "recv", text: "+OK " + MESSAGE.size + " octets" },
+                      { type: "recv", text: "From: " + MESSAGE.from },
+                      { type: "recv", text: "Subject: " + MESSAGE.subject },
+                      { type: "recv", text: "" },
+                      { type: "recv", text: MESSAGE.body },
+                      { type: "recv", text: "." },
+                    ],
+                    set: { inbox: [MESSAGE] },
+                  }),
+                },
+                {
+                  id: "dele",
+                  teach:
+                    "`DELE` marks a message for deletion. Nothing is actually removed until the session ends.",
+                  terminal: {
+                    instruction: "Type: DELE 2",
+                    expect: "DELE 2",
+                    display: "DELE 2",
+                  },
+                  app: null,
+                  effect: () => ({
+                    dialogue: [
+                      dlg("Bob's terminal", RECV_SERVER, "DELE 2", "cmd", 110),
+                      dlg(RECV_SERVER, "Bob's terminal", "+OK message 2 marked for deletion", "reply", 110),
+                    ],
+                    term: [
+                      { type: "command", text: "DELE 2" },
+                      { type: "recv", text: "+OK message 2 marked for deletion" },
+                    ],
+                  }),
+                },
+                {
+                  id: "quit",
+                  teach:
+                    "`QUIT` ends the session and **commits the deletion**. Watch the server mailbox: the message is gone from the server and now exists only on Bob's computer. That is the normal behaviour of POP3. (IMAP instead leaves mail on the server and synchronises it; the specification names POP3.)",
+                  terminal: { instruction: "Type: QUIT", expect: "QUIT", display: "QUIT" },
+                  app: null,
+                  effect: () => ({
+                    dialogue: [
+                      dlg("Bob's terminal", RECV_SERVER, "QUIT", "cmd", 110),
+                      dlg(RECV_SERVER, "Bob's terminal", "+OK deletions committed", "reply", 110),
+                    ],
+                    term: [
+                      { type: "command", text: "QUIT" },
+                      { type: "recv", text: "+OK deletions committed" },
+                    ],
+                    set: { mailbox: [WELCOME], activeLeg: "collected", connected: false },
+                  }),
+                },
+              ];
+            }
+            return [
+              {
+                id: "check",
+                teach:
+                  "**POP3 (Post Office Protocol version 3)** is the application layer protocol used to **retrieve** email, on **port 110**. Clicking Check mail makes the client connect to Bob's mail server, authenticate with `USER` and `PASS`, and ask what is waiting with `STAT` and `LIST`. Watch the dialogue panel — the password crosses the network in clear text.",
+                terminal: null,
+                app: {
+                  instruction: "Click Check mail in the mail client.",
+                  control: "checkmail",
+                },
+                effect: () => ({
+                  dialogue: [
+                    dlg(RECV_SERVER, "Bob's client", "+OK POP3 server ready", "reply", 110),
+                    ...POP3_LINES.flatMap((line) => [
+                      dlg("Bob's client", RECV_SERVER, line.cmd, "cmd", 110),
+                      dlg(RECV_SERVER, "Bob's client", line.reply, "reply", 110),
+                    ]),
+                  ],
+                  term: [
+                    { type: "info", text: "Mail client ran the POP3 dialogue with " + RECV_SERVER + ":110" },
+                    { type: "recv", text: "+OK 2 messages waiting" },
+                  ],
+                  set: { connected: true, port: 110, peer: RECV_SERVER, authenticated: true },
+                }),
+              },
+              pick,
+              retrieved,
+              removed,
+            ];
+          },
+        },
+        {
+          id: "failure",
+          label: "C: When delivery fails",
+          machine: "alice",
+          examPoints: [
+            "250 Message accepted for delivery means accepted by that server — not delivered to the recipient.",
+            "Only the recipient's mail server knows which mailboxes exist on it.",
+            "An unknown recipient is refused with 550, and the sending server returns a non-delivery report to the sender.",
+          ],
+          initial: { mailbox: [WELCOME] },
+          buildSteps: (view) => {
+            const lines = smtpLines(UNKNOWN);
+            const mx = mxStep(
+              "Alice's mail server accepted the message, so it now has to deliver it. As before it asks DNS for the **MX record** of the recipient's domain.",
+            );
+            const relay = {
+              id: "relay",
+              teach:
+                "Alice's server opens its own SMTP connection to `" +
+                RECV_SERVER +
+                "` and offers the recipient with `RCPT TO:`. Only now does a server that actually knows the mailboxes get to see the address.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                dialogue: relayDialogue(UNKNOWN, false),
+                term: [{ type: "info", text: "relaying to " + RECV_SERVER + ":25 ..." }],
+                set: { activeLeg: "relay" },
+              }),
+            };
+            const reject = mailboxStep({
+              teach:
+                "The recipient's server looks for a mailbox matching the **RCPT TO** address. Check the mailboxes it holds and tell it what it should do.",
+              expect: NONE,
+              wrongMailbox:
+                "That mailbox belongs to a different address. Compare each one with the RCPT TO line in the envelope.",
+              wrongNone: "",
+              onDeliver: () => ({
+                dialogue: [
+                  dlg(RECV_SERVER, SEND_SERVER, "550 No such user here", "reply", 25),
+                ],
+                term: [{ type: "error", text: "550 No such user here" }],
+                set: { activeLeg: "rejected", rejected: true },
+              }),
+            });
+            const ndr = {
+              id: "ndr",
+              teach:
+                "Because the recipient's server refused the address with **550**, Alice's server cannot deliver the message. It generates a **non-delivery report** and puts it in Alice's own mailbox. The lesson is in the wording of the earlier reply: **250 Message accepted for delivery** meant only that Alice's server had taken responsibility for it — not that anyone had received it. Only the recipient's mail server knows which mailboxes exist on it.",
+              terminal: null,
+              app: null,
+              effect: () => ({
+                term: [
+                  { type: "error", text: "Non-delivery report returned to " + ALICE },
+                ],
+                set: {
+                  ndr: true,
+                  inbox: [
+                    {
+                      num: 1,
+                      from: "postmaster@" + SEND_SERVER,
+                      to: ALICE,
+                      subject: "Undeliverable: " + SUBJECT,
+                      body: "550 No such user here — " + UNKNOWN,
+                      size: 640,
+                    },
+                  ],
+                  clientTab: "inbox",
+                },
+              }),
+            };
+
+            if (view === "terminal") {
+              return [
+                connectStep({
+                  id: "connect",
+                  teach:
+                    "The same SMTP dialogue as Exercise A, but addressed to `" +
+                    UNKNOWN +
+                    "` — an address that does not exist on the recipient's server.",
+                  host: SEND_SERVER,
+                  ip: SEND_IP,
+                  port: 25,
+                  greeting: "220 " + SEND_SERVER + " ESMTP ready",
+                  client: "Alice's terminal",
+                  terminalCommand: TELNET_SMTP,
+                  set: { envelope: { from: null, to: null, subject: SUBJECT, body: BODY_TEXT } },
+                }),
+                lineStep({
+                  id: "helo",
+                  teach: "The client identifies itself, exactly as before.",
+                  line: lines[0],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                }),
+                lineStep({
+                  id: "mailfrom",
+                  teach: "`MAIL FROM:` declares the sender.",
+                  line: lines[1],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                  set: { envelope: { from: ALICE, to: null, subject: SUBJECT, body: BODY_TEXT } },
+                }),
+                lineStep({
+                  id: "rcptto",
+                  teach:
+                    "`RCPT TO:` declares the recipient — and Alice's server replies **250 OK**. It has no way of knowing which mailboxes exist on somebody else's server, so it accepts the address without checking it.",
+                  line: lines[2],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                  set: { envelope: { from: ALICE, to: UNKNOWN, subject: SUBJECT, body: BODY_TEXT } },
+                }),
+                lineStep({
+                  id: "data",
+                  teach: "`DATA` invites the message content.",
+                  line: lines[3],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                }),
+                lineStep({
+                  id: "body",
+                  teach: "The message content is typed.",
+                  line: lines[4],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                }),
+                lineStep({
+                  id: "dot",
+                  teach:
+                    "A full stop on its own ends the message, and the server replies **250 Message accepted for delivery**. Read that reply carefully before going on.",
+                  line: lines[5],
+                  peer: SEND_SERVER,
+                  port: 25,
+                  client: "Alice's terminal",
+                  set: { sentAccepted: true, activeLeg: "submitted" },
+                }),
+                mx,
+                relay,
+                reject,
+                ndr,
+              ];
+            }
+            return [
+              {
+                id: "compose",
+                teach:
+                  "The same message, but addressed to `" +
+                  UNKNOWN +
+                  "` — an address that does not exist on the recipient's server. The client runs the whole SMTP dialogue as before.",
+                terminal: null,
+                app: {
+                  instruction: "Type " + UNKNOWN + " into the To field and click Send.",
+                  control: "compose",
+                  expect: UNKNOWN,
+                  display: UNKNOWN,
+                },
+                previewEnvelope: { from: ALICE, to: UNKNOWN, subject: SUBJECT, body: BODY_TEXT },
+                effect: () => ({
+                  dialogue: [
+                    dlg(SEND_SERVER, "Alice's client", "220 " + SEND_SERVER + " ESMTP ready", "reply", 25),
+                    ...lines.flatMap((line) => [
+                      dlg("Alice's client", SEND_SERVER, line.cmd, "cmd", 25),
+                      ...(line.reply
+                        ? [dlg(SEND_SERVER, "Alice's client", line.reply, "reply", 25)]
+                        : []),
+                    ]),
+                  ],
+                  term: [
+                    { type: "info", text: "Mail client ran the SMTP dialogue with " + SEND_SERVER + ":25" },
+                    { type: "recv", text: "250 Message accepted for delivery" },
+                  ],
+                  set: {
+                    connected: true,
+                    port: 25,
+                    peer: SEND_SERVER,
+                    sentAccepted: true,
+                    activeLeg: "submitted",
+                    envelope: { from: ALICE, to: UNKNOWN, subject: SUBJECT, body: BODY_TEXT },
+                  },
+                }),
+              },
+              mx,
+              relay,
+              reject,
+              ndr,
+            ];
+          },
+        },
+      ];
+
+      /* -------------------------- presentation ------------------------ */
+
+      const TERM_LINE_CLASS = {
+        command: "text-sky-800 dark:text-sky-300",
+        recv: "text-emerald-800 dark:text-emerald-300",
+        info: "text-slate-600 dark:text-slate-400",
+        error: "text-red-700 dark:text-red-400",
+      };
+      const TERM_LINE_PREFIX = { command: "$ ", recv: "< ", info: "  ", error: "! " };
+
+      const makeSimState = (exercise) => ({
+        step: 0,
+        dialogue: [],
+        term: [{ type: "info", text: "Ready. Follow the instructions above." }],
+        mailbox: [],
+        inbox: [],
+        envelope: null,
+        connected: false,
+        peer: null,
+        port: null,
+        authenticated: false,
+        mxResolved: false,
+        sentAccepted: false,
+        rejected: false,
+        ndr: false,
+        deliveredTo: null,
+        selectedMessage: null,
+        activeLeg: null,
+        clientTab: exercise.machine === "bob" ? "inbox" : "compose",
+        ...(exercise.initial || {}),
+      });
+
+      function ErrorBar({ message }) {
+        if (!message) return null;
+        return (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border-y border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200"
+          >
+            <span aria-hidden="true" className="shrink-0">
+              &#9888;
+            </span>
+            <span>{message}</span>
+          </div>
+        );
+      }
+
+      function InstructionPanel({ exercise, stepNumber, totalSteps, step, input, pickPrompt }) {
+        const percent = Math.round((stepNumber / totalSteps) * 100);
+        return (
+          <section
+            aria-labelledby="instruction-heading"
+            className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <h2
+                id="instruction-heading"
+                className="text-sm font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300"
+              >
+                {exercise.label}
+              </h2>
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                Step {Math.min(stepNumber + 1, totalSteps)} of {totalSteps}
+              </span>
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={totalSteps}
+                aria-valuenow={stepNumber}
+                aria-label="Exercise progress"
+                className="h-2 w-32 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              >
+                <div
+                  className="h-full rounded-full bg-indigo-600 dark:bg-indigo-400"
+                  style={{ width: percent + "%" }}
+                />
+              </div>
+            </div>
+            <p className="max-w-4xl text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+              {renderRich(step.teach)}
+            </p>
+            <p className="mt-2 flex flex-wrap items-baseline gap-2 text-sm">
+              <span className="rounded bg-indigo-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white dark:bg-indigo-500">
+                Now do this
+              </span>
+              <span className="font-semibold text-slate-900 dark:text-slate-50">
+                {input ? input.instruction : pickPrompt ? pickPrompt : "Press Continue."}
+              </span>
+            </p>
+          </section>
+        );
+      }
+
+      function RecapCard({ exercise, view, onRestart, onSwapView }) {
+        return (
+          <section
+            aria-labelledby="recap-heading"
+            className="border-b border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/50"
+          >
+            <h2
+              id="recap-heading"
+              className="text-sm font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200"
+            >
+              Exercise complete — {exercise.label}
+            </h2>
+            <ul className="mt-2 max-w-4xl list-disc space-y-1 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+              {exercise.examPoints.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onSwapView}
+                className="shrink-0 whitespace-nowrap rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-emerald-950"
+              >
+                Run this exercise in {view === "terminal" ? "the application" : "the terminal"} view
+              </button>
+              <button
+                type="button"
+                onClick={onRestart}
+                className="shrink-0 whitespace-nowrap rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-900"
+              >
+                Restart this exercise
+              </button>
+            </div>
+          </section>
+        );
+      }
+
+      function MailClientView({ sim, machine, toDraft, setToDraft, onSend, onTab, onCheckMail }) {
+        const owner = machine === "bob" ? BOB : ALICE;
+        const tabClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-t-md border-x border-t border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 dark:border-slate-600 dark:bg-slate-900 dark:text-indigo-300"
+            : "shrink-0 whitespace-nowrap rounded-t-md px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700";
+
+        return (
+          <div className="device-chrome flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Mail client &mdash; signed in as {owner}
+              </p>
+            </div>
+            <div className="flex gap-1 border-b border-slate-200 bg-slate-100 px-2 pt-1 dark:border-slate-700 dark:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => onTab("compose")}
+                aria-pressed={sim.clientTab === "compose"}
+                className={tabClass(sim.clientTab === "compose")}
+              >
+                Compose
+              </button>
+              <button
+                type="button"
+                onClick={() => onTab("inbox")}
+                aria-pressed={sim.clientTab === "inbox"}
+                className={tabClass(sim.clientTab === "inbox")}
+              >
+                Inbox ({sim.inbox.length})
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-3">
+              {sim.clientTab === "compose" ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    onSend(toDraft);
+                  }}
+                >
+                  <label
+                    htmlFor="to-input"
+                    className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+                  >
+                    To
+                  </label>
+                  <input
+                    id="to-input"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck="false"
+                    value={toDraft}
+                    onChange={(event) => setToDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onSend(toDraft);
+                      }
+                    }}
+                    className="mono mt-1 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                  <p className="mt-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                    From
+                  </p>
+                  <p className="mono text-sm text-slate-800 dark:text-slate-200">{ALICE}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                    Subject
+                  </p>
+                  <p className="mono text-sm text-slate-800 dark:text-slate-200">{SUBJECT}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                    Message
+                  </p>
+                  <p className="text-sm text-slate-800 dark:text-slate-200">{BODY_TEXT}</p>
+                  <button
+                    type="submit"
+                    className="mt-3 shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    Send
+                  </button>
+                </form>
+              ) : (
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Inbox on this computer
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onCheckMail}
+                      className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                    >
+                      Check mail
+                    </button>
+                  </div>
+                  {sim.inbox.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                      Nothing downloaded yet.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-2">
+                      {sim.inbox.map((message) => (
+                        <li
+                          key={message.subject}
+                          className="rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950"
+                        >
+                          <p className="mono text-xs text-slate-500 dark:text-slate-400">
+                            From: {message.from}
+                          </p>
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-50">
+                            {message.subject}
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {message.body}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function TerminalView({ sim, draft, setDraft, onSubmit, onHistory, inputRef, promptLabel }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.term.length]);
+
+        return (
+          <div className="flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-slate-50 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {promptLabel}
+            </div>
+            <div
+              ref={scrollRef}
+              role="log"
+              aria-live="polite"
+              aria-label="Terminal output"
+              className="mono min-h-0 flex-1 overflow-auto px-3 py-2 text-xs leading-relaxed"
+            >
+              {sim.term.map((line, index) => (
+                <div
+                  key={index}
+                  className={"wire-text " + (TERM_LINE_CLASS[line.type] || TERM_LINE_CLASS.info)}
+                >
+                  <span aria-hidden="true">{TERM_LINE_PREFIX[line.type] || "  "}</span>
+                  {line.text}
+                </div>
+              ))}
+            </div>
+            <form
+              onSubmit={onSubmit}
+              className="border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <label
+                htmlFor="terminal-input"
+                className="block text-xs font-bold text-slate-600 dark:text-slate-300"
+              >
+                Command
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="mono shrink-0 font-bold text-indigo-700 dark:text-indigo-300"
+                >
+                  $
+                </span>
+                <input
+                  id="terminal-input"
+                  ref={inputRef}
+                  type="text"
+                  autoComplete="off"
+                  spellCheck="false"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      onHistory("up");
+                    } else if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      onHistory("down");
+                    } else if (event.key === "Enter") {
+                      event.preventDefault();
+                      onSubmit(event);
+                    }
+                  }}
+                  className="mono min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Enter
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      }
+
+      // The envelope is the addressing information the mail servers actually
+      // route on, so it stays visible while the servers work.
+      function EnvelopePanel({ sim, preview }) {
+        const envelope = sim.envelope || preview || null;
+        return (
+          <section
+            aria-labelledby="envelope-heading"
+            className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+              <h3
+                id="envelope-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                {sim.envelope ? "Message envelope" : "Envelope the client will send"}
+              </h3>
+            </div>
+            <div className="mono px-3 py-2 text-[11px] leading-relaxed">
+              {!envelope ? (
+                <p className="text-slate-500 dark:text-slate-400">Nothing being sent.</p>
+              ) : (
+                <div className="text-slate-800 dark:text-slate-200">
+                  <p>
+                    MAIL FROM:&lt;
+                    <span className={envelope.from ? "" : "text-slate-400 dark:text-slate-500"}>
+                      {envelope.from || "not yet declared"}
+                    </span>
+                    &gt;
+                  </p>
+                  <p>
+                    RCPT TO:&lt;
+                    <span className={envelope.to ? "" : "text-slate-400 dark:text-slate-500"}>
+                      {envelope.to || "not yet declared"}
+                    </span>
+                    &gt;
+                  </p>
+                  <p className="mt-1 text-slate-500 dark:text-slate-400">
+                    Subject: {envelope.subject}
+                  </p>
+                  <p className="text-slate-500 dark:text-slate-400">{envelope.body}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      function MailFlowPane({ sim, mxPick, onMxPick, mailboxPick, onMailboxPick, messagePick, onMessagePick }) {
+        const legClass = (active) =>
+          active
+            ? "rounded-md border-2 border-indigo-400 bg-indigo-50 p-2 dark:border-indigo-500 dark:bg-indigo-950/50"
+            : "rounded-md border border-slate-200 p-2 dark:border-slate-700";
+
+        const mailboxMessages = (mailboxId) =>
+          mailboxId === "bob" ? sim.mailbox : [];
+
+        return (
+          <section
+            aria-labelledby="flow-heading"
+            className="flex min-h-[18rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="flow-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                Mail journey &mdash; two clients, two mail servers
+              </h2>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
+              {(mxPick || mailboxPick || messagePick) && (
+                <p className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-900 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100">
+                  {(mxPick || mailboxPick || messagePick).prompt}
+                </p>
+              )}
+
+              <div className={legClass(sim.activeLeg === "submitted")}>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  1. Alice&rsquo;s mail client
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {ALICE_HOST} &mdash; sends with SMTP on port 25
+                </p>
+              </div>
+
+              <div className={legClass(sim.activeLeg === "relay")}>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  2. {SEND_SERVER} &mdash; sending mail server
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {SEND_IP} &mdash; accepts outgoing mail and relays it onward
+                </p>
+                <div className="mt-1">
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    DNS mail exchanger (MX) records it can look up
+                  </p>
+                  <div className="mt-1 overflow-x-auto">
+                    <table className="w-full min-w-[280px] text-left text-[11px]">
+                      <thead>
+                        <tr className="text-slate-500 dark:text-slate-400">
+                          <th className="py-0.5 pr-2 font-bold">Domain</th>
+                          <th className="py-0.5 pr-2 font-bold">Type</th>
+                          <th className="py-0.5 font-bold">Mail exchanger</th>
+                        </tr>
+                      </thead>
+                      <tbody className="mono">
+                        {MX_RECORDS.map((record) => (
+                          <tr
+                            key={record.id}
+                            className="border-t border-slate-200 text-slate-800 dark:border-slate-700 dark:text-slate-200"
+                          >
+                            <td className="py-0.5 pr-2">
+                              {mxPick ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onMxPick(record.id)}
+                                  className="rounded border border-indigo-400 px-1.5 py-0.5 font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                                >
+                                  {record.name}
+                                </button>
+                              ) : (
+                                record.name
+                              )}
+                            </td>
+                            <td className="py-0.5 pr-2">{record.type}</td>
+                            <td className="py-0.5">{record.value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className={legClass(sim.activeLeg === "stored" || sim.activeLeg === "waiting" || sim.activeLeg === "rejected")}>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  3. {RECV_SERVER} &mdash; recipient mail server
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {RECV_IP} &mdash; stores incoming mail in mailboxes, serves it on POP3 port 110
+                </p>
+                <div className="mt-1 space-y-1">
+                  {MAILBOXES.map((mailbox) => (
+                    <div
+                      key={mailbox.id}
+                      className="rounded border border-slate-200 p-1.5 dark:border-slate-700"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        {mailboxPick ? (
+                          <button
+                            type="button"
+                            onClick={() => onMailboxPick(mailbox.id)}
+                            className="mono rounded border border-indigo-400 px-1.5 py-0.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                          >
+                            {mailbox.address}
+                          </button>
+                        ) : (
+                          <span className="mono text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                            {mailbox.address}
+                          </span>
+                        )}
+                        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-100">
+                          {mailboxMessages(mailbox.id).length} message
+                          {mailboxMessages(mailbox.id).length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      {mailboxMessages(mailbox.id).length > 0 && (
+                        <ul className="mt-1 space-y-1">
+                          {mailboxMessages(mailbox.id).map((message) => (
+                            <li key={message.num} className="text-[11px]">
+                              {messagePick ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onMessagePick(message.num)}
+                                  className="block w-full rounded border border-dashed border-slate-300 px-1.5 py-1 text-left hover:border-indigo-500 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:hover:border-indigo-400 dark:hover:bg-indigo-950"
+                                >
+                                  <span className="mono text-slate-800 dark:text-slate-200">
+                                    {message.num}. {message.subject}
+                                  </span>
+                                  <span className="mono block text-slate-500 dark:text-slate-400">
+                                    from {message.from} &mdash; {message.size} octets
+                                  </span>
+                                </button>
+                              ) : (
+                                <div className="mono rounded bg-slate-50 px-1.5 py-1 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                                  {message.num}. {message.subject}
+                                  <span className="block text-slate-500 dark:text-slate-400">
+                                    from {message.from} &mdash; {message.size} octets
+                                  </span>
+                                </div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                  {mailboxPick && (
+                    <button
+                      type="button"
+                      onClick={() => onMailboxPick(NONE)}
+                      className="shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      No mailbox matches this address
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className={legClass(sim.activeLeg === "collected")}>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  4. Bob&rsquo;s mail client
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  collects with POP3 on port 110 &mdash; {sim.inbox.length} message
+                  {sim.inbox.length === 1 ? "" : "s"} downloaded
+                </p>
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      function DialoguePane({ sim }) {
+        const scrollRef = useRef(null);
+        useEffect(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, [sim.dialogue.length]);
+
+        return (
+          <section
+            aria-labelledby="dialogue-heading"
+            className="flex min-h-[14rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <h2
+                id="dialogue-heading"
+                className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+              >
+                On the wire &mdash; every line sent in clear text
+              </h2>
+            </div>
+            <div
+              ref={scrollRef}
+              aria-live="polite"
+              className="min-h-0 flex-1 space-y-1 overflow-auto p-3"
+            >
+              {sim.dialogue.length === 0 && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Nothing has been sent yet.
+                </p>
+              )}
+              {sim.dialogue.map((entry, index) => (
+                <div
+                  key={index}
+                  className="wire-enter rounded-md border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-white dark:bg-slate-600">
+                      {entry.from} &rarr; {entry.to}
+                    </span>
+                    <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                      port {entry.port}
+                    </span>
+                    <span
+                      className={
+                        entry.kind === "cmd"
+                          ? "rounded bg-sky-100 px-1.5 py-0.5 text-sky-900 dark:bg-sky-900 dark:text-sky-100"
+                          : "rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100"
+                      }
+                    >
+                      {entry.kind === "cmd" ? "command" : "reply"}
+                    </span>
+                  </div>
+                  <pre className="mono wire-text mt-0.5 text-[11px] text-slate-800 dark:text-slate-200">
+                    {entry.text}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      /* ------------------------------ app ----------------------------- */
+
+      function App() {
+        const [exerciseId, setExerciseId] = useState(EXERCISES[0].id);
+        const exercise = useMemo(
+          () => EXERCISES.find((item) => item.id === exerciseId) || EXERCISES[0],
+          [exerciseId],
+        );
+        const [view, setView] = useState("app");
+        const [sim, setSim] = useState(() => makeSimState(EXERCISES[0]));
+        const [error, setError] = useState(null);
+        const [draft, setDraft] = useState("");
+        const [toDraft, setToDraft] = useState("");
+        const [history, setHistory] = useState([]);
+        const [historyIndex, setHistoryIndex] = useState(null);
+        const inputRef = useRef(null);
+
+        const steps = useMemo(() => exercise.buildSteps(view), [exercise, view]);
+        const done = sim.step >= steps.length;
+        const step = done ? null : steps[sim.step];
+        const input = step ? (view === "terminal" ? step.terminal : step.app) : null;
+        const mxPick = step ? step.mxPick : null;
+        const mailboxPick = step ? step.mailboxPick : null;
+        const messagePick = step ? step.messagePick : null;
+        const needsAction = Boolean(input || mxPick || mailboxPick || messagePick);
+
+        useEffect(() => {
+          if (view === "terminal" && step && step.terminal && inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, [view, sim.step, step]);
+
+        const resetState = useCallback((target) => {
+          setSim(makeSimState(target));
+          setError(null);
+          setDraft("");
+          setToDraft("");
+          setHistory([]);
+          setHistoryIndex(null);
+        }, []);
+
+        const changeExercise = (nextId) => {
+          const target = EXERCISES.find((item) => item.id === nextId) || EXERCISES[0];
+          setExerciseId(target.id);
+          resetState(target);
+        };
+
+        const changeView = (nextView) => {
+          if (nextView === view) return;
+          setView(nextView);
+          resetState(exercise);
+        };
+
+        const commit = useCallback(
+          (extraSet) => {
+            setSim((state) => {
+              const current = steps[state.step];
+              if (!current) return state;
+              const out = current.effect ? current.effect(state) : {};
+              return {
+                ...state,
+                ...(extraSet || {}),
+                ...(out.set || {}),
+                dialogue: out.dialogue ? [...state.dialogue, ...out.dialogue] : state.dialogue,
+                term: out.term ? [...state.term, ...out.term] : state.term,
+                step: state.step + 1,
+              };
+            });
+            setError(null);
+          },
+          [steps],
+        );
+
+        const missteppedMessage = (value) => {
+          const list = (input && input.misstep) || (step && step.misstep) || [];
+          const hit = list.find((entry) => entry.match.test(value));
+          return hit ? hit.message : DEVIATION_MESSAGE;
+        };
+
+        const submitTerminal = (event) => {
+          event.preventDefault();
+          if (!step) return;
+          const raw = draft;
+          const value = norm(raw);
+          if (!input) {
+            setDraft("");
+            setError(
+              needsAction
+                ? "This step is not a command. Carry out the action described in the instruction panel."
+                : "This step does not need a command. Press Continue to carry on.",
+            );
+            return;
+          }
+          if (value) setHistory((list) => [...list, value]);
+          setHistoryIndex(null);
+          setDraft("");
+          if (matchesExpectation(input.expect, value)) {
+            commit();
+            return;
+          }
+          const message = missteppedMessage(value);
+          setSim((state) => ({
+            ...state,
+            term: [
+              ...state.term,
+              { type: "command", text: raw },
+              { type: "error", text: message },
+            ],
+          }));
+          setError(message);
+        };
+
+        const recallHistory = (direction) => {
+          if (history.length === 0) return;
+          const current = historyIndex == null ? history.length : historyIndex;
+          const next =
+            direction === "up"
+              ? Math.max(0, current - 1)
+              : Math.min(history.length, current + 1);
+          setHistoryIndex(next);
+          setDraft(next === history.length ? "" : history[next]);
+        };
+
+        const attemptSend = (value) => {
+          if (!step || !input || input.control !== "compose") {
+            setError("This step does not need the Send button. Follow the instruction panel.");
+            return;
+          }
+          if (matchesExpectation(input.expect, norm(value))) {
+            commit();
+            return;
+          }
+          setError(missteppedMessage(norm(value)));
+        };
+
+        const attemptCheckMail = () => {
+          if (step && input && input.control === "checkmail") {
+            commit();
+            return;
+          }
+          setError("This step does not need Check mail. Follow the instruction panel.");
+        };
+
+        const attemptTab = (tab) => {
+          setSim((state) => ({ ...state, clientTab: tab }));
+        };
+
+        const attemptMxPick = (id) => {
+          if (!mxPick) return;
+          if (id === mxPick.expect) {
+            commit();
+            return;
+          }
+          setError(mxPick.wrong);
+        };
+
+        const attemptMailboxPick = (id) => {
+          if (!mailboxPick) return;
+          if (id === mailboxPick.expect) {
+            commit();
+            return;
+          }
+          setError(id === NONE ? mailboxPick.wrongNone : mailboxPick.wrongMailbox);
+        };
+
+        const attemptMessagePick = (num) => {
+          if (!messagePick) return;
+          if (num === messagePick.expect) {
+            commit();
+            return;
+          }
+          setError(messagePick.wrong);
+        };
+
+        const updateDraft = (value) => {
+          setDraft(value);
+          if (error) setError(null);
+        };
+        const updateTo = (value) => {
+          setToDraft(value);
+          if (error) setError(null);
+        };
+
+        const swapView = () => changeView(view === "terminal" ? "app" : "terminal");
+
+        const fillForMe = () => {
+          if (!input) return;
+          if (view === "terminal") {
+            updateDraft(input.display === undefined ? "" : input.display);
+            if (inputRef.current) inputRef.current.focus();
+          } else if (input.control === "compose") {
+            updateTo(input.display || "");
+          }
+        };
+
+        const canFill =
+          Boolean(input) && (view === "terminal" || input.control === "compose");
+
+        const pickPrompt = mxPick
+          ? mxPick.prompt
+          : mailboxPick
+            ? mailboxPick.prompt
+            : messagePick
+              ? messagePick.prompt
+              : null;
+
+        const promptLabel = sim.connected
+          ? (exercise.machine === "bob" ? "Bob" : "Alice") +
+            "'s terminal — connected to " +
+            sim.peer +
+            ":" +
+            sim.port
+          : (exercise.machine === "bob" ? "Bob" : "Alice") + "'s terminal";
+
+        const toggleClass = (active) =>
+          active
+            ? "shrink-0 whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-sm font-bold text-indigo-700 shadow"
+            : "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold text-white/90 hover:bg-white/20";
+
+        return (
+          <div className="protocol-lab flex flex-col bg-slate-100 dark:bg-slate-950">
+            <header
+              data-interactive-header
+              className="flex flex-wrap items-center justify-between gap-4"
+            >
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">Email: SMTP &amp; POP3</h1>
+                <p className="text-sm opacity-90">
+                  Send and collect a message by hand, or let the mail client do it
+                </p>
+              </div>
+              <div data-interactive-actions className="flex flex-wrap items-center gap-2">
+                <select
+                  id="exercise-select"
+                  aria-label="Exercise"
+                  value={exerciseId}
+                  onChange={(event) => changeExercise(event.target.value)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {EXERCISES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  role="group"
+                  aria-label="Client view"
+                  className="flex shrink-0 items-center gap-1 rounded-lg bg-black/25 p-1"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={view === "app"}
+                    onClick={() => changeView("app")}
+                    className={toggleClass(view === "app")}
+                  >
+                    Application
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={view === "terminal"}
+                    onClick={() => changeView("terminal")}
+                    className={toggleClass(view === "terminal")}
+                  >
+                    Terminal
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {done ? (
+              <RecapCard
+                exercise={exercise}
+                view={view}
+                onRestart={() => resetState(exercise)}
+                onSwapView={swapView}
+              />
+            ) : (
+              <InstructionPanel
+                exercise={exercise}
+                stepNumber={sim.step}
+                totalSteps={steps.length}
+                step={step}
+                input={input}
+                pickPrompt={pickPrompt}
+              />
+            )}
+
+            <ErrorBar message={error} />
+
+            <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-2 lg:overflow-hidden">
+              <section
+                aria-label="Client"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  {exercise.machine === "bob" ? "Bob" : "Alice"}&rsquo;s computer &mdash;{" "}
+                  {view === "terminal" ? "terminal" : "mail client"}
+                </h2>
+                {view === "terminal" ? (
+                  <TerminalView
+                    sim={sim}
+                    draft={draft}
+                    setDraft={updateDraft}
+                    onSubmit={submitTerminal}
+                    onHistory={recallHistory}
+                    inputRef={inputRef}
+                    promptLabel={promptLabel}
+                  />
+                ) : (
+                  <MailClientView
+                    sim={sim}
+                    machine={exercise.machine}
+                    toDraft={toDraft}
+                    setToDraft={updateTo}
+                    onSend={attemptSend}
+                    onTab={attemptTab}
+                    onCheckMail={attemptCheckMail}
+                  />
+                )}
+                <EnvelopePanel sim={sim} preview={step ? step.previewEnvelope : null} />
+              </section>
+
+              <section
+                aria-label="Behind the scenes"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0"
+              >
+                <h2 className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Behind the scenes
+                </h2>
+                <MailFlowPane
+                  sim={sim}
+                  mxPick={mxPick}
+                  onMxPick={attemptMxPick}
+                  mailboxPick={mailboxPick}
+                  onMailboxPick={attemptMailboxPick}
+                  messagePick={messagePick}
+                  onMessagePick={attemptMessagePick}
+                />
+                <DialoguePane sim={sim} />
+              </section>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => resetState(exercise)}
+                className="shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Restart exercise
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {canFill && (
+                  <button
+                    type="button"
+                    onClick={fillForMe}
+                    className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                  >
+                    Type it for me
+                  </button>
+                )}
+                {!done && !needsAction && (
+                  <button
+                    type="button"
+                    onClick={() => commit()}
+                    className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    Continue &#9654;
+                  </button>
+                )}
+                {!done && needsAction && (
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Complete the action above to continue.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
