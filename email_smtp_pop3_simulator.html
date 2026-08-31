@@ -81,6 +81,31 @@
       .dark .device-chrome {
         box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
       }
+      /* A single pulse around whichever panel the learner needs to act in
+         next, so a question appearing further down a pane is not missed. */
+      @keyframes attention-flash {
+        0% {
+          box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.75);
+        }
+        70% {
+          box-shadow: 0 0 0 7px rgba(99, 102, 241, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+        }
+      }
+      .attention-flash {
+        animation: attention-flash 1.1s ease-out 1;
+        border-color: #6366f1 !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .attention-flash {
+          animation: none;
+          outline: 2px solid #6366f1;
+          outline-offset: 2px;
+        }
+      }
+
       .wire-enter {
         animation: wire-in 260ms ease-out;
       }
@@ -1087,7 +1112,7 @@
         );
       }
 
-      function MailClientView({ sim, machine, toDraft, setToDraft, onSend, onTab, onCheckMail }) {
+      function MailClientView({ flash, sim, machine, toDraft, setToDraft, onSend, onTab, onCheckMail }) {
         const owner = machine === "bob" ? BOB : ALICE;
         const tabClass = (active) =>
           active
@@ -1095,7 +1120,7 @@
             : "shrink-0 whitespace-nowrap rounded-t-md px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700";
 
         return (
-          <div className="device-chrome flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900">
+          <div className={"device-chrome flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900" + (flash ? " attention-flash" : "")}>
             <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
               <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
                 Mail client &mdash; signed in as {owner}
@@ -1213,7 +1238,7 @@
         );
       }
 
-      function TerminalView({ sim, draft, setDraft, onSubmit, onHistory, inputRef, promptLabel }) {
+      function TerminalView({ flash, sim, draft, setDraft, onSubmit, onHistory, inputRef, promptLabel }) {
         const scrollRef = useRef(null);
         useEffect(() => {
           if (scrollRef.current) {
@@ -1222,7 +1247,7 @@
         }, [sim.term.length]);
 
         return (
-          <div className="flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-slate-50 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950">
+          <div className={"flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-slate-50 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950" + (flash ? " attention-flash" : "")}>
             <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
               {promptLabel}
             </div>
@@ -1341,7 +1366,7 @@
         );
       }
 
-      function MailFlowPane({ sim, mxPick, onMxPick, mailboxPick, onMailboxPick, messagePick, onMessagePick }) {
+      function MailFlowPane({ flash, sim, mxPick, onMxPick, mailboxPick, onMailboxPick, messagePick, onMessagePick }) {
         const legClass = (active) =>
           active
             ? "rounded-md border-2 border-indigo-400 bg-indigo-50 p-2 dark:border-indigo-500 dark:bg-indigo-950/50"
@@ -1353,7 +1378,7 @@
         return (
           <section
             aria-labelledby="flow-heading"
-            className="flex min-h-[18rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+            className={"flex min-h-[18rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900" + (flash ? " attention-flash" : "")}
           >
             <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
               <h2
@@ -1517,7 +1542,7 @@
         );
       }
 
-      function DialoguePane({ sim }) {
+      function DialoguePane({ flash, sim }) {
         const scrollRef = useRef(null);
         useEffect(() => {
           if (scrollRef.current) {
@@ -1528,7 +1553,7 @@
         return (
           <section
             aria-labelledby="dialogue-heading"
-            className="flex min-h-[14rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+            className={"flex min-h-[14rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900" + (flash ? " attention-flash" : "")}
           >
             <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
               <h2
@@ -1595,6 +1620,8 @@
         const [toDraft, setToDraft] = useState("");
         const [history, setHistory] = useState([]);
         const [historyIndex, setHistoryIndex] = useState(null);
+        const [flashOn, setFlashOn] = useState(false);
+        const [flashKey, setFlashKey] = useState(0);
         const inputRef = useRef(null);
 
         const steps = useMemo(() => exercise.buildSteps(view), [exercise, view]);
@@ -1612,8 +1639,35 @@
           }
         }, [view, sim.step, step]);
 
+        // Whichever panel the next action lives in.
+        const flashTarget = done
+          ? null
+          : input
+            ? "client"
+            : mxPick || mailboxPick || messagePick
+              ? "flow"
+              : "continue";
+
+        // Restart the one-shot pulse whenever the step changes: the class has
+        // to come off and go back on for the animation to replay.
+        useEffect(() => {
+          setFlashOn(false);
+          // Re-adding the class in a separate task gives two renders, so the
+          // one-shot animation actually replays. A timer rather than
+          // requestAnimationFrame, which does not fire in a hidden tab.
+          const start = setTimeout(() => setFlashOn(true), 20);
+          const stop = setTimeout(() => setFlashOn(false), 1400);
+          return () => {
+            clearTimeout(start);
+            clearTimeout(stop);
+          };
+        }, [sim.step, view, exerciseId, flashKey]);
+
+        const flashing = (target) => flashOn && flashTarget === target;
+
         const resetState = useCallback((target) => {
           setSim(makeSimState(target));
+          setFlashKey((value) => value + 1);
           setError(null);
           setDraft("");
           setToDraft("");
@@ -1881,6 +1935,7 @@
                 </h2>
                 {view === "terminal" ? (
                   <TerminalView
+                    flash={flashing("client")}
                     sim={sim}
                     draft={draft}
                     setDraft={updateDraft}
@@ -1891,6 +1946,7 @@
                   />
                 ) : (
                   <MailClientView
+                    flash={flashing("client")}
                     sim={sim}
                     machine={exercise.machine}
                     toDraft={toDraft}
@@ -1911,6 +1967,7 @@
                   Behind the scenes
                 </h2>
                 <MailFlowPane
+                  flash={flashing("flow")}
                   sim={sim}
                   mxPick={mxPick}
                   onMxPick={attemptMxPick}
@@ -1945,7 +2002,10 @@
                   <button
                     type="button"
                     onClick={() => commit()}
-                    className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                    className={
+                      "shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900" +
+                      (flashing("continue") ? " attention-flash" : "")
+                    }
                   >
                     Continue &#9654;
                   </button>
