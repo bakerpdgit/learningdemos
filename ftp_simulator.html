@@ -131,44 +131,61 @@
          --------------------------------------------------------------- */
       const HOST = "ftp.example.com";
       const IP = "192.0.2.45";
-      const USER = "pbaker";
+      const USER = "fbloggs";
+      const HOME = "/home/" + USER;
+      const PUB = "/pub";
       const PASSWORD = "not-a-real-password";
       const ANON_PASSWORD = "student@example.com";
 
       const DEVIATION_MESSAGE =
         "That is not the action for this step. Follow the simulation instructions exactly — enter the command shown in the instruction panel.";
 
-      const NONE = "__none__";
-
-      // The server's directories, with the access each one allows. This is
-      // what makes anonymous and non-anonymous access visibly different.
+      // Two directories, each allowing different access. An anonymous user
+      // gets read-only access to the public directory; an account holder
+      // gets read and write access to their own home directory.
       const DIRECTORIES = [
         {
-          path: "/pub",
-          access: "anonymous",
-          note: "world readable — anonymous login permitted",
+          path: PUB,
+          note: "world readable — anonymous login permitted, but read only",
+          anonymous: "read",
+          account: "read",
         },
         {
-          path: "/home/pbaker",
-          access: "owner",
-          note: "requires the account pbaker to be logged in",
-        },
-        {
-          path: "/upload",
-          access: "write",
-          note: "authenticated users may write here",
+          path: HOME,
+          note: "the home directory of the account " + USER + " — read and write",
+          anonymous: "none",
+          account: "write",
         },
       ];
 
-      const START_REMOTE = [
-        { name: "readme.txt", dir: "/pub", size: "1.4 KB", type: "ascii" },
-        { name: "prospectus.pdf", dir: "/pub", size: "820 KB", type: "binary" },
-        { name: "notes.txt", dir: "/pub", size: "2.1 KB", type: "ascii" },
+      const accessFor = (path, loggedIn) => {
+        const directory = DIRECTORIES.find((entry) => entry.path === path);
+        if (!directory) return "none";
+        return loggedIn === "anonymous" ? directory.anonymous : directory.account;
+      };
+
+      const REMOTE_START = [
+        { name: "readme.txt", dir: PUB, size: "1.4 KB", type: "ascii", modified: "2026-08-20 09:14" },
+        { name: "prospectus.pdf", dir: PUB, size: "820 KB", type: "binary", modified: "2026-07-02 11:00" },
+        { name: "notes.txt", dir: HOME, size: "2.1 KB", type: "ascii", modified: "2026-08-28 16:40" },
       ];
 
-      const START_LOCAL = [
-        { name: "coursework.zip", size: "4.6 MB", type: "binary" },
-        { name: "logo.png", size: "18.0 KB", type: "binary" },
+      const LOCAL_START = [
+        { name: "coursework.zip", size: "4.6 MB", type: "binary", modified: "2026-08-31 09:20" },
+        { name: "logo.png", size: "18.0 KB", type: "binary", modified: "2026-08-25 10:05" },
+      ];
+
+      // Exercise C starts with both sides part-way in step, so exactly one
+      // file is missing each way and one has been edited more recently here.
+      const SYNC_LOCAL = [
+        { name: "readme.txt", size: "1.5 KB", type: "ascii", modified: "2026-08-30 08:02" },
+        { name: "prospectus.pdf", size: "820 KB", type: "binary", modified: "2026-07-02 11:00" },
+        { name: "logo.png", size: "18.0 KB", type: "binary", modified: "2026-08-25 10:05" },
+      ];
+      const SYNC_REMOTE = [
+        { name: "readme.txt", dir: HOME, size: "1.4 KB", type: "ascii", modified: "2026-08-20 09:14" },
+        { name: "prospectus.pdf", dir: HOME, size: "820 KB", type: "binary", modified: "2026-07-02 11:00" },
+        { name: "notes.txt", dir: HOME, size: "2.1 KB", type: "ascii", modified: "2026-08-28 16:40" },
       ];
 
       /* --------------------------- helpers --------------------------- */
@@ -205,6 +222,64 @@
         });
       };
 
+      const remoteIn = (state) =>
+        state.remoteFiles.filter((file) => file.dir === state.cwd);
+
+      // What an FTP client's "compare directories" does: anything present on
+      // one side only, plus anything whose copies differ, newest wins.
+      const buildSyncPlan = (state) => {
+        const remote = remoteIn(state);
+        const plan = [];
+        remote.forEach((file) => {
+          const local = state.localFiles.find((entry) => entry.name === file.name);
+          if (!local) {
+            plan.push({
+              id: file.name,
+              name: file.name,
+              direction: "download",
+              reason: "on the server only",
+              detail: "server copy " + file.modified,
+            });
+          } else if (local.modified > file.modified) {
+            plan.push({
+              id: file.name,
+              name: file.name,
+              direction: "upload",
+              reason: "this computer has the newer copy",
+              detail: "here " + local.modified + " · server " + file.modified,
+            });
+          } else if (local.modified < file.modified) {
+            plan.push({
+              id: file.name,
+              name: file.name,
+              direction: "download",
+              reason: "the server has the newer copy",
+              detail: "server " + file.modified + " · here " + local.modified,
+            });
+          } else {
+            plan.push({
+              id: file.name,
+              name: file.name,
+              direction: "none",
+              reason: "identical on both sides",
+              detail: "both " + file.modified,
+            });
+          }
+        });
+        state.localFiles.forEach((file) => {
+          if (!remote.some((entry) => entry.name === file.name)) {
+            plan.push({
+              id: file.name,
+              name: file.name,
+              direction: "upload",
+              reason: "on this computer only",
+              detail: "local copy " + file.modified,
+            });
+          }
+        });
+        return plan.map((item) => ({ ...item, checked: false }));
+      };
+
       /* ----------------------- step construction ----------------------
          FTP keeps two connections open: a control connection on port 21
          that carries commands and numbered replies for the whole session,
@@ -227,6 +302,13 @@
         channel: "data",
         port: 20,
       });
+
+      const transferWire = (verb, filename) => [
+        ctrl("FTP client", HOST, verb + " " + filename, "cmd"),
+        ctrl(HOST, "FTP client", "150 Opening data connection for " + filename, "reply"),
+        data("FTP client", HOST, "‹file contents transferred on the data connection›", "cmd"),
+        ctrl(HOST, "FTP client", "226 Transfer complete — data connection closed", "reply"),
+      ];
 
       const lineStep = ({ id, teach, command, reply, misstep, set, extraWire, extraTerm }) => ({
         id,
@@ -262,15 +344,6 @@
         effect: onPick,
       });
 
-      const fileStep = ({ id, teach, expect, side, prompt, wrong, onPick }) => ({
-        id,
-        teach,
-        terminal: null,
-        app: null,
-        filePick: { expect, side, prompt, wrong },
-        effect: onPick || (() => ({ set: { selectedFile: expect } })),
-      });
-
       const typeStep = ({ id, teach, expect, prompt, wrong }) => ({
         id,
         teach,
@@ -288,74 +361,67 @@
         effect: () => ({ set: { chosenType: expect } }),
       });
 
-      const transferWire = (verb, filename) => [
-        ctrl("FTP client", HOST, verb + " " + filename, "cmd"),
-        ctrl(HOST, "FTP client", "150 Opening data connection for " + filename, "reply"),
-        data("FTP client", HOST, "‹file contents transferred on the data connection›", "cmd"),
-        ctrl(HOST, "FTP client", "226 Transfer complete — data connection closed", "reply"),
-      ];
+      const fileStep = ({ id, teach, expect, side, prompt, wrong }) => ({
+        id,
+        teach,
+        terminal: null,
+        app: null,
+        filePick: { expect, side, prompt, wrong },
+        effect: () => ({ set: { selectedFile: expect } }),
+      });
 
       /* --------------------------- exercises -------------------------- */
 
       const CONNECT_CMD = "ftp " + HOST;
 
+      const listWire = (path, names) => [
+        ctrl("FTP client", HOST, "CWD " + path, "cmd"),
+        ctrl(HOST, "FTP client", "250 Directory changed to " + path, "reply"),
+        ctrl("FTP client", HOST, "LIST", "cmd"),
+        ctrl(HOST, "FTP client", "150 Opening data connection for directory listing", "reply"),
+        data(HOST, "FTP client", names.join("  "), "reply"),
+        ctrl(HOST, "FTP client", "226 Directory listing complete", "reply"),
+      ];
+
       const EXERCISES = [
         {
           id: "anonymous",
-          label: "A: Anonymous access — downloading a file",
+          label: "A: Anonymous access — read only",
           examPoints: [
             "FTP (File Transfer Protocol) transfers files between an FTP client and an FTP server.",
             "Anonymous access lets any user log in without an account, by convention with the username anonymous and an email address as the password.",
-            "Anonymous access normally grants read-only access to public directories only.",
+            "Anonymous access normally grants read-only access to public directories, and no access at all to private ones.",
             "FTP uses two connections: a control connection on port 21 for commands and replies, and a separate data connection for each transfer.",
           ],
           initial: {},
           buildSteps: (view) => {
-            const pickPub = dirStep({
+            const enterPub = dirStep({
               id: "pickdir",
               teach:
-                "The server holds several directories, and each one allows different access. An anonymous user has **no account**, so the server will only let it into a directory that is marked as publicly readable. Read the access column and choose the one anonymous may enter.",
-              expect: "/pub",
-              prompt: "Which directory may an anonymous user enter?",
+                "The server holds two directories and each allows different access. An anonymous user has **no account**, so it will only be let into a directory marked publicly readable. Check the access column in the server panel, then open that directory.",
+              expect: PUB,
+              prompt: "Which directory may an anonymous user open?",
               wrong:
-                "That directory needs a real account. Anonymous access is only granted to publicly readable directories — check the access column.",
+                "That is somebody's private home directory and needs a real account. Anonymous access only reaches publicly readable directories.",
               onPick: () => ({
-                wire: [
-                  ctrl("FTP client", HOST, "CWD /pub", "cmd"),
-                  ctrl(HOST, "FTP client", "250 Directory changed to /pub", "reply"),
-                  ctrl("FTP client", HOST, "LIST", "cmd"),
-                  ctrl(HOST, "FTP client", "150 Opening data connection for directory listing", "reply"),
-                  data(HOST, "FTP client", "readme.txt  prospectus.pdf  notes.txt", "reply"),
-                  ctrl(HOST, "FTP client", "226 Directory listing complete", "reply"),
-                ],
+                wire: listWire(PUB, ["readme.txt", "prospectus.pdf"]),
                 term: [
-                  { type: "recv", text: "250 Directory changed to /pub" },
+                  { type: "recv", text: "250 Directory changed to " + PUB },
                   { type: "recv", text: "226 Directory listing complete" },
                 ],
-                set: { cwd: "/pub", listed: true },
+                set: { cwd: PUB, listed: true },
               }),
-            });
-            const pickFile = fileStep({
-              id: "pickfile",
-              teach:
-                "The listing arrived over the **data connection**, which then closed again. Now choose the file to download — the client will name it in a `RETR` command on the control connection.",
-              expect: "readme.txt",
-              side: "remote",
-              prompt: "Click readme.txt in the server's /pub directory.",
-              wrong:
-                "This exercise downloads readme.txt. Click that file in the /pub directory.",
             });
             const denied = dirStep({
               id: "denied",
               teach:
-                "Finally, see what anonymous access does **not** allow. Click the directory belonging to a real user account and watch the server's reply.",
-              expect: "/home/pbaker",
-              prompt: "Click /home/pbaker to try to enter it.",
-              wrong:
-                "For this step click /home/pbaker — the directory that belongs to a real account.",
+                "Finally, see what anonymous access does **not** allow. Try to open the private home directory and watch the server's reply.",
+              expect: HOME,
+              prompt: "Try to open " + HOME + ".",
+              wrong: "For this step open " + HOME + " — the directory that belongs to a real account.",
               onPick: () => ({
                 wire: [
-                  ctrl("FTP client", HOST, "CWD /home/pbaker", "cmd"),
+                  ctrl("FTP client", HOST, "CWD " + HOME, "cmd"),
                   ctrl(HOST, "FTP client", "550 Permission denied", "reply"),
                 ],
                 term: [{ type: "error", text: "550 Permission denied" }],
@@ -368,7 +434,7 @@
                 {
                   id: "connect",
                   teach:
-                    "**FTP (File Transfer Protocol)** transfers files between an **FTP client** and an **FTP server**. The client first opens a **control connection** to the server's well-known port, **21**. This connection stays open for the whole session and carries commands and numbered replies.",
+                    "**FTP (File Transfer Protocol)** transfers files between an **FTP client** and an **FTP server**. The client first opens a **control connection** to the server's well-known port **21**. This connection stays open for the whole session and carries commands and numbered replies.",
                   terminal: {
                     instruction: "Type: " + CONNECT_CMD,
                     expect: CONNECT_CMD,
@@ -388,7 +454,7 @@
                 lineStep({
                   id: "user",
                   teach:
-                    "**Anonymous access** means logging in without an account. By convention the username is literally `anonymous`. Read the server's reply carefully — it says what to send as the password.",
+                    "**Anonymous access** means logging in without an account. By convention the username is literally `anonymous`. Read the server's reply — it says what to send as the password.",
                   command: "USER anonymous",
                   reply: "331 Guest login ok, send your email address as your password",
                 }),
@@ -400,12 +466,20 @@
                   reply: "230 User logged in — anonymous access granted",
                   set: { loggedIn: "anonymous" },
                 }),
-                pickPub,
-                pickFile,
+                enterPub,
+                fileStep({
+                  id: "pickfile",
+                  teach:
+                    "The listing arrived over the **data connection**, which then closed again. Choose the file to download — the client will name it in a `RETR` command on the control connection.",
+                  expect: "readme.txt",
+                  side: "remote",
+                  prompt: "Click readme.txt in the server's " + PUB + " directory.",
+                  wrong: "This exercise downloads readme.txt. Click that file in the " + PUB + " directory.",
+                }),
                 {
                   id: "retr",
                   teach:
-                    "`RETR` asks the server to send a file. Watch the connection panel: the control connection stays open while a **separate data connection opens on port 20**, carries the file, and closes again. Every transfer gets its own data connection.",
+                    "`RETR` asks the server to send a file. Watch the connection panel: the control connection stays open while a **separate data connection opens on port 20**, carries the file, and closes again.",
                   terminal: {
                     instruction: "Type: RETR readme.txt",
                     expect: "RETR readme.txt",
@@ -429,17 +503,43 @@
                     set: {
                       localFiles: [
                         ...state.localFiles,
-                        { name: "readme.txt", size: "1.4 KB", type: "ascii" },
+                        {
+                          name: "readme.txt",
+                          size: "1.4 KB",
+                          type: "ascii",
+                          modified: "2026-08-20 09:14",
+                        },
                       ],
                       lastTransfer: "readme.txt",
                     },
                   }),
                 },
+                {
+                  id: "stor-refused",
+                  teach:
+                    "Now try the other direction. Anonymous access is **read only**, so the server should refuse to accept a file.",
+                  terminal: {
+                    instruction: "Type: STOR logo.png",
+                    expect: "STOR logo.png",
+                    display: "STOR logo.png",
+                  },
+                  app: null,
+                  effect: () => ({
+                    wire: [
+                      ctrl("FTP client", HOST, "STOR logo.png", "cmd"),
+                      ctrl(HOST, "FTP client", "532 Permission denied — anonymous access is read only", "reply"),
+                    ],
+                    term: [
+                      { type: "command", text: "STOR logo.png" },
+                      { type: "error", text: "532 Permission denied — anonymous access is read only" },
+                    ],
+                    set: { refusedUpload: true },
+                  }),
+                },
                 denied,
                 {
                   id: "quit",
-                  teach:
-                    "`QUIT` closes the control connection and ends the session.",
+                  teach: "`QUIT` closes the control connection and ends the session.",
                   terminal: { instruction: "Type: QUIT", expect: "QUIT", display: "QUIT" },
                   app: null,
                   effect: () => ({
@@ -457,14 +557,15 @@
               {
                 id: "connect",
                 teach:
-                  "**FTP client software** hides the protocol behind a two-pane window: your own files on one side, the server's on the other. Underneath it opens a **control connection** to port **21** and logs in. For **anonymous access** the username is `anonymous` and the password is an email address.",
+                  "**FTP client software** shows your own files on one side and the server's on the other. Underneath it opens a **control connection** to port **21** and logs in. For **anonymous access** the username is `anonymous` and the password is an email address.",
                 terminal: null,
                 app: {
-                  instruction:
-                    "Type " + HOST + " into the Host box and click Quickconnect.",
+                  instruction: "Type " + HOST + " into the Host box and click Quickconnect.",
                   control: "connect",
-                  expect: HOST,
-                  display: HOST,
+                  expectHost: HOST,
+                  expectUser: "anonymous",
+                  displayHost: HOST,
+                  displayUser: "anonymous",
                 },
                 effect: () => ({
                   wire: [
@@ -478,16 +579,17 @@
                   set: { controlOpen: true, loggedIn: "anonymous" },
                 }),
               },
-              pickPub,
-              pickFile,
+              enterPub,
               {
                 id: "download",
                 teach:
-                  "Clicking Download makes the client send `RETR readme.txt`. Watch the connection panel: the control connection stays open while a **separate data connection opens on port 20**, carries the file, and closes again.",
+                  "Both sides are now listed side by side. Select the file you want on the **Remote site** and move it across with the **◀** button. Underneath, the client sends `RETR readme.txt`: the command goes on the control connection while the file travels on a **separate data connection** that opens and closes again.",
                 terminal: null,
                 app: {
-                  instruction: "Click Download in the FTP client.",
+                  instruction:
+                    "Select readme.txt in the Remote site pane, then click the ◀ button.",
                   control: "download",
+                  expectFile: "readme.txt",
                 },
                 effect: (state) => ({
                   wire: transferWire("RETR", "readme.txt"),
@@ -495,17 +597,44 @@
                   set: {
                     localFiles: [
                       ...state.localFiles,
-                      { name: "readme.txt", size: "1.4 KB", type: "ascii" },
+                      {
+                        name: "readme.txt",
+                        size: "1.4 KB",
+                        type: "ascii",
+                        modified: "2026-08-20 09:14",
+                      },
                     ],
                     lastTransfer: "readme.txt",
+                    selectedRemote: null,
                   },
+                }),
+              },
+              {
+                id: "upload-refused",
+                teach:
+                  "Now try the other direction. The client will happily send the command — it is the **server** that decides whether it is allowed.",
+                terminal: null,
+                app: {
+                  instruction:
+                    "Select logo.png in the Local site pane, then click the ▶ button.",
+                  control: "upload",
+                  expectFile: "logo.png",
+                  refuse: true,
+                },
+                effect: () => ({
+                  wire: [
+                    ctrl("FTP client", HOST, "STOR logo.png", "cmd"),
+                    ctrl(HOST, "FTP client", "532 Permission denied — anonymous access is read only", "reply"),
+                  ],
+                  term: [{ type: "error", text: "532 Permission denied — anonymous access is read only" }],
+                  set: { refusedUpload: true, selectedLocal: null },
                 }),
               },
               denied,
               {
                 id: "disconnect",
                 teach:
-                  "Disconnecting sends `QUIT` and closes the control connection.",
+                  "Disconnecting sends `QUIT` and closes the control connection. **Anonymous access gave read-only access to one public directory and nothing else.**",
                 terminal: null,
                 app: null,
                 effect: () => ({
@@ -521,16 +650,36 @@
         },
         {
           id: "authenticated",
-          label: "B: Non-anonymous access — uploading a file",
+          label: "B: Non-anonymous access — uploading to your own folder",
           examPoints: [
             "Non-anonymous access requires a valid username and password for an account on the server.",
-            "The account determines which directories the user may read from and write to.",
+            "The account determines which directories the user may read from and write to — normally including their own home directory.",
             "Plain FTP sends the username and password in clear text; SFTP or FTPS carry FTP over an encrypted connection.",
             "TYPE I (binary) must be set for non-text files; TYPE A (ASCII) is for text.",
             "STOR uploads a file, again over a separate data connection.",
           ],
           initial: {},
           buildSteps: (view) => {
+            const enterHome = dirStep({
+              id: "pickdir",
+              teach:
+                "Logged in as a real account, the home directory belonging to that account becomes available — and unlike " +
+                PUB +
+                ", it may be **written** to. Check the access column, then open it.",
+              expect: HOME,
+              prompt: "Which directory may " + USER + " write to?",
+              wrong:
+                PUB +
+                " is readable by everyone but not writable. Look for the directory belonging to this account.",
+              onPick: () => ({
+                wire: listWire(HOME, ["notes.txt"]),
+                term: [
+                  { type: "recv", text: "250 Directory changed to " + HOME },
+                  { type: "recv", text: "226 Directory listing complete" },
+                ],
+                set: { cwd: HOME, listed: true },
+              }),
+            });
             const pickType = typeStep({
               id: "type",
               teach:
@@ -539,32 +688,6 @@
               prompt: "Which transfer type should be set for coursework.zip?",
               wrong:
                 "ASCII mode may alter line endings, which would corrupt a compressed archive. A non-text file must be sent in binary.",
-            });
-            const pickFile = fileStep({
-              id: "pickfile",
-              teach:
-                "Now choose the file on **this computer** to send to the server. The client will name it in a `STOR` command.",
-              expect: "coursework.zip",
-              side: "local",
-              prompt: "Click coursework.zip in your local files.",
-              wrong: "This exercise uploads coursework.zip. Click that file in your local files.",
-            });
-            const pickUpload = dirStep({
-              id: "pickdir",
-              teach:
-                "A file can only be uploaded into a directory the account is allowed to **write** to. Read the access column again and pick the writable one.",
-              expect: "/upload",
-              prompt: "Which directory may an authenticated user write to?",
-              wrong:
-                "That directory is not writable. Look for the one whose access allows authenticated users to write.",
-              onPick: () => ({
-                wire: [
-                  ctrl("FTP client", HOST, "CWD /upload", "cmd"),
-                  ctrl(HOST, "FTP client", "250 Directory changed to /upload", "reply"),
-                ],
-                term: [{ type: "recv", text: "250 Directory changed to /upload" }],
-                set: { cwd: "/upload" },
-              }),
             });
 
             if (view === "terminal") {
@@ -603,6 +726,7 @@
                   reply: "230 User " + USER + " logged in",
                   set: { loggedIn: USER },
                 }),
+                enterHome,
                 pickType,
                 lineStep({
                   id: "typecmd",
@@ -610,12 +734,19 @@
                   command: "TYPE I",
                   reply: "200 Type set to I",
                 }),
-                pickUpload,
-                pickFile,
+                fileStep({
+                  id: "pickfile",
+                  teach:
+                    "Choose the file on **this computer** to send to the server. The client will name it in a `STOR` command.",
+                  expect: "coursework.zip",
+                  side: "local",
+                  prompt: "Click coursework.zip in your local files.",
+                  wrong: "This exercise uploads coursework.zip. Click that file in your local files.",
+                }),
                 {
                   id: "stor",
                   teach:
-                    "`STOR` uploads a file. As with `RETR`, the command travels on the control connection and the file itself travels on a **separate data connection** that opens and closes for this one transfer. Watch the server's directory gain the file.",
+                    "`STOR` uploads a file. As with `RETR`, the command travels on the control connection and the file itself travels on a **separate data connection** that opens and closes for this one transfer. Watch the home directory gain the file.",
                   terminal: {
                     instruction: "Type: STOR coursework.zip",
                     expect: "STOR coursework.zip",
@@ -643,7 +774,13 @@
                     set: {
                       remoteFiles: [
                         ...state.remoteFiles,
-                        { name: "coursework.zip", dir: "/upload", size: "4.6 MB", type: "binary" },
+                        {
+                          name: "coursework.zip",
+                          dir: HOME,
+                          size: "4.6 MB",
+                          type: "binary",
+                          modified: "2026-08-31 09:20",
+                        },
                       ],
                       lastTransfer: "coursework.zip",
                     },
@@ -672,10 +809,16 @@
                 terminal: null,
                 app: {
                   instruction:
-                    "Type " + USER + " into the Username box and click Quickconnect.",
-                  control: "connectuser",
-                  expect: USER,
-                  display: USER,
+                    "Type " +
+                    HOST +
+                    " into the Host box and " +
+                    USER +
+                    " into the Username box, then click Quickconnect.",
+                  control: "connect",
+                  expectHost: HOST,
+                  expectUser: USER,
+                  displayHost: HOST,
+                  displayUser: USER,
                 },
                 effect: () => ({
                   wire: [
@@ -689,17 +832,18 @@
                   set: { controlOpen: true, loggedIn: USER },
                 }),
               },
+              enterHome,
               pickType,
-              pickUpload,
-              pickFile,
               {
                 id: "upload",
                 teach:
-                  "Clicking Upload makes the client send `STOR coursework.zip`. The command goes on the control connection; the file goes on a **separate data connection** that opens and closes for this transfer.",
+                  "Select the file on the **Local site** and move it across with the **▶** button. The client sends `STOR coursework.zip`: the command goes on the control connection, the file on a **separate data connection**. Watch the Remote site pane gain the file.",
                 terminal: null,
                 app: {
-                  instruction: "Click Upload in the FTP client.",
+                  instruction:
+                    "Select coursework.zip in the Local site pane, then click the ▶ button.",
                   control: "upload",
+                  expectFile: "coursework.zip",
                 },
                 effect: (state) => ({
                   wire: transferWire("STOR", "coursework.zip"),
@@ -707,15 +851,23 @@
                   set: {
                     remoteFiles: [
                       ...state.remoteFiles,
-                      { name: "coursework.zip", dir: "/upload", size: "4.6 MB", type: "binary" },
+                      {
+                        name: "coursework.zip",
+                        dir: HOME,
+                        size: "4.6 MB",
+                        type: "binary",
+                        modified: "2026-08-31 09:20",
+                      },
                     ],
                     lastTransfer: "coursework.zip",
+                    selectedLocal: null,
                   },
                 }),
               },
               {
                 id: "disconnect",
-                teach: "Disconnecting sends `QUIT` and closes the control connection.",
+                teach:
+                  "Disconnecting sends `QUIT`. The account holder could read **and** write in their own home directory — the difference an account makes.",
                 terminal: null,
                 app: null,
                 effect: () => ({
@@ -734,125 +886,254 @@
           label: "C: Keeping local and remote in step",
           examPoints: [
             "FTP is used to synchronise files and folders between a client and a server.",
-            "Compare the two listings to see what is missing from each side.",
+            "A file present on one side only is transferred in that direction.",
+            "When both sides hold a copy, the modification timestamps decide which is newer.",
+            "Files that are identical on both sides need no transfer at all.",
             "TYPE A (ASCII) is for text files; TYPE I (binary) is for everything else.",
-            "Transferring a binary file in ASCII mode corrupts it.",
           ],
-          // Both sides already share two files, so exactly one file is
-          // missing from each side and the comparison has a single answer.
           initial: {
             controlOpen: true,
             loggedIn: USER,
-            cwd: "/pub",
+            cwd: HOME,
             listed: true,
-            localFiles: [
-              { name: "readme.txt", size: "1.4 KB", type: "ascii" },
-              { name: "prospectus.pdf", size: "820 KB", type: "binary" },
-              { name: "logo.png", size: "18.0 KB", type: "binary" },
-            ],
+            localFiles: SYNC_LOCAL.map((file) => ({ ...file })),
+            remoteFiles: SYNC_REMOTE.map((file) => ({ ...file })),
           },
           buildSteps: (view) => {
-            const pickMissingLocal = fileStep({
-              id: "missing-local",
-              teach:
-                "**FTP is used to synchronise files and folders between a client and a server.** Compare the two listings. One file is on the server but not on this computer, so it needs downloading.",
-              expect: "notes.txt",
-              side: "remote",
-              prompt: "Which file is on the server but missing from this computer?",
-              wrong:
-                "Compare the two lists carefully — that file is already on both sides.",
-            });
-            const typeA = typeStep({
-              id: "typea",
-              teach:
-                "`notes.txt` is a **text** file. Choose the transfer type that lets the server translate line endings between systems.",
-              expect: "A",
-              prompt: "Which transfer type should be used for notes.txt?",
-              wrong:
-                "Binary mode would work, but ASCII mode is the correct choice for a text file: it converts line endings between the two systems.",
-            });
-            const pickMissingRemote = fileStep({
-              id: "missing-remote",
-              teach:
-                "Now the other direction. One file is on this computer but not on the server, so it needs uploading.",
-              expect: "logo.png",
-              side: "local",
-              prompt: "Which file is on this computer but missing from the server?",
-              wrong: "Compare the two lists again — that file is already on the server.",
-            });
-            const typeI = typeStep({
-              id: "typei",
-              teach:
-                "`logo.png` is an **image**, not text. Choose the transfer type that sends every byte through untouched.",
-              expect: "I",
-              prompt: "Which transfer type should be used for logo.png?",
-              wrong:
-                "In ASCII mode the server would alter byte sequences that look like line endings, and the image would arrive corrupted. A non-text file must be sent in binary.",
-            });
-            const download = {
-              id: "download",
-              teach:
-                "The file comes down over a data connection opened just for it, and appears in the local listing.",
-              terminal: {
-                instruction: "Type: RETR notes.txt",
-                expect: "RETR notes.txt",
-                display: "RETR notes.txt",
-              },
-              app: { instruction: "Click Download in the FTP client.", control: "download" },
-              effect: (state) => ({
-                wire: [
-                  ctrl("FTP client", HOST, "TYPE A", "cmd"),
-                  ctrl(HOST, "FTP client", "200 Type set to A", "reply"),
-                  ...transferWire("RETR", "notes.txt"),
-                ],
-                term: [{ type: "recv", text: "226 Transfer complete — notes.txt" }],
-                set: {
-                  localFiles: [
-                    ...state.localFiles,
-                    { name: "notes.txt", size: "2.1 KB", type: "ascii" },
-                  ],
-                  lastTransfer: "notes.txt",
+            if (view === "terminal") {
+              return [
+                fileStep({
+                  id: "missing-local",
+                  teach:
+                    "**FTP is used to synchronise files and folders between a client and a server.** By hand that means comparing the two listings yourself. Start with the file that is on the server but not on this computer.",
+                  expect: "notes.txt",
+                  side: "remote",
+                  prompt: "Which file is on the server but missing from this computer?",
+                  wrong: "Compare the two lists carefully — that file is already on both sides.",
+                }),
+                typeStep({
+                  id: "typea",
+                  teach:
+                    "`notes.txt` is a **text** file. Choose the transfer type that lets the server translate line endings between systems.",
+                  expect: "A",
+                  prompt: "Which transfer type should be used for notes.txt?",
+                  wrong:
+                    "Binary mode would work, but ASCII is the correct choice for a text file: it converts line endings between the two systems.",
+                }),
+                {
+                  id: "download",
+                  teach: "Bring it down. The file appears in the local listing.",
+                  terminal: {
+                    instruction: "Type: RETR notes.txt",
+                    expect: "RETR notes.txt",
+                    display: "RETR notes.txt",
+                  },
+                  app: null,
+                  effect: (state) => ({
+                    wire: [
+                      ctrl("FTP client", HOST, "TYPE A", "cmd"),
+                      ctrl(HOST, "FTP client", "200 Type set to A", "reply"),
+                      ...transferWire("RETR", "notes.txt"),
+                    ],
+                    term: [{ type: "recv", text: "226 Transfer complete — notes.txt" }],
+                    set: {
+                      localFiles: [
+                        ...state.localFiles,
+                        { name: "notes.txt", size: "2.1 KB", type: "ascii", modified: "2026-08-28 16:40" },
+                      ],
+                      lastTransfer: "notes.txt",
+                    },
+                  }),
                 },
-              }),
-            };
-            const upload = {
-              id: "upload",
-              teach:
-                "And the same in reverse. Both listings now match: the folders are synchronised.",
-              terminal: {
-                instruction: "Type: STOR logo.png",
-                expect: "STOR logo.png",
-                display: "STOR logo.png",
-              },
-              app: { instruction: "Click Upload in the FTP client.", control: "upload" },
-              effect: (state) => ({
-                wire: [
-                  ctrl("FTP client", HOST, "TYPE I", "cmd"),
-                  ctrl(HOST, "FTP client", "200 Type set to I", "reply"),
-                  ...transferWire("STOR", "logo.png"),
-                ],
-                term: [{ type: "recv", text: "226 Transfer complete — logo.png" }],
-                set: {
-                  remoteFiles: [
-                    ...state.remoteFiles,
-                    { name: "logo.png", dir: "/pub", size: "18.0 KB", type: "binary" },
-                  ],
-                  lastTransfer: "logo.png",
+                fileStep({
+                  id: "missing-remote",
+                  teach: "Now the other direction: the file that is here but not on the server.",
+                  expect: "logo.png",
+                  side: "local",
+                  prompt: "Which file is on this computer but missing from the server?",
+                  wrong: "Compare the two lists again — that file is already on the server.",
+                }),
+                typeStep({
+                  id: "typei",
+                  teach:
+                    "`logo.png` is an **image**, not text. Choose the transfer type that sends every byte through untouched.",
+                  expect: "I",
+                  prompt: "Which transfer type should be used for logo.png?",
+                  wrong:
+                    "In ASCII mode the server would alter byte sequences that look like line endings, and the image would arrive corrupted. A non-text file must be sent in binary.",
+                }),
+                {
+                  id: "upload",
+                  teach: "Send it up. The server's listing gains the file.",
+                  terminal: {
+                    instruction: "Type: STOR logo.png",
+                    expect: "STOR logo.png",
+                    display: "STOR logo.png",
+                  },
+                  app: null,
+                  effect: (state) => ({
+                    wire: [
+                      ctrl("FTP client", HOST, "TYPE I", "cmd"),
+                      ctrl(HOST, "FTP client", "200 Type set to I", "reply"),
+                      ...transferWire("STOR", "logo.png"),
+                    ],
+                    term: [{ type: "recv", text: "226 Transfer complete — logo.png" }],
+                    set: {
+                      remoteFiles: [
+                        ...state.remoteFiles,
+                        { name: "logo.png", dir: HOME, size: "18.0 KB", type: "binary", modified: "2026-08-25 10:05" },
+                      ],
+                      lastTransfer: "logo.png",
+                    },
+                  }),
                 },
-              }),
-            };
-
+                {
+                  id: "classify",
+                  teach:
+                    "Two files are left, and both exist on **both** sides. `prospectus.pdf` has the same timestamp in both listings. `readme.txt` does not — compare its modified times in the two panels.",
+                  terminal: null,
+                  app: null,
+                  classify: {
+                    prompt: "readme.txt is on both sides. Which copy should be kept?",
+                    options: [
+                      { id: "local", label: "The copy on this computer — it is newer" },
+                      { id: "remote", label: "The copy on the server — it is newer" },
+                      { id: "none", label: "Neither — they are identical" },
+                    ],
+                    expect: "local",
+                    wrong:
+                      "Read the modified column in both panels. The copy here is dated 2026-08-30; the server's is dated 2026-08-20, so this computer holds the more recent version.",
+                  },
+                  effect: () => ({}),
+                },
+                {
+                  id: "overwrite",
+                  teach:
+                    "Send the newer copy up, overwriting the older one on the server. `prospectus.pdf` needs nothing at all: **identical files are not transferred**, which is the whole point of comparing before copying.",
+                  terminal: {
+                    instruction: "Type: STOR readme.txt",
+                    expect: "STOR readme.txt",
+                    display: "STOR readme.txt",
+                  },
+                  app: null,
+                  effect: (state) => ({
+                    wire: transferWire("STOR", "readme.txt"),
+                    term: [{ type: "recv", text: "226 Transfer complete — readme.txt overwritten" }],
+                    set: {
+                      remoteFiles: state.remoteFiles.map((file) =>
+                        file.name === "readme.txt" && file.dir === HOME
+                          ? { ...file, size: "1.5 KB", modified: "2026-08-30 08:02" }
+                          : file,
+                      ),
+                      lastTransfer: "readme.txt",
+                    },
+                  }),
+                },
+                {
+                  id: "review",
+                  teach:
+                    "Both listings now match. Synchronising with FTP means exactly this: compare the two sides, transfer whatever is missing in each direction, send the newer copy where both sides differ, and leave identical files alone — choosing **TYPE A** for text and **TYPE I** for everything else.",
+                  terminal: null,
+                  app: null,
+                  effect: () => ({ set: {} }),
+                },
+              ];
+            }
             return [
-              pickMissingLocal,
-              typeA,
-              download,
-              pickMissingRemote,
-              typeI,
-              upload,
+              {
+                id: "compare",
+                teach:
+                  "**FTP is used to synchronise files and folders between a client and a server.** Rather than comparing the two listings by eye, FTP client software can do it for you. Look at both panes first — note the **modified** column, which is what makes the comparison possible.",
+                terminal: null,
+                app: {
+                  instruction: "Click Compare directories in the FTP client.",
+                  control: "sync",
+                },
+                effect: (state) => ({
+                  term: [{ type: "info", text: "Comparing " + state.cwd + " with the local folder ..." }],
+                  set: { syncPlan: buildSyncPlan(state) },
+                }),
+              },
+              {
+                id: "queue",
+                teach:
+                  "The client has worked out what each file needs. A file on one side only is copied in that direction; where both sides hold a copy the **timestamps** decide, and where they are identical **nothing is transferred at all**. Tick every action that is needed, then start the transfer.",
+                terminal: null,
+                app: {
+                  instruction:
+                    "Tick all three required actions, then click Transfer queued items.",
+                  control: "synctransfer",
+                },
+                effect: (state) => {
+                  const remote = remoteIn(state);
+                  const localAdds = state.syncPlan
+                    .filter((item) => item.direction === "download")
+                    .map((item) => {
+                      const source = remote.find((file) => file.name === item.name);
+                      return {
+                        name: source.name,
+                        size: source.size,
+                        type: source.type,
+                        modified: source.modified,
+                      };
+                    });
+                  let remoteFiles = state.remoteFiles.slice();
+                  state.syncPlan
+                    .filter((item) => item.direction === "upload")
+                    .forEach((item) => {
+                      const source = state.localFiles.find((file) => file.name === item.name);
+                      const existing = remoteFiles.findIndex(
+                        (file) => file.name === item.name && file.dir === state.cwd,
+                      );
+                      const replacement = {
+                        name: source.name,
+                        dir: state.cwd,
+                        size: source.size,
+                        type: source.type,
+                        modified: source.modified,
+                      };
+                      if (existing >= 0) remoteFiles[existing] = replacement;
+                      else remoteFiles = [...remoteFiles, replacement];
+                    });
+                  return {
+                    wire: state.syncPlan
+                      .filter((item) => item.direction !== "none")
+                      .flatMap((item) =>
+                        transferWire(item.direction === "download" ? "RETR" : "STOR", item.name),
+                      ),
+                    term: [{ type: "recv", text: "226 All queued transfers complete" }],
+                    set: {
+                      localFiles: [...state.localFiles, ...localAdds],
+                      remoteFiles,
+                      syncPlan: null,
+                      lastTransfer: "3 files",
+                    },
+                  };
+                },
+              },
+              {
+                id: "classify",
+                teach:
+                  "One of those three was not a missing file at all — `readme.txt` existed on both sides.",
+                terminal: null,
+                app: null,
+                classify: {
+                  prompt: "Why was readme.txt sent from this computer to the server?",
+                  options: [
+                    { id: "newer", label: "Its copy here had a later modified time" },
+                    { id: "bigger", label: "Its copy here was a larger file" },
+                    { id: "missing", label: "It was missing from the server" },
+                  ],
+                  expect: "newer",
+                  wrong:
+                    "It was on the server already, so it was not missing. The client compared the modified timestamps and sent whichever copy was more recent.",
+                },
+                effect: () => ({}),
+              },
               {
                 id: "review",
                 teach:
-                  "The local and remote listings now hold the same files. That is what synchronising folders with FTP means in practice: compare the two sides, then transfer whatever is missing in each direction — choosing **TYPE A** for text and **TYPE I** for everything else.",
+                  "Both panes now match. Notice what the client did **not** do: `prospectus.pdf` was identical on both sides, so no data was transferred for it at all. Synchronising is comparing first and copying only what has changed — the same job you did by hand in the terminal view.",
                 terminal: null,
                 app: null,
                 effect: () => ({ set: {} }),
@@ -872,15 +1153,11 @@
       };
       const TERM_LINE_PREFIX = { command: "$ ", recv: "< ", info: "  ", error: "! " };
 
-      const ACCESS_LABEL = {
-        anonymous: "public — anonymous may read",
-        owner: "account pbaker only",
-        write: "authenticated users may write",
-      };
+      const ACCESS_LABEL = { read: "read only", write: "read and write", none: "no access" };
       const ACCESS_CLASS = {
-        anonymous: "bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50",
-        owner: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-50",
-        write: "bg-amber-200 text-amber-950 dark:bg-amber-700 dark:text-amber-50",
+        read: "bg-amber-200 text-amber-950 dark:bg-amber-700 dark:text-amber-50",
+        write: "bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-50",
+        none: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-50",
       };
 
       const makeSimState = (exercise) => ({
@@ -891,11 +1168,15 @@
         loggedIn: null,
         cwd: null,
         listed: false,
-        localFiles: START_LOCAL.slice(),
-        remoteFiles: START_REMOTE.slice(),
+        localFiles: LOCAL_START.map((file) => ({ ...file })),
+        remoteFiles: REMOTE_START.map((file) => ({ ...file })),
+        selectedLocal: null,
+        selectedRemote: null,
         selectedFile: null,
         chosenType: null,
         denied: false,
+        refusedUpload: false,
+        syncPlan: null,
         lastTransfer: null,
         ...(exercise.initial || {}),
       });
@@ -998,6 +1279,317 @@
         );
       }
 
+      function FileRow({ file, selected, onSelect, disabled }) {
+        return (
+          <li>
+            <button
+              type="button"
+              onClick={() => onSelect(file.name)}
+              aria-pressed={selected}
+              disabled={disabled}
+              className={
+                "mono block w-full rounded px-1.5 py-1 text-left text-[11px] disabled:opacity-50 " +
+                (selected
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-800 hover:bg-indigo-50 dark:text-slate-200 dark:hover:bg-indigo-950")
+              }
+            >
+              <span className="font-bold">{file.name}</span>
+              <span
+                className={
+                  "ml-2 " +
+                  (selected ? "text-indigo-100" : "text-slate-500 dark:text-slate-400")
+                }
+              >
+                {file.size} · {file.type}
+              </span>
+              <span
+                className={
+                  "block " + (selected ? "text-indigo-100" : "text-slate-500 dark:text-slate-400")
+                }
+              >
+                modified {file.modified}
+              </span>
+            </button>
+          </li>
+        );
+      }
+
+      // A two-pane FTP client: your files on the left, the server's on the
+      // right, and arrow buttons to move the selected file between them.
+      function FtpClientView({
+        sim,
+        hostDraft,
+        setHostDraft,
+        userDraft,
+        setUserDraft,
+        onConnect,
+        onSelectLocal,
+        onSelectRemote,
+        onDownload,
+        onUpload,
+        onSync,
+        onToggleSyncItem,
+        onSyncTransfer,
+        dirPick,
+        onDirPick,
+      }) {
+        const remoteFiles = sim.remoteFiles.filter((file) => file.dir === sim.cwd);
+        const arrowClass =
+          "shrink-0 whitespace-nowrap rounded-md border border-indigo-500 px-2.5 py-1.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950";
+
+        return (
+          <div className="device-chrome flex min-h-[26rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900">
+            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                FTP client software
+              </p>
+            </div>
+
+            <form
+              className="border-b border-slate-200 px-3 py-2 dark:border-slate-700"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onConnect(hostDraft, userDraft);
+              }}
+            >
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <label
+                    htmlFor="host-input"
+                    className="block text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                  >
+                    Host
+                  </label>
+                  <input
+                    id="host-input"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck="false"
+                    value={hostDraft}
+                    onChange={(event) => setHostDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onConnect(hostDraft, userDraft);
+                      }
+                    }}
+                    className="mono mt-0.5 w-full min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label
+                    htmlFor="user-input"
+                    className="block text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                  >
+                    Username
+                  </label>
+                  <input
+                    id="user-input"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck="false"
+                    value={userDraft}
+                    onChange={(event) => setUserDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onConnect(hostDraft, userDraft);
+                      }
+                    }}
+                    className="mono mt-0.5 w-full min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Quickconnect
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Status:{" "}
+                {sim.loggedIn
+                  ? "logged in as " +
+                    sim.loggedIn +
+                    (sim.cwd ? " — remote directory " + sim.cwd : "")
+                  : "not connected"}
+              </p>
+            </form>
+
+            <div className="min-h-0 flex-1 overflow-auto p-3">
+              {dirPick && (
+                <div className="mb-2 rounded-md border border-indigo-300 bg-indigo-50 p-2 dark:border-indigo-700 dark:bg-indigo-950">
+                  <p className="text-[11px] font-bold text-indigo-900 dark:text-indigo-100">
+                    {dirPick.prompt}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {DIRECTORIES.map((directory) => (
+                      <button
+                        key={directory.path}
+                        type="button"
+                        onClick={() => onDirPick(directory.path)}
+                        className="mono shrink-0 whitespace-nowrap rounded border border-indigo-500 bg-white px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                      >
+                        Open {directory.path}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                <section
+                  aria-labelledby="local-pane-heading"
+                  className="min-w-0 rounded-md border border-slate-200 dark:border-slate-700"
+                >
+                  <h3
+                    id="local-pane-heading"
+                    className="border-b border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  >
+                    Local site — this computer
+                  </h3>
+                  <ul className="space-y-0.5 p-1">
+                    {sim.localFiles.map((file) => (
+                      <FileRow
+                        key={file.name}
+                        file={file}
+                        selected={sim.selectedLocal === file.name}
+                        onSelect={onSelectLocal}
+                      />
+                    ))}
+                  </ul>
+                </section>
+
+                <div
+                  role="group"
+                  aria-label="Transfer selected file"
+                  className="flex flex-row items-center justify-center gap-2 sm:flex-col"
+                >
+                  <button
+                    type="button"
+                    onClick={onUpload}
+                    disabled={!sim.controlOpen || !sim.selectedLocal}
+                    aria-label="Upload the selected local file to the server"
+                    title="Upload the selected local file to the server"
+                    className={arrowClass}
+                  >
+                    &#9654;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDownload}
+                    disabled={!sim.controlOpen || !sim.selectedRemote}
+                    aria-label="Download the selected server file to this computer"
+                    title="Download the selected server file to this computer"
+                    className={arrowClass}
+                  >
+                    &#9664;
+                  </button>
+                </div>
+
+                <section
+                  aria-labelledby="remote-pane-heading"
+                  className="min-w-0 rounded-md border border-slate-200 dark:border-slate-700"
+                >
+                  <h3
+                    id="remote-pane-heading"
+                    className="border-b border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  >
+                    Remote site {sim.cwd ? "— " + sim.cwd : ""}
+                  </h3>
+                  {!sim.listed ? (
+                    <p className="p-2 text-[11px] text-slate-500 dark:text-slate-400">
+                      No directory opened yet.
+                    </p>
+                  ) : (
+                    <ul className="space-y-0.5 p-1">
+                      {remoteFiles.map((file) => (
+                        <FileRow
+                          key={file.name}
+                          file={file}
+                          selected={sim.selectedRemote === file.name}
+                          onSelect={onSelectRemote}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              </div>
+
+              {sim.controlOpen && (
+                <div className="mt-3">
+                  {sim.syncPlan ? (
+                    <div className="rounded-md border border-indigo-300 bg-indigo-50 p-2 dark:border-indigo-700 dark:bg-indigo-950">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-900 dark:text-indigo-100">
+                        Actions needed to synchronise
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {sim.syncPlan.map((item) => (
+                          <li key={item.id}>
+                            {item.direction === "none" ? (
+                              <p className="mono rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400">
+                                {item.name} — {item.reason}, no transfer needed ({item.detail})
+                              </p>
+                            ) : (
+                              <label className="flex cursor-pointer items-start gap-2 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-900">
+                                <input
+                                  type="checkbox"
+                                  checked={item.checked}
+                                  onChange={() => onToggleSyncItem(item.id)}
+                                  className="mt-0.5 shrink-0"
+                                />
+                                <span className="mono min-w-0 text-slate-800 dark:text-slate-200">
+                                  <span className="font-bold">
+                                    {item.direction === "download"
+                                      ? "◀ server to here"
+                                      : "▶ here to server"}
+                                  </span>{" "}
+                                  {item.name}
+                                  <span className="block text-slate-500 dark:text-slate-400">
+                                    {item.reason} ({item.detail})
+                                  </span>
+                                </span>
+                              </label>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        onClick={onSyncTransfer}
+                        className="mt-2 shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-indigo-950"
+                      >
+                        Transfer queued items
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onSync}
+                      className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                    >
+                      Compare directories
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {sim.lastTransfer && (
+                <p className="mt-2 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100">
+                  Transfer queue: {sim.lastTransfer} — complete
+                </p>
+              )}
+              {sim.refusedUpload && (
+                <p className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs font-bold text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100">
+                  Last upload refused by the server: 532 Permission denied
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      }
+
       function TerminalView({ sim, draft, setDraft, onSubmit, onHistory, inputRef }) {
         const scrollRef = useRef(null);
         useEffect(() => {
@@ -1081,124 +1673,6 @@
         );
       }
 
-      function FtpClientView({ sim, hostDraft, setHostDraft, userDraft, setUserDraft, onConnect, onTransfer, transferAction }) {
-        return (
-          <div className="device-chrome flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white lg:min-h-0 dark:border-slate-700 dark:bg-slate-900">
-            <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                FTP client software
-              </p>
-            </div>
-            <form
-              className="border-b border-slate-200 px-3 py-2 dark:border-slate-700"
-              onSubmit={(event) => {
-                event.preventDefault();
-                onConnect(hostDraft, userDraft);
-              }}
-            >
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="min-w-0 flex-1">
-                  <label
-                    htmlFor="host-input"
-                    className="block text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                  >
-                    Host
-                  </label>
-                  <input
-                    id="host-input"
-                    type="text"
-                    autoComplete="off"
-                    spellCheck="false"
-                    value={hostDraft}
-                    onChange={(event) => setHostDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        onConnect(hostDraft, userDraft);
-                      }
-                    }}
-                    className="mono mt-0.5 w-full min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <label
-                    htmlFor="user-input"
-                    className="block text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                  >
-                    Username
-                  </label>
-                  <input
-                    id="user-input"
-                    type="text"
-                    autoComplete="off"
-                    spellCheck="false"
-                    value={userDraft}
-                    onChange={(event) => setUserDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        onConnect(hostDraft, userDraft);
-                      }
-                    }}
-                    className="mono mt-0.5 w-full min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
-                >
-                  Quickconnect
-                </button>
-              </div>
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                Status:{" "}
-                {sim.loggedIn
-                  ? "logged in as " + sim.loggedIn + (sim.cwd ? " — remote directory " + sim.cwd : "")
-                  : "not connected"}
-              </p>
-            </form>
-
-            <div className="min-h-0 flex-1 overflow-auto p-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Remote site {sim.cwd ? "— " + sim.cwd : ""}
-              </p>
-              {!sim.listed ? (
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  No directory listed yet.
-                </p>
-              ) : (
-                <ul className="mono mt-1 space-y-0.5 text-xs text-slate-800 dark:text-slate-200">
-                  {sim.remoteFiles
-                    .filter((file) => file.dir === sim.cwd)
-                    .map((file) => (
-                      <li key={file.name}>
-                        {file.name}
-                        <span className="ml-2 text-slate-500 dark:text-slate-400">
-                          {file.size}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              )}
-              {transferAction && (
-                <button
-                  type="button"
-                  onClick={onTransfer}
-                  className="mt-3 shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
-                >
-                  {transferAction === "download" ? "Download" : "Upload"}
-                </button>
-              )}
-              {sim.lastTransfer && (
-                <p className="mt-2 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100">
-                  Transfer queue: {sim.lastTransfer} — complete
-                </p>
-              )}
-            </div>
-          </div>
-        );
-      }
-
       function LocalPanel({ sim, filePick, onFilePick }) {
         const pickable = filePick && filePick.side === "local";
         return (
@@ -1231,14 +1705,14 @@
                       >
                         {file.name}
                         <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
-                          {file.size} · {file.type}
+                          {file.size} · {file.type} · {file.modified}
                         </span>
                       </button>
                     ) : (
                       <span className="text-slate-800 dark:text-slate-200">
                         {file.name}
                         <span className="ml-2 text-slate-500 dark:text-slate-400">
-                          {file.size} · {file.type}
+                          {file.size} · {file.type} · {file.modified}
                         </span>
                       </span>
                     )}
@@ -1332,7 +1806,7 @@
         );
       }
 
-      function ServerPane({ sim, dirPick, onDirPick, filePick, onFilePick }) {
+      function ServerPane({ sim, dirPick, onDirPick, filePick, onFilePick, classify, onClassify }) {
         const pickable = filePick && filePick.side === "remote";
         return (
           <section
@@ -1353,8 +1827,13 @@
                   {(dirPick || filePick).prompt}
                 </p>
               )}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Access shown for the current session
+                {sim.loggedIn ? " (logged in as " + sim.loggedIn + ")" : " (not logged in)"}.
+              </p>
               {DIRECTORIES.map((directory) => {
                 const files = sim.remoteFiles.filter((file) => file.dir === directory.path);
+                const access = sim.loggedIn ? accessFor(directory.path, sim.loggedIn) : "none";
                 return (
                   <div
                     key={directory.path}
@@ -1381,11 +1860,10 @@
                       )}
                       <span
                         className={
-                          "rounded px-1.5 py-0.5 text-[10px] font-bold " +
-                          ACCESS_CLASS[directory.access]
+                          "rounded px-1.5 py-0.5 text-[10px] font-bold " + ACCESS_CLASS[access]
                         }
                       >
-                        {ACCESS_LABEL[directory.access]}
+                        {ACCESS_LABEL[access]}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -1403,14 +1881,14 @@
                               >
                                 {file.name}
                                 <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
-                                  {file.size} · {file.type}
+                                  {file.size} · {file.type} · {file.modified}
                                 </span>
                               </button>
                             ) : (
                               <span className="text-slate-700 dark:text-slate-200">
                                 {file.name}
                                 <span className="ml-2 text-slate-500 dark:text-slate-400">
-                                  {file.size} · {file.type}
+                                  {file.size} · {file.type} · {file.modified}
                                 </span>
                               </span>
                             )}
@@ -1421,6 +1899,25 @@
                   </div>
                 );
               })}
+              {classify && (
+                <div className="rounded-md border border-indigo-300 bg-indigo-50 p-2 dark:border-indigo-700 dark:bg-indigo-950">
+                  <p className="text-xs font-bold text-indigo-900 dark:text-indigo-100">
+                    {classify.prompt}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {classify.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => onClassify(option.id)}
+                        className="shrink-0 whitespace-nowrap rounded-md border border-indigo-500 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         );
@@ -1511,7 +2008,8 @@
         const dirPick = step ? step.dirPick : null;
         const filePick = step ? step.filePick : null;
         const typePick = step ? step.typePick : null;
-        const needsAction = Boolean(input || dirPick || filePick || typePick);
+        const classify = step ? step.classify : null;
+        const needsAction = Boolean(input || dirPick || filePick || typePick || classify);
 
         useEffect(() => {
           if (view === "terminal" && step && step.terminal && inputRef.current) {
@@ -1523,8 +2021,12 @@
           setSim(makeSimState(target));
           setError(null);
           setDraft("");
-          setHostDraft("");
-          setUserDraft(target.id === "authenticated" ? "" : "anonymous");
+          // Exercise C opens with a session already established, so its
+          // connection bar shows the details in use rather than blanks.
+          setHostDraft(target.id === "sync" ? HOST : "");
+          setUserDraft(
+            target.id === "anonymous" ? "anonymous" : target.id === "sync" ? USER : "",
+          );
           setHistory([]);
           setHistoryIndex(null);
         }, []);
@@ -1611,29 +2113,128 @@
           setDraft(next === history.length ? "" : history[next]);
         };
 
+        // Both boxes have to be right: a connection needs a host to reach as
+        // well as an account to log in with.
         const attemptConnect = (host, user) => {
-          if (!step || !input || (input.control !== "connect" && input.control !== "connectuser")) {
+          if (!step || !input || input.control !== "connect") {
             setError("This step does not need Quickconnect. Follow the instruction panel.");
             return;
           }
-          const value = norm(input.control === "connect" ? host : user);
-          if (matchesExpectation(input.expect, value)) {
-            commit();
+          const hostValue = norm(host);
+          const userValue = norm(user);
+          if (!hostValue) {
+            setError(
+              "The Host box is empty. A connection needs a server to reach — type " +
+                input.expectHost +
+                " into it.",
+            );
             return;
           }
-          setError(missteppedMessage(value));
+          if (!matchesExpectation(input.expectHost, hostValue)) {
+            setError(
+              "That is not the FTP server this exercise uses. The host is " + input.expectHost + ".",
+            );
+            return;
+          }
+          if (!userValue) {
+            setError(
+              "The Username box is empty. FTP always logs in as somebody — type " +
+                input.expectUser +
+                " into it.",
+            );
+            return;
+          }
+          if (!matchesExpectation(input.expectUser, userValue)) {
+            setError(
+              input.expectUser === "anonymous"
+                ? "This exercise uses anonymous access, so the username is literally anonymous."
+                : "That account does not exist on this server. Log in as " + input.expectUser + ".",
+            );
+            return;
+          }
+          commit();
         };
 
-        const attemptTransfer = () => {
-          if (
-            step &&
-            input &&
-            (input.control === "download" || input.control === "upload")
-          ) {
+        const selectLocal = (name) => {
+          setSim((state) => ({ ...state, selectedLocal: name, selectedRemote: null }));
+          if (error) setError(null);
+        };
+        const selectRemote = (name) => {
+          setSim((state) => ({ ...state, selectedRemote: name, selectedLocal: null }));
+          if (error) setError(null);
+        };
+
+        const attemptTransfer = (direction) => {
+          const chosen = direction === "download" ? sim.selectedRemote : sim.selectedLocal;
+          const paneName = direction === "download" ? "Remote site" : "Local site";
+          if (!step || !input || input.control !== direction) {
+            // Using the wrong arrow is worth explaining rather than dismissing.
+            if (step && input && (input.control === "download" || input.control === "upload")) {
+              setError(
+                input.control === "download"
+                  ? "This step moves a file from the server to this computer, so select it in the Remote site pane and use the ◀ button."
+                  : "This step moves a file from this computer to the server, so select it in the Local site pane and use the ▶ button.",
+              );
+              return;
+            }
+            setError("This step does not need a transfer. Follow the instruction panel.");
+            return;
+          }
+          if (!chosen) {
+            setError("Nothing is selected. Click the file in the " + paneName + " pane first.");
+            return;
+          }
+          if (input.expectFile && chosen !== input.expectFile) {
+            setError(
+              "This step transfers " +
+                input.expectFile +
+                ". Select that file in the " +
+                paneName +
+                " pane.",
+            );
+            return;
+          }
+          commit();
+        };
+
+        const attemptSync = () => {
+          if (step && input && input.control === "sync") {
             commit();
             return;
           }
-          setError("This step does not need a transfer. Follow the instruction panel.");
+          setError("This step does not need Compare directories. Follow the instruction panel.");
+        };
+
+        const toggleSyncItem = (id) => {
+          setSim((state) => ({
+            ...state,
+            syncPlan: state.syncPlan
+              ? state.syncPlan.map((item) =>
+                  item.id === id ? { ...item, checked: !item.checked } : item,
+                )
+              : state.syncPlan,
+          }));
+          if (error) setError(null);
+        };
+
+        const attemptSyncTransfer = () => {
+          if (!step || !input || input.control !== "synctransfer") {
+            setError("This step does not need the transfer button. Follow the instruction panel.");
+            return;
+          }
+          const actionable = (sim.syncPlan || []).filter((item) => item.direction !== "none");
+          const unticked = actionable.filter((item) => !item.checked);
+          if (unticked.length > 0) {
+            setError(
+              "Not every required action is ticked yet — " +
+                unticked.map((item) => item.name).join(", ") +
+                " still " +
+                (unticked.length === 1 ? "needs" : "need") +
+                " transferring. Tick all three, then start the transfer.",
+            );
+            return;
+          }
+          commit();
         };
 
         const attemptDirPick = (path) => {
@@ -1663,6 +2264,15 @@
           setError(typePick.wrong);
         };
 
+        const attemptClassify = (id) => {
+          if (!classify) return;
+          if (id === classify.expect) {
+            commit();
+            return;
+          }
+          setError(classify.wrong);
+        };
+
         const updateDraft = (value) => {
           setDraft(value);
           if (error) setError(null);
@@ -1684,17 +2294,13 @@
             updateDraft(input.display === undefined ? "" : input.display);
             if (inputRef.current) inputRef.current.focus();
           } else if (input.control === "connect") {
-            updateHost(input.display || "");
-          } else if (input.control === "connectuser") {
-            updateUser(input.display || "");
+            updateHost(input.displayHost || "");
+            updateUser(input.displayUser || "");
           }
         };
 
         const canFill =
-          Boolean(input) &&
-          (view === "terminal" ||
-            input.control === "connect" ||
-            input.control === "connectuser");
+          Boolean(input) && (view === "terminal" || input.control === "connect");
 
         const pickPrompt = dirPick
           ? dirPick.prompt
@@ -1702,12 +2308,9 @@
             ? filePick.prompt
             : typePick
               ? typePick.prompt
-              : null;
-
-        const transferAction =
-          input && (input.control === "download" || input.control === "upload")
-            ? input.control
-            : null;
+              : classify
+                ? classify.prompt
+                : null;
 
         const toggleClass = (active) =>
           active
@@ -1794,14 +2397,17 @@
                   Client — {view === "terminal" ? "terminal" : "FTP client software"}
                 </h2>
                 {view === "terminal" ? (
-                  <TerminalView
-                    sim={sim}
-                    draft={draft}
-                    setDraft={updateDraft}
-                    onSubmit={submitTerminal}
-                    onHistory={recallHistory}
-                    inputRef={inputRef}
-                  />
+                  <React.Fragment>
+                    <TerminalView
+                      sim={sim}
+                      draft={draft}
+                      setDraft={updateDraft}
+                      onSubmit={submitTerminal}
+                      onHistory={recallHistory}
+                      inputRef={inputRef}
+                    />
+                    <LocalPanel sim={sim} filePick={filePick} onFilePick={attemptFilePick} />
+                  </React.Fragment>
                 ) : (
                   <FtpClientView
                     sim={sim}
@@ -1810,11 +2416,17 @@
                     userDraft={userDraft}
                     setUserDraft={updateUser}
                     onConnect={attemptConnect}
-                    onTransfer={attemptTransfer}
-                    transferAction={transferAction}
+                    onSelectLocal={selectLocal}
+                    onSelectRemote={selectRemote}
+                    onDownload={() => attemptTransfer("download")}
+                    onUpload={() => attemptTransfer("upload")}
+                    onSync={attemptSync}
+                    onToggleSyncItem={toggleSyncItem}
+                    onSyncTransfer={attemptSyncTransfer}
+                    dirPick={dirPick}
+                    onDirPick={attemptDirPick}
                   />
                 )}
-                <LocalPanel sim={sim} filePick={filePick} onFilePick={attemptFilePick} />
               </section>
 
               <section
@@ -1831,6 +2443,8 @@
                   onDirPick={attemptDirPick}
                   filePick={filePick}
                   onFilePick={attemptFilePick}
+                  classify={classify}
+                  onClassify={attemptClassify}
                 />
                 <WirePane sim={sim} />
               </section>
