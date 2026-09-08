@@ -1,0 +1,2265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A Level Maths: Binomial Expansion Lab</title>
+    <meta
+      name="description"
+      content="Explore the binomial expansion for negative and fractional powers, see where it is valid, and practise finding coefficients and validity ranges."
+    />
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <style>
+      :root {
+        --bg: #eef2f7;
+        --panel: #ffffff;
+        --panel-2: #f8fafc;
+        --line: #d7dfea;
+        --line-soft: #e6ecf4;
+        --text: #0f172a;
+        --muted: #4a5a6e;
+        --accent: #4338ca;
+        --accent-soft: #eef2ff;
+        --accent-line: #c7d2fe;
+        /* Graph colours. Both must stay legible on the light canvas. */
+        --exact: #b45309;
+        --series: #4338ca;
+        --valid: #047857;
+        --valid-soft: rgba(4, 120, 87, 0.09);
+        --valid-line: #a7d8c6;
+        --invalid: #b91c1c;
+        --invalid-soft: #fef2f2;
+        --invalid-line: #f3c7c7;
+        --canvas-bg: #ffffff;
+        --grid: rgba(15, 23, 42, 0.09);
+        --grid-strong: rgba(15, 23, 42, 0.32);
+        --tick: #64748b;
+        --shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+      }
+
+      html.dark {
+        --bg: #0b1220;
+        --panel: #16202f;
+        --panel-2: #1b2739;
+        --line: #35435a;
+        --line-soft: #2a3648;
+        --text: #e8eef6;
+        --muted: #9fb0c4;
+        --accent: #a5b4fc;
+        --accent-soft: #1e2a44;
+        --accent-line: #3f4d76;
+        --exact: #fbbf24;
+        --series: #a5b4fc;
+        --valid: #6ee7b7;
+        --valid-soft: rgba(110, 231, 183, 0.1);
+        --valid-line: #2f5b4c;
+        --invalid: #fca5a5;
+        --invalid-soft: #2a1a1c;
+        --invalid-line: #5c3234;
+        --canvas-bg: #0f1826;
+        --grid: rgba(226, 232, 240, 0.1);
+        --grid-strong: rgba(226, 232, 240, 0.34);
+        --tick: #94a3b8;
+        --shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.5;
+      }
+
+      button,
+      select,
+      input {
+        font: inherit;
+      }
+
+      /* Author styles that set `display` beat the user-agent [hidden] rule,
+         so gated controls need this to stay genuinely hidden. */
+      [hidden] {
+        display: none !important;
+      }
+
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* ── Title bar control ─────────────────────────────────────────── */
+      [data-interactive-actions] {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      #expansion-select {
+        height: 38px;
+        max-width: min(24rem, 60vw);
+        border: 1px solid #dbeafe;
+        border-radius: 0.5rem;
+        background: #ffffff;
+        color: #1e293b;
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0 0.6rem;
+        cursor: pointer;
+      }
+
+      #expansion-select:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 2px;
+      }
+
+      /* ── Page frame ────────────────────────────────────────────────── */
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 1rem 1rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+      }
+
+      .lab {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 21rem);
+        gap: 0;
+      }
+
+      .lab-main {
+        min-width: 0;
+        padding: 1rem 1.15rem 1.15rem;
+        border-right: 1px solid var(--line);
+      }
+
+      .lab-side {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem 1.15rem 1.15rem;
+        background: var(--panel-2);
+        border-radius: 0 14px 14px 0;
+      }
+
+      @media (max-width: 1080px) {
+        .lab {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .lab-main {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .lab-side {
+          border-radius: 0 0 14px 14px;
+        }
+      }
+
+      /* ── Equation strip ────────────────────────────────────────────── */
+      .eyebrow {
+        margin: 0 0 0.2rem;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .equation {
+        min-height: 3rem;
+        display: flex;
+        align-items: center;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0.35rem 0.1rem 0.5rem;
+        font-size: 1.05rem;
+      }
+
+      /* ── Controls ──────────────────────────────────────────────────── */
+      .control-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0.25rem 0 0.85rem;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-height: 38px;
+        padding: 0 0.95rem;
+        border: 1px solid var(--line);
+        border-radius: 0.55rem;
+        background: var(--panel-2);
+        color: var(--text);
+        font-size: 0.88rem;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .btn:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .btn:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #ffffff;
+      }
+
+      html.dark .btn-primary {
+        color: #131c2e;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        filter: brightness(1.08);
+        color: #ffffff;
+      }
+
+      html.dark .btn-primary:hover:not(:disabled) {
+        color: #131c2e;
+      }
+
+      .term-count {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: 32px;
+        padding: 0.2rem 0.7rem;
+        border: 1px solid var(--accent-line);
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      /* ── Graph ─────────────────────────────────────────────────────── */
+      .canvas-wrap {
+        position: relative;
+        width: 100%;
+        height: clamp(320px, 50vh, 480px);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--canvas-bg);
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 1rem;
+        margin: 0.6rem 0 0.3rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .key-line {
+        width: 22px;
+        height: 0;
+        border-top-width: 3px;
+        border-top-style: solid;
+        border-radius: 2px;
+      }
+
+      .key-line.exact {
+        border-color: var(--exact);
+      }
+
+      .key-line.series {
+        border-color: var(--series);
+      }
+
+      .key-band {
+        width: 22px;
+        height: 12px;
+        border: 1px solid var(--valid);
+        border-radius: 3px;
+        background: var(--valid-soft);
+      }
+
+      .canvas-note {
+        margin: 0.2rem 0 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      /* ── Support cards ─────────────────────────────────────────────── */
+      .side-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        padding: 0.85rem 0.95rem 0.95rem;
+      }
+
+      .side-card h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        color: var(--accent);
+      }
+
+      .side-card p {
+        margin: 0 0 0.5rem;
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .side-card p:last-child {
+        margin-bottom: 0;
+      }
+
+      .math-block {
+        overflow-x: auto;
+        overflow-y: hidden;
+        margin: 0 0 0.55rem;
+        padding: 0.5rem 0.55rem;
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: var(--panel-2);
+        font-size: 0.95rem;
+      }
+
+      .math-block:last-child {
+        margin-bottom: 0;
+      }
+
+      .witness {
+        border: 1px solid var(--line);
+        border-left-width: 4px;
+        border-radius: 8px;
+        padding: 0.55rem 0.65rem;
+        margin-bottom: 0.6rem;
+      }
+
+      .witness:last-child {
+        margin-bottom: 0;
+      }
+
+      .witness.inside {
+        border-left-color: var(--valid);
+        background: var(--valid-soft);
+      }
+
+      .witness.outside {
+        border-left-color: var(--invalid);
+        background: var(--invalid-soft);
+      }
+
+      .witness-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.4rem;
+        font-size: 0.86rem;
+        font-weight: 700;
+      }
+
+      .tag {
+        border-radius: 999px;
+        padding: 0.05rem 0.5rem;
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .tag.inside {
+        border: 1px solid var(--valid);
+        color: var(--valid);
+      }
+
+      .tag.outside {
+        border: 1px solid var(--invalid);
+        color: var(--invalid);
+      }
+
+      .witness dl {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.1rem 0.6rem;
+        margin: 0.4rem 0 0;
+        font-size: 0.8rem;
+      }
+
+      .witness dt {
+        color: var(--muted);
+      }
+
+      .witness dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+      }
+
+      .witness .empty {
+        margin: 0.4rem 0 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      /* ── Practice ──────────────────────────────────────────────────── */
+      .practice {
+        padding: 1.1rem 1.25rem 1.25rem;
+      }
+
+      .practice-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        margin-bottom: 0.4rem;
+      }
+
+      .practice h2 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+
+      .practice-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0.15rem 0.65rem;
+        border: 1px solid var(--accent-line);
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .practice-intro {
+        margin: 0 0 0.9rem;
+        color: var(--muted);
+        font-size: 0.86rem;
+        max-width: 62ch;
+      }
+
+      .question-card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel-2);
+        padding: 1rem 1.1rem 1.1rem;
+      }
+
+      .prompt {
+        margin: 0 0 0.9rem;
+        font-size: 1rem;
+      }
+
+      .answer-label {
+        display: block;
+        margin-bottom: 0.3rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+
+      .answer-hint {
+        margin: 0.3rem 0 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      #answer-input {
+        width: min(16rem, 100%);
+        min-height: 42px;
+        padding: 0 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.55rem;
+        background: var(--panel);
+        color: var(--text);
+      }
+
+      #answer-input:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      .choice-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .choice {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.5rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.55rem;
+        background: var(--panel);
+        cursor: pointer;
+      }
+
+      .choice:hover {
+        border-color: var(--accent);
+      }
+
+      .choice:focus-within {
+        outline: 3px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      .choice input {
+        accent-color: var(--accent);
+        width: 1.05rem;
+        height: 1.05rem;
+        flex: 0 0 auto;
+      }
+
+      .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+      }
+
+      .action-row .spacer {
+        flex: 1 1 auto;
+      }
+
+      .feedback {
+        margin-top: 0.9rem;
+        padding: 0.65rem 0.8rem;
+        border: 1px solid var(--line);
+        border-left-width: 4px;
+        border-radius: 8px;
+        font-size: 0.88rem;
+      }
+
+      .feedback.correct {
+        border-left-color: var(--valid);
+        background: var(--valid-soft);
+      }
+
+      .feedback.wrong {
+        border-left-color: var(--invalid);
+        background: var(--invalid-soft);
+      }
+
+      .feedback.info {
+        border-left-color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .feedback strong {
+        display: block;
+        margin-bottom: 0.15rem;
+      }
+
+      .solution {
+        margin-top: 0.9rem;
+        padding: 0.75rem 0.85rem;
+        border: 1px solid var(--accent-line);
+        border-radius: 10px;
+        background: var(--accent-soft);
+      }
+
+      .solution h3 {
+        margin: 0 0 0.45rem;
+        font-size: 0.9rem;
+        color: var(--accent);
+      }
+
+      .solution p {
+        margin: 0 0 0.5rem;
+        font-size: 0.88rem;
+      }
+
+      .solution p:last-child {
+        margin-bottom: 0;
+      }
+
+      .summary {
+        border: 1px solid var(--accent-line);
+        border-radius: 12px;
+        background: var(--accent-soft);
+        padding: 1rem 1.1rem;
+      }
+
+      .summary h3 {
+        margin: 0 0 0.4rem;
+        font-size: 1rem;
+      }
+
+      .summary p {
+        margin: 0 0 0.8rem;
+        font-size: 0.9rem;
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding: 0.75rem 0.6rem 2rem;
+        }
+        .lab-main,
+        .lab-side,
+        .practice {
+          padding-left: 0.85rem;
+          padding-right: 0.85rem;
+        }
+        .term-count {
+          margin-left: 0;
+        }
+        .canvas-wrap {
+          height: 340px;
+        }
+      }
+    </style>
+    <!-- Prevent FOUC: apply dark class before render -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body>
+    <header data-interactive-header>
+      <div>
+        <h1>Binomial Expansion Lab</h1>
+        <p>Negative and fractional powers, and the values of x that the expansion is valid for</p>
+      </div>
+      <div data-interactive-actions>
+        <select id="expansion-select" aria-label="Expansion"></select>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel lab" aria-labelledby="lab-heading">
+        <h2 id="lab-heading" class="visually-hidden">Expansion explorer</h2>
+
+        <div class="lab-main">
+          <p class="eyebrow" id="equation-caption">The function before it is expanded</p>
+          <div class="equation" id="equation" aria-live="polite"></div>
+
+          <div class="control-row">
+            <button type="button" class="btn" id="reset-btn">Reset</button>
+            <button type="button" class="btn" id="play-btn">Play</button>
+            <button type="button" class="btn" id="fewer-btn">Fewer terms</button>
+            <button type="button" class="btn btn-primary" id="more-btn">Add a term</button>
+            <span class="term-count" id="term-count" aria-live="polite">Terms used: 0</span>
+          </div>
+
+          <div class="canvas-wrap" id="canvas-wrap">
+            <canvas id="graph" role="img" aria-label="Graph of the chosen function and its binomial expansion"></canvas>
+          </div>
+
+          <p class="legend">
+            <span><i class="key-line exact" aria-hidden="true"></i> the exact function</span>
+            <span><i class="key-line series" aria-hidden="true"></i> the expansion so far</span>
+            <span><i class="key-band" aria-hidden="true"></i> <span id="legend-band">values of x the expansion is valid for</span></span>
+          </p>
+          <p class="canvas-note" id="canvas-note"></p>
+        </div>
+
+        <aside class="lab-side">
+          <div class="side-card">
+            <h3>Setting up the expansion</h3>
+            <div id="setup-math"></div>
+            <p id="setup-note"></p>
+          </div>
+
+          <div class="side-card">
+            <h3>Testing two values of x</h3>
+            <div class="witness inside">
+              <div class="witness-head">
+                <span id="inside-x">x = 0.5</span>
+                <span class="tag inside">valid</span>
+              </div>
+              <div id="inside-body"></div>
+            </div>
+            <div class="witness outside">
+              <div class="witness-head">
+                <span id="outside-x">x = 1.5</span>
+                <span class="tag outside">not valid</span>
+              </div>
+              <div id="outside-body"></div>
+            </div>
+          </div>
+
+          <div class="side-card">
+            <h3>Why the range is limited</h3>
+            <p>
+              Divide one term by the one before it. For the expansion of
+              <span id="ratio-inline"></span> the ratio settles down to:
+            </p>
+            <div class="math-block" id="ratio-math"></div>
+            <p id="ratio-note"></p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="panel practice" aria-labelledby="practice-heading">
+        <div class="practice-head">
+          <h2 id="practice-heading">Check your understanding</h2>
+          <div class="practice-meta">
+            <span class="chip" id="progress-chip">Question 1 of 9</span>
+            <span class="chip" id="score-chip">Correct first time: 0</span>
+          </div>
+        </div>
+        <p class="practice-intro">
+          Nine questions on coefficients, on rewriting <span id="intro-math"></span> before
+          expanding, and on stating the range of validity. Work through them in order.
+        </p>
+
+        <div class="question-card" id="question-card">
+          <p class="prompt" id="prompt"></p>
+
+          <div id="answer-area"></div>
+
+          <div class="action-row">
+            <button type="button" class="btn" id="solution-btn" hidden>Show Solution</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-primary" id="check-btn">Check Answer</button>
+            <button type="button" class="btn btn-primary" id="next-btn" hidden>Next Question</button>
+          </div>
+
+          <div class="feedback" id="feedback" role="status" aria-live="polite" hidden></div>
+          <div class="solution" id="solution" hidden>
+            <h3>Worked solution</h3>
+            <div id="solution-body"></div>
+          </div>
+        </div>
+
+        <div class="summary" id="summary" hidden>
+          <h3>All nine questions attempted</h3>
+          <p id="summary-text"></p>
+          <button type="button" class="btn btn-primary" id="restart-btn">Start again</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        /* ================================================================
+           Exact arithmetic.
+
+           Every coefficient of a binomial expansion with a rational power
+           is itself rational, so the coefficients are held as BigInt
+           fractions and only converted to a Number for plotting. That
+           keeps displayed coefficients such as 5/128 exact rather than
+           rounded.
+           ================================================================ */
+
+        function bigAbs(value) {
+          return value < 0n ? -value : value;
+        }
+
+        function gcd(a, b) {
+          a = bigAbs(a);
+          b = bigAbs(b);
+          while (b) {
+            const remainder = a % b;
+            a = b;
+            b = remainder;
+          }
+          return a || 1n;
+        }
+
+        function fraction(numerator, denominator) {
+          let num = BigInt(numerator);
+          let den = BigInt(denominator);
+          if (den < 0n) {
+            num = -num;
+            den = -den;
+          }
+          const divisor = gcd(num, den);
+          return { num: num / divisor, den: den / divisor };
+        }
+
+        function multiply(left, right) {
+          return fraction(left.num * right.num, left.den * right.den);
+        }
+
+        function toNumber(value) {
+          return Number(value.num) / Number(value.den);
+        }
+
+        function fractionLatex(value, withSign) {
+          const negative = value.num < 0n;
+          const magnitude = bigAbs(value.num);
+          const body =
+            value.den === 1n
+              ? String(magnitude)
+              : "\\frac{" + magnitude + "}{" + value.den + "}";
+          if (!withSign) return (negative ? "-" : "") + body;
+          return { sign: negative ? "-" : "+", body: body, isOne: magnitude === value.den };
+        }
+
+        /* ================================================================
+           The expansions on offer.
+
+           Every one has the form (a + bx)^n with n = nNum/nDen, so the
+           first step of the A level method — taking out a factor of a^n —
+           is visible in the data as `leading`. `leading` is written out
+           exactly, which is why a is always chosen so that a^n is
+           rational.
+           ================================================================ */
+
+        const MAX_TERMS = 17;
+
+        const EXAMPLES = [
+          {
+            id: "inv-1",
+            option: "1/(1 + x)   ·   n = −1",
+            functionLatex: "\\frac{1}{1+x}",
+            powerLatex: "(1+x)^{-1}",
+            a: 1,
+            b: 1,
+            nNum: -1,
+            nDen: 1,
+            leading: fraction(1, 1),
+            radius: 1,
+            radiusLatex: "1",
+            ratioLatex: "\\left|\\frac{T_{k+1}}{T_{k}}\\right| = |x|\\left|\\frac{n-k}{k+1}\\right| \\longrightarrow |x|",
+            ratioNote:
+              "Each new term is about |x| times the one before it. Terms shrink only when |x| < 1, so that is the range of validity.",
+            setup: ["\\frac{1}{1+x} = (1+x)^{-1}"],
+            setupNote:
+              "Already in the form (1 + x)ⁿ, so the expansion can be written down directly.",
+            validityLatex: "|x| < 1",
+            insideX: 0.5,
+            outsideX: 1.5,
+            xMin: -2.4,
+            xMax: 2.4,
+            xStep: 1,
+            yMin: -6,
+            yMax: 6,
+            yStep: 2,
+            boundaryNote:
+              "The curve has a vertical asymptote at x = −1, exactly one unit from x = 0.",
+          },
+          {
+            id: "inv-2",
+            option: "1/(1 + x)²   ·   n = −2",
+            functionLatex: "\\frac{1}{(1+x)^{2}}",
+            powerLatex: "(1+x)^{-2}",
+            a: 1,
+            b: 1,
+            nNum: -2,
+            nDen: 1,
+            leading: fraction(1, 1),
+            radius: 1,
+            radiusLatex: "1",
+            ratioLatex: "\\left|\\frac{T_{k+1}}{T_{k}}\\right| = |x|\\left|\\frac{n-k}{k+1}\\right| \\longrightarrow |x|",
+            ratioNote:
+              "Squaring the bracket changes every coefficient but not the ratio, so the expansion is still valid only for |x| < 1.",
+            setup: ["\\frac{1}{(1+x)^{2}} = (1+x)^{-2}"],
+            setupNote:
+              "A negative integer power. The coefficients 1, −2, 3, −4, … grow steadily, but powers of x shrink faster inside the valid range.",
+            validityLatex: "|x| < 1",
+            insideX: 0.5,
+            outsideX: 1.5,
+            xMin: -2.4,
+            xMax: 2.4,
+            xStep: 1,
+            yMin: -2,
+            yMax: 10,
+            yStep: 2,
+            boundaryNote:
+              "The curve shoots up on both sides of x = −1, again one unit from x = 0.",
+          },
+          {
+            id: "sqrt-1",
+            option: "√(1 + x)   ·   n = ½",
+            functionLatex: "\\sqrt{1+x}",
+            powerLatex: "(1+x)^{\\frac{1}{2}}",
+            a: 1,
+            b: 1,
+            nNum: 1,
+            nDen: 2,
+            leading: fraction(1, 1),
+            radius: 1,
+            radiusLatex: "1",
+            ratioLatex: "\\left|\\frac{T_{k+1}}{T_{k}}\\right| = |x|\\left|\\frac{n-k}{k+1}\\right| \\longrightarrow |x|",
+            ratioNote:
+              "A fractional power never terminates: the factor (n − k) is never zero, so the expansion runs forever and needs |x| < 1.",
+            setup: ["\\sqrt{1+x} = (1+x)^{\\frac{1}{2}}"],
+            setupNote:
+              "Write the root as a power first. Unlike a positive whole number power, this expansion has infinitely many terms.",
+            validityLatex: "|x| < 1",
+            insideX: 0.5,
+            outsideX: 1.5,
+            xMin: -2.4,
+            xMax: 2.4,
+            xStep: 1,
+            yMin: -1.5,
+            yMax: 3,
+            yStep: 0.5,
+            boundaryNote:
+              "To the left of x = −1 there is no real square root at all, so the exact curve simply stops.",
+          },
+          {
+            id: "inv-sqrt-1",
+            option: "1/√(1 + x)   ·   n = −½",
+            functionLatex: "\\frac{1}{\\sqrt{1+x}}",
+            powerLatex: "(1+x)^{-\\frac{1}{2}}",
+            a: 1,
+            b: 1,
+            nNum: -1,
+            nDen: 2,
+            leading: fraction(1, 1),
+            radius: 1,
+            radiusLatex: "1",
+            ratioLatex: "\\left|\\frac{T_{k+1}}{T_{k}}\\right| = |x|\\left|\\frac{n-k}{k+1}\\right| \\longrightarrow |x|",
+            ratioNote:
+              "Negative and fractional at the same time. The behaviour is the same: terms shrink only while |x| < 1.",
+            setup: ["\\frac{1}{\\sqrt{1+x}} = (1+x)^{-\\frac{1}{2}}"],
+            setupNote:
+              "A root in a denominator becomes a negative fractional power before expanding.",
+            validityLatex: "|x| < 1",
+            insideX: 0.5,
+            outsideX: 1.5,
+            xMin: -2.4,
+            xMax: 2.4,
+            xStep: 1,
+            yMin: -1,
+            yMax: 5,
+            yStep: 1,
+            boundaryNote:
+              "At x = −1 the curve has an asymptote and there is no real value to its left.",
+          },
+          {
+            id: "inv-1-2x",
+            option: "1/(1 + 2x)   ·   valid for |x| < ½",
+            functionLatex: "\\frac{1}{1+2x}",
+            powerLatex: "(1+2x)^{-1}",
+            a: 1,
+            b: 2,
+            nNum: -1,
+            nDen: 1,
+            leading: fraction(1, 1),
+            radius: 0.5,
+            radiusLatex: "\\tfrac{1}{2}",
+            ratioLatex: "\\left|\\frac{T_{k+1}}{T_{k}}\\right| \\longrightarrow |2x| \\quad\\text{so}\\quad |2x| < 1",
+            ratioNote:
+              "The bracket contains 2x, not x, so it is |2x| that has to be less than 1. That halves the range to |x| < ½.",
+            setup: ["\\frac{1}{1+2x} = (1+2x)^{-1}"],
+            setupNote:
+              "The expansion is in powers of 2x. Every coefficient picks up a factor of 2ᵏ, which is why the range shrinks.",
+            validityLatex: "|2x| < 1 \\;\\Longrightarrow\\; |x| < \\tfrac{1}{2}",
+            insideX: 0.25,
+            outsideX: 0.75,
+            xMin: -1.5,
+            xMax: 1.5,
+            xStep: 0.5,
+            yMin: -6,
+            yMax: 6,
+            yStep: 2,
+            boundaryNote:
+              "The asymptote has moved to x = −½, and the valid range shrinks to match it.",
+          },
+          {
+            id: "inv-2-plus-x",
+            option: "1/(2 + x)   ·   valid for |x| < 2",
+            functionLatex: "\\frac{1}{2+x}",
+            powerLatex: "(2+x)^{-1}",
+            a: 2,
+            b: 1,
+            nNum: -1,
+            nDen: 1,
+            leading: fraction(1, 2),
+            radius: 2,
+            radiusLatex: "2",
+            ratioLatex: "\\left|\\frac{T_{k+1}}{T_{k}}\\right| \\longrightarrow \\left|\\tfrac{x}{2}\\right| \\quad\\text{so}\\quad \\left|\\tfrac{x}{2}\\right| < 1",
+            ratioNote:
+              "After taking out the factor of 2 the expansion is in powers of x/2, so x may now run all the way to ±2.",
+            setup: [
+              "\\frac{1}{2+x} = (2+x)^{-1}",
+              "= 2^{-1}\\left(1+\\tfrac{x}{2}\\right)^{-1} = \\tfrac{1}{2}\\left(1+\\tfrac{x}{2}\\right)^{-1}",
+            ],
+            setupNote:
+              "The bracket must start with 1, so take out a factor of aⁿ — here 2⁻¹ = ½ — before expanding.",
+            validityLatex: "\\left|\\tfrac{x}{2}\\right| < 1 \\;\\Longrightarrow\\; |x| < 2",
+            insideX: 1,
+            outsideX: 3,
+            xMin: -5,
+            xMax: 5,
+            xStep: 1,
+            yMin: -3,
+            yMax: 3,
+            yStep: 1,
+            boundaryNote:
+              "The asymptote sits at x = −2, and the valid range reaches exactly that far.",
+          },
+          {
+            id: "sqrt-4",
+            option: "√(4 + x)   ·   valid for |x| < 4",
+            functionLatex: "\\sqrt{4+x}",
+            powerLatex: "(4+x)^{\\frac{1}{2}}",
+            a: 4,
+            b: 1,
+            nNum: 1,
+            nDen: 2,
+            leading: fraction(2, 1),
+            radius: 4,
+            radiusLatex: "4",
+            ratioLatex: "\\left|\\frac{T_{k+1}}{T_{k}}\\right| \\longrightarrow \\left|\\tfrac{x}{4}\\right| \\quad\\text{so}\\quad \\left|\\tfrac{x}{4}\\right| < 1",
+            ratioNote:
+              "The expansion is in powers of x/4, so it stays valid until |x| reaches 4 — where the curve meets the x-axis.",
+            setup: [
+              "\\sqrt{4+x} = (4+x)^{\\frac{1}{2}}",
+              "= 4^{\\frac{1}{2}}\\left(1+\\tfrac{x}{4}\\right)^{\\frac{1}{2}} = 2\\left(1+\\tfrac{x}{4}\\right)^{\\frac{1}{2}}",
+            ],
+            setupNote:
+              "Take out 4½ = 2, not 4. Forgetting to raise the factor to the power n is the most common slip here.",
+            validityLatex: "\\left|\\tfrac{x}{4}\\right| < 1 \\;\\Longrightarrow\\; |x| < 4",
+            insideX: 2,
+            outsideX: 6,
+            xMin: -7.5,
+            xMax: 7.5,
+            xStep: 2,
+            yMin: -1,
+            yMax: 4,
+            yStep: 1,
+            boundaryNote:
+              "There is no real root to the left of x = −4, which is exactly 4 units from x = 0.",
+          },
+        ];
+
+        /* ================================================================
+           Coefficients and values.
+           ================================================================ */
+
+        function buildCoefficients(example) {
+          const ratio = fraction(example.b, example.a);
+          const nNum = BigInt(example.nNum);
+          const nDen = BigInt(example.nDen);
+          const exact = [example.leading];
+          const numeric = [toNumber(example.leading)];
+
+          for (let k = 1; k < MAX_TERMS; k += 1) {
+            // c(k) = c(k-1) * (n - (k-1))/k * (b/a)
+            const step = fraction(nNum - BigInt(k - 1) * nDen, nDen * BigInt(k));
+            exact[k] = multiply(multiply(exact[k - 1], step), ratio);
+            numeric[k] = toNumber(exact[k]);
+          }
+          return { exact: exact, numeric: numeric };
+        }
+
+        function exactValue(example, x) {
+          const base = example.a + example.b * x;
+          const power = example.nNum / example.nDen;
+          if (base === 0) return NaN;
+          if (base < 0 && example.nDen !== 1) return NaN;
+          return Math.pow(base, power);
+        }
+
+        function partialSum(x, terms) {
+          if (terms <= 0) return NaN;
+          let total = state.numeric[terms - 1];
+          for (let k = terms - 2; k >= 0; k -= 1) {
+            total = total * x + state.numeric[k];
+          }
+          return total;
+        }
+
+        function newestTerm(x, terms) {
+          if (terms <= 0) return NaN;
+          return state.numeric[terms - 1] * Math.pow(x, terms - 1);
+        }
+
+        function formatValue(value) {
+          if (!Number.isFinite(value)) return "—";
+          const size = Math.abs(value);
+          if (size !== 0 && (size >= 1e6 || size < 1e-4)) {
+            return value.toExponential(3).replace("-", "−");
+          }
+          return String(Number(value.toPrecision(7))).replace("-", "−");
+        }
+
+        function formatAxis(value) {
+          const rounded = Number(value.toFixed(4));
+          return String(rounded).replace("-", "−");
+        }
+
+        /* ================================================================
+           Rendering helpers.
+           ================================================================ */
+
+        function tex(latex, displayMode) {
+          return katex.renderToString(latex, {
+            throwOnError: false,
+            displayMode: Boolean(displayMode),
+          });
+        }
+
+        function setTex(element, latex, displayMode) {
+          element.innerHTML = tex(latex, displayMode);
+        }
+
+        // Prompts and solutions are held as segment arrays so that plain
+        // text and maths can be mixed without building raw HTML strings.
+        function renderSegments(container, segments) {
+          container.textContent = "";
+          segments.forEach(function (segment) {
+            if (typeof segment === "string") {
+              container.appendChild(document.createTextNode(segment));
+              return;
+            }
+            const span = document.createElement("span");
+            span.innerHTML = tex(segment.tex, segment.display);
+            container.appendChild(span);
+          });
+        }
+
+        function accentColour() {
+          return getComputedStyle(document.documentElement)
+            .getPropertyValue("--series")
+            .trim() || "#4338ca";
+        }
+
+        /* ================================================================
+           State.
+           ================================================================ */
+
+        const state = {
+          example: EXAMPLES[0],
+          exact: [],
+          numeric: [],
+          terms: 0,
+          playing: false,
+          playTimer: null,
+          reveal: 1,
+          frame: null,
+        };
+
+        const els = {
+          select: document.getElementById("expansion-select"),
+          equation: document.getElementById("equation"),
+          equationCaption: document.getElementById("equation-caption"),
+          termCount: document.getElementById("term-count"),
+          reset: document.getElementById("reset-btn"),
+          play: document.getElementById("play-btn"),
+          fewer: document.getElementById("fewer-btn"),
+          more: document.getElementById("more-btn"),
+          canvasWrap: document.getElementById("canvas-wrap"),
+          canvas: document.getElementById("graph"),
+          canvasNote: document.getElementById("canvas-note"),
+          legendBand: document.getElementById("legend-band"),
+          setupMath: document.getElementById("setup-math"),
+          setupNote: document.getElementById("setup-note"),
+          insideX: document.getElementById("inside-x"),
+          insideBody: document.getElementById("inside-body"),
+          outsideX: document.getElementById("outside-x"),
+          outsideBody: document.getElementById("outside-body"),
+          ratioInline: document.getElementById("ratio-inline"),
+          ratioMath: document.getElementById("ratio-math"),
+          ratioNote: document.getElementById("ratio-note"),
+        };
+
+        const context = els.canvas.getContext("2d");
+
+        function reducedMotion() {
+          return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        }
+
+        /* ================================================================
+           The expansion written out.
+           ================================================================ */
+
+        function termLatex(index, highlight) {
+          const parts = fractionLatex(state.exact[index], true);
+          let core;
+          if (index === 0) core = parts.body;
+          else if (parts.isOne) core = index === 1 ? "x" : "x^{" + index + "}";
+          else core = parts.body + (index === 1 ? "x" : "x^{" + index + "}");
+
+          const signed = index === 0 ? (parts.sign === "-" ? "-" + core : core) : parts.sign + " " + core;
+          if (!highlight) return signed;
+          return "\\textcolor{" + accentColour() + "}{" + signed + "}";
+        }
+
+        function expansionLatex() {
+          const example = state.example;
+          if (state.terms === 0) {
+            return "f(x) = " + example.functionLatex + " = " + example.powerLatex;
+          }
+          let body;
+          if (state.terms <= 5) {
+            body = [];
+            for (let k = 0; k < state.terms; k += 1) {
+              body.push(termLatex(k, k === state.terms - 1));
+            }
+            body = body.join(" ");
+          } else {
+            body =
+              termLatex(0, false) +
+              " " +
+              termLatex(1, false) +
+              " " +
+              termLatex(2, false) +
+              " + \\cdots " +
+              termLatex(state.terms - 1, true);
+          }
+          return example.functionLatex + " \\approx " + body;
+        }
+
+        /* ================================================================
+           Drawing.
+           ================================================================ */
+
+        let palette = null;
+
+        function readPalette() {
+          const style = getComputedStyle(document.documentElement);
+          const value = function (name, fallback) {
+            return style.getPropertyValue(name).trim() || fallback;
+          };
+          palette = {
+            background: value("--canvas-bg", "#ffffff"),
+            grid: value("--grid", "rgba(15,23,42,0.09)"),
+            axis: value("--grid-strong", "rgba(15,23,42,0.32)"),
+            tick: value("--tick", "#64748b"),
+            exact: value("--exact", "#b45309"),
+            series: value("--series", "#4338ca"),
+            valid: value("--valid", "#047857"),
+            validSoft: value("--valid-soft", "rgba(4,120,87,0.09)"),
+            invalid: value("--invalid", "#b91c1c"),
+          };
+        }
+
+        function resizeCanvas() {
+          const width = els.canvasWrap.clientWidth;
+          const height = els.canvasWrap.clientHeight;
+          if (!width || !height) return;
+          const scale = Math.min(window.devicePixelRatio || 1, 2);
+          els.canvas.width = Math.round(width * scale);
+          els.canvas.height = Math.round(height * scale);
+          context.setTransform(scale, 0, 0, scale, 0, 0);
+          draw();
+        }
+
+        function plotArea(width, height) {
+          const left = width < 520 ? 44 : 56;
+          const area = {
+            left: left,
+            top: 18,
+            right: width - 16,
+            bottom: height - 30,
+          };
+          area.width = area.right - area.left;
+          area.height = area.bottom - area.top;
+          return area;
+        }
+
+        function drawCurve(fn, colour, lineWidth, area, toX, toY, reveal, breakAt) {
+          const samples = Math.max(600, Math.round(area.width * 1.5));
+          const last = Math.max(1, Math.floor(samples * reveal));
+          const example = state.example;
+          const span = example.yMax - example.yMin;
+          let started = false;
+          let previousX = null;
+
+          context.save();
+          context.beginPath();
+          context.rect(area.left, area.top, area.width, area.height);
+          context.clip();
+          context.strokeStyle = colour;
+          context.lineWidth = lineWidth;
+          context.lineJoin = "round";
+          context.lineCap = "round";
+          context.beginPath();
+
+          for (let i = 0; i <= last; i += 1) {
+            const x = example.xMin + (i / samples) * (example.xMax - example.xMin);
+            const y = fn(x);
+            const crossed =
+              breakAt !== null &&
+              previousX !== null &&
+              (previousX - breakAt) * (x - breakAt) <= 0;
+            const usable = Number.isFinite(y) && Math.abs(y) < span * 500;
+
+            if (!usable || crossed) {
+              if (started) context.stroke();
+              context.beginPath();
+              started = false;
+            } else if (!started) {
+              context.moveTo(toX(x), toY(y));
+              started = true;
+            } else {
+              context.lineTo(toX(x), toY(y));
+            }
+            previousX = x;
+          }
+          if (started) context.stroke();
+          context.restore();
+        }
+
+        function drawMarker(x, y, colour, area, toX, toY) {
+          if (!Number.isFinite(y)) return;
+          const px = toX(x);
+          const py = toY(y);
+          if (px < area.left || px > area.right || py < area.top || py > area.bottom) return;
+          context.save();
+          context.fillStyle = palette.background;
+          context.strokeStyle = colour;
+          context.lineWidth = 2.4;
+          context.beginPath();
+          context.arc(px, py, 4.5, 0, Math.PI * 2);
+          context.fill();
+          context.stroke();
+          context.restore();
+        }
+
+        function draw() {
+          if (!palette) readPalette();
+          const width = els.canvasWrap.clientWidth;
+          const height = els.canvasWrap.clientHeight;
+          if (!width || !height) return;
+
+          const example = state.example;
+          const area = plotArea(width, height);
+          const toX = function (x) {
+            return area.left + ((x - example.xMin) / (example.xMax - example.xMin)) * area.width;
+          };
+          const toY = function (y) {
+            return area.bottom - ((y - example.yMin) / (example.yMax - example.yMin)) * area.height;
+          };
+
+          context.clearRect(0, 0, width, height);
+          context.fillStyle = palette.background;
+          context.fillRect(0, 0, width, height);
+
+          // The band of x values the expansion is valid for.
+          const bandLeft = Math.max(toX(-example.radius), area.left);
+          const bandRight = Math.min(toX(example.radius), area.right);
+          context.fillStyle = palette.validSoft;
+          context.fillRect(bandLeft, area.top, bandRight - bandLeft, area.height);
+
+          // Grid and tick labels.
+          context.save();
+          context.font = "11px 'Segoe UI', Tahoma, sans-serif";
+          context.fillStyle = palette.tick;
+          context.strokeStyle = palette.grid;
+          context.lineWidth = 1;
+          context.textAlign = "center";
+          context.textBaseline = "top";
+          const firstX = Math.ceil(example.xMin / example.xStep) * example.xStep;
+          for (let x = firstX; x <= example.xMax + 1e-9; x += example.xStep) {
+            const px = toX(x);
+            context.beginPath();
+            context.moveTo(px, area.top);
+            context.lineTo(px, area.bottom);
+            context.stroke();
+            if (Math.abs(x) > 1e-9) context.fillText(formatAxis(x), px, area.bottom + 7);
+          }
+          context.textAlign = "right";
+          context.textBaseline = "middle";
+          const firstY = Math.ceil(example.yMin / example.yStep) * example.yStep;
+          for (let y = firstY; y <= example.yMax + 1e-9; y += example.yStep) {
+            const py = toY(y);
+            context.beginPath();
+            context.moveTo(area.left, py);
+            context.lineTo(area.right, py);
+            context.stroke();
+            if (Math.abs(y) > 1e-9) context.fillText(formatAxis(y), area.left - 8, py);
+          }
+          context.restore();
+
+          // Axes.
+          context.save();
+          context.strokeStyle = palette.axis;
+          context.lineWidth = 1.3;
+          const zeroY = toY(0);
+          if (zeroY >= area.top && zeroY <= area.bottom) {
+            context.beginPath();
+            context.moveTo(area.left, zeroY);
+            context.lineTo(area.right, zeroY);
+            context.stroke();
+          }
+          const zeroX = toX(0);
+          context.beginPath();
+          context.moveTo(zeroX, area.top);
+          context.lineTo(zeroX, area.bottom);
+          context.stroke();
+          context.restore();
+
+          // The two edges of the valid range.
+          context.save();
+          context.setLineDash([6, 5]);
+          context.strokeStyle = palette.valid;
+          context.lineWidth = 1.4;
+          [-example.radius, example.radius].forEach(function (edge) {
+            const px = toX(edge);
+            if (px < area.left || px > area.right) return;
+            context.beginPath();
+            context.moveTo(px, area.top);
+            context.lineTo(px, area.bottom);
+            context.stroke();
+          });
+          context.restore();
+
+          // Band caption.
+          context.save();
+          context.font = "700 11px 'Segoe UI', Tahoma, sans-serif";
+          context.fillStyle = palette.valid;
+          context.textAlign = "center";
+          context.textBaseline = "top";
+          const caption = "valid for |x| < " + formatAxis(example.radius);
+          const centre = (bandLeft + bandRight) / 2;
+          if (bandRight - bandLeft > context.measureText(caption).width + 10) {
+            context.fillText(caption, centre, area.top + 5);
+          }
+          context.restore();
+
+          // The exact function, then the expansion on top of it.
+          const singular = example.nNum < 0 ? -example.a / example.b : null;
+          // The exact curve is drawn slightly thicker so that it still
+          // shows as a halo wherever the expansion lies on top of it.
+          drawCurve(
+            function (x) { return exactValue(example, x); },
+            palette.exact,
+            3.4,
+            area,
+            toX,
+            toY,
+            1,
+            singular
+          );
+
+          if (state.terms > 0) {
+            drawCurve(
+              function (x) { return partialSum(x, state.terms); },
+              palette.series,
+              2.2,
+              area,
+              toX,
+              toY,
+              state.reveal,
+              null
+            );
+            drawMarker(example.insideX, partialSum(example.insideX, state.terms), palette.valid, area, toX, toY);
+            drawMarker(example.outsideX, partialSum(example.outsideX, state.terms), palette.invalid, area, toX, toY);
+          }
+
+          // Origin label, drawn last so the curves do not cover it.
+          context.save();
+          context.font = "11px 'Segoe UI', Tahoma, sans-serif";
+          context.fillStyle = palette.tick;
+          context.textAlign = "left";
+          context.textBaseline = "top";
+          if (zeroY >= area.top && zeroY <= area.bottom) context.fillText("0", zeroX + 5, zeroY + 5);
+          context.restore();
+        }
+
+        function animateCurve() {
+          if (state.frame) cancelAnimationFrame(state.frame);
+          if (reducedMotion()) {
+            state.reveal = 1;
+            draw();
+            return;
+          }
+          const start = performance.now();
+          const duration = 420;
+          state.reveal = 0;
+          const step = function (now) {
+            const progress = Math.min(1, (now - start) / duration);
+            state.reveal = 1 - Math.pow(1 - progress, 3);
+            draw();
+            if (progress < 1) state.frame = requestAnimationFrame(step);
+            else state.frame = null;
+          };
+          state.frame = requestAnimationFrame(step);
+        }
+
+        /* ================================================================
+           Side panel readouts.
+           ================================================================ */
+
+        function witnessBody(container, x, valid) {
+          container.textContent = "";
+          const example = state.example;
+          const exact = exactValue(example, x);
+
+          if (state.terms === 0) {
+            const message = document.createElement("p");
+            message.className = "empty";
+            message.textContent = valid
+              ? "Add the first term to start comparing the expansion with f(x) = " +
+                formatValue(exact) + "."
+              : "f(x) = " + formatValue(exact) +
+                " is perfectly well defined here — it is the expansion that will fail.";
+            container.appendChild(message);
+            return;
+          }
+
+          const approximation = partialSum(x, state.terms);
+          const rows = [
+            ["exact f(x)", formatValue(exact)],
+            ["expansion", formatValue(approximation)],
+            ["difference", formatValue(Math.abs(approximation - exact))],
+            ["newest term", formatValue(newestTerm(x, state.terms))],
+          ];
+
+          const list = document.createElement("dl");
+          rows.forEach(function (row) {
+            const term = document.createElement("dt");
+            term.textContent = row[0];
+            const definition = document.createElement("dd");
+            definition.textContent = row[1];
+            list.append(term, definition);
+          });
+          container.appendChild(list);
+        }
+
+        function updateReadouts() {
+          const example = state.example;
+          els.insideX.textContent = "x = " + formatAxis(example.insideX);
+          els.outsideX.textContent = "x = " + formatAxis(example.outsideX);
+          witnessBody(els.insideBody, example.insideX, true);
+          witnessBody(els.outsideBody, example.outsideX, false);
+        }
+
+        function updateExampleCards() {
+          const example = state.example;
+
+          els.setupMath.textContent = "";
+          example.setup.forEach(function (line) {
+            const block = document.createElement("div");
+            block.className = "math-block";
+            setTex(block, line, true);
+            els.setupMath.appendChild(block);
+          });
+          const validity = document.createElement("div");
+          validity.className = "math-block";
+          setTex(validity, "\\text{valid for } " + example.validityLatex, true);
+          els.setupMath.appendChild(validity);
+          els.setupNote.textContent = example.setupNote;
+
+          setTex(els.ratioInline, example.powerLatex, false);
+          setTex(els.ratioMath, example.ratioLatex, true);
+          els.ratioNote.textContent = example.ratioNote;
+
+          els.legendBand.textContent = "valid for |x| < " + formatAxis(example.radius);
+          els.canvasNote.textContent =
+            "Fixed axes: x from " + formatAxis(example.xMin) + " to " + formatAxis(example.xMax) +
+            ", y from " + formatAxis(example.yMin) + " to " + formatAxis(example.yMax) +
+            ". Curves leaving the window are clipped so the scale never jumps. " +
+            example.boundaryNote;
+        }
+
+        function updateGraphDescription() {
+          const example = state.example;
+          const description =
+            state.terms === 0
+              ? "Graph of the exact function only. The expansion is valid for |x| less than " +
+                formatAxis(example.radius) + ", shaded on the graph."
+              : "Graph comparing the exact function with its binomial expansion using " +
+                state.terms + " term" + (state.terms === 1 ? "" : "s") +
+                ". The two curves agree closely for |x| less than " + formatAxis(example.radius) +
+                " and separate outside that range.";
+          els.canvas.setAttribute("aria-label", description);
+        }
+
+        function update(skipAnimation) {
+          els.equation.innerHTML = tex(expansionLatex(), false);
+          els.equationCaption.textContent =
+            state.terms === 0
+              ? "The function before it is expanded"
+              : "Expansion using " + state.terms + " term" + (state.terms === 1 ? "" : "s") +
+                " (up to " + (state.terms === 1 ? "the constant" : "x" + superscript(state.terms - 1)) + ")";
+          els.termCount.textContent = "Terms used: " + state.terms;
+          els.reset.disabled = state.terms === 0;
+          els.fewer.disabled = state.terms === 0;
+          els.more.disabled = state.terms >= MAX_TERMS;
+
+          updateReadouts();
+          updateGraphDescription();
+
+          if (skipAnimation) {
+            state.reveal = 1;
+            draw();
+          } else {
+            animateCurve();
+          }
+        }
+
+        function superscript(value) {
+          const digits = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };
+          return String(value).split("").map(function (digit) { return digits[digit]; }).join("");
+        }
+
+        function setExample(id) {
+          stopPlaying();
+          const found = EXAMPLES.find(function (item) { return item.id === id; });
+          state.example = found || EXAMPLES[0];
+          const built = buildCoefficients(state.example);
+          state.exact = built.exact;
+          state.numeric = built.numeric;
+          state.terms = 0;
+          updateExampleCards();
+          update(true);
+        }
+
+        function changeTerms(delta) {
+          const next = Math.max(0, Math.min(MAX_TERMS, state.terms + delta));
+          if (next === state.terms) return;
+          state.terms = next;
+          update(false);
+        }
+
+        function startPlaying() {
+          if (state.playing) return;
+          if (state.terms >= MAX_TERMS) {
+            state.terms = 0;
+            update(true);
+          }
+          state.playing = true;
+          els.play.textContent = "Pause";
+          state.playTimer = window.setInterval(function () {
+            if (state.terms >= MAX_TERMS) {
+              stopPlaying();
+              return;
+            }
+            changeTerms(1);
+          }, 900);
+        }
+
+        function stopPlaying() {
+          state.playing = false;
+          if (state.playTimer) window.clearInterval(state.playTimer);
+          state.playTimer = null;
+          els.play.textContent = "Play";
+        }
+
+        /* ================================================================
+           Practice questions.
+           ================================================================ */
+
+        const QUESTIONS = [
+          {
+            type: "value",
+            prompt: [
+              "Expand ",
+              { tex: "(1+x)^{-3}" },
+              " as a binomial series. What is the coefficient of ",
+              { tex: "x^{2}" },
+              "?",
+            ],
+            answer: 6,
+            hint: "Use n(n − 1)/2! with n = −3. Two negatives multiply to give a positive.",
+            solution: [
+              "With ",
+              { tex: "n=-3" },
+              ", the ",
+              { tex: "x^{2}" },
+              " coefficient is ",
+              { tex: "\\frac{n(n-1)}{2!} = \\frac{(-3)(-4)}{2} = 6", display: true },
+              "So ",
+              { tex: "(1+x)^{-3} = 1 - 3x + 6x^{2} - 10x^{3} + \\cdots" },
+              ", valid for ",
+              { tex: "|x| < 1" },
+              ".",
+            ],
+          },
+          {
+            type: "value",
+            prompt: [
+              "What is the coefficient of ",
+              { tex: "x^{2}" },
+              " in the expansion of ",
+              { tex: "\\sqrt{1+x}" },
+              "?",
+            ],
+            answer: -0.125,
+            hint: "Write the root as (1 + x)^(1/2) first, then use n(n − 1)/2!.",
+            solution: [
+              "With ",
+              { tex: "n=\\tfrac{1}{2}" },
+              ":",
+              { tex: "\\frac{n(n-1)}{2!} = \\frac{\\left(\\tfrac{1}{2}\\right)\\left(-\\tfrac{1}{2}\\right)}{2} = -\\frac{1}{8}", display: true },
+              "So ",
+              { tex: "\\sqrt{1+x} = 1 + \\tfrac{1}{2}x - \\tfrac{1}{8}x^{2} + \\tfrac{1}{16}x^{3} - \\cdots" },
+              ".",
+            ],
+          },
+          {
+            type: "choice",
+            prompt: [
+              "For which values of ",
+              { tex: "x" },
+              " is the binomial expansion of ",
+              { tex: "(1+4x)^{-2}" },
+              " valid?",
+            ],
+            options: [
+              { segments: [{ tex: "|x| < 4" }], correct: false },
+              { segments: [{ tex: "|x| < 1" }], correct: false },
+              { segments: [{ tex: "|x| < \\tfrac{1}{4}" }], correct: true },
+              { segments: [{ tex: "|x| < \\tfrac{1}{2}" }], correct: false },
+            ],
+            hint: "The condition is on the whole of the term that follows the 1, not on x alone.",
+            solution: [
+              "The expansion of ",
+              { tex: "(1+y)^{n}" },
+              " needs ",
+              { tex: "|y| < 1" },
+              ". Here ",
+              { tex: "y = 4x" },
+              ", so",
+              { tex: "|4x| < 1 \\;\\Longrightarrow\\; |x| < \\tfrac{1}{4}", display: true },
+            ],
+          },
+          {
+            type: "value",
+            prompt: [
+              "What is the coefficient of ",
+              { tex: "x^{3}" },
+              " in the expansion of ",
+              { tex: "\\dfrac{1}{1+2x}" },
+              "?",
+            ],
+            answer: -8,
+            hint: "Expand in powers of 2x, then remember that (2x)³ = 8x³.",
+            solution: [
+              "Using ",
+              { tex: "(1+y)^{-1} = 1 - y + y^{2} - y^{3} + \\cdots" },
+              " with ",
+              { tex: "y = 2x" },
+              ":",
+              { tex: "1 - 2x + 4x^{2} - 8x^{3} + \\cdots", display: true },
+              "The coefficient is ",
+              { tex: "-8" },
+              ", and the expansion is valid for ",
+              { tex: "|x| < \\tfrac{1}{2}" },
+              ".",
+            ],
+          },
+          {
+            type: "choice",
+            prompt: [
+              "What is the correct first step in expanding ",
+              { tex: "\\sqrt{9+x}" },
+              "?",
+            ],
+            options: [
+              { segments: [{ tex: "9\\left(1+\\tfrac{x}{9}\\right)^{\\frac{1}{2}}" }], correct: false },
+              { segments: [{ tex: "3\\left(1+\\tfrac{x}{9}\\right)^{\\frac{1}{2}}" }], correct: true },
+              { segments: [{ tex: "3\\left(1+x\\right)^{\\frac{1}{2}}" }], correct: false },
+              { segments: [{ tex: "\\left(1+\\tfrac{x}{9}\\right)^{\\frac{1}{2}}" }], correct: false },
+            ],
+            hint: "The factor taken outside must itself be raised to the power n.",
+            solution: [
+              "The bracket has to start with 1, so take out a factor of ",
+              { tex: "9" },
+              " and raise it to the power ",
+              { tex: "\\tfrac{1}{2}" },
+              ":",
+              { tex: "\\sqrt{9+x} = 9^{\\frac{1}{2}}\\left(1+\\tfrac{x}{9}\\right)^{\\frac{1}{2}} = 3\\left(1+\\tfrac{x}{9}\\right)^{\\frac{1}{2}}", display: true },
+            ],
+          },
+          {
+            type: "value",
+            prompt: [
+              "Using ",
+              { tex: "\\sqrt{9+x} = 3\\left(1+\\tfrac{x}{9}\\right)^{\\frac{1}{2}}" },
+              ", what is the coefficient of ",
+              { tex: "x" },
+              "?",
+            ],
+            answer: 1 / 6,
+            hint: "Find the x term inside the bracket first, then multiply it by the 3 outside.",
+            solution: [
+              "Inside the bracket the ",
+              { tex: "x" },
+              " term is ",
+              { tex: "\\tfrac{1}{2}\\cdot\\tfrac{x}{9} = \\tfrac{x}{18}" },
+              ". Multiplying by the 3 outside:",
+              { tex: "3 \\times \\tfrac{1}{18} = \\tfrac{1}{6}", display: true },
+              "So ",
+              { tex: "\\sqrt{9+x} \\approx 3 + \\tfrac{1}{6}x - \\tfrac{1}{216}x^{2} + \\cdots" },
+              ".",
+            ],
+          },
+          {
+            type: "choice",
+            prompt: [
+              "For which values of ",
+              { tex: "x" },
+              " is that expansion of ",
+              { tex: "\\sqrt{9+x}" },
+              " valid?",
+            ],
+            options: [
+              { segments: [{ tex: "|x| < 3" }], correct: false },
+              { segments: [{ tex: "|x| < 1" }], correct: false },
+              { segments: [{ tex: "|x| < \\tfrac{1}{9}" }], correct: false },
+              { segments: [{ tex: "|x| < 9" }], correct: true },
+            ],
+            hint: "Apply the condition to the term inside the bracket, not to the factor outside it.",
+            solution: [
+              "The bracket is ",
+              { tex: "\\left(1+\\tfrac{x}{9}\\right)^{\\frac{1}{2}}" },
+              ", so the condition is",
+              { tex: "\\left|\\tfrac{x}{9}\\right| < 1 \\;\\Longrightarrow\\; |x| < 9", display: true },
+              "That is exactly the distance from ",
+              { tex: "x=0" },
+              " to ",
+              { tex: "x=-9" },
+              ", where ",
+              { tex: "\\sqrt{9+x}" },
+              " stops existing.",
+            ],
+          },
+          {
+            type: "value",
+            prompt: [
+              "What is the coefficient of ",
+              { tex: "x^{2}" },
+              " in the expansion of ",
+              { tex: "(1-3x)^{\\frac{1}{3}}" },
+              "?",
+            ],
+            answer: -1,
+            hint: "Take y = −3x. Do not forget to square the −3 as well as the x.",
+            solution: [
+              "With ",
+              { tex: "n=\\tfrac{1}{3}" },
+              " and ",
+              { tex: "y=-3x" },
+              ", the ",
+              { tex: "y^{2}" },
+              " coefficient is ",
+              { tex: "\\frac{\\left(\\tfrac{1}{3}\\right)\\left(-\\tfrac{2}{3}\\right)}{2} = -\\frac{1}{9}" },
+              ", so the ",
+              { tex: "x^{2}" },
+              " term is",
+              { tex: "-\\tfrac{1}{9}(-3x)^{2} = -\\tfrac{1}{9}\\times 9x^{2} = -x^{2}", display: true },
+            ],
+          },
+          {
+            type: "choice",
+            prompt: [
+              "A student substitutes ",
+              { tex: "x = 2" },
+              " into ",
+              { tex: "\\dfrac{1}{1+x} = 1 - x + x^{2} - x^{3} + \\cdots" },
+              " to estimate ",
+              { tex: "\\tfrac{1}{3}" },
+              ". What goes wrong?",
+            ],
+            options: [
+              {
+                segments: [
+                  "Nothing is wrong; they simply need more terms to reach ",
+                  { tex: "\\tfrac{1}{3}" },
+                  ".",
+                ],
+                correct: false,
+              },
+              {
+                segments: [{ tex: "\\dfrac{1}{1+x}" }, " is undefined at ", { tex: "x = 2" }, "."],
+                correct: false,
+              },
+              {
+                segments: [
+                  "The expansion is only valid for negative ",
+                  { tex: "x" },
+                  ".",
+                ],
+                correct: false,
+              },
+              {
+                segments: [
+                  "The terms ",
+                  { tex: "1, -2, 4, -8, \\ldots" },
+                  " grow in size, so the running total never settles down.",
+                ],
+                correct: true,
+              },
+            ],
+            hint: "Work out the first four terms at x = 2 and look at what they are doing.",
+            solution: [
+              "The function itself is fine at ",
+              { tex: "x=2" },
+              " — it equals ",
+              { tex: "\\tfrac{1}{3}" },
+              ". The expansion is not: since ",
+              { tex: "|x| = 2 > 1" },
+              ", each term is larger than the one before,",
+              { tex: "1 - 2 + 4 - 8 + 16 - \\cdots", display: true },
+              "and the partial sums swing further and further apart instead of closing in on ",
+              { tex: "\\tfrac{1}{3}" },
+              ".",
+            ],
+          },
+        ];
+
+        const practice = {
+          index: 0,
+          score: 0,
+          attempted: false,
+          revealed: false,
+          solved: false,
+          wrongAttempt: false,
+          finished: false,
+        };
+
+        const practiceEls = {
+          prompt: document.getElementById("prompt"),
+          answerArea: document.getElementById("answer-area"),
+          check: document.getElementById("check-btn"),
+          solutionBtn: document.getElementById("solution-btn"),
+          next: document.getElementById("next-btn"),
+          feedback: document.getElementById("feedback"),
+          solution: document.getElementById("solution"),
+          solutionBody: document.getElementById("solution-body"),
+          card: document.getElementById("question-card"),
+          summary: document.getElementById("summary"),
+          summaryText: document.getElementById("summary-text"),
+          restart: document.getElementById("restart-btn"),
+          progress: document.getElementById("progress-chip"),
+          score: document.getElementById("score-chip"),
+        };
+
+        // Accepts an integer, a decimal, or an exact fraction such as -3/8.
+        function parseAnswer(text) {
+          const cleaned = text.replace(/\s+/g, "").replace(/^\+/, "").replace(/−/g, "-");
+          if (!cleaned) return null;
+          const match = /^(-?\d+(?:\.\d+)?)(?:\/(-?\d+(?:\.\d+)?))?$/.exec(cleaned);
+          if (!match) return null;
+          const numerator = Number(match[1]);
+          const denominator = match[2] === undefined ? 1 : Number(match[2]);
+          if (!denominator) return null;
+          return numerator / denominator;
+        }
+
+        function showFeedback(kind, title, detail) {
+          practiceEls.feedback.hidden = false;
+          practiceEls.feedback.className = "feedback " + kind;
+          practiceEls.feedback.textContent = "";
+          const heading = document.createElement("strong");
+          heading.textContent = title;
+          practiceEls.feedback.appendChild(heading);
+          if (detail) practiceEls.feedback.appendChild(document.createTextNode(detail));
+        }
+
+        function renderQuestion() {
+          const question = QUESTIONS[practice.index];
+          practice.attempted = false;
+          practice.revealed = false;
+          practice.solved = false;
+          practice.wrongAttempt = false;
+
+          practiceEls.progress.textContent =
+            "Question " + (practice.index + 1) + " of " + QUESTIONS.length;
+          practiceEls.score.textContent = "Correct first time: " + practice.score;
+
+          renderSegments(practiceEls.prompt, question.prompt);
+          practiceEls.answerArea.textContent = "";
+
+          if (question.type === "value") {
+            const label = document.createElement("label");
+            label.className = "answer-label";
+            label.setAttribute("for", "answer-input");
+            label.textContent = "Your answer";
+
+            const input = document.createElement("input");
+            input.type = "text";
+            input.id = "answer-input";
+            input.autocomplete = "off";
+            input.spellcheck = false;
+            input.addEventListener("keydown", function (event) {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                checkAnswer();
+              }
+            });
+
+            const hint = document.createElement("p");
+            hint.className = "answer-hint";
+            hint.textContent = "Give an exact value — a whole number such as 6, or a fraction such as -1/8.";
+
+            practiceEls.answerArea.append(label, input, hint);
+          } else {
+            const group = document.createElement("fieldset");
+            group.className = "choice-list";
+            const legend = document.createElement("legend");
+            legend.className = "visually-hidden";
+            legend.textContent = "Choose one answer";
+            group.appendChild(legend);
+
+            question.options.forEach(function (option, position) {
+              const wrapper = document.createElement("label");
+              wrapper.className = "choice";
+              const radio = document.createElement("input");
+              radio.type = "radio";
+              radio.name = "practice-choice";
+              radio.value = String(position);
+              const text = document.createElement("span");
+              renderSegments(text, option.segments);
+              wrapper.append(radio, text);
+              group.appendChild(wrapper);
+            });
+            practiceEls.answerArea.appendChild(group);
+          }
+
+          practiceEls.feedback.hidden = true;
+          practiceEls.solution.hidden = true;
+          practiceEls.solutionBtn.hidden = true;
+          practiceEls.next.hidden = true;
+          practiceEls.check.hidden = false;
+          practiceEls.check.disabled = false;
+          practiceEls.card.hidden = false;
+          practiceEls.summary.hidden = true;
+        }
+
+        function selectedChoice() {
+          const chosen = practiceEls.answerArea.querySelector("input[name='practice-choice']:checked");
+          return chosen ? Number(chosen.value) : null;
+        }
+
+        function markCorrect() {
+          // Only an unaided first attempt counts towards the score.
+          if (!practice.revealed && !practice.solved && !practice.wrongAttempt) practice.score += 1;
+          practice.solved = true;
+          practiceEls.score.textContent = "Correct first time: " + practice.score;
+          practiceEls.check.hidden = true;
+          practiceEls.solutionBtn.hidden = false;
+          practiceEls.next.hidden = false;
+        }
+
+        function checkAnswer() {
+          const question = QUESTIONS[practice.index];
+          if (practice.solved) return;
+
+          if (question.type === "value") {
+            const input = document.getElementById("answer-input");
+            const parsed = parseAnswer(input.value);
+            if (parsed === null) {
+              showFeedback(
+                "info",
+                "Nothing to mark yet. ",
+                "Type a whole number or a fraction, for example 6 or -1/8."
+              );
+              return;
+            }
+            practice.attempted = true;
+            practiceEls.solutionBtn.hidden = false;
+            if (Math.abs(parsed - question.answer) < 1e-6) {
+              showFeedback("correct", "Correct. ", "Read the worked solution or move on when you are ready.");
+              markCorrect();
+            } else {
+              practice.wrongAttempt = true;
+              showFeedback("wrong", "Not yet. ", question.hint);
+            }
+            return;
+          }
+
+          const choice = selectedChoice();
+          if (choice === null) {
+            showFeedback("info", "Nothing to mark yet. ", "Choose one of the options first.");
+            return;
+          }
+          practice.attempted = true;
+          practiceEls.solutionBtn.hidden = false;
+          if (question.options[choice].correct) {
+            showFeedback("correct", "Correct. ", "Read the worked solution or move on when you are ready.");
+            markCorrect();
+          } else {
+            practice.wrongAttempt = true;
+            showFeedback("wrong", "Not quite. ", question.hint);
+          }
+        }
+
+        function revealSolution() {
+          const question = QUESTIONS[practice.index];
+          practice.revealed = true;
+          renderSegments(practiceEls.solutionBody, question.solution);
+          practiceEls.solution.hidden = false;
+          practiceEls.solutionBtn.disabled = true;
+          practiceEls.next.hidden = false;
+        }
+
+        function nextQuestion() {
+          if (practice.index >= QUESTIONS.length - 1) {
+            practice.finished = true;
+            practiceEls.card.hidden = true;
+            practiceEls.summary.hidden = false;
+            practiceEls.progress.textContent = "All " + QUESTIONS.length + " attempted";
+            practiceEls.summaryText.textContent =
+              "You answered " + practice.score + " of " + QUESTIONS.length +
+              " correctly at the first attempt. The two ideas to carry forward are that a fractional or " +
+              "negative power gives an expansion that never ends, and that the bracket must start with 1 before the " +
+              "range of validity can be read off.";
+            return;
+          }
+          practice.index += 1;
+          practiceEls.solutionBtn.disabled = false;
+          renderQuestion();
+          practiceEls.card.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+        }
+
+        function restartPractice() {
+          practice.index = 0;
+          practice.score = 0;
+          practice.finished = false;
+          practiceEls.solutionBtn.disabled = false;
+          renderQuestion();
+        }
+
+        /* ================================================================
+           Wiring.
+           ================================================================ */
+
+        EXAMPLES.forEach(function (example) {
+          const option = document.createElement("option");
+          option.value = example.id;
+          option.textContent = example.option;
+          els.select.appendChild(option);
+        });
+
+        els.select.addEventListener("change", function (event) {
+          setExample(event.target.value);
+        });
+        els.reset.addEventListener("click", function () {
+          stopPlaying();
+          state.terms = 0;
+          update(true);
+        });
+        els.fewer.addEventListener("click", function () {
+          stopPlaying();
+          changeTerms(-1);
+        });
+        els.more.addEventListener("click", function () {
+          stopPlaying();
+          changeTerms(1);
+        });
+        els.play.addEventListener("click", function () {
+          if (state.playing) stopPlaying();
+          else startPlaying();
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          const target = event.target;
+          if (target && typeof target.closest === "function"
+            && target.closest("input, select, textarea, button, [contenteditable]")) return;
+          event.preventDefault();
+          stopPlaying();
+          changeTerms(event.key === "ArrowRight" ? 1 : -1);
+        });
+
+        practiceEls.check.addEventListener("click", checkAnswer);
+        practiceEls.solutionBtn.addEventListener("click", revealSolution);
+        practiceEls.next.addEventListener("click", nextQuestion);
+        practiceEls.restart.addEventListener("click", restartPractice);
+
+        // The shared shell owns the theme button; the canvas has to be
+        // repainted with the new palette whenever it is used.
+        function refreshTheme() {
+          readPalette();
+          els.equation.innerHTML = tex(expansionLatex(), false);
+          draw();
+        }
+
+        window.addEventListener("site-theme-change", refreshTheme);
+        new MutationObserver(refreshTheme).observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
+
+        if (window.ResizeObserver) {
+          new ResizeObserver(resizeCanvas).observe(els.canvasWrap);
+        } else {
+          window.addEventListener("resize", resizeCanvas);
+        }
+
+        setTex(document.getElementById("intro-math"), "(a+bx)^{n}", false);
+        setExample(EXAMPLES[0].id);
+        renderQuestion();
+        resizeCanvas();
+      })();
+    </script>
+  </body>
+</html>
