@@ -1,0 +1,2199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Subnet Masking Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              headerBg: "#0f172a",
+              headerAccent: "#38bdf8",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Full-height app shell. The production site navigation bar is 58px
+         tall, so the built page must subtract it or the Next button falls
+         below the viewport. Locked to the viewport only once the diagram and
+         the explanation sit side by side; narrower than that the page
+         scrolls. */
+      .subnet-lab {
+        min-height: 100vh;
+      }
+      @media (min-width: 1024px) {
+        .subnet-lab {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .subnet-lab {
+          height: calc(100vh - 58px);
+        }
+        /* An explicit flexible row, so the shared shell's align-content
+           rule for post-header grids cannot collapse the diagram. The
+           diagram's share of the width is set by the draggable divider. */
+        .subnet-main {
+          grid-template-rows: minmax(0, 1fr);
+          grid-template-columns: minmax(0, var(--diagram-share, 61%)) 1rem minmax(0, 1fr);
+        }
+      }
+
+      body.subnet-resizing,
+      body.subnet-resizing * {
+        cursor: col-resize !important;
+        user-select: none !important;
+      }
+
+      .mono,
+      .svg-mono {
+        font-family: "Consolas", "Menlo", "Courier New", monospace;
+      }
+
+      /* The diagram scrolls sideways inside its card on narrow screens, so
+         its labels stay legible, and scales to fit the pane on wide ones. */
+      .diagram-box {
+        position: relative;
+        overflow-x: auto;
+      }
+      .diagram-svg {
+        display: block;
+        width: 100%;
+        min-width: 640px;
+        height: auto;
+      }
+      @media (min-width: 1024px) {
+        .diagram-box {
+          flex: 1 1 0%;
+          min-height: 0;
+          overflow: hidden;
+        }
+        .diagram-svg {
+          position: absolute;
+          top: 0.5rem;
+          left: 0.5rem;
+          width: calc(100% - 1rem);
+          height: calc(100% - 1rem);
+          min-width: 0;
+        }
+      }
+
+      .step-enter {
+        animation: step-in 240ms ease-out;
+      }
+      @keyframes step-in {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .step-enter {
+          animation: none;
+        }
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } = React;
+
+      /* ---------------------------------------------------------------
+         The network. One small subnet is shown in full: three computers
+         and a router interface on one switch. The router's other links
+         are drawn as wires only, labelled with the network they lead to.
+         Private (RFC 1918) addresses are used inside the organisation and
+         a documentation (RFC 5737) address stands in for the internet.
+         --------------------------------------------------------------- */
+      const PC1 = { name: "PC1", ip: "192.168.10.11", mac: "3C:52:82:10:00:11" };
+      const PC2 = { name: "PC2", ip: "192.168.10.12", mac: "3C:52:82:10:00:12" };
+      const PC3 = { name: "PC3", ip: "192.168.10.13", mac: "3C:52:82:10:00:13" };
+      const MASK = "255.255.255.0";
+      const LAN_ID = "192.168.10.0";
+      const BROADCAST_MAC = "FF:FF:FF:FF:FF:FF";
+
+      const ROUTER = {
+        eth0: { ip: "192.168.10.1", mac: "00:1D:A1:10:00:01" },
+        eth1: { ip: "192.168.20.1", mac: "00:1D:A1:20:00:01" },
+        eth2: { ip: "192.168.30.129", mac: "00:1D:A1:30:00:01" },
+        eth3: { mac: "00:1D:A1:FE:00:01" },
+      };
+      const NEXT_ROUTER_MAC = "5C:A6:2D:FE:00:02";
+
+      // The routing table, most specific (longest mask) first. Checking in
+      // this order and stopping at the first match gives the same answer as
+      // a longest-prefix match, which is how a real router chooses.
+      const ROUTES = [
+        { id: "lan3", network: "192.168.30.128", mask: "255.255.255.128", prefix: 25, iface: "eth2" },
+        { id: "lan1", network: "192.168.10.0", mask: "255.255.255.0", prefix: 24, iface: "eth0" },
+        { id: "lan2", network: "192.168.20.0", mask: "255.255.255.0", prefix: 24, iface: "eth1" },
+        { id: "default", network: "0.0.0.0", mask: "0.0.0.0", prefix: 0, iface: "eth3" },
+      ];
+
+      const SWITCH_TABLE = [
+        { id: "pc1", port: 1, mac: PC1.mac, device: "PC1" },
+        { id: "pc2", port: 2, mac: PC2.mac, device: "PC2" },
+        { id: "pc3", port: 3, mac: PC3.mac, device: "PC3" },
+        { id: "router", port: 4, mac: ROUTER.eth0.mac, device: "Router R1 (eth0)" },
+      ];
+
+      // PC1's ARP cache, already filled in by earlier traffic on its subnet.
+      const PC1_ARP = [
+        { ip: ROUTER.eth0.ip, mac: ROUTER.eth0.mac },
+        { ip: PC3.ip, mac: PC3.mac },
+      ];
+      const arpFound = (entries, ip, note) =>
+        entries.map((entry) => (entry.ip === ip ? Object.assign({}, entry, { state: "hit", note }) : entry));
+
+      /* --------------------------- helpers --------------------------- */
+
+      const octets = (ip) => ip.split(".").map(Number);
+      const andIp = (ip, mask) => {
+        const maskOctets = octets(mask);
+        return octets(ip)
+          .map((value, index) => value & maskOctets[index])
+          .join(".");
+      };
+      const toBits = (value) => value.toString(2).padStart(8, "0");
+      const maskPrefix = (mask) =>
+        octets(mask).reduce(
+          (count, value) => count + toBits(value).split("").filter((bit) => bit === "1").length,
+          0,
+        );
+
+      // Every place a subnet mask is applied with AND uses this colour, in
+      // the text, the calculation, the routing table and the diagram.
+      const AND_TEXT = "text-fuchsia-700 dark:text-fuchsia-300";
+
+      // Tiny inline formatter so the teaching text can carry **bold**,
+      // `code` and ==an AND operation== without raw HTML.
+      const renderInline = (text, and) => {
+        const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+        return parts.map((part, index) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={index} className={"font-bold" + (and ? "" : " text-slate-900 dark:text-white")}>
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+              <code
+                key={index}
+                className={
+                  "mono whitespace-nowrap rounded px-1 py-0.5 text-[0.92em] " +
+                  (and
+                    ? "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950 dark:text-fuchsia-200"
+                    : "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-50")
+                }
+              >
+                {part.slice(1, -1)}
+              </code>
+            );
+          }
+          return part;
+        });
+      };
+
+      const renderRich = (text) =>
+        String(text)
+          .split(/(==[^=]+==)/g)
+          .map((segment, index) =>
+            segment.startsWith("==") && segment.endsWith("==") ? (
+              <span key={index} className={"font-bold " + AND_TEXT}>
+                {renderInline(segment.slice(2, -2), true)}
+              </span>
+            ) : (
+              <React.Fragment key={index}>{renderInline(segment, false)}</React.Fragment>
+            ),
+          );
+
+      const prefersReducedMotion = () => {
+        try {
+          return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        } catch (e) {
+          return false;
+        }
+      };
+
+      /* ----------------------- step construction ----------------------
+         Every step is a complete description of what is on screen: the
+         devices in focus, the frame as it stands, any calculation, and the
+         table that matters at that moment. Back therefore only has to show
+         an earlier step, never undo anything. */
+
+      const icmpFrame = (dest, extra) =>
+        Object.assign(
+          {
+            kind: "icmp",
+            caption: "Frame being built by PC1",
+            dstMac: null,
+            srcMac: PC1.mac,
+            srcIp: PC1.ip,
+            dstIp: dest.ip,
+            ttl: 64,
+            tags: {},
+            andFields: [],
+          },
+          extra,
+        );
+
+      function routeTeach(route, destIp) {
+        const result = andIp(destIp, route.mask);
+        const sum = "==`" + destIp + "` AND `" + route.mask + "`== gives `" + result + "`";
+        const matched = result === route.network;
+        if (route.id === "lan3") {
+          return (
+            "This route is for the subnet on **eth2**, and it has a **different subnet mask**: `255.255.255.128`, or /25, so its network identifier is the first **25 bits** rather than 24. The router applies this route's own mask: " +
+            sum +
+            ", which is not `192.168.30.128`, so there is **no match**."
+          );
+        }
+        if (route.id === "lan1") {
+          return (
+            "This route is for the subnet on **eth0**, the one the packet has just arrived from. The router applies this route's mask: " +
+            sum +
+            ", which is not `192.168.10.0`, so there is **no match**."
+          );
+        }
+        if (route.id === "lan2") {
+          return matched
+            ? "This route is for the subnet on **eth1**. The router applies this route's mask: " +
+                sum +
+                ", which **equals** this route's network identifier, so there is a **match**: the destination is on the subnet connected to eth1. This is the most specific route that matches, so the router stops checking and the default route is not needed."
+            : "This route is for the subnet on **eth1**. The router applies this route's mask: " +
+                sum +
+                ", which is not `192.168.20.0`, so there is **no match**. The destination is not on any of the subnets connected directly to this router.";
+        }
+        return (
+          "The last route is the **default route**, `0.0.0.0` /0. Its mask is all zeros, so " +
+          sum +
+          ". ==ANDing with an all-zero mask== turns **any** address into `0.0.0.0`, which always equals this route's network identifier, so the default route matches **every** destination. That is why it is tried last and only used when no more specific route matches. It leads out of **eth3**, towards the next router."
+        );
+      }
+
+      function buildSteps(sc) {
+        const dest = sc.dest;
+        const destNet = andIp(dest.ip, MASK);
+        const local = destNet === LAN_ID;
+        const pc1Panel = (extra) => Object.assign({ type: "host", host: "pc1", arp: PC1_ARP }, extra);
+
+        const steps = [
+          {
+            id: "ping",
+            title: "PC1 builds a ping request",
+            teach:
+              "A user on **PC1** types `ping " +
+              dest.ip +
+              "` to check that " +
+              dest.intro +
+              " can be reached. Ping creates an **ICMP Echo Request**, which is carried directly inside an **IP packet**: ICMP does not use TCP or UDP, so there are no port numbers. PC1 can fill in the IP header straight away, with source `" +
+              PC1.ip +
+              "` and destination `" +
+              dest.ip +
+              "`. What it cannot fill in yet is the **destination MAC address** for the link-layer frame. That depends on whether the destination is on PC1's own subnet, so PC1 has to work that out first.",
+            focus: ["pc1"],
+            frame: icmpFrame(dest, { tags: { srcIp: "PC1", dstIp: "destination" } }),
+            panel: pc1Panel({ highlight: ["ip"] }),
+          },
+          {
+            id: "mask-own",
+            title: "PC1 ANDs its own IP address with its subnet mask",
+            andAt: "pc1",
+            teach:
+              "PC1's network settings include its **subnet mask**, `255.255.255.0`, written /24 because it starts with 24 ones. ==PC1 applies the mask to its own IP address with a bitwise AND: `" +
+              PC1.ip +
+              "` AND `" +
+              MASK +
+              "`==. Wherever the mask has a 1 the address bit is kept, and wherever the mask has a 0 the bit becomes 0. What survives is the **network identifier**, so PC1's own subnet is `" +
+              LAN_ID +
+              "`.",
+            focus: ["pc1"],
+            frame: icmpFrame(dest, { tags: { srcIp: "AND with mask" }, andFields: ["srcIp"] }),
+            calc: {
+              type: "and",
+              title: "PC1's IP address AND PC1's subnet mask",
+              ip: { label: "PC1's IP", value: PC1.ip },
+              mask: { label: "Subnet mask", value: MASK },
+              resultLabel: "Network ID",
+            },
+            panel: pc1Panel({ highlight: ["ip", "mask"] }),
+          },
+          {
+            id: "mask-dest",
+            title: "PC1 ANDs the destination address with the same mask",
+            andAt: "pc1",
+            teach:
+              "Now ==PC1 applies the same mask to the destination IP address: `" +
+              dest.ip +
+              "` AND `" +
+              MASK +
+              "`==. PC1 uses **its own** subnet mask because it has no way of knowing the destination's. In effect PC1 is asking: if this address were on my subnet, what would its network identifier be? The answer is `" +
+              destNet +
+              "`.",
+            focus: ["pc1"],
+            frame: icmpFrame(dest, { tags: { dstIp: "AND with mask" }, andFields: ["dstIp"] }),
+            calc: {
+              type: "and",
+              title: "Destination IP address AND PC1's subnet mask",
+              ip: { label: "Destination IP", value: dest.ip },
+              mask: { label: "Subnet mask", value: MASK },
+              resultLabel: "Network ID",
+            },
+            panel: pc1Panel({ highlight: ["mask"] }),
+          },
+          local
+            ? {
+                id: "compare",
+                title: "Same network identifier: deliver directly",
+                teach:
+                  "Both answers are `" +
+                  LAN_ID +
+                  "`, so the destination is on the **same subnet** as PC1. PC1 can deliver the frame **directly** through the switch, and the router plays no part. That means the destination MAC address in the frame must be **PC3's own MAC address**.",
+                focus: ["pc1"],
+                frame: icmpFrame(dest),
+                calc: {
+                  type: "compare",
+                  left: { label: "PC1's network ID", value: LAN_ID },
+                  right: { label: "Destination's network ID", value: destNet },
+                  same: true,
+                  verdict: "Same subnet: send the frame directly to " + dest.ip,
+                },
+                panel: pc1Panel({}),
+              }
+            : {
+                id: "compare",
+                title: "Different network identifiers: send to the router",
+                teach:
+                  "The answers are different: `" +
+                  LAN_ID +
+                  "` for PC1 but `" +
+                  destNet +
+                  "` for the destination. The destination is **not on PC1's subnet**, so PC1 cannot deliver the frame to it directly. Instead PC1 sends the frame to its **default gateway**: the router's interface on this subnet, `" +
+                  ROUTER.eth0.ip +
+                  "`, which is stored in PC1's network settings (usually supplied by DHCP). The **destination IP address** stays as `" +
+                  dest.ip +
+                  "`. Only the frame's destination MAC address changes: it will be the **router's** MAC address.",
+                note:
+                  "In network settings the router is called the **default gateway**. Do not confuse this with a **gateway** in the AQA sense: a device that joins networks which use different protocols.",
+                focus: ["pc1"],
+                frame: icmpFrame(dest, { tags: { dstIp: "stays the same" } }),
+                calc: {
+                  type: "compare",
+                  left: { label: "PC1's network ID", value: LAN_ID },
+                  right: { label: "Destination's network ID", value: destNet },
+                  same: false,
+                  verdict: "Different subnets: send the frame to the default gateway, " + ROUTER.eth0.ip,
+                },
+                panel: pc1Panel({ highlight: ["gateway"] }),
+              },
+        ];
+
+        if (local) {
+          steps.push(
+            {
+              id: "add-mac",
+              title: "PC1 adds PC3's MAC address to the frame",
+              macHelp: true,
+              teach:
+                "The frame must be addressed to PC3 itself, so PC1 looks up `" +
+                PC3.ip +
+                "` in its **ARP cache**, a table of the IP addresses and matching MAC addresses of devices on its subnet, and finds `" +
+                PC3.mac +
+                "`. PC1 now finishes **encapsulating** the ping: the IP packet goes inside a link-layer frame with PC3's MAC address as the **destination MAC** and its own as the **source MAC**. The IP addresses identify the two ends of the whole journey; the MAC addresses identify the two ends of this one link. On the same subnet, those are the same two computers.",
+              focus: ["pc1"],
+              frame: icmpFrame(dest, { dstMac: PC3.mac, tags: { dstMac: "PC3" } }),
+              panel: pc1Panel({ arp: arpFound(PC1_ARP, PC3.ip) }),
+            },
+            {
+              id: "send",
+              title: "PC1 sends the frame to the switch",
+              teach:
+                "The frame travels along PC1's cable into **port 1** of the switch. A switch works at the **link layer**: it decides where a frame goes using the destination **MAC address**, and never looks at the IP address inside.",
+              focus: ["sw"],
+              motion: [[{ kind: "icmp", from: "pc1", to: "sw" }]],
+              frame: icmpFrame(dest, {
+                caption: "Frame arriving at the switch",
+                dstMac: PC3.mac,
+                tags: { dstMac: "read by the switch" },
+              }),
+              panel: { type: "switch", arrived: "pc1" },
+            },
+            {
+              id: "switch-forward",
+              title: "The switch forwards the frame to PC3 only",
+              teach:
+                "The switch looks up `" +
+                PC3.mac +
+                "` in its **MAC address table** and finds it on **port 3**, so the frame goes out of port 3 **only**: PC2 and the router never see it. The switch built this table itself, by noting the **source** MAC address of the frames arriving on each port.",
+              focus: ["sw"],
+              motion: [[{ kind: "icmp", from: "sw", to: "pc3" }]],
+              frame: icmpFrame(dest, {
+                caption: "Frame leaving port 3",
+                dstMac: PC3.mac,
+                tags: { dstMac: "found on port 3" },
+              }),
+              panel: { type: "switch", arrived: "pc1", forward: "pc3" },
+            },
+            {
+              id: "deliver",
+              title: "PC3 accepts the ping",
+              teach:
+                "PC3 sees its own MAC address as the frame's destination, so it accepts the frame and removes the frame header. The IP packet's destination is PC3's own IP address, so the **ICMP Echo Request** is passed on to be answered. PC3 then sends an **Echo Reply** back to `" +
+                PC1.ip +
+                "`, making exactly the same decision in reverse: ==PC3 ANDs both IP addresses with its own subnet mask==, finds that PC1 is on its subnet too, and addresses the reply directly to PC1's MAC address, which is in its own ARP cache.",
+              focus: ["pc3"],
+              screens: { pc3: ["Echo Request", "received"] },
+              frame: icmpFrame(dest, {
+                caption: "Frame received by PC3",
+                dstMac: PC3.mac,
+                tags: { dstMac: "matches PC3", dstIp: "matches PC3" },
+              }),
+              panel: {
+                type: "host",
+                host: "pc3",
+                arp: [
+                  { ip: ROUTER.eth0.ip, mac: ROUTER.eth0.mac },
+                  { ip: PC1.ip, mac: PC1.mac, state: "hit", note: "used for the reply" },
+                ],
+                highlight: ["ip", "mac"],
+              },
+            },
+          );
+          return steps;
+        }
+
+        // Destination on another network: the frame goes to the router.
+        const toRouter = (extra) => icmpFrame(dest, Object.assign({ dstMac: ROUTER.eth0.mac }, extra));
+        const routerFrame = (extra) =>
+          icmpFrame(
+            dest,
+            Object.assign(
+              { caption: "IP packet inside the router", dstMac: ROUTER.eth0.mac, removedLink: true },
+              extra,
+            ),
+          );
+
+        steps.push(
+          {
+            id: "add-mac",
+            title: "PC1 adds the router's MAC address to the frame",
+            macHelp: true,
+            teach:
+              "The frame must be addressed to the **router**, so PC1 looks up its default gateway, `" +
+              ROUTER.eth0.ip +
+              "`, in its **ARP cache**, a table of the IP addresses and matching MAC addresses of devices on its subnet, and finds `" +
+              ROUTER.eth0.mac +
+              "`. PC1 does **not** look for the MAC address of `" +
+              dest.ip +
+              "`: that computer is not on PC1's subnet, so PC1 could never send a frame straight to it. PC1 finishes **encapsulating** the ping with the router's MAC address as the **destination MAC** and its own as the **source MAC**.",
+            focus: ["pc1"],
+            frame: toRouter({ tags: { dstMac: "router eth0" } }),
+            panel: pc1Panel({ arp: arpFound(PC1_ARP, ROUTER.eth0.ip), highlight: ["gateway"] }),
+          },
+          {
+            id: "send",
+            title: "PC1 sends the frame to the switch",
+            teach:
+              "PC1 sends the frame. Compare the two kinds of address inside it: the **destination MAC address** belongs to the router, but the **destination IP address** is still `" +
+              dest.ip +
+              "`. The MAC addresses describe only this one hop across the LAN; the IP addresses describe the whole journey.",
+            focus: ["sw"],
+            motion: [[{ kind: "icmp", from: "pc1", to: "sw" }]],
+            frame: toRouter({
+              caption: "Frame arriving at the switch",
+              tags: { dstMac: "router eth0", dstIp: "not the router" },
+            }),
+            panel: { type: "switch", arrived: "pc1" },
+          },
+          {
+            id: "switch-forward",
+            title: "The switch forwards the frame to the router",
+            teach:
+              "The switch looks up `" +
+              ROUTER.eth0.mac +
+              "` in its **MAC address table** and finds it on **port 4**, so it sends the frame out of that port only. The switch neither knows nor cares that this device is a router: it never reads the IP address.",
+            focus: ["sw"],
+            motion: [[{ kind: "icmp", from: "sw", to: "r" }]],
+            frame: toRouter({ caption: "Frame leaving port 4", tags: { dstMac: "found on port 4" } }),
+            panel: { type: "switch", arrived: "pc1", forward: "router" },
+          },
+          {
+            id: "router-receive",
+            title: "The router reads the destination IP address",
+            teach:
+              "The frame's destination MAC address matches the router's **eth0** interface, so the router accepts the frame and removes the link-layer header. It reads the **destination IP address**, `" +
+              dest.ip +
+              "`, and looks for a route to it in its **routing table**. Each route has its **own** network identifier and its **own** subnet mask. For each route, ==the router ANDs the destination address with that route's mask== and checks whether the answer equals that route's network identifier. The most specific routes, with the longest masks, are tried first.",
+            focus: ["router"],
+            frame: routerFrame({ tags: { dstIp: "looked up" } }),
+            panel: { type: "router", states: {} },
+          },
+        );
+
+        const matchIndex = ROUTES.findIndex((route) => andIp(dest.ip, route.mask) === route.network);
+        const statesAt = (checked) => {
+          const states = {};
+          ROUTES.slice(0, checked + 1).forEach((route, index) => {
+            states[route.id] = {
+              result: andIp(dest.ip, route.mask) === route.network ? "match" : "nomatch",
+              current: index === checked,
+            };
+          });
+          return states;
+        };
+
+        ROUTES.slice(0, matchIndex + 1).forEach((route, index) => {
+          steps.push({
+            id: "route-" + route.id,
+            title: "Route " + (index + 1) + " of " + ROUTES.length + ": " + route.network + " /" + route.prefix,
+            andAt: "router",
+            teach: routeTeach(route, dest.ip),
+            focus: ["router"],
+            routeStates: statesAt(index),
+            frame: routerFrame({ tags: { dstIp: "AND with route mask" }, andFields: ["dstIp"] }),
+            calc: {
+              type: "and",
+              title: "Destination IP AND this route's subnet mask",
+              ip: { label: "Destination IP", value: dest.ip },
+              mask: { label: "Route's mask", value: route.mask },
+              resultLabel: "AND result",
+              compareTo: { label: "Route's network ID", value: route.network },
+            },
+            panel: { type: "router", states: statesAt(index) },
+          });
+        });
+
+        const finalStates = statesAt(matchIndex);
+        if (ROUTES[matchIndex].id === "lan2") {
+          steps.push({
+            id: "forward",
+            title: "The router forwards the packet out of eth1",
+            macHelp: true,
+            teach:
+              "The router sends the packet out of **eth1**, onto the 192.168.20.0 subnet. It wraps the packet in a **new frame** for this hop: the source MAC address is its own eth1 interface, `" +
+              ROUTER.eth1.mac +
+              "`, and the destination MAC address belongs to `" +
+              dest.ip +
+              "` itself, which the router finds in its own ARP cache for that subnet. The router **reduces the TTL** from 64 to 63, but the **source and destination IP addresses do not change**. A switch on that subnet now delivers the frame, just as the switch in scenario A delivered PC1's frame to PC3.",
+            focus: ["router"],
+            routeStates: finalStates,
+            motion: [[{ kind: "icmp", from: "r", to: "lan2" }]],
+            frame: icmpFrame(dest, {
+              caption: "New frame sent out of eth1",
+              srcMac: ROUTER.eth1.mac,
+              dstMac: dest.mac,
+              ttl: 63,
+              tags: { srcMac: "router eth1", dstMac: "destination", ttl: "was 64", dstIp: "unchanged" },
+            }),
+            panel: { type: "router", states: finalStates, sent: "eth1" },
+          });
+        } else {
+          steps.push({
+            id: "forward",
+            title: "The router forwards the packet along the default route",
+            macHelp: true,
+            teach:
+              "The router sends the packet out of **eth3**, the uplink towards the rest of the network. It wraps the packet in a **new frame** addressed to the **next router's MAC address**, which it finds in its own ARP cache, reduces the **TTL** from 64 to 63, and leaves both IP addresses unchanged. The next router makes its own decision in exactly the same way, using its own routing table, and so on, hop by hop. One more change happens later: `" +
+              PC1.ip +
+              "` is a **private IP address**, so a router at the edge of the organisation's network will use **NAT** to replace it with a public IP address before the packet reaches the internet.",
+            focus: ["router"],
+            routeStates: finalStates,
+            motion: [[{ kind: "icmp", from: "r", to: "up" }]],
+            frame: icmpFrame(dest, {
+              caption: "New frame sent out of eth3",
+              srcMac: ROUTER.eth3.mac,
+              dstMac: NEXT_ROUTER_MAC,
+              ttl: 63,
+              tags: { srcMac: "router eth3", dstMac: "next router", ttl: "was 64", dstIp: "unchanged" },
+            }),
+            panel: { type: "router", states: finalStates, sent: "eth3" },
+          });
+        }
+        return steps;
+      }
+
+      // Where packets rest when a step has no animation of its own: wherever
+      // the most recent movement left them.
+      function computeRest(steps) {
+        let current = [];
+        return steps.map((step) => {
+          if (step.motion) current = step.motion[step.motion.length - 1];
+          return current;
+        });
+      }
+
+      const SCENARIOS = [
+        {
+          id: "local",
+          letter: "A",
+          label: "A: Destination on this subnet",
+          summary: "PC1 pings PC3, on the same subnet",
+          dest: { ip: PC3.ip, mac: PC3.mac, intro: "**PC3**, on the same switch," },
+          names: { pc1: "PC1 (sender)", pc3: "PC3 (destination)" },
+          examPoints: [
+            "A computer finds its own network identifier by ==ANDing its IP address with its subnet mask==.",
+            "To test a destination, it ==ANDs the destination IP address with its own subnet mask==, because it cannot know the destination's mask.",
+            "If the two network identifiers are the same, the destination is on the same subnet, so the frame is addressed directly to the destination's MAC address and delivered through the switch.",
+            "The MAC address comes from the computer's ARP cache: a table of IP addresses and MAC addresses for devices on its own subnet.",
+            "A switch forwards a frame using the destination MAC address and its MAC address table, never the IP address.",
+          ],
+        },
+        {
+          id: "remote",
+          letter: "B",
+          label: "B: Destination on another subnet",
+          summary: "PC1 pings 192.168.20.25, on another subnet",
+          dest: {
+            ip: "192.168.20.25",
+            mac: "B8:27:EB:20:00:25",
+            intro: "a computer elsewhere in the building, on the 192.168.20.0 subnet,",
+          },
+          names: { pc1: "PC1 (sender)", pc3: "PC3" },
+          examPoints: [
+            "A computer ==ANDs both its own IP address and the destination IP address with its own subnet mask==.",
+            "If the network identifiers differ, the frame is addressed to the MAC address of the default gateway: the router's interface on the computer's own subnet.",
+            "The destination IP address does not change on the way; the MAC addresses change at every hop.",
+            "A router ==ANDs the destination IP address with each route's own subnet mask== and compares the answer with that route's network identifier, trying the most specific routes first.",
+            "The router sends the packet out of the matching route's interface, in a new frame, with the TTL reduced by one.",
+          ],
+        },
+        {
+          id: "default",
+          letter: "C",
+          label: "C: No matching subnet (default route)",
+          summary: "PC1 pings 192.0.2.34, a server on the internet",
+          dest: { ip: "192.0.2.34", intro: "a web server on the internet" },
+          names: { pc1: "PC1 (sender)", pc3: "PC3" },
+          examPoints: [
+            "A destination that is not on the computer's own subnet is sent to its default gateway.",
+            "The router checks the destination against each route in turn, ==ANDing it with that route's subnet mask==.",
+            "When no specific route matches, the default route, 0.0.0.0 /0, is used. ==ANDing any address with its all-zero mask== gives 0.0.0.0, so it matches every address and is always tried last.",
+            "The default route leads to the next router, which makes its own routing decision; the journey continues hop by hop.",
+            "A private source address such as 192.168.10.11 is replaced using NAT at the edge of the organisation's network before the packet reaches the internet.",
+          ],
+        },
+      ];
+
+      SCENARIOS.forEach((scenario) => {
+        scenario.steps = buildSteps(scenario);
+        scenario.rest = computeRest(scenario.steps);
+      });
+
+      /* ---------------------------- diagram ---------------------------- */
+
+      const SVG_TEXT = "fill-slate-800 dark:fill-slate-100";
+      const SVG_MUTED = "fill-slate-600 dark:fill-slate-300";
+      const SVG_HALO = "stroke-white dark:stroke-slate-900";
+
+      // Packet routes across the drawing, following the cables. A leg can be
+      // travelled either way.
+      const LEGS = {
+        "pc1>sw": [[190, 384], [190, 360], [440, 360], [440, 326], [500, 299]],
+        "pc3>sw": [[810, 384], [810, 360], [560, 360], [560, 326], [500, 299]],
+        "r>sw": [[500, 206], [500, 299]],
+        "r>lan2": [[500, 206], [500, 158], [130, 158]],
+        "r>up": [[500, 206], [500, 158], [500, 90]],
+      };
+
+      const legPoints = (from, to) => {
+        if (LEGS[from + ">" + to]) return LEGS[from + ">" + to];
+        if (LEGS[to + ">" + from]) return LEGS[to + ">" + from].slice().reverse();
+        throw new Error("No cable from " + from + " to " + to);
+      };
+
+      const pointAlong = (points, fraction) => {
+        const lengths = [];
+        let total = 0;
+        for (let index = 1; index < points.length; index += 1) {
+          const length = Math.hypot(points[index][0] - points[index - 1][0], points[index][1] - points[index - 1][1]);
+          lengths.push(length);
+          total += length;
+        }
+        let remaining = fraction * total;
+        for (let index = 0; index < lengths.length; index += 1) {
+          if (remaining <= lengths[index] || index === lengths.length - 1) {
+            const share = lengths[index] === 0 ? 1 : Math.min(1, remaining / lengths[index]);
+            const [x1, y1] = points[index];
+            const [x2, y2] = points[index + 1];
+            return [x1 + (x2 - x1) * share, y1 + (y2 - y1) * share];
+          }
+          remaining -= lengths[index];
+        }
+        return points[points.length - 1];
+      };
+
+      const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+      const MOVE_MS = 1150;
+      const PHASE_GAP_MS = 160;
+
+      function Token() {
+        return (
+          <g>
+            <rect
+              x={-36}
+              y={-15}
+              width={72}
+              height={30}
+              rx={9}
+              strokeWidth={2}
+              className="fill-indigo-600 stroke-white dark:stroke-slate-900"
+            />
+            <text x={0} y={5} textAnchor="middle" fontSize={15} fontWeight={700} className="fill-white">
+              Ping
+            </text>
+          </g>
+        );
+      }
+
+      // Moves packets by writing SVG attributes directly, so an animation
+      // frame never re-renders React. The initial render is the finished
+      // state; the layout effect rewinds it to the start before painting.
+      function PacketLayer({ phases, animate }) {
+        const refs = useRef([]);
+        const movers = useMemo(() => {
+          const list = [];
+          phases.forEach((phase, phaseIndex) =>
+            phase.forEach((mover) =>
+              list.push(Object.assign({}, mover, { phase: phaseIndex, points: legPoints(mover.from, mover.to) })),
+            ),
+          );
+          return list;
+        }, [phases]);
+        const lastPhase = phases.length - 1;
+
+        useLayoutEffect(() => {
+          if (!animate || movers.length === 0) return undefined;
+          const total = lastPhase * (MOVE_MS + PHASE_GAP_MS) + MOVE_MS;
+
+          const place = (elapsed) => {
+            movers.forEach((mover, index) => {
+              const element = refs.current[index];
+              if (!element) return;
+              const start = mover.phase * (MOVE_MS + PHASE_GAP_MS);
+              const progress = Math.max(0, Math.min(1, (elapsed - start) / MOVE_MS));
+              const visible =
+                mover.phase === lastPhase
+                  ? elapsed >= start
+                  : elapsed >= start && elapsed < start + MOVE_MS + PHASE_GAP_MS;
+              const [x, y] = pointAlong(mover.points, easeInOut(progress));
+              element.setAttribute("transform", "translate(" + x.toFixed(1) + " " + y.toFixed(1) + ")");
+              element.setAttribute("opacity", visible ? "1" : "0");
+            });
+          };
+
+          if (prefersReducedMotion()) {
+            place(total);
+            return undefined;
+          }
+
+          place(0);
+          const begin = performance.now();
+          let frame = 0;
+          const tick = (now) => {
+            const elapsed = now - begin;
+            place(elapsed);
+            if (elapsed < total) frame = requestAnimationFrame(tick);
+          };
+          frame = requestAnimationFrame(tick);
+          // Animation frames stop in a hidden tab; make sure the packets
+          // still finish where the step says they are.
+          const settle = setTimeout(() => place(total), total + 300);
+          return () => {
+            cancelAnimationFrame(frame);
+            clearTimeout(settle);
+          };
+        }, [movers, animate, lastPhase]);
+
+        return (
+          <g aria-hidden="true">
+            {movers.map((mover, index) => {
+              const [x, y] = mover.points[mover.points.length - 1];
+              return (
+                <g
+                  key={index}
+                  ref={(element) => {
+                    refs.current[index] = element;
+                  }}
+                  transform={"translate(" + x + " " + y + ")"}
+                  opacity={mover.phase === lastPhase ? 1 : 0}
+                >
+                  <Token />
+                </g>
+              );
+            })}
+          </g>
+        );
+      }
+
+      function Arrow({ x1, x2, y, y1 = y, y2 = y }) {
+        const length = Math.hypot(x2 - x1, y2 - y1);
+        const ux = (x2 - x1) / length;
+        const uy = (y2 - y1) / length;
+        const baseX = x2 - ux * 10;
+        const baseY = y2 - uy * 10;
+        const head =
+          "M " + x2 + " " + y2 +
+          " L " + (baseX - uy * 5) + " " + (baseY + ux * 5) +
+          " L " + (baseX + uy * 5) + " " + (baseY - ux * 5) + " Z";
+        return (
+          <g>
+            <line x1={x1} y1={y1} x2={x2 - ux * 6} y2={y2 - uy * 6} strokeWidth={3} strokeLinecap="round" className="stroke-white" />
+            <path d={head} className="fill-white" />
+          </g>
+        );
+      }
+
+      function FocusRing({ x, y, width, height, and }) {
+        return (
+          <rect
+            x={x}
+            y={y}
+            width={width}
+            height={height}
+            rx={14}
+            strokeWidth={and ? 3 : 2}
+            className={
+              and
+                ? "fill-fuchsia-50 stroke-fuchsia-500 dark:fill-fuchsia-950 dark:stroke-fuchsia-400"
+                : "fill-indigo-50 stroke-indigo-400 dark:fill-indigo-950 dark:stroke-indigo-400"
+            }
+          />
+        );
+      }
+
+      // Marks the device that is applying a subnet mask at this step.
+      function AndPill({ cx, cy, label }) {
+        const width = label.length * 8.6 + 26;
+        return (
+          <g>
+            <rect
+              x={cx - width / 2}
+              y={cy - 14}
+              width={width}
+              height={28}
+              rx={14}
+              strokeWidth={2}
+              className="fill-white stroke-fuchsia-500 dark:fill-slate-900 dark:stroke-fuchsia-400"
+            />
+            <text x={cx} y={cy + 5} textAnchor="middle" fontSize={15} fontWeight={700} className="fill-fuchsia-700 dark:fill-fuchsia-300">
+              {label}
+            </text>
+          </g>
+        );
+      }
+
+      function Computer({ x, name, host, screen }) {
+        return (
+          <g transform={"translate(" + x + " 400)"}>
+            <rect x={-60} y={0} width={120} height={78} rx={7} className="fill-slate-700 dark:fill-slate-500" />
+            <rect
+              x={-52}
+              y={8}
+              width={104}
+              height={62}
+              rx={3}
+              className={screen ? "fill-slate-900" : "fill-sky-100 dark:fill-sky-900"}
+            />
+            {screen &&
+              screen.map((line, index) => (
+                <text key={index} x={0} y={33 + index * 20} textAnchor="middle" fontSize={12} className="svg-mono fill-emerald-300">
+                  {line}
+                </text>
+              ))}
+            <rect x={-9} y={78} width={18} height={14} className="fill-slate-500 dark:fill-slate-400" />
+            <rect x={-34} y={92} width={68} height={7} rx={3} className="fill-slate-500 dark:fill-slate-400" />
+            <text x={0} y={123} textAnchor="middle" fontSize={19} fontWeight={700} className={SVG_TEXT}>
+              {name}
+            </text>
+            <text x={0} y={144} textAnchor="middle" fontSize={16} className={"svg-mono " + SVG_TEXT}>
+              {host.ip}
+            </text>
+            <text x={0} y={163} textAnchor="middle" fontSize={14} className={"svg-mono " + SVG_MUTED}>
+              {"MAC " + host.mac}
+            </text>
+          </g>
+        );
+      }
+
+      function PortBadge({ x, y, port }) {
+        return (
+          <g>
+            <circle cx={x} cy={y} r={11} strokeWidth={2} className="fill-white stroke-slate-500 dark:fill-slate-800 dark:stroke-slate-400" />
+            <text x={x} y={y + 5} textAnchor="middle" fontSize={14} fontWeight={700} className={SVG_TEXT}>
+              {port}
+            </text>
+          </g>
+        );
+      }
+
+      // Where each route's wire is, for highlighting it and tagging the
+      // result of the check beside its label.
+      const ROUTE_WIRES = {
+        lan3: { x1: 572, y1: 158, x2: 976, y2: 158, tagX: 960, tagY: 210, anchor: "end" },
+        lan1: { x1: 500, y1: 191, x2: 500, y2: 272, tagX: 486, tagY: 246, anchor: "end" },
+        lan2: { x1: 428, y1: 158, x2: 24, y2: 158, tagX: 40, tagY: 210, anchor: "start" },
+        default: { x1: 500, y1: 125, x2: 500, y2: 58, tagX: 398, tagY: 122, anchor: "end" },
+      };
+
+      function RouteMarks({ routeStates }) {
+        return (
+          <React.Fragment>
+            {ROUTES.map((route) => {
+              const state = routeStates[route.id];
+              if (!state || !state.current) return null;
+              const wire = ROUTE_WIRES[route.id];
+              return (
+                <line
+                  key={route.id}
+                  x1={wire.x1}
+                  y1={wire.y1}
+                  x2={wire.x2}
+                  y2={wire.y2}
+                  strokeWidth={16}
+                  strokeLinecap="round"
+                  opacity={0.75}
+                  className={
+                    state.result === "match"
+                      ? "stroke-emerald-300 dark:stroke-emerald-700"
+                      : "stroke-rose-200 dark:stroke-rose-900"
+                  }
+                />
+              );
+            })}
+          </React.Fragment>
+        );
+      }
+
+      function RouteTags({ routeStates }) {
+        return (
+          <React.Fragment>
+            {ROUTES.map((route) => {
+              const state = routeStates[route.id];
+              if (!state) return null;
+              const wire = ROUTE_WIRES[route.id];
+              const matched = state.result === "match";
+              return (
+                <text
+                  key={route.id}
+                  x={wire.tagX}
+                  y={wire.tagY}
+                  textAnchor={wire.anchor}
+                  fontSize={16}
+                  fontWeight={700}
+                  strokeWidth={4}
+                  style={{ paintOrder: "stroke" }}
+                  className={
+                    (matched ? "fill-emerald-700 dark:fill-emerald-300 " : "fill-rose-700 dark:fill-rose-300 ") + SVG_HALO
+                  }
+                >
+                  {matched ? "✓ match: out of " + route.iface : "✗ no match"}
+                </text>
+              );
+            })}
+          </React.Fragment>
+        );
+      }
+
+      function Diagram({ scenario, step, restTokens, animate, runKey }) {
+        const focus = new Set(step.focus || []);
+        const routeStates = step.routeStates || {};
+        const screens = Object.assign({ pc1: ["C:\\> ping", scenario.dest.ip] }, step.screens || {});
+        const phases = useMemo(
+          () => (step.motion && animate ? step.motion : [restTokens]),
+          [step, animate, restTokens],
+        );
+
+        return (
+          <svg
+            viewBox="0 0 1000 580"
+            preserveAspectRatio="xMidYMid meet"
+            className="diagram-svg"
+            role="img"
+            aria-labelledby="diagram-title diagram-desc"
+          >
+            <title id="diagram-title">Network diagram</title>
+            <desc id="diagram-desc">
+              PC1 (192.168.10.11), PC2 (192.168.10.12) and PC3 (192.168.10.13) are connected
+              to ports 1 to 3 of a switch on subnet 192.168.10.0 /24. Port 4 of the switch
+              connects to router R1's eth0 interface, 192.168.10.1. The router also connects
+              to subnet 192.168.20.0 /24 on eth1, subnet 192.168.30.128 /25 on eth2, and an
+              uplink towards the internet on eth3, which is its default route.
+            </desc>
+
+            {/* The zoomed-in subnet */}
+            <rect
+              x={16}
+              y={222}
+              width={968}
+              height={352}
+              rx={18}
+              strokeWidth={2}
+              strokeDasharray="10 8"
+              className="fill-sky-50 stroke-slate-400 dark:fill-slate-800/40 dark:stroke-slate-500"
+            />
+            <text x={36} y={250} fontSize={18} fontWeight={700} className={"svg-mono " + SVG_TEXT}>
+              Subnet 192.168.10.0 /24
+            </text>
+            <text x={36} y={270} fontSize={15} className={"svg-mono " + SVG_MUTED}>
+              mask 255.255.255.0
+            </text>
+
+            {focus.has("pc1") && <FocusRing x={94} y={392} width={192} height={178} and={step.andAt === "pc1"} />}
+            {focus.has("pc3") && <FocusRing x={714} y={392} width={192} height={178} />}
+            {focus.has("sw") && <FocusRing x={382} y={264} width={236} height={70} />}
+            {focus.has("router") && <FocusRing x={410} y={116} width={180} height={88} and={step.andAt === "router"} />}
+
+            <RouteMarks routeStates={routeStates} />
+
+            {/* Cables */}
+            <g fill="none" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" className="stroke-slate-500 dark:stroke-slate-400">
+              <line x1={500} y1={125} x2={500} y2={58} />
+              <line x1={428} y1={158} x2={80} y2={158} />
+              <line x1={80} y1={158} x2={24} y2={158} strokeDasharray="4 9" />
+              <line x1={572} y1={158} x2={920} y2={158} />
+              <line x1={920} y1={158} x2={976} y2={158} strokeDasharray="4 9" />
+              <line x1={500} y1={191} x2={500} y2={272} />
+              <polyline points="190,400 190,360 440,360 440,326" />
+              <line x1={500} y1={400} x2={500} y2={326} />
+              <polyline points="810,400 810,360 560,360 560,326" />
+            </g>
+
+            {/* Towards the internet */}
+            <g transform="translate(500 34)" className="fill-slate-200 dark:fill-slate-700">
+              <circle cx={-58} cy={6} r={18} />
+              <circle cx={-24} cy={-6} r={24} />
+              <circle cx={18} cy={-8} r={22} />
+              <circle cx={56} cy={4} r={19} />
+              <rect x={-84} y={2} width={168} height={22} rx={11} />
+            </g>
+            <text x={500} y={50} textAnchor="middle" fontSize={15} fontWeight={600} className={SVG_TEXT}>
+              towards the internet
+            </text>
+            <text x={455} y={96} textAnchor="end" fontSize={18} fontWeight={700} className={"svg-mono " + SVG_TEXT}>
+              Default route 0.0.0.0 /0
+            </text>
+            <text x={545} y={88} fontSize={15} fontWeight={700} className={SVG_TEXT}>
+              eth3 uplink
+            </text>
+            <text x={545} y={106} fontSize={15} className={SVG_MUTED}>
+              to the next router
+            </text>
+
+            {/* Other internal subnets */}
+            <text x={40} y={138} fontSize={18} fontWeight={700} className={"svg-mono " + SVG_TEXT}>
+              Subnet 192.168.20.0 /24
+            </text>
+            <text x={40} y={186} fontSize={15} className={"svg-mono " + SVG_MUTED}>
+              mask 255.255.255.0
+            </text>
+            <text x={418} y={146} textAnchor="end" fontSize={15} fontWeight={700} className={SVG_TEXT}>
+              eth1
+            </text>
+            <text x={418} y={186} textAnchor="end" fontSize={15} className={"svg-mono " + SVG_MUTED}>
+              {ROUTER.eth1.ip}
+            </text>
+
+            <text x={960} y={138} textAnchor="end" fontSize={18} fontWeight={700} className={"svg-mono " + SVG_TEXT}>
+              Subnet 192.168.30.128 /25
+            </text>
+            <text x={960} y={186} textAnchor="end" fontSize={15} className={"svg-mono " + SVG_MUTED}>
+              mask 255.255.255.128
+            </text>
+            <text x={582} y={146} fontSize={15} fontWeight={700} className={SVG_TEXT}>
+              eth2
+            </text>
+            <text x={582} y={186} fontSize={15} className={"svg-mono " + SVG_MUTED}>
+              {ROUTER.eth2.ip}
+            </text>
+
+            {/* Router R1 */}
+            <g transform="translate(500 158)">
+              <rect x={-72} y={-18} width={144} height={36} className="fill-teal-700 dark:fill-teal-600" />
+              <ellipse cx={0} cy={18} rx={72} ry={15} className="fill-teal-700 dark:fill-teal-600" />
+              <ellipse cx={0} cy={-18} rx={72} ry={15} className="fill-teal-500 dark:fill-teal-400" />
+              {/* The conventional router symbol: two arrows in, two out. */}
+              <Arrow x1={-10} y1={-21} x2={-48} y2={-28} />
+              <Arrow x1={10} y1={-15} x2={48} y2={-8} />
+              <Arrow x1={48} y1={-28} x2={12} y2={-21} />
+              <Arrow x1={-48} y1={-8} x2={-12} y2={-15} />
+              <text x={0} y={16} textAnchor="middle" fontSize={16} fontWeight={700} className="fill-white">
+                Router R1
+              </text>
+            </g>
+            <text x={518} y={246} fontSize={15} fontWeight={700} className={SVG_TEXT}>
+              eth0 <tspan className="svg-mono" fontWeight={400}>{ROUTER.eth0.ip}</tspan>
+            </text>
+            <text x={518} y={264} fontSize={14} className={SVG_MUTED}>
+              PC1's default gateway
+            </text>
+
+            {/* Switch */}
+            <g transform="translate(500 299)">
+              <rect x={-110} y={-27} width={220} height={54} rx={8} className="fill-sky-700 dark:fill-sky-600" />
+              <Arrow x1={-84} x2={-26} y={-9} />
+              <Arrow x1={26} x2={84} y={-9} />
+              <Arrow x1={-26} x2={-84} y={11} />
+              <Arrow x1={84} x2={26} y={11} />
+            </g>
+            <text x={625} y={294} fontSize={19} fontWeight={700} className={SVG_TEXT}>
+              Switch
+            </text>
+            <text x={625} y={314} fontSize={15} className={SVG_MUTED}>
+              reads MAC addresses
+            </text>
+            <PortBadge x={440} y={344} port={1} />
+            <PortBadge x={500} y={344} port={2} />
+            <PortBadge x={560} y={344} port={3} />
+            <PortBadge x={500} y={250} port={4} />
+
+            <Computer x={190} name={scenario.names.pc1} host={PC1} screen={screens.pc1} />
+            <Computer x={500} name="PC2" host={PC2} screen={screens.pc2} />
+            <Computer x={810} name={scenario.names.pc3} host={PC3} screen={screens.pc3} />
+
+            <RouteTags routeStates={routeStates} />
+
+            {step.andAt === "pc1" && <AndPill cx={190} cy={386} label="IP AND subnet mask" />}
+            {step.andAt === "router" && <AndPill cx={336} cy={207} label="IP AND route mask" />}
+
+            <PacketLayer key={runKey} phases={phases} animate={Boolean(step.motion && animate)} />
+          </svg>
+        );
+      }
+
+      /* --------------------------- frame strip -------------------------- */
+
+      function Field({ label, value, tag, and }) {
+        const unknown = value == null;
+        return (
+          <div
+            className={
+              "min-w-0 rounded border px-1.5 py-0.5 " +
+              (unknown
+                ? "border-dashed border-amber-500 bg-amber-50 dark:border-amber-400 dark:bg-amber-950/40"
+                : and
+                  ? "border-2 border-fuchsia-500 bg-fuchsia-50 dark:border-fuchsia-400 dark:bg-fuchsia-950/60"
+                  : tag
+                    ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/70"
+                    : "border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-950")
+            }
+          >
+            <div className="flex items-center gap-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+              <span className="whitespace-nowrap">{label}</span>
+              {tag && !unknown && (
+                <span
+                  className={
+                    "whitespace-nowrap rounded px-1 text-[9px] leading-[14px] " +
+                    (and
+                      ? "bg-fuchsia-700 text-white dark:bg-fuchsia-300 dark:text-fuchsia-950"
+                      : "bg-indigo-700 text-white dark:bg-indigo-300 dark:text-indigo-950")
+                  }
+                >
+                  {tag}
+                </span>
+              )}
+            </div>
+            <div
+              className={
+                "mono whitespace-nowrap text-xs font-bold " +
+                (unknown
+                  ? "text-amber-800 dark:text-amber-200"
+                  : and
+                    ? AND_TEXT
+                    : "text-slate-900 dark:text-slate-50")
+              }
+            >
+              {unknown ? "? not known yet" : value}
+            </div>
+          </div>
+        );
+      }
+
+      // Laid out like a packet format diagram: one row of fields, with a bar
+      // beneath each group saying which layer added it.
+      // The growing group keeps a sensible minimum, so on a narrow screen it
+      // wraps onto its own line instead of squeezing and overflowing.
+      function LayerGroup({ bar, label, grow, children }) {
+        return (
+          <div className={grow ? "min-w-[min(22rem,100%)] flex-1" : "shrink-0"}>
+            <div className="flex flex-wrap items-stretch gap-1">{children}</div>
+            <p className={"mt-1 border-t-4 pt-0.5 text-[10px] font-bold " + bar}>{label}</p>
+          </div>
+        );
+      }
+
+      function FrameStrip({ frame }) {
+        const tags = frame.tags || {};
+        const and = new Set(frame.andFields || []);
+        return (
+          <section
+            aria-labelledby="frame-heading"
+            className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 pb-2 pt-2 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <h2
+              id="frame-heading"
+              className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+            >
+              {frame.caption}
+            </h2>
+            <div className="flex flex-wrap items-end gap-x-2 gap-y-2">
+              {frame.removedLink ? (
+                <LayerGroup
+                  bar="border-dashed border-slate-400 text-slate-600 dark:border-slate-500 dark:text-slate-300"
+                  label="Frame header removed"
+                >
+                  <div className="flex items-center rounded border border-dashed border-slate-400 px-2 py-0.5 text-[11px] font-bold text-slate-600 dark:border-slate-500 dark:text-slate-300">
+                    MAC addresses discarded
+                  </div>
+                </LayerGroup>
+              ) : (
+                <LayerGroup
+                  bar="border-sky-600 text-sky-800 dark:border-sky-500 dark:text-sky-300"
+                  label="Link-layer frame header"
+                >
+                  <Field label="Destination MAC" value={frame.dstMac} tag={tags.dstMac} />
+                  <Field label="Source MAC" value={frame.srcMac} tag={tags.srcMac} />
+                </LayerGroup>
+              )}
+              <LayerGroup
+                grow
+                bar="border-teal-600 text-teal-800 dark:border-teal-500 dark:text-teal-300"
+                label="IP packet (network layer): header, then the ICMP data it carries"
+              >
+                <Field label="Source IP" value={frame.srcIp} tag={tags.srcIp} and={and.has("srcIp")} />
+                <Field label="Destination IP" value={frame.dstIp} tag={tags.dstIp} and={and.has("dstIp")} />
+                <Field label="TTL" value={String(frame.ttl)} tag={tags.ttl} />
+                <div className="flex items-center rounded border border-slate-400 bg-white px-1.5 py-0.5 text-[11px] font-bold text-slate-800 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100">
+                  ICMP Echo Request
+                </div>
+              </LayerGroup>
+            </div>
+          </section>
+        );
+      }
+
+      /* ------------------------- explanation pane ------------------------ */
+
+      function Card({ id, title, accent, children }) {
+        return (
+          <section
+            aria-labelledby={id}
+            className={
+              "shrink-0 overflow-hidden rounded-lg border bg-white dark:bg-slate-900 " +
+              (accent ? "border-2 border-fuchsia-400 dark:border-fuchsia-500" : "border-slate-300 dark:border-slate-700")
+            }
+          >
+            <div
+              className={
+                "border-b px-3 py-2 " +
+                (accent
+                  ? "border-fuchsia-200 bg-fuchsia-50 dark:border-fuchsia-900 dark:bg-fuchsia-950/60"
+                  : "border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800")
+              }
+            >
+              <h3
+                id={id}
+                className={
+                  "text-xs font-bold uppercase tracking-wide " +
+                  (accent ? AND_TEXT : "text-slate-600 dark:text-slate-300")
+                }
+              >
+                {title}
+              </h3>
+            </div>
+            {children}
+          </section>
+        );
+      }
+
+      function StepCard({ scenario, step, stepIndex, total, onMacHelp }) {
+        return (
+          <section
+            aria-labelledby="step-heading"
+            className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Step {stepIndex + 1} of {total}
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                Scenario {scenario.letter}: {scenario.summary}
+              </p>
+            </div>
+            <div className="h-1.5 bg-slate-200 dark:bg-slate-800" aria-hidden="true">
+              <div
+                className="h-full bg-indigo-600 transition-all dark:bg-indigo-400"
+                style={{ width: ((stepIndex + 1) / total) * 100 + "%" }}
+              />
+            </div>
+            <div key={scenario.id + step.id} className="step-enter space-y-2 p-3" aria-live="polite">
+              {step.andAt && (
+                <p className="inline-flex items-center gap-1.5 rounded-full border border-fuchsia-400 bg-fuchsia-50 px-2.5 py-0.5 text-[11px] font-bold text-fuchsia-800 dark:border-fuchsia-500 dark:bg-fuchsia-950/60 dark:text-fuchsia-200">
+                  <span className="mono">AND</span>
+                  {step.andAt === "router" ? "The router applies a subnet mask" : "PC1 applies its subnet mask"}
+                </p>
+              )}
+              <h2 id="step-heading" className="text-lg font-bold leading-snug text-slate-900 dark:text-slate-50">
+                {step.title}
+              </h2>
+              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{renderRich(step.teach)}</p>
+              {step.note && (
+                <p className="rounded-md border-l-4 border-slate-400 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700 dark:border-slate-500 dark:bg-slate-950 dark:text-slate-300">
+                  {renderRich(step.note)}
+                </p>
+              )}
+              {step.macHelp && (
+                <button
+                  type="button"
+                  onClick={onMacHelp}
+                  aria-haspopup="dialog"
+                  className="inline-flex items-center gap-2 rounded-md border border-sky-500 bg-sky-50 px-3 py-1.5 text-sm font-bold text-sky-900 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-sky-600 dark:bg-sky-950/60 dark:text-sky-100 dark:hover:bg-sky-900"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-700 text-xs text-white dark:bg-sky-300 dark:text-sky-950"
+                  >
+                    ?
+                  </span>
+                  How does it know the MAC address?
+                </button>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      function MacHelpDialog({ open, onClose }) {
+        const dialogRef = useRef(null);
+
+        useEffect(() => {
+          const dialog = dialogRef.current;
+          if (!dialog) return undefined;
+          dialog.addEventListener("close", onClose);
+          return () => dialog.removeEventListener("close", onClose);
+        }, [onClose]);
+
+        useEffect(() => {
+          const dialog = dialogRef.current;
+          if (!dialog) return;
+          if (open && !dialog.open) dialog.showModal();
+          if (!open && dialog.open) dialog.close();
+        }, [open]);
+
+        const close = () => {
+          if (dialogRef.current && dialogRef.current.open) dialogRef.current.close();
+        };
+
+        // The dialog has no padding of its own, so a click whose target is the
+        // dialog element itself landed on the backdrop.
+        return (
+          <dialog
+            ref={dialogRef}
+            aria-labelledby="mac-help-heading"
+            onClick={(event) => {
+              if (event.target === dialogRef.current) close();
+            }}
+            onKeyDown={(event) => {
+              // Handled explicitly: not every embedded browser closes a modal
+              // dialog on Escape by itself.
+              if (event.key === "Escape") {
+                event.preventDefault();
+                close();
+              }
+            }}
+            className="m-auto w-[min(36rem,calc(100vw-2rem))] rounded-xl border border-slate-300 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+          >
+            <div className="max-h-[85vh] overflow-y-auto p-5">
+              <div className="flex items-start justify-between gap-4">
+                <h2 id="mac-help-heading" className="text-lg font-bold text-slate-900 dark:text-slate-50">
+                  How does it know the MAC address?
+                </h2>
+                <button
+                  type="button"
+                  onClick={close}
+                  aria-label="Close"
+                  className="shrink-0 rounded-md px-2 py-0.5 text-xl leading-none text-slate-600 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="mt-3 space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                <p>
+                  {renderRich(
+                    "Every computer and router keeps an **ARP cache**: a small table that matches IP addresses to MAC addresses for devices on its **own subnet**. It builds up from earlier conversations with those devices, and an entry is removed after a few minutes if it is not used.",
+                  )}
+                </p>
+                <p>Before sending a frame, the device looks in its ARP cache for:</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>{renderRich("the **destination's** IP address, if the destination is on the same subnet")}</li>
+                  <li>{renderRich("the **router's** IP address (the default gateway), if the destination is on another subnet.")}</li>
+                </ul>
+                <p>
+                  {renderRich(
+                    "If the address is **not** in the cache, the device finds the MAC address out first, using the **Address Resolution Protocol (ARP)**:",
+                  )}
+                </p>
+                <ol className="list-decimal space-y-1 pl-5">
+                  <li>
+                    {renderRich(
+                      "It sends an **ARP request** as a **broadcast**, to the MAC address `" +
+                        BROADCAST_MAC +
+                        "`, asking a question such as \"Who has `" +
+                        PC3.ip +
+                        "`?\"",
+                    )}
+                  </li>
+                  <li>
+                    {renderRich(
+                      "The switch **floods** the broadcast out of every port except the one it arrived on, so every device on the subnet receives it.",
+                    )}
+                  </li>
+                  <li>
+                    {renderRich(
+                      "Only the device that has that IP address replies, sending its MAC address straight back. Every other device ignores the request.",
+                    )}
+                  </li>
+                  <li>{renderRich("The answer is saved in the ARP cache, and the waiting frame can now be sent.")}</li>
+                </ol>
+                <p>
+                  {renderRich(
+                    "Routers do **not** forward broadcasts, so ARP can only find MAC addresses on the device's own subnet. That is another reason why a frame for a different subnet is always addressed to the router.",
+                  )}
+                </p>
+                <p className="rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  Background only: ARP is not named in the AQA specification.
+                </p>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={close}
+                  className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </dialog>
+        );
+      }
+
+      function BitString({ value, octetIndex, prefix }) {
+        return toBits(value)
+          .split("")
+          .map((bit, index) => {
+            const network = octetIndex * 8 + index < prefix;
+            return (
+              <span
+                key={index}
+                className={
+                  network
+                    ? "text-slate-900 dark:text-slate-100"
+                    : "bg-amber-100 text-slate-800 dark:bg-amber-900/70 dark:text-amber-50"
+                }
+              >
+                {bit}
+              </span>
+            );
+          });
+      }
+
+      function AndCard({ calc }) {
+        const prefix = maskPrefix(calc.mask.value);
+        const result = andIp(calc.ip.value, calc.mask.value);
+        const rows = [
+          { key: "ip", label: calc.ip.label, value: calc.ip.value },
+          { key: "mask", label: calc.mask.label, value: calc.mask.value },
+          { key: "result", label: calc.resultLabel, value: result, rule: "border-t-2 border-fuchsia-400 dark:border-fuchsia-500" },
+        ];
+        if (calc.compareTo) {
+          rows.push({
+            key: "compare",
+            label: calc.compareTo.label,
+            value: calc.compareTo.value,
+            rule: "border-t border-dashed border-slate-400 dark:border-slate-500",
+          });
+        }
+        const matched = calc.compareTo ? result === calc.compareTo.value : null;
+
+        return (
+          <Card id="calc-heading" title={calc.title} accent>
+            <div className="p-3">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[460px] border-collapse text-left">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <th scope="col" className="pb-0.5 pr-2 font-bold">
+                        <span className="sr-only">Value</span>
+                      </th>
+                      {[1, 2, 3, 4].map((number) => (
+                        <th key={number} scope="col" className="pb-0.5 pr-2 font-bold">
+                          Octet {number}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.key} className={row.rule || ""}>
+                        <th scope="row" className="whitespace-nowrap py-1 pr-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                          {row.key === "mask" && <span className={"mono " + AND_TEXT}>AND </span>}
+                          {row.key === "result" && <span className={AND_TEXT}>= </span>}
+                          <span className={row.key === "result" ? AND_TEXT : ""}>{row.label}</span>
+                        </th>
+                        {octets(row.value).map((value, index) => (
+                          <td key={index} className="whitespace-nowrap py-1 pr-2">
+                            <span
+                              className={
+                                "mono inline-block w-[3ch] text-right text-sm font-bold " +
+                                (row.key === "result" ? AND_TEXT : "text-slate-900 dark:text-slate-50")
+                              }
+                            >
+                              {value}
+                            </span>
+                            <span className="mono ml-1.5 text-[11px] tracking-wide">
+                              <BitString value={value} octetIndex={index} prefix={prefix} />
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+                <span>
+                  {prefix === 0
+                    ? "/0: the mask has no 1s, so every bit is cleared"
+                    : "/" + prefix + ": the first " + prefix + " bits are the network identifier"}
+                </span>
+                {prefix < 32 && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="mono rounded-sm bg-amber-100 px-1 text-slate-800 dark:bg-amber-900/70 dark:text-amber-50">
+                      0
+                    </span>
+                    shaded: the {32 - prefix} host identifier bits
+                  </span>
+                )}
+              </p>
+              {matched === null ? (
+                <p className="mt-2 rounded-md border border-fuchsia-300 bg-fuchsia-50 px-3 py-2 text-sm text-slate-800 dark:border-fuchsia-800 dark:bg-fuchsia-950/50 dark:text-slate-100">
+                  Network identifier: <span className={"mono font-bold " + AND_TEXT}>{result}</span>
+                </p>
+              ) : (
+                <p
+                  className={
+                    "mt-2 rounded-md border px-3 py-2 text-sm font-bold " +
+                    (matched
+                      ? "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-100"
+                      : "border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-100")
+                  }
+                >
+                  {matched ? "✓ " : "✗ "}
+                  <span className="mono">{result}</span>
+                  {matched ? " = " : " ≠ "}
+                  <span className="mono">{calc.compareTo.value}</span>
+                  {matched ? ": match" : ": no match"}
+                </p>
+              )}
+            </div>
+          </Card>
+        );
+      }
+
+      function CompareCard({ calc }) {
+        const box = "min-w-0 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 dark:border-slate-600 dark:bg-slate-950";
+        return (
+          <Card id="calc-heading" title="Compare the two network identifiers">
+            <div className="p-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                <div className={box}>
+                  <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{calc.left.label}</p>
+                  <p className="mono text-base font-bold text-slate-900 dark:text-slate-50">{calc.left.value}</p>
+                </div>
+                <p className="text-2xl font-bold text-slate-700 dark:text-slate-200">
+                  <span aria-hidden="true">{calc.same ? "=" : "≠"}</span>
+                  <span className="sr-only">{calc.same ? "equals" : "does not equal"}</span>
+                </p>
+                <div className={box}>
+                  <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{calc.right.label}</p>
+                  <p className="mono text-base font-bold text-slate-900 dark:text-slate-50">{calc.right.value}</p>
+                </div>
+              </div>
+              <p
+                className={
+                  "mt-2 rounded-md border px-3 py-2 text-sm font-bold " +
+                  (calc.same
+                    ? "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-100"
+                    : "border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-100")
+                }
+              >
+                {calc.same ? "✓ " : "✗ "}
+                {calc.verdict}
+              </p>
+            </div>
+          </Card>
+        );
+      }
+
+      const USED_TAG =
+        "ml-2 whitespace-nowrap rounded bg-indigo-700 px-1 font-sans text-[9px] font-bold uppercase tracking-wide text-white dark:bg-indigo-300 dark:text-indigo-950";
+
+      function HostPanel({ panel }) {
+        const host = panel.host === "pc3" ? PC3 : PC1;
+        const highlight = new Set(panel.highlight || []);
+        const settings = [
+          { key: "ip", label: "IP address", value: host.ip },
+          { key: "mask", label: "Subnet mask", value: MASK + " (/24)" },
+          { key: "gateway", label: "Default gateway", value: ROUTER.eth0.ip },
+          { key: "mac", label: "MAC address", value: host.mac },
+        ];
+        return (
+          <Card id="panel-heading" title={host.name + " network settings and ARP cache"}>
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-3 py-2 text-xs">
+              {settings.map((row) => (
+                <React.Fragment key={row.key}>
+                  <dt className="font-bold text-slate-600 dark:text-slate-300">{row.label}</dt>
+                  <dd className="mono text-slate-900 dark:text-slate-100">
+                    <span className={highlight.has(row.key) ? "font-bold" : ""}>{row.value}</span>
+                    {highlight.has(row.key) && <span className={USED_TAG}>used</span>}
+                  </dd>
+                </React.Fragment>
+              ))}
+            </dl>
+            <div className="border-t border-slate-200 px-3 py-2 dark:border-slate-700">
+              <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                ARP cache: IP address → MAC address, for devices on this subnet
+              </p>
+              <ul className="mono mt-1 space-y-1 text-xs">
+                {panel.arp.map((entry) => (
+                  <li
+                    key={entry.ip}
+                    className={
+                      "rounded border px-2 py-1 " +
+                      (entry.state
+                        ? "border-indigo-400 bg-indigo-50 text-slate-900 dark:border-indigo-500 dark:bg-indigo-950/60 dark:text-slate-50"
+                        : "border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200")
+                    }
+                  >
+                    {entry.ip} → {entry.mac}
+                    {entry.state === "hit" && <span className={USED_TAG}>{entry.note || "found"}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Card>
+        );
+      }
+
+      function SwitchPanel({ panel }) {
+        return (
+          <Card id="panel-heading" title="Switch MAC address table">
+            <div className="overflow-x-auto px-3 py-2">
+              <table className="w-full min-w-[380px] border-collapse text-left text-xs">
+                <thead>
+                  <tr className="text-slate-500 dark:text-slate-400">
+                    <th scope="col" className="py-1 pr-2 font-bold">Port</th>
+                    <th scope="col" className="py-1 pr-2 font-bold">MAC address</th>
+                    <th scope="col" className="py-1 pr-2 font-bold">Device (for reference)</th>
+                    <th scope="col" className="py-1 font-bold">This step</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SWITCH_TABLE.map((row) => {
+                    const forwarded = row.id === panel.forward;
+                    const action =
+                      row.id === panel.arrived ? "frame arrived here" : forwarded ? "forwarded out of this port only" : "";
+                    return (
+                      <tr
+                        key={row.id}
+                        className={
+                          "border-t border-slate-200 dark:border-slate-700 " +
+                          (forwarded ? "bg-indigo-50 dark:bg-indigo-950/60" : "")
+                        }
+                      >
+                        <td className="py-1 pr-2 font-bold text-slate-900 dark:text-slate-100">{row.port}</td>
+                        <td className="mono py-1 pr-2 text-slate-900 dark:text-slate-100">{row.mac}</td>
+                        <td className="py-1 pr-2 text-slate-600 dark:text-slate-300">{row.device}</td>
+                        <td
+                          className={
+                            "py-1 " +
+                            (forwarded ? "font-bold text-indigo-800 dark:text-indigo-200" : "text-slate-600 dark:text-slate-300")
+                          }
+                        >
+                          {action}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-2 text-[11px] text-slate-600 dark:text-slate-300">
+                The switch reads only the destination MAC address, then sends the frame out of the matching port.
+              </p>
+            </div>
+          </Card>
+        );
+      }
+
+      function RouterPanel({ panel, destIp }) {
+        const states = panel.states || {};
+        return (
+          <Card id="panel-heading" title="Router R1 routing table">
+            <div className="px-3 pt-2 text-xs text-slate-700 dark:text-slate-200">
+              Destination IP: <span className="mono font-bold">{destIp}</span>. Routes are tried from the longest
+              mask to the shortest.
+            </div>
+            <div className="overflow-x-auto px-3 py-2">
+              <table className="w-full min-w-[420px] border-collapse text-left text-xs">
+                <thead>
+                  <tr className="text-slate-500 dark:text-slate-400">
+                    <th scope="col" className="py-1 pr-2 font-bold">Network ID</th>
+                    <th scope="col" className="py-1 pr-2 font-bold">Subnet mask</th>
+                    <th scope="col" className="py-1 pr-2 font-bold">Out of</th>
+                    <th scope="col" className={"py-1 pr-2 font-bold " + AND_TEXT}>Dest AND mask</th>
+                    <th scope="col" className="py-1 font-bold">Match?</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ROUTES.map((route) => {
+                    const state = states[route.id];
+                    const matched = state && state.result === "match";
+                    return (
+                      <tr
+                        key={route.id}
+                        className={
+                          "border-t border-slate-200 dark:border-slate-700 " +
+                          (state && state.current
+                            ? matched
+                              ? "bg-emerald-50 dark:bg-emerald-950/60"
+                              : "bg-rose-50 dark:bg-rose-950/40"
+                            : "")
+                        }
+                      >
+                        <td className="py-1 pr-2 align-top">
+                          <span className="mono whitespace-nowrap font-bold text-slate-900 dark:text-slate-50">
+                            {route.network} /{route.prefix}
+                          </span>
+                          {route.id === "default" && (
+                            <span className="block text-[10px] text-slate-600 dark:text-slate-300">default route</span>
+                          )}
+                        </td>
+                        <td className="mono whitespace-nowrap py-1 pr-2 align-top text-slate-900 dark:text-slate-100">{route.mask}</td>
+                        <td className="py-1 pr-2 align-top text-slate-900 dark:text-slate-100">{route.iface}</td>
+                        <td
+                          className={
+                            "mono whitespace-nowrap py-1 pr-2 align-top " +
+                            (state ? "font-bold " + AND_TEXT : "text-slate-500 dark:text-slate-400")
+                          }
+                        >
+                          {state ? andIp(destIp, route.mask) : "—"}
+                        </td>
+                        <td
+                          className={
+                            "whitespace-nowrap py-1 align-top font-bold " +
+                            (!state
+                              ? "text-slate-500 dark:text-slate-400"
+                              : matched
+                                ? "text-emerald-800 dark:text-emerald-300"
+                                : "text-rose-700 dark:text-rose-300")
+                          }
+                        >
+                          {!state ? "—" : matched ? "✓ Yes" : "✗ No"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {panel.sent && (
+                <p className="mt-2 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                  Packet sent out of {panel.sent}, TTL 64 → 63.
+                </p>
+              )}
+            </div>
+          </Card>
+        );
+      }
+
+      function ContextPanel({ panel, destIp }) {
+        if (!panel) return null;
+        if (panel.type === "host") return <HostPanel panel={panel} />;
+        if (panel.type === "switch") return <SwitchPanel panel={panel} />;
+        return <RouterPanel panel={panel} destIp={destIp} />;
+      }
+
+      function SummaryCard({ scenario, nextScenario }) {
+        return (
+          <section
+            aria-labelledby="summary-heading"
+            className="step-enter shrink-0 rounded-lg border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/40"
+          >
+            <h2 id="summary-heading" className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
+              Scenario {scenario.letter} complete
+            </h2>
+            <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">{scenario.summary}. The key points:</p>
+            <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+              {scenario.examPoints.map((point) => (
+                <li key={point}>{renderRich(point)}</li>
+              ))}
+            </ul>
+            {nextScenario && (
+              <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">
+                Next, compare this with scenario {nextScenario.letter}: {nextScenario.summary}.
+              </p>
+            )}
+          </section>
+        );
+      }
+
+      /* --------------------------- resizable split --------------------------
+         A window-splitter between the diagram and the explanation. The share
+         is a percentage of the grid's content width, clamped so neither pane
+         becomes unusable, and remembered for this browser only. */
+
+      const SPLIT_KEY = "subnetMaskingDiagramShare";
+      const DEFAULT_SHARE = 61;
+      const DIVIDER_PX = 16;
+      const MIN_DIAGRAM_PX = 380;
+      const MIN_EXPLAIN_PX = 340;
+
+      const readShare = () => {
+        try {
+          const stored = Number(localStorage.getItem(SPLIT_KEY));
+          if (stored >= 20 && stored <= 85) return stored;
+        } catch (e) {}
+        return DEFAULT_SHARE;
+      };
+
+      const saveShare = (share) => {
+        try {
+          localStorage.setItem(SPLIT_KEY, String(Math.round(share * 10) / 10));
+        } catch (e) {}
+      };
+
+      const contentBox = (element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const paddingLeft = parseFloat(style.paddingLeft) || 0;
+        const paddingRight = parseFloat(style.paddingRight) || 0;
+        return { left: rect.left + paddingLeft, width: rect.width - paddingLeft - paddingRight };
+      };
+
+      const clampShare = (share, width) => {
+        const min = Math.max(20, (MIN_DIAGRAM_PX / width) * 100);
+        const max = Math.min(85, ((width - DIVIDER_PX - MIN_EXPLAIN_PX) / width) * 100);
+        if (min > max) return (min + max) / 2;
+        return Math.min(max, Math.max(min, share));
+      };
+
+      function Splitter({ share, onResize, containerRef }) {
+        const dragging = useRef(false);
+
+        const shareAt = (clientX) => {
+          const box = contentBox(containerRef.current);
+          return clampShare(((clientX - box.left - DIVIDER_PX / 2) / box.width) * 100, box.width);
+        };
+
+        const finish = () => {
+          if (!dragging.current) return;
+          dragging.current = false;
+          document.body.classList.remove("subnet-resizing");
+          saveShare(share);
+        };
+
+        return (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the diagram and explanation panels"
+            aria-controls="network-pane explanation-pane"
+            aria-valuemin={20}
+            aria-valuemax={85}
+            aria-valuenow={Math.round(share)}
+            aria-valuetext={"Diagram " + Math.round(share) + "% of the width"}
+            title="Drag to resize. Double-click to reset."
+            tabIndex={0}
+            onPointerDown={(event) => {
+              if (event.button !== 0 || !containerRef.current) return;
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              event.currentTarget.focus();
+              dragging.current = true;
+              document.body.classList.add("subnet-resizing");
+            }}
+            onPointerMove={(event) => {
+              if (dragging.current) onResize(shareAt(event.clientX));
+            }}
+            onPointerUp={finish}
+            onPointerCancel={finish}
+            onLostPointerCapture={finish}
+            onDoubleClick={() => {
+              const box = contentBox(containerRef.current);
+              const reset = clampShare(DEFAULT_SHARE, box.width);
+              onResize(reset);
+              saveShare(reset);
+            }}
+            onKeyDown={(event) => {
+              if (!containerRef.current) return;
+              const steps = { ArrowLeft: -2, ArrowRight: 2, Home: -100, End: 100 };
+              if (!(event.key in steps)) return;
+              event.preventDefault();
+              const box = contentBox(containerRef.current);
+              const next = clampShare(share + steps[event.key], box.width);
+              onResize(next);
+              saveShare(next);
+            }}
+            className="group relative hidden cursor-col-resize touch-none justify-center focus:outline-none lg:flex"
+          >
+            <div className="h-full w-0.5 rounded-full bg-slate-300 group-hover:bg-indigo-500 group-focus-visible:bg-indigo-500 dark:bg-slate-700 dark:group-hover:bg-indigo-400 dark:group-focus-visible:bg-indigo-400" />
+            <div className="absolute left-1/2 top-1/2 flex h-14 w-3 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-full border border-slate-400 bg-white shadow-sm group-hover:border-indigo-500 group-focus-visible:border-indigo-500 group-focus-visible:ring-2 group-focus-visible:ring-indigo-500 dark:border-slate-500 dark:bg-slate-800 dark:group-hover:border-indigo-400">
+              <span className="h-1 w-1 rounded-full bg-slate-500 dark:bg-slate-300" />
+              <span className="h-1 w-1 rounded-full bg-slate-500 dark:bg-slate-300" />
+              <span className="h-1 w-1 rounded-full bg-slate-500 dark:bg-slate-300" />
+            </div>
+          </div>
+        );
+      }
+
+      /* ------------------------------ app ----------------------------- */
+
+      function App() {
+        const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id);
+        const [stepIndex, setStepIndex] = useState(0);
+        const [run, setRun] = useState({ key: 0, animate: true });
+        const [share, setShare] = useState(readShare);
+        const [macHelpOpen, setMacHelpOpen] = useState(false);
+        const explainRef = useRef(null);
+        const mainRef = useRef(null);
+
+        const scenarioPosition = Math.max(0, SCENARIOS.findIndex((item) => item.id === scenarioId));
+        const scenario = SCENARIOS[scenarioPosition];
+        const nextScenario = SCENARIOS[scenarioPosition + 1] || null;
+        const steps = scenario.steps;
+        const done = stepIndex >= steps.length;
+        const shownIndex = Math.min(stepIndex, steps.length - 1);
+        const step = steps[shownIndex];
+        const animate = !done && run.animate;
+        const routerStep = Boolean(step.panel && step.panel.type === "router");
+
+        useEffect(() => {
+          if (explainRef.current) explainRef.current.scrollTop = 0;
+        }, [scenarioId, stepIndex]);
+
+        // Keep a remembered split usable when the window is narrower than
+        // when it was set.
+        useEffect(() => {
+          const fit = () => {
+            if (!mainRef.current || window.innerWidth < 1024) return;
+            const box = contentBox(mainRef.current);
+            if (box.width > 0) setShare((current) => clampShare(current, box.width));
+          };
+          fit();
+          window.addEventListener("resize", fit);
+          return () => window.removeEventListener("resize", fit);
+        }, []);
+
+        const closeMacHelp = useCallback(() => setMacHelpOpen(false), []);
+
+        const replay = () => setRun((current) => ({ key: current.key + 1, animate: true }));
+        const goTo = (index, shouldAnimate) => {
+          setStepIndex(index);
+          setRun((current) => ({ key: current.key + 1, animate: shouldAnimate }));
+        };
+        const moveBy = (delta, shouldAnimate) => {
+          setStepIndex((current) => Math.max(0, Math.min(steps.length, current + delta)));
+          setRun((current) => ({ key: current.key + 1, animate: shouldAnimate }));
+        };
+        const next = () => moveBy(1, true);
+        const back = () => moveBy(-1, false);
+        const changeScenario = (id) => {
+          setScenarioId(id);
+          goTo(0, true);
+        };
+
+        const secondaryButton =
+          "shrink-0 whitespace-nowrap rounded-md border border-slate-400 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-500 dark:text-slate-200 dark:hover:bg-slate-800";
+        const primaryButton =
+          "shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900";
+
+        return (
+          <div className="subnet-lab flex flex-col bg-slate-100 dark:bg-slate-950">
+            <header data-interactive-header className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">Subnet Masking Simulator</h1>
+                <p className="text-sm opacity-90">
+                  How a computer and a router use subnet masks to decide where a packet goes next
+                </p>
+              </div>
+              <div data-interactive-actions className="flex flex-wrap items-center gap-2">
+                <select
+                  id="scenario-select"
+                  aria-label="Scenario"
+                  value={scenarioId}
+                  onChange={(event) => changeScenario(event.target.value)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {SCENARIOS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </header>
+
+            <div
+              ref={mainRef}
+              className="subnet-main grid min-h-0 flex-1 gap-3 p-3 lg:gap-0 lg:overflow-hidden"
+              style={{ "--diagram-share": share + "%" }}
+            >
+              <section id="network-pane" aria-label="Network" className="flex min-w-0 flex-col gap-3 lg:min-h-0">
+                <div className="diagram-box rounded-lg border border-slate-300 bg-white p-2 lg:p-0 dark:border-slate-700 dark:bg-slate-900">
+                  <Diagram
+                    scenario={scenario}
+                    step={step}
+                    restTokens={scenario.rest[shownIndex]}
+                    animate={animate}
+                    runKey={scenario.id + "-" + shownIndex + "-" + run.key}
+                  />
+                </div>
+                <FrameStrip frame={step.frame} />
+              </section>
+
+              <Splitter share={share} onResize={setShare} containerRef={mainRef} />
+
+              <section
+                id="explanation-pane"
+                ref={explainRef}
+                aria-label="Explanation"
+                className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto"
+              >
+                {done ? (
+                  <SummaryCard scenario={scenario} nextScenario={nextScenario} />
+                ) : (
+                  <React.Fragment>
+                    <StepCard
+                      scenario={scenario}
+                      step={step}
+                      stepIndex={stepIndex}
+                      total={steps.length}
+                      onMacHelp={() => setMacHelpOpen(true)}
+                    />
+                    {/* At the router the table is the overview and each AND is
+                        the detail, so the table comes first; at a computer the
+                        calculation is the point and its settings support it. */}
+                    {routerStep && <ContextPanel panel={step.panel} destIp={scenario.dest.ip} />}
+                    {step.calc && step.calc.type === "and" && <AndCard calc={step.calc} />}
+                    {step.calc && step.calc.type === "compare" && <CompareCard calc={step.calc} />}
+                    {!routerStep && <ContextPanel panel={step.panel} destIp={scenario.dest.ip} />}
+                  </React.Fragment>
+                )}
+              </section>
+            </div>
+
+            <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => goTo(0, true)} className={secondaryButton}>
+                  Restart scenario
+                </button>
+                {!done && step.motion && (
+                  <button type="button" onClick={replay} className={secondaryButton}>
+                    Replay animation
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  {done ? "Scenario complete" : "Step " + (stepIndex + 1) + " of " + steps.length}
+                </p>
+                <button type="button" onClick={back} disabled={stepIndex === 0} className={secondaryButton}>
+                  ◀ Back
+                </button>
+                {!done && (
+                  <button type="button" onClick={next} className={primaryButton}>
+                    Next ▶
+                  </button>
+                )}
+                {done && nextScenario && (
+                  <button type="button" onClick={() => changeScenario(nextScenario.id)} className={primaryButton}>
+                    Scenario {nextScenario.letter} ▶
+                  </button>
+                )}
+                {done && !nextScenario && (
+                  <button type="button" onClick={() => changeScenario(SCENARIOS[0].id)} className={primaryButton}>
+                    Back to scenario A ▶
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <MacHelpDialog open={macHelpOpen} onClose={closeMacHelp} />
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

@@ -603,6 +603,42 @@ if (fs.existsSync(sshSimulatorPath)) {
   }
 }
 
+// The subnet masking page teaches two decisions that are easy to get subtly
+// wrong: the host masks the destination with its own mask, and the router
+// tries routes most-specific first so the default route is always last.
+const subnetMaskingPath = path.join(root, 'subnet_masking_simulator.html');
+if (fs.existsSync(subnetMaskingPath)) {
+  const subnetSource = fs.readFileSync(subnetMaskingPath, 'utf8');
+  if (!/\.subnet-lab\s*\{[^}]*height:\s*100vh/.test(subnetSource)
+    || !/body\[data-site-page="interactive"\]\s*\.subnet-lab\s*\{[^}]*height:\s*calc\(100vh - 58px\)/.test(subnetSource)) {
+    failures.push('subnet_masking_simulator.html: the app root must subtract the built site bar from the viewport height');
+  }
+  if (!/andIp\(dest\.ip, MASK\)/.test(subnetSource)) {
+    failures.push('subnet_masking_simulator.html: the sending host must AND the destination address with its own subnet mask');
+  }
+  const routesBlock = (subnetSource.match(/const ROUTES = \[([\s\S]*?)\];/) || [])[1] || '';
+  const prefixes = Array.from(routesBlock.matchAll(/prefix:\s*(\d+)/g), (match) => Number(match[1]));
+  const ordered = prefixes.every((prefix, index) => index === 0 || prefix <= prefixes[index - 1]);
+  if (prefixes.length < 2 || !ordered || prefixes[prefixes.length - 1] !== 0
+    || !/network: "0\.0\.0\.0", mask: "0\.0\.0\.0"/.test(routesBlock)) {
+    failures.push('subnet_masking_simulator.html: routes must be tried longest mask first, ending with the 0.0.0.0 /0 default route');
+  }
+  if (/\balert\s*\(/.test(subnetSource)) {
+    failures.push('subnet_masking_simulator.html: feedback must be inline, not a JavaScript alert');
+  }
+  // ARP is background for AQA, so it lives in an optional explainer rather
+  // than in the animated path.
+  if (!/How does it know the MAC address\?/.test(subnetSource) || !/\.showModal\(\)/.test(subnetSource)
+    || /arpRequest|arpReply/.test(subnetSource)) {
+    failures.push('subnet_masking_simulator.html: ARP must be explained in the MAC address dialog, not animated');
+  }
+  // The diagram/explanation divider must stay keyboard operable.
+  if (!/role="separator"/.test(subnetSource) || !/aria-valuenow=/.test(subnetSource)
+    || !/ArrowLeft/.test(subnetSource) || !/tabIndex=\{0\}/.test(subnetSource)) {
+    failures.push('subnet_masking_simulator.html: the pane divider must be a focusable separator with keyboard resizing');
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));
