@@ -639,6 +639,45 @@ if (fs.existsSync(subnetMaskingPath)) {
   }
 }
 
+// Check the bath's exact solutions against the specified flow laws, including
+// the finite emptying time that must not turn into a spurious refilling curve.
+{
+  const bathSource = fs.readFileSync(path.join(root, 'separable_differential_equations.html'), 'utf8');
+  const modelScript = bathSource.match(/<script id="bath-models">([\s\S]*?)<\/script>/);
+  if (!modelScript) {
+    failures.push('separable_differential_equations.html: missing bath models');
+  } else {
+    const models = require('vm').runInNewContext(`${modelScript[1]}; bathScenarios`, {}, { timeout: 1000 });
+    const expectedRates = {
+      fill: v => 5,
+      proportional: v => -0.05 * v,
+      sqrt: v => -Math.sqrt(v),
+      balanceUp: v => 7.5 - 0.05 * v,
+      balanceDown: v => 2.5 - 0.05 * v,
+    };
+    for (const [key, rate] of Object.entries(expectedRates)) {
+      const model = models[key];
+      if (!model || model.volume(0) !== 100) {
+        failures.push(`Bath ${key}: must start at 100 litres`);
+        continue;
+      }
+      for (const t of [0.1, model.duration / 2, model.duration - 0.1]) {
+        const v = model.volume(t);
+        const derivative = (model.volume(t + 0.0001) - model.volume(t - 0.0001)) / 0.0002;
+        if (v < 0 || v > 200 || Math.abs(derivative - rate(v)) > 1e-6
+          || Math.abs(model.inflow - model.outflow(v) - rate(v)) > 1e-9) {
+          failures.push(`Bath ${key}: volume, solution derivative and net flow disagree at ${t} minutes`);
+        }
+      }
+    }
+    if (models.fill.volume(20) !== 200 || models.sqrt.volume(20) !== 0 || models.sqrt.volume(30) !== 0
+      || models.proportional.volume(60) <= 0
+      || models.balanceUp.volume(60) >= 150 || models.balanceDown.volume(60) <= 50) {
+      failures.push('Bath models: preserve capacity, finite emptying and asymptotic equilibrium boundaries');
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));

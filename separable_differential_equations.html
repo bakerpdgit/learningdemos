@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Separable Differential Equations — The Bath Lab</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <style>
+    :root { color-scheme: light; --page: #f3f6fb; --card: #fff; --ink: #18253b; --muted: #53647a; --line: #dce4ee; --soft: #edf4fa; --blue: #087ba6; --purple: #5743bc; --bath: #fbfdff; --rim: #9aafc4; --shadow: 0 3px 16px #18324e09; }
+    html.dark { color-scheme: dark; --page: #0d1727; --card: #162336; --ink: #edf3fc; --muted: #a9bad0; --line: #33445b; --soft: #1b2e43; --blue: #62d6f5; --purple: #baadff; --bath: #22394c; --rim: #7c94ae; --shadow: 0 3px 16px #0002; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+    button, select, input { font: inherit; }
+    button, select, summary, input[type=range] { cursor: pointer; }
+    button, select { border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); padding: 9px 15px; }
+    button { font-weight: 650; white-space: nowrap; }
+    button:hover { background: var(--soft); }
+    :focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
+    h1, h2, p { margin: 0; }
+    h2 { font-size: 18px; letter-spacing: -.02em; }
+    [data-interactive-header] { background: #4338ca; color: white; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 28px; }
+    [data-interactive-header] h1 { font-size: 22px; }
+    [data-interactive-header] p { font-size: 13px; opacity: .85; }
+    [data-interactive-actions] { display: flex; gap: 12px; min-width: 0; }
+    main { max-width: 1192px; margin: 0 auto; padding: 22px 24px 32px; }
+    .intro { display: flex; align-items: center; gap: 18px; justify-content: space-between; margin-bottom: 18px; }
+    .intro p { max-width: 780px; margin-top: 5px; color: var(--muted); }
+    .initial { border: 1px solid var(--line); border-radius: 30px; padding: 7px 14px; white-space: nowrap; color: var(--muted); font-size: 13px; }
+    .lab { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px; }
+    .card, details { border: 1px solid var(--line); border-radius: 15px; background: var(--card); box-shadow: var(--shadow); min-width: 0; }
+    .simulation { overflow: hidden; }
+    .card-top { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 17px 20px 0; }
+    .eyebrow { font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); }
+    #volume { font-size: 25px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+    #direction { color: var(--blue); font-size: 13px; font-weight: 650; }
+    .bath-scene { width: 100%; height: 247px; display: block; }
+    svg text { font-family: "Segoe UI", system-ui, sans-serif; fill: var(--muted); font-size: 13px; }
+    .bath-body { fill: var(--bath); stroke: var(--rim); stroke-width: 7; }
+    .plumbing { fill: none; stroke: var(--rim); stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; }
+    .flow { stroke: #20aedb; fill: none; stroke-linecap: round; stroke-dasharray: 9 6; }
+    .running .flow { animation: flow .65s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -30; } }
+    @media (prefers-reduced-motion: reduce) { .running .flow { animation: none; } }
+    .rates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 20px 17px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
+    .rates > div { padding: 9px 12px; }
+    .rates > div + div { border-left: 1px solid var(--line); }
+    .rates span { display: block; font-size: 11px; color: var(--muted); }
+    .rates strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .rates small { font-size: 11px; font-weight: normal; color: var(--muted); }
+    .rates .net strong { color: var(--purple); }
+    .graph-card { padding: 17px 20px; display: flex; flex-direction: column; }
+    .graph-card h2 { font-size: 15px; }
+    .graph { width: 100%; flex: 1; min-height: 230px; }
+    .grid-line { fill: none; stroke: var(--line); stroke-width: 1; }
+    .axis { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+    .curve { fill: none; stroke: var(--blue); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+    .graph-note { color: var(--muted); font-size: 12px; min-height: 36px; }
+    .transport { margin: 18px 0; display: flex; align-items: center; gap: 18px; }
+    .timeline { flex: 1; min-width: 0; }
+    .timeline-top { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+    output { font-variant-numeric: tabular-nums; }
+    input[type=range] { width: 100%; margin: 8px 0 0; accent-color: #087ba6; }
+    .speed { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .speed select { padding: 9px; }
+    .playback { display: flex; gap: 9px; }
+    #play { background: #4338ca; border-color: #4338ca; color: white; min-width: 106px; }
+    #play:hover { background: #3730a3; }
+    .status { font-size: 12px; color: var(--muted); margin: -7px 0 18px; min-height: 18px; }
+    .explainers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+    summary { padding: 17px 20px; font-weight: 650; list-style: none; display: flex; align-items: center; gap: 10px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: '+'; margin-left: auto; color: var(--muted); font-size: 22px; font-weight: 400; }
+    details[open] summary::after { content: '−'; }
+    .number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; background: var(--soft); color: var(--purple); font-size: 12px; }
+    .explanation { padding: 0 20px 20px; border-top: 1px solid var(--line); font-size: 14px; }
+    .explanation p { margin-top: 14px; color: var(--muted); }
+    .step { padding: 15px 0 10px; border-bottom: 1px solid var(--line); }
+    .step:last-child { border-bottom: 0; padding-bottom: 0; }
+    .step h3 { margin: 0 0 5px; color: var(--muted); font-size: 12px; font-weight: 650; }
+    .math { overflow-x: auto; padding: 3px 0; }
+    .katex-display { margin: .5em 0; font-size: 1em; }
+    .answer { border-radius: 9px; background: var(--soft); padding: 6px 12px; margin-top: 8px; }
+    .math-error { color: var(--muted); font-size: 13px; }
+    @media (max-width: 760px) {
+      main { padding: 18px 16px 28px; }
+      .intro { align-items: flex-start; }
+      .initial { display: none; }
+      .lab, .explainers { grid-template-columns: minmax(0, 1fr); }
+      .transport { flex-wrap: wrap; gap: 12px; }
+      .timeline { flex-basis: 100%; }
+      .playback { margin-left: auto; }
+      .graph { height: 240px; flex: none; min-height: 0; }
+      .bath-scene { height: auto; max-height: 247px; }
+      [data-interactive-header] { flex-wrap: wrap; }
+    }
+    @media (max-width: 390px) {
+      .rates { margin-left: 12px; margin-right: 12px; }
+      .rates > div { padding: 9px 8px; }
+      .rates strong { font-size: 15px; }
+      .rates small { display: block; }
+      .explanation { padding-left: 12px; padding-right: 12px; }
+      .katex-display { font-size: .9em; }
+    }
+  </style>
+  <script src="scripts/site-shell.js"></script>
+</head>
+<body>
+  <header data-interactive-header>
+    <div><h1>Separable Differential Equations</h1><p>The bath lab</p></div>
+    <div data-interactive-actions>
+      <select id="scenario" aria-label="Bath scenario">
+        <option value="fill">1: Steady filling</option>
+        <option value="proportional">2: Proportional leak</option>
+        <option value="sqrt">3: Square-root leak</option>
+        <option value="balanceUp">4: Tap + leak — rising</option>
+        <option value="balanceDown">5: Tap + leak — falling</option>
+      </select>
+    </div>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="scenario-title">
+      <div><h2 id="scenario-title"></h2><p id="description"></p></div>
+      <span class="initial">Starts half-full · 100 of 200 L</span>
+    </section>
+    <div class="lab">
+      <section class="card simulation" aria-label="Bath simulation">
+        <div class="card-top"><div><div class="eyebrow">Water in the bath</div><div id="volume">100.0 L</div></div><span id="direction"></span></div>
+        <svg class="bath-scene" viewBox="0 0 580 270" role="img" aria-labelledby="bath-title bath-desc">
+          <title id="bath-title">Bath water level</title><desc id="bath-desc">The bath starts half-full at 100 litres.</desc>
+          <defs>
+            <clipPath id="bath-inside"><path d="M100 78 H450 V202 Q450 216 436 216 H114 Q100 216 100 202Z"/></clipPath>
+            <linearGradient id="water-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#62d5f0" stop-opacity=".86"/><stop offset="1" stop-color="#149bc9" stop-opacity=".92"/></linearGradient>
+          </defs>
+          <path class="plumbing" d="M80 69 V39 Q80 26 94 26 H130 Q142 26 142 39 V48"/>
+          <path d="M69 25 H90 M79 18 V31" stroke="var(--rim)" stroke-width="6" stroke-linecap="round"/>
+          <path class="plumbing" d="M388 218 V241 H445 V255"/>
+          <path class="bath-body" d="M94 76 H456 V202 Q456 225 434 225 H116 Q94 225 94 202Z"/>
+          <g clip-path="url(#bath-inside)">
+            <rect id="water" x="100" y="147" width="350" height="69" fill="url(#water-fill)"/>
+            <path id="surface" d="M100 147 H450" stroke="#087ba6" stroke-width="2" fill="none"/>
+          </g>
+          <path d="M86 76 H464" stroke="var(--rim)" stroke-width="10" stroke-linecap="round"/>
+          <path d="M129 229 V239 M420 229 V239" stroke="var(--rim)" stroke-width="9" stroke-linecap="round"/>
+          <path id="tap-stream" class="flow" d="M142 52 V144" stroke-width="6"/>
+          <path id="drain-stream" class="flow" d="M388 220 V241 H445 V260" stroke-width="5"/>
+          <path d="M478 78 H487 M478 147 H487 M478 216 H487" stroke="var(--muted)"/>
+          <text x="497" y="83">200 L</text><text x="497" y="152">100 L</text><text x="497" y="221">0 L</text>
+          <path id="bath-equilibrium" d="M100 112.5 H450" stroke="var(--purple)" stroke-width="2" stroke-dasharray="5 5" visibility="hidden"/>
+        </svg>
+        <div class="rates" aria-label="Current flow rates">
+          <div><span>Tap in</span><strong id="inflow">5.00</strong> <small>L/min</small></div>
+          <div><span>Leak out</span><strong id="outflow">0.00</strong> <small>L/min</small></div>
+          <div class="net"><span>Net change</span><strong id="net">+5.00</strong> <small>L/min</small></div>
+        </div>
+      </section>
+      <section class="card graph-card" aria-labelledby="graph-heading">
+        <h2 id="graph-heading">Volume over time</h2>
+        <svg class="graph" viewBox="0 0 430 280" role="img" aria-labelledby="graph-title graph-desc">
+          <title id="graph-title">Volume against time</title><desc id="graph-desc">The line traces the water volume as the simulation runs.</desc>
+          <text x="49" y="20">Volume (L)</text>
+          <path class="grid-line" d="M49 39 H406 M49 86.75 H406 M49 134.5 H406 M49 182.25 H406"/>
+          <path class="axis" d="M49 34 V230 H412"/>
+          <g text-anchor="end"><text x="39" y="44">200</text><text x="39" y="91.75">150</text><text x="39" y="139.5">100</text><text x="39" y="187.25">50</text><text x="39" y="235">0</text></g>
+          <g id="time-ticks" text-anchor="middle"></g>
+          <text x="230" y="275" text-anchor="middle">Time (min)</text>
+          <g id="equilibrium" visibility="hidden"><path id="equilibrium-line" stroke="var(--purple)" stroke-width="1.5" stroke-dasharray="5 5"/><text id="equilibrium-label" x="402" text-anchor="end" style="fill:var(--purple);font-size:11px"></text></g>
+          <path id="curve" class="curve"/>
+          <path id="cursor" stroke="var(--muted)" stroke-dasharray="3 4" opacity=".6"/>
+          <circle id="graph-point" r="5.5" fill="var(--blue)" stroke="var(--card)" stroke-width="2"/>
+        </svg>
+        <p class="graph-note" id="graph-note"></p>
+      </section>
+    </div>
+    <div class="transport">
+      <div class="timeline"><div class="timeline-top"><label for="time">Explore time</label><output id="time-label" for="time" aria-live="off">0.0 / 20 min</output></div><input id="time" type="range" min="0" max="20" step="0.1" value="0" aria-valuetext="0 minutes"></div>
+      <label class="speed" for="speed">Speed <select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+      <div class="playback"><button id="reset" type="button">↺ Reset</button><button id="play" type="button">▶ Play</button></div>
+    </div>
+    <p class="status" id="status" role="status">Ready · 1 second of playback = 1 minute in the bath.</p>
+    <div class="explainers">
+      <details id="form-panel"><summary><span class="number">01</span>Form the equation</summary><div class="explanation" id="formation"></div></details>
+      <details id="solve-panel"><summary><span class="number">02</span>Solve the equation</summary><div class="explanation" id="solution"></div></details>
+    </div>
+    <noscript>This simulation needs JavaScript enabled.</noscript>
+  </main>
+  <script id="bath-models">
+    // Exact solutions keep the bath, rates and graph in agreement at every time.
+    // Volume is in litres and time is in minutes; all scenarios start at 100 L.
+    const BATH_CAPACITY = 200;
+    const BATH_INITIAL = 100;
+    const bathScenarios = {
+      fill: {
+        title: 'A steady tap. A closed plug.',
+        description: 'A 200-litre bath starts with 100 litres. Water flows in at 5 litres per minute; none leaks out.',
+        duration: 20, inflow: 5, outflow: () => 0,
+        volume: t => BATH_INITIAL + 5 * t,
+        note: 'A constant net inflow gives a straight line. The simulation stops when the bath is full.',
+        relationship: 'The tap adds 5 litres each minute. With the plug closed, the outflow is zero.',
+        rates: String.raw`\text{inflow}=5,\qquad \text{outflow}=0`,
+        equation: String.raw`\frac{dV}{dt}=5`,
+        steps: [
+          ['Separate', String.raw`dV=5\,dt`],
+          ['Integrate', String.raw`\int dV=\int 5\,dt\quad\Rightarrow\quad V=5t+C`],
+          ['Use the initial condition', String.raw`V(0)=100\quad\Rightarrow\quad C=100`],
+          ['Particular solution', String.raw`V=100+5t,\qquad 0\leq t\leq20`]
+        ],
+        solutionNote: 'At 20 minutes, $V=200$ litres. We stop here: the model does not describe overflow.'
+      },
+      proportional: {
+        title: 'More water, a faster leak.',
+        description: 'The tap is off. The leak rate is proportional to the water volume: at 100 litres it leaks at 5 litres per minute.',
+        duration: 60, inflow: 0, outflow: v => 0.05 * v,
+        volume: t => BATH_INITIAL * Math.exp(-0.05 * t), equilibrium: 0,
+        note: 'As the water level falls, the leak slows. This model approaches empty without reaching it in finite time.',
+        relationship: 'Proportional to $V$ means an outflow of $kV$. The given rate determines $k$ (per minute).',
+        rates: String.raw`5=k(100)\quad\Rightarrow\quad k=0.05`,
+        equation: String.raw`\frac{dV}{dt}=-0.05V`,
+        steps: [
+          ['Separate ($V > 0$)', String.raw`\frac{1}{V}\,dV=-0.05\,dt`],
+          ['Integrate', String.raw`\ln V=-0.05t+C`],
+          ['Use the initial condition', String.raw`V(0)=100\quad\Rightarrow\quad C=\ln100`],
+          ['Particular solution', String.raw`V=100e^{-0.05t},\qquad t\geq0`]
+        ],
+        solutionNote: 'Exponentiate to obtain the particular solution. An empty bath is also an equilibrium solution, excluded when dividing by V; it does not satisfy our initial condition.'
+      },
+      sqrt: {
+        title: 'A leak that reaches empty.',
+        description: 'The tap is off. The leak rate is proportional to the square root of the volume: at 100 litres it leaks at 10 litres per minute.',
+        duration: 20, inflow: 0, outflow: v => Math.sqrt(v),
+        volume: t => Math.pow(Math.max(0, 10 - t / 2), 2),
+        note: 'This leak also slows down, but the bath reaches empty in 20 minutes.',
+        relationship: String.raw`Proportional to the square root of $V$ means an outflow of $k\sqrt{V}$. Here $k$ has units $\mathrm{L}^{1/2}/\mathrm{min}$.`,
+        rates: String.raw`10=k\sqrt{100}\quad\Rightarrow\quad k=1`,
+        equation: String.raw`\frac{dV}{dt}=-\sqrt{V}`,
+        steps: [
+          ['Separate ($V > 0$)', String.raw`V^{-1/2}\,dV=-dt`],
+          ['Integrate', String.raw`2\sqrt{V}=-t+C`],
+          ['Use the initial condition', String.raw`2\sqrt{100}=C\quad\Rightarrow\quad C=20`],
+          ['Particular solution', String.raw`V=\left(10-\frac{t}{2}\right)^2,\quad 0\leq t\leq20`]
+        ],
+        solutionNote: 'The square root must be non-negative, so this expression is valid only up to $t=20$. After that the bath stays empty ($V=0$); the squared formula must not make it refill.'
+      },
+      balanceUp: {
+        title: 'Tap and leak. The level rises… then settles.',
+        description: 'Water flows in at 7.5 litres per minute. The leak rate is proportional to volume: at 100 litres it leaks at 5 litres per minute.',
+        duration: 60, inflow: 7.5, outflow: v => 0.05 * v,
+        volume: t => 150 - 50 * Math.exp(-0.05 * t), equilibrium: 150,
+        note: 'The dashed line is equilibrium: 150 L. Both flows continue, but their rates approach the same value.',
+        relationship: 'The leak is $kV$, with $5=100k$, so $k=0.05$ per minute. Subtract this changing leak from the constant inflow.',
+        rates: String.raw`\text{inflow}=7.5,\qquad \text{outflow}=0.05V`,
+        equation: String.raw`\frac{dV}{dt}=7.5-0.05V=0.05(150-V)`,
+        steps: [
+          [String.raw`Separate ($V\ne150$)`, String.raw`\frac{1}{150-V}\,dV=0.05\,dt`],
+          ['Integrate — watch the minus sign', String.raw`-\ln|150-V|=0.05t+C`],
+          ['Use the initial condition', String.raw`V(0)=100\quad\Rightarrow\quad C=-\ln50`],
+          ['Rearrange (initially $V < 150$)', String.raw`150-V=50e^{-0.05t}`],
+          ['Particular solution', String.raw`V=150-50e^{-0.05t},\qquad t\geq0`]
+        ],
+        solutionNote: 'The separate equilibrium solution is $V=150$. Our solution approaches it from below; it never crosses it. The graph shows the first 60 minutes.'
+      },
+      balanceDown: {
+        title: 'Tap and leak. The level falls… then settles.',
+        description: 'Water flows in at 2.5 litres per minute. The leak rate is proportional to volume: at 100 litres it leaks at 5 litres per minute.',
+        duration: 60, inflow: 2.5, outflow: v => 0.05 * v,
+        volume: t => 50 + 50 * Math.exp(-0.05 * t), equilibrium: 50,
+        note: 'The dashed line is equilibrium: 50 L. The bath does not empty because the tap keeps adding water.',
+        relationship: 'The leak is $kV$, with $5=100k$, so $k=0.05$ per minute. The initial leak is faster than the inflow.',
+        rates: String.raw`\text{inflow}=2.5,\qquad \text{outflow}=0.05V`,
+        equation: String.raw`\frac{dV}{dt}=2.5-0.05V=0.05(50-V)`,
+        steps: [
+          [String.raw`Separate ($V\ne50$)`, String.raw`\frac{1}{50-V}\,dV=0.05\,dt`],
+          ['Integrate — watch the minus sign', String.raw`-\ln|50-V|=0.05t+C`],
+          ['Use the initial condition', String.raw`V(0)=100\quad\Rightarrow\quad C=-\ln50`],
+          ['Rearrange (initially $V > 50$)', String.raw`V-50=50e^{-0.05t}`],
+          ['Particular solution', String.raw`V=50+50e^{-0.05t},\qquad t\geq0`]
+        ],
+        solutionNote: 'Here $|50-V|=V-50$ because we start above equilibrium. The separate equilibrium solution is $V=50$. Our solution approaches it from above.'
+      }
+    };
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const $ = id => document.getElementById(id);
+      let scenario = bathScenarios.fill;
+      let time = 0;
+      let playing = false;
+      let frameId = null;
+      let lastFrame = null;
+      const x = t => 49 + 357 * t / scenario.duration;
+      const y = v => 230 - 191 * v / BATH_CAPACITY;
+
+      function math(latex, displayMode = true) {
+        if (!window.katex) return '<span class="math-error">Equations could not load. Please reload when connected.</span>';
+        return katex.renderToString(latex, { displayMode, throwOnError: true });
+      }
+      function prose(text) {
+        return text.replace(/\$([^$]+)\$/g, (_, latex) => math(latex, false));
+      }
+      function renderExplanations() {
+        $('formation').innerHTML = `<p>Let <i>V</i> be the volume in litres, <i>t</i> the time in minutes. Model the bath with a constant horizontal cross-sectional area, so water depth tracks volume.</p>
+          <div class="math">${math(String.raw`V(0)=100`)}</div>
+          <p>${prose(scenario.relationship)}</p><div class="math">${math(scenario.rates)}</div>
+          <div class="step"><h3>Rate of change = rate in − rate out</h3><div class="math">${math(String.raw`\frac{dV}{dt}=\text{inflow}-\text{outflow}`)}</div></div>
+          <div class="answer math">${math(scenario.equation)}</div>`;
+        $('solution').innerHTML = scenario.steps.map(([label, formula], index) => `<div class="step"><h3>${index + 1}. ${prose(label)}</h3><div class="math${index === scenario.steps.length - 1 ? ' answer' : ''}">${math(formula)}</div></div>`).join('') + `<p>${prose(scenario.solutionNote)}</p>`;
+      }
+      function setStatus(message) {
+        if ($('status').textContent !== message) $('status').textContent = message;
+      }
+      function stop() {
+        playing = false;
+        cancelAnimationFrame(frameId);
+        frameId = null;
+        lastFrame = null;
+        $('play').textContent = time >= scenario.duration ? '↺ Replay' : '▶ Play';
+        document.querySelector('.simulation').classList.remove('running');
+      }
+      function endpoint() {
+        if (scenario === bathScenarios.fill) return 'Full at 20 minutes · Simulation stopped at the bath’s capacity.';
+        if (scenario === bathScenarios.sqrt) return 'Empty at 20 minutes · With the tap off, the bath stays empty.';
+        return '60-minute view complete · The volume would keep approaching equilibrium.';
+      }
+      function draw() {
+        const volume = Math.max(0, Math.min(BATH_CAPACITY, scenario.volume(time)));
+        const outflow = scenario.outflow(volume);
+        const net = scenario.inflow - outflow;
+        const level = 216 - 138 * volume / BATH_CAPACITY;
+        $('volume').textContent = `${volume.toFixed(1)} L`;
+        $('inflow').textContent = scenario.inflow.toFixed(2);
+        $('outflow').textContent = outflow.toFixed(2);
+        $('net').textContent = `${net > 0 ? '+' : net < 0 ? '−' : ''}${Math.abs(net).toFixed(2)}`;
+        $('direction').textContent = volume === BATH_CAPACITY ? 'Full' : volume === 0 ? 'Empty' : net > 0 ? '↑ Filling' : net < 0 ? '↓ Draining' : 'Balanced';
+        $('water').setAttribute('y', level);
+        $('water').setAttribute('height', 216 - level);
+        $('surface').setAttribute('d', `M100 ${level} H450`);
+        $('surface').setAttribute('visibility', volume > 0 ? 'visible' : 'hidden');
+        $('tap-stream').setAttribute('d', `M142 52 V${level}`);
+        $('tap-stream').setAttribute('visibility', scenario.inflow > 0 ? 'visible' : 'hidden');
+        $('drain-stream').setAttribute('visibility', outflow > 0 ? 'visible' : 'hidden');
+        $('drain-stream').setAttribute('stroke-width', Math.max(1.5, Math.min(7, outflow * .7)));
+        const points = [];
+        for (let i = 0; i <= 120; i++) {
+          const t = time * i / 120;
+          points.push(`${i ? 'L' : 'M'}${x(t).toFixed(2)} ${y(scenario.volume(t)).toFixed(2)}`);
+        }
+        $('curve').setAttribute('d', points.join(' '));
+        $('graph-point').setAttribute('cx', x(time));
+        $('graph-point').setAttribute('cy', y(volume));
+        $('cursor').setAttribute('d', `M${x(time)} ${y(volume)} V230`);
+        $('time').value = time;
+        $('time').setAttribute('aria-valuetext', `${time.toFixed(1)} minutes; ${volume.toFixed(1)} litres`);
+        $('time-label').textContent = `${time.toFixed(1)} / ${scenario.duration} min`;
+        $('bath-desc').textContent = `At ${time.toFixed(1)} minutes the bath contains ${volume.toFixed(1)} litres out of 200.`;
+        $('graph-desc').textContent = `Volume from 100 litres at time zero to ${volume.toFixed(1)} litres at ${time.toFixed(1)} minutes. Net rate now ${net.toFixed(2)} litres per minute.`;
+      }
+      function animate(timestamp) {
+        if (!playing) return;
+        if (lastFrame !== null) time = Math.min(scenario.duration, time + (timestamp - lastFrame) / 1000 * Number($('speed').value));
+        lastFrame = timestamp;
+        draw();
+        if (time >= scenario.duration) {
+          stop();
+          setStatus(endpoint());
+        } else frameId = requestAnimationFrame(animate);
+      }
+      function reset() {
+        stop();
+        time = 0;
+        $('play').textContent = '▶ Play';
+        draw();
+        setStatus('Ready · At 1×, 1 second of playback = 1 minute in the bath.');
+      }
+      function chooseScenario() {
+        scenario = bathScenarios[$('scenario').value];
+        $('scenario-title').textContent = scenario.title;
+        $('description').textContent = scenario.description;
+        $('graph-note').textContent = scenario.note;
+        $('time').max = scenario.duration;
+        $('form-panel').open = false;
+        $('solve-panel').open = false;
+        $('time-ticks').innerHTML = [0, .25, .5, .75, 1].map(fraction => `<text x="${x(fraction * scenario.duration)}" y="249">${fraction * scenario.duration}</text>`).join('');
+        const hasEquilibrium = scenario.equilibrium !== undefined;
+        $('equilibrium').setAttribute('visibility', hasEquilibrium ? 'visible' : 'hidden');
+        $('bath-equilibrium').setAttribute('visibility', hasEquilibrium ? 'visible' : 'hidden');
+        if (hasEquilibrium) {
+          const height = 216 - 138 * scenario.equilibrium / BATH_CAPACITY;
+          $('equilibrium-line').setAttribute('d', `M49 ${y(scenario.equilibrium)} H406`);
+          $('equilibrium-label').setAttribute('y', y(scenario.equilibrium) - 7);
+          $('equilibrium-label').textContent = `Equilibrium ${scenario.equilibrium} L`;
+          $('bath-equilibrium').setAttribute('d', `M100 ${height} H450`);
+        }
+        renderExplanations();
+        reset();
+      }
+      $('scenario').addEventListener('change', chooseScenario);
+      $('reset').addEventListener('click', reset);
+      $('play').addEventListener('click', () => {
+        if (playing) {
+          stop();
+          setStatus('Paused · Drag the time slider to explore.');
+          return;
+        }
+        if (time >= scenario.duration) reset();
+        playing = true;
+        $('play').textContent = 'Ⅱ Pause';
+        document.querySelector('.simulation').classList.add('running');
+        setStatus('Playing · Watch how the net flow changes the slope.');
+        frameId = requestAnimationFrame(animate);
+      });
+      $('time').addEventListener('input', () => {
+        stop();
+        time = Number($('time').value);
+        draw();
+        $('play').textContent = time >= scenario.duration ? '↺ Replay' : '▶ Play';
+        setStatus(time >= scenario.duration ? endpoint() : 'Paused · Drag the time slider to explore.');
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && playing) {
+          stop();
+          setStatus('Paused while away · Press Play to continue.');
+        }
+      });
+      chooseScenario();
+    });
+  </script>
+</body>
+</html>
