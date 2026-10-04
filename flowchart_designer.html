@@ -157,6 +157,19 @@
       .fc-edge-hit {
         cursor: pointer;
       }
+      .fc-caret {
+        animation: fc-caret-blink 1.05s steps(1) infinite;
+      }
+      @keyframes fc-caret-blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .fc-caret {
+          animation: none;
+        }
+      }
       .fc-label {
         paint-order: stroke;
         stroke: var(--fc-bg);
@@ -1546,7 +1559,7 @@
         return lines.reduce((max, line) => Math.max(max, textWidth(line.text, line.kind)), 0);
       }
 
-      function blockLayout(node, tab, doc) {
+      function blockLayout(node, tab, doc, editing) {
         const text = String(node.text || "");
         switch (node.type) {
           case "start": {
@@ -1566,7 +1579,8 @@
             const value = text.trim();
             const lines = [{ text: "RETURN", kind: "key" }];
             if (value) lines.push({ text: value, kind: "code" });
-            return { shape: "terminator", lines, w: Math.max(120, widest(lines) + 52), h: value ? 58 : 42 };
+            else if (editing) lines.push({ text: "value", kind: "hint" });
+            return { shape: "terminator", lines, w: Math.max(120, widest(lines) + 52), h: lines.length > 1 ? 58 : 42 };
           }
           case "process": {
             const rows = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -1760,9 +1774,9 @@
         return `M${end.x} ${end.y} L${a.x} ${a.y} L${b.x} ${b.y} Z`;
       }
 
-      function computeLayouts(tab, doc) {
+      function computeLayouts(tab, doc, editingId) {
         const layouts = new Map();
-        tab.nodes.forEach((node) => layouts.set(node.id, blockLayout(node, tab, doc)));
+        tab.nodes.forEach((node) => layouts.set(node.id, blockLayout(node, tab, doc, node.id === editingId)));
         return layouts;
       }
 
@@ -1963,7 +1977,43 @@
         return elements;
       }
 
-      function TextLines({ lines, cx, cy }) {
+      // Where the right-pane editor's cursor falls in the text drawn inside
+      // the block: which drawn line, and the text before the cursor on it.
+      function caretInBlock(node, layout, caret) {
+        const raw = String(node.text || "");
+        const before = raw.slice(0, caret);
+        let index = 0;
+        let shown = "";
+        let prefix = "";
+        if (node.type === "process") {
+          const rows = raw.split(/\r?\n/);
+          const beforeRows = before.split(/\r?\n/);
+          const row = beforeRows.length - 1;
+          const shownRows = rows.map((item) => item.trim()).filter(Boolean);
+          index = rows.slice(0, row).filter((item) => item.trim()).length;
+          if (!shownRows.length) {
+            index = 0;
+          } else if (!rows[row].trim()) {
+            index = Math.max(0, index - 1);
+            shown = shownRows[index];
+            prefix = index === 0 && !rows.slice(0, row).some((item) => item.trim()) ? "" : shown;
+          } else {
+            shown = shownRows[index];
+            prefix = beforeRows[row].replace(/^\s+/, "").slice(0, shown.length);
+          }
+        } else {
+          shown = node.type === "decision" ? FlowLang.cleanCondition(raw) : raw.trim();
+          prefix = before.replace(/^\s+/, "").slice(0, shown.length);
+          index = node.type === "decision" ? 0 : 1;
+        }
+        if (index >= layout.lines.length) return null;
+        const textCy = layout.shape === "decision" ? node.y - 5 : node.y;
+        const y = textCy - ((layout.lines.length - 1) * LINE) / 2 + index * LINE;
+        const x = shown ? node.x - textWidth(shown, "code") / 2 + textWidth(prefix, "code") : node.x;
+        return { x, y };
+      }
+
+      function TextLines({ lines, cx, cy, hideHints }) {
         const offset = -((lines.length - 1) * LINE) / 2;
         return lines.map((line, index) => {
           const font = FONTS[line.kind];
@@ -1978,15 +2028,15 @@
               fontSize={font.size}
               fontWeight={font.weight}
               fontStyle={line.kind === "hint" ? "italic" : "normal"}
-              style={{ fill: line.kind === "hint" ? "var(--fc-muted)" : "var(--fc-text)" }}
+              style={{ fill: line.kind === "hint" ? "var(--fc-muted)" : "var(--fc-text)", whiteSpace: "pre" }}
             >
-              {line.text}
+              {hideHints && line.kind === "hint" ? "" : line.text}
             </text>
           );
         });
       }
 
-      function BlockGraphic({ node, layout, state, problem, design, connected, summary, insertPort }) {
+      function BlockGraphic({ node, layout, state, problem, design, connected, summary, insertPort, caret }) {
         const { shape, w, h, lines, header } = layout;
         const cx = node.x;
         const cy = node.y;
@@ -2018,7 +2068,23 @@
               })}
             {shapeElements(shape, cx, cy, w, h, { fill: "var(--fc-bg)", stroke, strokeWidth, strokeLinejoin: "round" })}
             {shapeElements(shape, cx, cy, w + 12, h + 12, { fill: "none", className: "fc-focus-ring", "data-export-skip": "" })}
-            <TextLines lines={lines} cx={cx} cy={textCy} />
+            <TextLines lines={lines} cx={cx} cy={textCy} hideHints={caret != null} />
+            {caret != null &&
+              (() => {
+                const point = caretInBlock(node, layout, caret);
+                return point ? (
+                  <line
+                    className="fc-caret"
+                    data-export-skip=""
+                    x1={point.x + 1}
+                    x2={point.x + 1}
+                    y1={point.y - 9}
+                    y2={point.y + 9}
+                    strokeWidth={2}
+                    style={{ stroke: "var(--fc-select)" }}
+                  />
+                ) : null;
+              })()}
             {shape === "decision" && (
               <text x={cx} y={cy + h / 2 - 15} textAnchor="middle" dominantBaseline="central" fontFamily={KEY_FONT_FAMILY} fontSize={16} fontWeight={700} style={{ fill: "var(--fc-text)" }}>
                 ?
@@ -2100,7 +2166,7 @@
         const {
           doc, tab, layouts, routes, view, onViewChange, mode, selection, onSelect,
           onNodeDragStart, onNodeDrag, onNodeDragEnd, onConnect, onChoosePort, insertPort, problemNodes, highlight,
-          reveal, onEditNode,
+          reveal, onEditNode, editing,
         } = props;
         const wrapRef = useRef(null);
         const svgRef = useRef(null);
@@ -2229,6 +2295,7 @@
             const last = lastPressRef.current;
             lastPressRef.current = { id: node.id, time: now };
             if (design && last.id === node.id && now - last.time < 400) {
+              event.preventDefault();
               dragRef.current = null;
               onEditNode(node.id);
               return;
@@ -2388,6 +2455,7 @@
                         connected={connectedPorts.get(node.id) || empty}
                         summary={summary}
                         insertPort={selected ? insertPortFor(node, insertPort) : null}
+                        caret={editing && editing.nodeId === node.id ? editing.caret : null}
                       />
                     </g>
                   );
@@ -2484,14 +2552,24 @@
         "shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900";
       const cardClass = "rounded-lg border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900";
 
-      function CodeField({ id, label, value, onChange, placeholder, multiline, help, fieldApi, focusKey, onNormalise }) {
+      function CodeField({ id, label, value, onChange, placeholder, multiline, help, fieldApi, focusKey, onNormalise, caretFor }) {
         const inputRef = useRef(null);
+        // Double-clicking a block (or typing on it) puts the cursor after
+        // its current contents, ready to carry on typing.
         useEffect(() => {
-          if (focusKey && inputRef.current) {
-            inputRef.current.focus();
-            inputRef.current.select();
-          }
+          if (!focusKey || !inputRef.current) return undefined;
+          const element = inputRef.current;
+          const frame = requestAnimationFrame(() => {
+            element.focus();
+            const end = element.value.length;
+            element.setSelectionRange(end, end);
+            report(element);
+          });
+          return () => cancelAnimationFrame(frame);
         }, [focusKey]);
+        const report = (element) => {
+          if (caretFor && document.activeElement === element) fieldApi.caret(caretFor, element.selectionEnd);
+        };
         const shared = {
           id,
           ref: inputRef,
@@ -2502,13 +2580,24 @@
           autoCorrect: "off",
           autoComplete: "off",
           className: fieldClass,
-          onChange: (event) => onChange(event.target.value),
-          onFocus: (event) => fieldApi.focus(event.target, onChange),
+          onChange: (event) => {
+            onChange(event.target.value);
+            report(event.target);
+          },
+          onSelect: (event) => report(event.target),
+          onFocus: (event) => {
+            fieldApi.focus(event.target, onChange);
+            report(event.target);
+          },
+          onKeyDown: (event) => {
+            if (event.key === "Escape") event.target.blur();
+          },
           onBlur: () => {
             if (onNormalise) {
               const cleaned = onNormalise(value);
               if (cleaned !== value) onChange(cleaned);
             }
+            if (caretFor) fieldApi.caret(null);
             fieldApi.blur();
           },
         };
@@ -2517,7 +2606,7 @@
             <label htmlFor={id} className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               {label}
             </label>
-            {multiline ? <textarea rows={3} {...shared} /> : <input type="text" {...shared} />}
+            {multiline ? <textarea rows={Math.max(1, String(value || "").split("\n").length)} {...shared} /> : <input type="text" {...shared} />}
             {help && <p className="text-xs text-slate-600 dark:text-slate-400">{help}</p>}
           </div>
         );
@@ -2670,7 +2759,7 @@
                 <strong>Select START</strong>, then click blocks in the palette: each new block is added and connected at the selected
                 block's filled dot. On a decision, click the other dot to build on that path instead.
               </p>
-              <p>Drag blocks to move them. Drag from a block's dot to another block to connect them. Double-click a block to type in it.</p>
+              <p>Drag blocks to move them. Drag from a block's dot to another block to connect them. Double-click a block, or select it and start typing, to edit it here and in the block.</p>
               <p>Press <strong>Simulate</strong> when the checks below are clear, or load an example from the title bar.</p>
             </div>
           );
@@ -2706,6 +2795,7 @@
                 <div className="flex flex-col gap-3">
                   <CodeField
                     id="fc-return"
+                    caretFor={node.id}
                     label="Value to return (optional)"
                     value={node.text}
                     onChange={(text) => update({ text })}
@@ -2725,6 +2815,7 @@
                 <div className="flex flex-col gap-3">
                   <CodeField
                     id="fc-process"
+                    caretFor={node.id}
                     label="Assignment"
                     value={node.text}
                     onChange={(text) => update({ text })}
@@ -2744,6 +2835,7 @@
                 <div className="flex flex-col gap-3">
                   <CodeField
                     id="fc-input"
+                    caretFor={node.id}
                     label="INPUT into variable"
                     value={node.text}
                     onChange={(text) => update({ text })}
@@ -2763,6 +2855,7 @@
                 <div className="flex flex-col gap-3">
                   <CodeField
                     id="fc-output"
+                    caretFor={node.id}
                     label="OUTPUT"
                     value={node.text}
                     onChange={(text) => update({ text })}
@@ -2790,6 +2883,7 @@
                 <div className="flex flex-col gap-3">
                   <CodeField
                     id="fc-decision"
+                    caretFor={node.id}
                     label="Condition"
                     value={node.text}
                     onChange={(text) => update({ text })}
@@ -3366,6 +3460,7 @@
         const [editKey, setEditKey] = useState(null);
         const [problemsFlash, setProblemsFlash] = useState(0);
         const [chosenPort, setChosenPort] = useState(null);
+        const [editing, setEditing] = useState(null);
         const selectedId = selection && selection.kind === "node" ? selection.id : null;
         useEffect(() => {
           if (chosenPort && chosenPort.nodeId !== selectedId) setChosenPort(null);
@@ -3385,7 +3480,8 @@
         const tab = doc.tabs.find((item) => item.id === activeTabId) || doc.tabs[0];
         const key = logicKey(doc);
         const validation = useMemo(() => FlowLang.validateDoc(docRef.current), [key]);
-        const layouts = useMemo(() => computeLayouts(tab, doc), [tab, doc.tabs]);
+        const editingId = editing ? editing.nodeId : null;
+        const layouts = useMemo(() => computeLayouts(tab, doc, editingId), [tab, doc.tabs, editingId]);
         const routes = useMemo(() => routeEdges(tab, layouts), [tab, layouts]);
         const variables = useMemo(() => FlowLang.variablesInTab(tab, doc), [tab]);
         const problemNodes = useMemo(() => {
@@ -3448,6 +3544,13 @@
         // Typing in a field updates the flowchart live; one undo step is
         // recorded per field visit.
         const fieldApi = useMemo(() => ({
+          caret(nodeId, position) {
+            setEditing((current) => {
+              if (!nodeId) return null;
+              if (current && current.nodeId === nodeId && current.caret === position) return current;
+              return { nodeId, caret: position };
+            });
+          },
           focus(element, apply) {
             fieldRef.current = { element, apply, snapshot: docRef.current };
           },
@@ -3858,6 +3961,17 @@
               setSelection(null);
               return;
             }
+            const typedOnBlock = event.key.length === 1 && !modifier && !event.altKey && selection.kind === "node"
+              && target && target.closest && target.closest(".fc-canvas");
+            if (typedOnBlock) {
+              const node = tab.nodes.find((item) => item.id === selection.id);
+              if (node && ["process", "input", "output", "decision", "return"].includes(node.type)) {
+                event.preventDefault();
+                commit((value) => patchNode(value, tab.id, node.id, { text: String(node.text || "") + event.key }));
+                requestEdit(node.id);
+                return;
+              }
+            }
             const arrows = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
             if (arrows[event.key] && selection.kind === "node" && target && target.closest && target.closest(".fc-canvas")) {
               event.preventDefault();
@@ -4063,6 +4177,7 @@
                         : editKey && { id: editKey.nodeId, key: "edit" + editKey.count + ":" + tab.id }
                     }
                     onEditNode={requestEdit}
+                    editing={editing}
                   />
                   {notice && (
                     <div
