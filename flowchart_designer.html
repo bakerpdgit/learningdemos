@@ -1392,7 +1392,7 @@
                 sub("countdown", "CountDown", "total", [
                   node("s", "start", 300, 110),
                   decision("d1", 300, 230, "total == 0", "right", "bottom"),
-                  node("r", "return", 520, 230),
+                  node("r", "return", 520, 340),
                   node("o1", "output", 300, 350, "total"),
                   node("p1", "process", 300, 440, "total = total - 1"),
                 ], [
@@ -1403,7 +1403,7 @@
                   node("s", "start", 300, 110),
                   node("p1", "process", 300, 200, "i = 0"),
                   decision("d1", 300, 310, "i == total", "right", "bottom"),
-                  node("r", "return", 520, 310),
+                  node("r", "return", 520, 420),
                   node("o1", "output", 300, 430, "i"),
                   node("p2", "process", 300, 520, "i = i + 1"),
                 ], [
@@ -1460,7 +1460,7 @@
                 sub("factorial", "Factorial", "n", [
                   node("s", "start", 300, 110),
                   decision("d1", 300, 220, "n <= 1", "right", "bottom"),
-                  node("r1", "return", 520, 220, "1"),
+                  node("r1", "return", 520, 330, "1"),
                   call("c1", 300, 330, "factorial", ["n - 1"], "smaller"),
                   node("r2", "return", 300, 420, "n * smaller"),
                 ], [
@@ -1633,10 +1633,15 @@
       }
 
       /* ---------------------------------------------------------------
-         Connector routing. Connectors are orthogonal: forward links drop
-         into the top of the next block; links that go back up (loops) run
-         round the outside of the blocks they pass and enter from the side.
+         Connector routing. Connectors are orthogonal, leave from the
+         bottom (or a decision's side exit) and always enter the next
+         block from the top. A connector that has to climb back up runs
+         through the gap beside its target if there is one, otherwise
+         round the outside of the blocks it passes, then joins the
+         target's incoming line just above its top.
          --------------------------------------------------------------- */
+      const APPROACH = 20;
+
       function routeEdges(tab, layouts) {
         const routes = new Map();
         const nodes = new Map(tab.nodes.map((node) => [node.id, node]));
@@ -1650,22 +1655,19 @@
           const toLayout = layouts.get(to.id);
           const side = portSide(from, edge.port);
           const p = sidePoint(from, fromLayout, side);
+          const source = blockBox(from, fromLayout, false);
           const target = blockBox(to, toLayout, false);
           const top = { x: to.x, y: target.top };
+          const joinY = target.top - APPROACH;
           let points = null;
 
-          const besideRight = side === "right" && target.left >= p.x + 24 && p.y >= target.top - 4 && p.y <= target.bottom + 4;
-          const besideLeft = side === "left" && target.right <= p.x - 24 && p.y >= target.top - 4 && p.y <= target.bottom + 4;
-          if (besideRight || besideLeft) {
-            const entry = sidePoint(to, toLayout, besideRight ? "left" : "right");
-            const midX = (p.x + entry.x) / 2;
-            points = Math.abs(p.y - entry.y) < 1 ? [p, entry] : [p, { x: midX, y: p.y }, { x: midX, y: entry.y }, entry];
-          } else if (target.top >= p.y + 20) {
+          if (target.top >= p.y + 20) {
+            // Forward: drop into the top of a block further down.
             if (side === "bottom") {
               if (Math.abs(to.x - p.x) < 1) {
                 points = [p, top];
               } else {
-                const midY = Math.max(p.y + 16, target.top - 20);
+                const midY = Math.max(p.y + 16, joinY);
                 points = [p, { x: p.x, y: midY }, { x: to.x, y: midY }, top];
               }
             } else {
@@ -1674,30 +1676,40 @@
                 points = [p, { x: to.x, y: p.y }, top];
               } else {
                 const outX = p.x + 24 * direction;
-                const midY = target.top - 20;
-                points = [p, { x: outX, y: p.y }, { x: outX, y: midY }, { x: to.x, y: midY }, top];
+                points = [p, { x: outX, y: p.y }, { x: outX, y: joinY }, { x: to.x, y: joinY }, top];
               }
             }
           } else {
-            loops.push({ edge, from, to, fromLayout, toLayout, side, p });
-            return;
+            // The target is level with or above the exit. Use the gap
+            // beside the target, on the side facing this block, if any.
+            const out = side === "bottom" ? { x: p.x, y: p.y + 16 } : p;
+            const gapRight = side !== "left" && target.left - APPROACH >= source.right + 10;
+            const gapLeft = side !== "right" && target.right + APPROACH <= source.left - 10;
+            if (gapRight || gapLeft) {
+              const gapX = gapRight ? target.left - APPROACH : target.right + APPROACH;
+              points = [p];
+              if (out !== p) points.push(out);
+              points.push({ x: gapX, y: out.y }, { x: gapX, y: joinY }, { x: to.x, y: joinY }, top);
+            } else {
+              loops.push({ edge, from, to, fromLayout, toLayout, side, p, out, joinY, top });
+              return;
+            }
           }
           routes.set(edge.id, { points, side, start: p });
         });
 
-        // Loops: choose a side, then a lane far enough out to clear every
-        // block in the column between the two ends. Nested loops use
-        // successively wider lanes.
+        // Loops: run up a lane outside every block between the two ends.
+        // Nested loops use successively wider lanes.
         loops.forEach((loop) => {
           const { side, p, to } = loop;
           loop.loopSide = side === "bottom" ? (to.x > p.x + 40 ? "right" : "left") : side;
-          loop.low = Math.min(to.y, p.y);
-          loop.high = Math.max(to.y, p.y) + (side === "bottom" ? 18 : 0);
+          loop.low = loop.joinY;
+          loop.high = loop.out.y;
         });
         loops.sort((a, b) => (a.high - a.low) - (b.high - b.low));
         const placed = [];
         loops.forEach((loop) => {
-          const { edge, from, to, fromLayout, toLayout, side, p, loopSide } = loop;
+          const { edge, from, to, fromLayout, toLayout, side, p, out, loopSide, joinY, top } = loop;
           const fromBox = blockBox(from, fromLayout, false);
           const toBox = blockBox(to, toLayout, false);
           const columnLeft = Math.min(fromBox.left, toBox.left);
@@ -1724,16 +1736,10 @@
           // True/False label sits clear of the vertical run.
           const gap = side === "bottom" ? 28 : 66;
           const laneX = loopSide === "left" ? extreme - gap - lane * 16 : extreme + gap + lane * 16;
-          const entry = sidePoint(to, toLayout, loopSide);
           const points = [p];
-          if (side === "bottom") {
-            points.push({ x: p.x, y: p.y + 18 + lane * 6 });
-            points.push({ x: laneX, y: p.y + 18 + lane * 6 });
-          } else {
-            points.push({ x: laneX, y: p.y });
-          }
-          points.push({ x: laneX, y: entry.y });
-          points.push(entry);
+          const outY = out.y + (side === "bottom" ? lane * 6 : 0);
+          if (side === "bottom") points.push({ x: p.x, y: outY });
+          points.push({ x: laneX, y: outY }, { x: laneX, y: joinY }, { x: to.x, y: joinY }, top);
           routes.set(edge.id, { points, side, start: p });
         });
         return routes;
@@ -2618,7 +2624,7 @@
         const {
           doc, tab, selection, problems, fieldApi, editKey, variables,
           onUpdateNode, onUpdateTab, onDeleteTab, onDeleteSelection, onCreateSub, onShowTab,
-          chosenPort, onChoosePort,
+          chosenPort, onChoosePort, onSwapLabels,
         } = props;
         const node = selection && selection.kind === "node" ? tab.nodes.find((item) => item.id === selection.id) : null;
         const edge = selection && selection.kind === "edge" ? tab.edges.find((item) => item.id === selection.id) : null;
@@ -2814,8 +2820,8 @@
                     ))}
                   </div>
                   <div>
-                    <button type="button" className={smallButton} onClick={() => update({ trueSide: node.falseSide || "right", falseSide: node.trueSide || "bottom" })}>
-                      Swap True and False sides
+                    <button type="button" className={smallButton} onClick={() => onSwapLabels(node.id)}>
+                      Swap True and False labels
                     </button>
                   </div>
                   <fieldset className="flex flex-col gap-1">
@@ -3578,6 +3584,18 @@
           setSelection(null);
         }
 
+        // The connectors stay where they are; only which exit is True and
+        // which is False changes.
+        function swapDecisionLabels(nodeId) {
+          const flip = { true: "false", false: "true" };
+          commit((value) => mapTab(value, tab.id, (item) => ({
+            ...item,
+            nodes: item.nodes.map((node) => (node.id === nodeId ? { ...node, trueSide: portSide(node, "false"), falseSide: portSide(node, "true") } : node)),
+            edges: item.edges.map((edge) => (edge.from === nodeId && flip[edge.port] ? { ...edge, port: flip[edge.port] } : edge)),
+          })));
+          if (chosenPort && chosenPort.nodeId === nodeId) setChosenPort({ nodeId, port: flip[chosenPort.port] });
+        }
+
         function connectBlocks(fromId, port, toId) {
           if (fromId === toId) return;
           commit((value) => mapTab(value, tab.id, (item) => {
@@ -4081,6 +4099,7 @@
                       onShowTab={showTab}
                       chosenPort={chosenPort}
                       onChoosePort={(nodeId, port) => setChosenPort({ nodeId, port })}
+                      onSwapLabels={swapDecisionLabels}
                     />
                     <ProblemsPanel doc={doc} validation={validation} onShowProblem={showProblem} highlightKey={problemsFlash} />
                     <ReferenceCard />
