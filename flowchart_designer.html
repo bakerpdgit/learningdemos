@@ -72,8 +72,12 @@
         /* An explicit flexible row, so the shared shell's align-content
            rule for post-header grids cannot collapse the canvas. */
         .fc-main {
-          grid-template-columns: 10.5rem minmax(0, 1fr) 22rem;
+          column-gap: 0.25rem;
+          grid-template-columns: 12rem minmax(0, 1fr) 0.75rem var(--fc-side-width, 22rem);
           grid-template-rows: minmax(0, 1fr);
+        }
+        .fc-main > aside:first-child {
+          margin-right: 0.5rem;
         }
         .fc-canvas-column {
           height: auto;
@@ -82,7 +86,7 @@
       }
       @media (min-width: 1536px) {
         .fc-main {
-          grid-template-columns: 11rem minmax(0, 1fr) 26rem;
+          grid-template-columns: 12rem minmax(0, 1fr) 0.75rem var(--fc-side-width, 26rem);
         }
       }
 
@@ -2552,7 +2556,7 @@
         "shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900";
       const cardClass = "rounded-lg border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900";
 
-      function CodeField({ id, label, value, onChange, placeholder, multiline, help, fieldApi, focusKey, onNormalise, caretFor }) {
+      function CodeField({ id, label, value, onChange, placeholder, help, fieldApi, focusKey, onNormalise, caretFor }) {
         const inputRef = useRef(null);
         // Double-clicking a block (or typing on it) puts the cursor after
         // its current contents, ready to carry on typing.
@@ -2589,8 +2593,12 @@
             fieldApi.focus(event.target, onChange);
             report(event.target);
           },
+          // Enter or Escape finishes editing the block.
           onKeyDown: (event) => {
-            if (event.key === "Escape") event.target.blur();
+            if (event.key === "Enter" || event.key === "Escape") {
+              event.preventDefault();
+              event.target.blur();
+            }
           },
           onBlur: () => {
             if (onNormalise) {
@@ -2606,7 +2614,7 @@
             <label htmlFor={id} className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               {label}
             </label>
-            {multiline ? <textarea rows={Math.max(1, String(value || "").split("\n").length)} {...shared} /> : <input type="text" {...shared} />}
+            <input type="text" {...shared} />
             {help && <p className="text-xs text-slate-600 dark:text-slate-400">{help}</p>}
           </div>
         );
@@ -2820,8 +2828,7 @@
                     value={node.text}
                     onChange={(text) => update({ text })}
                     placeholder="total = num1 + num2"
-                    multiline
-                    help="variable = value. Use one line for each assignment."
+                    help="variable = value, e.g. total = total + 1. Use another process block for another assignment."
                     fieldApi={fieldApi}
                     focusKey={editFocus}
                   />
@@ -3405,6 +3412,78 @@
       }
 
       /* ---------------------------------------------------------------
+         Grip between the canvas and the side panel. Drag it, or focus it
+         and use the arrow keys; double-click restores the default width.
+         --------------------------------------------------------------- */
+      const SIDE_WIDTH_KEY = "flowchart-designer-panel-width";
+      const SIDE_MIN = 280;
+
+      function sideMax(container) {
+        const width = container ? container.clientWidth : window.innerWidth;
+        return Math.max(SIDE_MIN, Math.min(760, Math.round(width * 0.55)));
+      }
+
+      function SideResizer({ width, onResize, containerRef, asideRef }) {
+        const [dragging, setDragging] = useState(false);
+        const current = width || (asideRef.current ? Math.round(asideRef.current.getBoundingClientRect().width) : 352);
+        const max = sideMax(containerRef.current);
+        const set = (value) => onResize(clamp(Math.round(value), SIDE_MIN, sideMax(containerRef.current)));
+
+        function onPointerDown(event) {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setDragging(true);
+        }
+        function onPointerMove(event) {
+          if (!dragging || !asideRef.current) return;
+          const right = asideRef.current.getBoundingClientRect().right;
+          set(right - event.clientX - 6);
+        }
+        function onPointerUp(event) {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+          setDragging(false);
+        }
+        function onKeyDown(event) {
+          const step = event.shiftKey ? 64 : 16;
+          if (event.key === "ArrowLeft") set(current + step);
+          else if (event.key === "ArrowRight") set(current - step);
+          else if (event.key === "Home") set(max);
+          else if (event.key === "End") set(SIDE_MIN);
+          else return;
+          event.preventDefault();
+        }
+
+        return (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the side panel"
+            aria-valuemin={SIDE_MIN}
+            aria-valuemax={max}
+            aria-valuenow={current}
+            tabIndex={0}
+            title="Drag to resize the side panel (double-click to reset)"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={() => setDragging(false)}
+            onDoubleClick={() => onResize(null)}
+            onKeyDown={onKeyDown}
+            className="fc-resizer group hidden cursor-col-resize touch-none items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 lg:flex"
+          >
+            <span
+              aria-hidden="true"
+              className={
+                "h-12 w-1.5 rounded-full transition-colors " +
+                (dragging ? "bg-indigo-500" : "bg-slate-300 group-hover:bg-indigo-400 dark:bg-slate-600 dark:group-hover:bg-indigo-400")
+              }
+            ></span>
+          </div>
+        );
+      }
+
+      /* ---------------------------------------------------------------
          Image export: the current tab as a PNG with light colours.
          --------------------------------------------------------------- */
       async function exportPng(svgElement, tab, layouts, filename) {
@@ -3461,6 +3540,24 @@
         const [problemsFlash, setProblemsFlash] = useState(0);
         const [chosenPort, setChosenPort] = useState(null);
         const [editing, setEditing] = useState(null);
+        const [sideWidth, setSideWidth] = useState(() => {
+          try {
+            const saved = Number(localStorage.getItem(SIDE_WIDTH_KEY));
+            return saved >= SIDE_MIN ? saved : null;
+          } catch (error) {
+            return null;
+          }
+        });
+        const mainRef = useRef(null);
+        const asideRef = useRef(null);
+        useEffect(() => {
+          try {
+            if (sideWidth) localStorage.setItem(SIDE_WIDTH_KEY, String(sideWidth));
+            else localStorage.removeItem(SIDE_WIDTH_KEY);
+          } catch (error) {
+            // Remembering the width is only a convenience.
+          }
+        }, [sideWidth]);
         const selectedId = selection && selection.kind === "node" ? selection.id : null;
         useEffect(() => {
           if (chosenPort && chosenPort.nodeId !== selectedId) setChosenPort(null);
@@ -4047,7 +4144,11 @@
               </div>
             </header>
 
-            <div className="fc-main grid min-h-0 flex-1 gap-3 p-3">
+            <div
+              ref={mainRef}
+              className="fc-main grid min-h-0 flex-1 gap-3 p-3"
+              style={sideWidth ? { "--fc-side-width": sideWidth + "px" } : undefined}
+            >
               <Palette tabKind={tab.kind} disabled={!design} onAdd={placeNewBlock} onDragStart={startPaletteDrag} />
 
               <section aria-label="Flowchart" className="fc-canvas-column flex min-w-0 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
@@ -4195,7 +4296,9 @@
                 </div>
               </section>
 
-              <aside aria-label={design ? "Block editor and checks" : "Simulation"} className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+              <SideResizer width={sideWidth} onResize={setSideWidth} containerRef={mainRef} asideRef={asideRef} />
+
+              <aside ref={asideRef} aria-label={design ? "Block editor and checks" : "Simulation"} className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
                 {design ? (
                   <React.Fragment>
                     <Inspector

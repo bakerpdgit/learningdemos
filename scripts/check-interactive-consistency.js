@@ -687,6 +687,14 @@ if (fs.existsSync(subnetMaskingPath)) {
     || !/body\[data-site-page="interactive"\]\s*\.flowchart-app\s*\{[^}]*height:\s*calc\(100vh - 58px\)/.test(flowchartSource)) {
     failures.push('flowchart_designer.html: the app root must subtract the built site bar from the viewport height');
   }
+  // A double press on a block must stop the browser's mousedown focus,
+  // which otherwise takes focus straight back from the block's editor.
+  if (!/now - last\.time < 400\)\s*\{\s*event\.preventDefault\(\);/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: double-clicking a block must prevent the default focus so its editor keeps focus');
+  }
+  if (!/role="separator"/.test(flowchartSource) || !/ArrowLeft/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: the side panel grip must be a keyboard-operable separator');
+  }
   if (/\b(?:alert|confirm|prompt)\s*\(/.test(flowchartSource)) {
     failures.push('flowchart_designer.html: input and feedback must be inline, not alert/confirm/prompt dialogs');
   }
