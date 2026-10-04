@@ -1,0 +1,4081 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flowchart Designer &amp; Simulator</title>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {},
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Full-height designer. The production site navigation bar is 58px
+         tall, so the built page subtracts it to keep the canvas and the run
+         controls inside the viewport. Below the desktop breakpoint the panels
+         stack and the page scrolls as a document. */
+      .flowchart-app {
+        min-height: 100vh;
+      }
+      @media (min-width: 1024px) {
+        .flowchart-app {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .flowchart-app {
+          height: calc(100vh - 58px);
+        }
+      }
+
+      .fc-main {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .fc-canvas-column {
+        height: 72vh;
+        min-height: 420px;
+      }
+      @media (min-width: 1024px) {
+        /* An explicit flexible row, so the shared shell's align-content
+           rule for post-header grids cannot collapse the canvas. */
+        .fc-main {
+          grid-template-columns: 10.5rem minmax(0, 1fr) 22rem;
+          grid-template-rows: minmax(0, 1fr);
+        }
+        .fc-canvas-column {
+          height: auto;
+          min-height: 0;
+        }
+      }
+      @media (min-width: 1536px) {
+        .fc-main {
+          grid-template-columns: 11rem minmax(0, 1fr) 26rem;
+        }
+      }
+
+      /* Canvas colours. Shapes are outlines only; the shape interior uses the
+         canvas colour so that connectors passing behind a block are hidden. */
+      .fc-canvas {
+        --fc-bg: #ffffff;
+        --fc-grid: #d3dae4;
+        --fc-stroke: #1e293b;
+        --fc-text: #0f172a;
+        --fc-muted: #64748b;
+        --fc-edge: #334155;
+        --fc-select: #4f46e5;
+        --fc-current: #b45309;
+        --fc-current-glow: rgba(217, 119, 6, 0.28);
+        --fc-error: #dc2626;
+        --fc-true: #047857;
+        --fc-false: #b91c1c;
+        background-color: var(--fc-bg);
+        background-image: radial-gradient(var(--fc-grid) 1.1px, transparent 1.2px);
+      }
+      html.dark .fc-canvas {
+        --fc-bg: #0b1220;
+        --fc-grid: #273449;
+        --fc-stroke: #e2e8f0;
+        --fc-text: #f1f5f9;
+        --fc-muted: #94a3b8;
+        --fc-edge: #cbd5e1;
+        --fc-select: #a5b4fc;
+        --fc-current: #fbbf24;
+        --fc-current-glow: rgba(251, 191, 36, 0.3);
+        --fc-error: #f87171;
+        --fc-true: #6ee7b7;
+        --fc-false: #fca5a5;
+      }
+      .fc-canvas svg {
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .fc-canvas.fc-panning,
+      .fc-canvas.fc-panning * {
+        cursor: grabbing !important;
+      }
+      .fc-node {
+        cursor: grab;
+        outline: none;
+      }
+      .fc-run .fc-node {
+        cursor: default;
+      }
+      .fc-node:focus-visible .fc-focus-ring {
+        stroke: var(--fc-select);
+        stroke-width: 2;
+        stroke-dasharray: 5 4;
+        opacity: 1;
+      }
+      .fc-focus-ring {
+        opacity: 0;
+      }
+      .fc-port {
+        cursor: crosshair;
+      }
+      .fc-port-connected {
+        opacity: 0;
+        transition: opacity 120ms;
+      }
+      .fc-node:hover .fc-port-connected,
+      .fc-node-selected .fc-port-connected {
+        opacity: 1;
+      }
+      .fc-edge-hit {
+        cursor: pointer;
+      }
+      .fc-label {
+        paint-order: stroke;
+        stroke: var(--fc-bg);
+        stroke-width: 4px;
+        stroke-linejoin: round;
+      }
+
+      .fc-ghost {
+        pointer-events: none;
+        position: fixed;
+        z-index: 60;
+        transform: translate(-50%, -50%);
+      }
+
+      .fc-mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
+          "Liberation Mono", monospace;
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (
+            mode === "dark" ||
+            (!mode &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+
+    <script id="flowchart-language">
+      /* ---------------------------------------------------------------
+         Flowchart language. Plain JavaScript, independent of React, so the
+         build checks can load it and run every example flowchart.
+
+         Values are { type, v } with type INT, REAL, STRING or BOOL.
+         Variables are created by assignment or INPUT and are local to the
+         flowchart (Main or one subprogram) that creates them.
+         --------------------------------------------------------------- */
+      var FlowLang = (function () {
+        "use strict";
+
+        var BUILTINS = {
+          LEN: { min: 1, max: 1, usage: "LEN(text)" },
+          INT: { min: 1, max: 1, usage: "INT(value)" },
+          REAL: { min: 1, max: 1, usage: "REAL(value)" },
+          STR: { min: 1, max: 1, usage: "STR(value)" },
+          ROUND: { min: 1, max: 2, usage: "ROUND(number) or ROUND(number, places)" },
+          RANDOM_INT: { min: 2, max: 2, usage: "RANDOM_INT(low, high)" },
+        };
+        var WORD_OPERATORS = { AND: 1, OR: 1, NOT: 1, DIV: 1, MOD: 1 };
+        var RESERVED = {};
+        ["AND", "OR", "NOT", "DIV", "MOD", "TRUE", "FALSE", "INPUT", "OUTPUT", "RETURN", "START", "END"]
+          .concat(Object.keys(BUILTINS))
+          .forEach(function (word) { RESERVED[word] = 1; });
+        var COMPARISONS = { "==": 1, "!=": 1, "<": 1, "<=": 1, ">": 1, ">=": 1 };
+        var BINDING = {
+          OR: 10, AND: 20,
+          "==": 30, "!=": 30, "<": 30, "<=": 30, ">": 30, ">=": 30,
+          "+": 40, "-": 40,
+          "*": 50, "/": 50, DIV: 50, MOD: 50,
+          "^": 70,
+        };
+        var MAX_CALL_DEPTH = 200;
+
+        function FlowError(message, hint) {
+          this.message = message;
+          this.hint = hint || "";
+        }
+        FlowError.prototype = Object.create(Error.prototype);
+        FlowError.prototype.name = "FlowError";
+
+        function fail(message, hint) {
+          throw new FlowError(message, hint);
+        }
+
+        /* ---------- Names ---------- */
+
+        function isReserved(name) {
+          return Object.prototype.hasOwnProperty.call(RESERVED, String(name).toUpperCase());
+        }
+
+        // Returns null for a usable variable or subprogram name, otherwise a
+        // FlowError explaining what is wrong with it.
+        function nameProblem(name, what) {
+          what = what || "A variable name";
+          if (!name) return new FlowError(what + " is missing.");
+          if (/\s/.test(name)) {
+            return new FlowError(what + " can't contain spaces.", "Try " + name.trim().replace(/\s+/g, "_") + " instead.");
+          }
+          if (/^[0-9]/.test(name)) return new FlowError(what + " must start with a letter.");
+          if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+            return new FlowError(what + " can only use letters, digits and _.", "\"" + name + "\" is not allowed.");
+          }
+          if (isReserved(name)) {
+            return new FlowError(name + " is a reserved word, so it can't be used as a name.");
+          }
+          return null;
+        }
+
+        /* ---------- Tokens ---------- */
+
+        var OPEN_QUOTES = { "\"": "\"", "“": "\"", "”": "\"", "'": "'", "‘": "'", "’": "'" };
+
+        function tokenize(source) {
+          var tokens = [];
+          var i = 0;
+          var text = String(source);
+          while (i < text.length) {
+            var ch = text[i];
+            if (/\s/.test(ch)) { i += 1; continue; }
+            var start = i;
+
+            if (/[0-9]/.test(ch)) {
+              var j = i;
+              while (j < text.length && /[0-9]/.test(text[j])) j += 1;
+              var real = false;
+              if (text[j] === "." && /[0-9]/.test(text[j + 1] || "")) {
+                real = true;
+                j += 1;
+                while (j < text.length && /[0-9]/.test(text[j])) j += 1;
+              } else if (text[j] === ".") {
+                fail("\"" + text.slice(i, j + 1) + "\" is not a complete number.", "Write decimals with a digit after the point, e.g. 2.5 or 2.0");
+              }
+              if (/[A-Za-z_]/.test(text[j] || "")) {
+                var word = text.slice(i).match(/^[A-Za-z0-9_]+/)[0];
+                fail("\"" + word + "\" is not a number or a valid name.", "Variable names must start with a letter.");
+              }
+              tokens.push({ t: "num", v: Number(text.slice(i, j)), real: real, pos: start, text: text.slice(i, j) });
+              i = j;
+              continue;
+            }
+
+            if (OPEN_QUOTES[ch]) {
+              var family = OPEN_QUOTES[ch];
+              var k = i + 1;
+              while (k < text.length && OPEN_QUOTES[text[k]] !== family) k += 1;
+              if (k >= text.length) {
+                fail("This text is missing its closing quote mark.", "Text must be inside a matching pair of quotes, e.g. \"Hello\"");
+              }
+              tokens.push({ t: "str", v: text.slice(i + 1, k), pos: start, text: text.slice(i, k + 1) });
+              i = k + 1;
+              continue;
+            }
+
+            if (/[A-Za-z_]/.test(ch)) {
+              var name = text.slice(i).match(/^[A-Za-z_][A-Za-z0-9_]*/)[0];
+              var upper = name.toUpperCase();
+              if (upper === "TRUE" || upper === "FALSE") {
+                tokens.push({ t: "bool", v: upper === "TRUE", pos: start, text: name });
+              } else if (WORD_OPERATORS[upper]) {
+                tokens.push({ t: "op", v: upper, pos: start, text: name });
+              } else {
+                tokens.push({ t: "id", v: name, pos: start, text: name });
+              }
+              i += name.length;
+              continue;
+            }
+
+            var two = text.slice(i, i + 2);
+            if (two === "+=" || two === "-=" || two === "*=" || two === "/=") {
+              fail(two + " is not used in this pseudocode.", "Write the full assignment, e.g. total = total + 1");
+            }
+            if (two === "//") fail("// is not an operator here.", "Use DIV for whole-number division, e.g. 7 DIV 2");
+            if (two === "&&") fail("&& is not an operator here.", "Use AND, e.g. x > 1 AND x < 10");
+            if (two === "||") fail("|| is not an operator here.", "Use OR, e.g. x < 1 OR x > 10");
+            if (two === "==" || two === "!=" || two === "<=" || two === ">=") {
+              tokens.push({ t: "op", v: two, pos: start, text: two });
+              i += 2;
+              continue;
+            }
+            if (two === "<>") {
+              tokens.push({ t: "op", v: "!=", pos: start, text: two });
+              i += 2;
+              continue;
+            }
+            if (ch === "≠") { tokens.push({ t: "op", v: "!=", pos: start, text: ch }); i += 1; continue; }
+            if (ch === "≤") { tokens.push({ t: "op", v: "<=", pos: start, text: ch }); i += 1; continue; }
+            if (ch === "≥") { tokens.push({ t: "op", v: ">=", pos: start, text: ch }); i += 1; continue; }
+            if (ch === "←") { tokens.push({ t: "assign", v: "=", pos: start, text: ch }); i += 1; continue; }
+            if (ch === "=") { tokens.push({ t: "assign", v: "=", pos: start, text: ch }); i += 1; continue; }
+            if ("<>+-*/^".indexOf(ch) >= 0) { tokens.push({ t: "op", v: ch, pos: start, text: ch }); i += 1; continue; }
+            if (ch === "(" || ch === ")" || ch === ",") { tokens.push({ t: ch, v: ch, pos: start, text: ch }); i += 1; continue; }
+            if (ch === "%") fail("% is not an operator here.", "Use MOD for the remainder, e.g. 7 MOD 2");
+            if (ch === "!") fail("! on its own is not an operator here.", "Use NOT, or != for “not equal to”");
+            if (ch === "[" || ch === "]") fail("Arrays are not supported yet.");
+            if (ch === "?") fail("A ? is only used on decisions, and it is added for you.");
+            fail("Unexpected character \"" + ch + "\".");
+          }
+          return tokens;
+        }
+
+        /* ---------- Expressions ---------- */
+
+        function Parser(tokens, options) {
+          this.tokens = tokens;
+          this.index = 0;
+          this.options = options || {};
+        }
+        Parser.prototype.peek = function () { return this.tokens[this.index]; };
+        Parser.prototype.next = function () { return this.tokens[this.index++]; };
+        Parser.prototype.done = function () { return this.index >= this.tokens.length; };
+
+        Parser.prototype.unexpected = function (token) {
+          if (!token) fail("This expression is incomplete.", "Something is missing at the end.");
+          if (token.t === "assign") {
+            fail("A single = gives a variable a value; it can't be used here.", "To compare two values use ==, e.g. guess == answer");
+          }
+          if (token.t === ",") {
+            fail("Commas can only separate the values given to a function.", "To join values together use +, e.g. \"Score: \" + total");
+          }
+          if (token.t === ")") fail("There is a ) without a matching (.");
+          fail("\"" + token.text + "\" was not expected here.");
+        };
+
+        Parser.prototype.expression = function (minBinding) {
+          var left = this.prefix();
+          for (;;) {
+            var token = this.peek();
+            if (!token || token.t === ")" || token.t === ",") break;
+            if (token.t !== "op" || !BINDING[token.v]) {
+              if (token.t === "id" || token.t === "num" || token.t === "str" || token.t === "bool" || token.t === "(") {
+                fail("An operator is missing before \"" + token.text + "\".", "To join text and values use +, e.g. \"Score: \" + total");
+              }
+              if (token.t === "op" && token.v === "NOT") fail("NOT can only go before a condition, e.g. NOT (x > 5)");
+              this.unexpected(token);
+            }
+            var binding = BINDING[token.v];
+            if (binding <= minBinding) break;
+            this.next();
+            var op = token.v;
+            var right = this.expression(op === "^" ? binding - 1 : binding);
+            if (COMPARISONS[op]) {
+              var after = this.peek();
+              if (after && after.t === "op" && COMPARISONS[after.v]) {
+                fail("Comparisons can't be chained like this.", "Join two comparisons with AND, e.g. x > 1 AND x < 10");
+              }
+            }
+            left = { k: "bin", op: op, l: left, r: right };
+          }
+          return left;
+        };
+
+        Parser.prototype.prefix = function () {
+          var token = this.next();
+          if (!token) fail("This expression is incomplete.", "Something is missing at the end.");
+          if (token.t === "num") return { k: "lit", value: { type: token.real ? "REAL" : "INT", v: token.v } };
+          if (token.t === "str") return { k: "lit", value: { type: "STRING", v: token.v } };
+          if (token.t === "bool") return { k: "lit", value: { type: "BOOL", v: token.v } };
+          if (token.t === "(") {
+            var inner = this.expression(0);
+            var close = this.next();
+            if (!close || close.t !== ")") fail("A ( is missing its closing ).");
+            return inner;
+          }
+          if (token.t === "op" && token.v === "-") return { k: "neg", e: this.expression(60) };
+          if (token.t === "op" && token.v === "+") return this.expression(60);
+          if (token.t === "op" && token.v === "NOT") return { k: "not", e: this.expression(25) };
+          if (token.t === "id") {
+            var following = this.peek();
+            if (following && following.t === "(") return this.call(token);
+            if (isReserved(token.v)) {
+              var upper = token.v.toUpperCase();
+              if (BUILTINS[upper]) fail(upper + " is a function, so it needs brackets.", "e.g. " + BUILTINS[upper].usage);
+              fail(upper + " is a reserved word and can't be used in an expression.");
+            }
+            return { k: "var", name: token.v };
+          }
+          this.unexpected(token);
+        };
+
+        Parser.prototype.call = function (nameToken) {
+          var upper = nameToken.v.toUpperCase();
+          if (!BUILTINS[upper]) {
+            var subs = this.options.subprogramNames || [];
+            if (subs.indexOf(nameToken.v) >= 0) {
+              fail(nameToken.v + " is a subprogram.", "Call subprograms with a Subprogram Call block (the box with double side bars).");
+            }
+            fail("There is no built-in function called " + nameToken.v + ".", "Built-in functions: LEN, INT, REAL, STR, ROUND, RANDOM_INT");
+          }
+          this.next();
+          var args = [];
+          if (this.peek() && this.peek().t === ")") {
+            this.next();
+          } else {
+            for (;;) {
+              args.push(this.expression(0));
+              var separator = this.next();
+              if (!separator) fail(upper + "( is missing its closing ).");
+              if (separator.t === ")") break;
+              if (separator.t !== ",") this.unexpected(separator);
+            }
+          }
+          var spec = BUILTINS[upper];
+          if (args.length < spec.min || args.length > spec.max) {
+            fail(upper + " was given " + args.length + " value" + (args.length === 1 ? "" : "s") + ".", "Use it like this: " + spec.usage);
+          }
+          return { k: "call", name: upper, args: args };
+        };
+
+        function parseTokens(tokens, options) {
+          if (!tokens.length) fail("This is empty.");
+          var parser = new Parser(tokens, options);
+          var ast = parser.expression(0);
+          if (!parser.done()) parser.unexpected(parser.peek());
+          return ast;
+        }
+
+        function parseExpression(source, options) {
+          return parseTokens(tokenize(source), options);
+        }
+
+        function collectVariables(ast, into) {
+          into = into || [];
+          if (!ast) return into;
+          if (ast.k === "var" && into.indexOf(ast.name) < 0) into.push(ast.name);
+          if (ast.k === "bin") { collectVariables(ast.l, into); collectVariables(ast.r, into); }
+          if (ast.k === "neg" || ast.k === "not") collectVariables(ast.e, into);
+          if (ast.k === "call") ast.args.forEach(function (arg) { collectVariables(arg, into); });
+          return into;
+        }
+
+        /* ---------- Values ---------- */
+
+        function isNumber(value) {
+          return value.type === "INT" || value.type === "REAL";
+        }
+
+        function formatReal(number) {
+          var tidy = Number(number.toPrecision(12));
+          if (Number.isInteger(tidy) && Math.abs(tidy) < 1e21) return tidy.toFixed(1);
+          return String(tidy);
+        }
+
+        // Automatic conversion used by OUTPUT and by + when text is involved.
+        function toText(value) {
+          if (value.type === "STRING") return value.v;
+          if (value.type === "BOOL") return value.v ? "True" : "False";
+          if (value.type === "REAL") return formatReal(value.v);
+          return String(value.v);
+        }
+
+        // Shows the type as well: strings keep their quotes in tables.
+        function formatValue(value) {
+          if (!value) return "";
+          return value.type === "STRING" ? "\"" + value.v + "\"" : toText(value);
+        }
+
+        function describe(value) {
+          return value.type + " " + formatValue(value);
+        }
+
+        function makeNumber(number, real) {
+          if (!isFinite(number)) fail("That calculation gave a number that is too large or undefined.");
+          return { type: real ? "REAL" : "INT", v: number };
+        }
+
+        // INPUT stores whole numbers as INT, decimals as REAL and anything else as STRING.
+        function inputValue(raw) {
+          var trimmed = String(raw).trim();
+          if (/^[+-]?\d+$/.test(trimmed)) return { type: "INT", v: parseInt(trimmed, 10) };
+          if (/^[+-]?\d*\.\d+$/.test(trimmed) || /^[+-]?\d+\.\d*$/.test(trimmed)) {
+            return { type: "REAL", v: parseFloat(trimmed) };
+          }
+          return { type: "STRING", v: String(raw) };
+        }
+
+        function arithmetic(op, l, r) {
+          if (op === "+" && (l.type === "STRING" || r.type === "STRING")) {
+            return { type: "STRING", v: toText(l) + toText(r) };
+          }
+          if (!isNumber(l) || !isNumber(r)) {
+            var hint = l.type === "STRING" || r.type === "STRING"
+              ? "Only + works with text (it joins). Use INT() or REAL() to turn text into a number."
+              : "Arithmetic needs INT or REAL values.";
+            fail("Can't use " + op + " with " + describe(l) + " and " + describe(r) + ".", hint);
+          }
+          var real = l.type === "REAL" || r.type === "REAL";
+          switch (op) {
+            case "+": return makeNumber(l.v + r.v, real);
+            case "-": return makeNumber(l.v - r.v, real);
+            case "*": return makeNumber(l.v * r.v, real);
+            case "/":
+              if (r.v === 0) fail("Division by zero.", "Check the value you are dividing by.");
+              return makeNumber(l.v / r.v, true);
+            case "^":
+              if (!real && r.v >= 0) return makeNumber(Math.pow(l.v, r.v), false);
+              return makeNumber(Math.pow(l.v, r.v), true);
+            case "DIV":
+            case "MOD":
+              if (real) {
+                fail(op + " needs two whole numbers (INT), but got " + describe(l) + " and " + describe(r) + ".", "Use INT() to convert a REAL first.");
+              }
+              if (r.v === 0) fail(op + " by zero is not possible.");
+              var quotient = Math.floor(l.v / r.v);
+              return makeNumber(op === "DIV" ? quotient : l.v - r.v * quotient, false);
+          }
+          fail("Unknown operator " + op + ".");
+        }
+
+        function compare(op, l, r) {
+          var comparable = (isNumber(l) && isNumber(r)) || l.type === r.type;
+          if (!comparable) {
+            var hint = "Convert one side first with STR(), INT() or REAL().";
+            if ((l.type === "STRING" && isNumber(r)) || (r.type === "STRING" && isNumber(l))) {
+              hint = "INPUT stores numbers as INT or REAL, so compare with a number (no quotes), or convert with STR() or INT().";
+            }
+            fail("Can't compare " + describe(l) + " with " + describe(r) + ".", hint);
+          }
+          if (l.type === "BOOL" && op !== "==" && op !== "!=") {
+            fail("True and False can only be compared with == or !=.");
+          }
+          var a = l.v;
+          var b = r.v;
+          switch (op) {
+            case "==": return a === b;
+            case "!=": return a !== b;
+            case "<": return a < b;
+            case "<=": return a <= b;
+            case ">": return a > b;
+            case ">=": return a >= b;
+          }
+        }
+
+        function requireBool(value, op) {
+          if (value.type !== "BOOL") {
+            fail(op + " needs True or False on each side, but got " + describe(value) + ".", "e.g. x > 1 AND x < 10");
+          }
+          return value.v;
+        }
+
+        function roundHalfAway(number, places) {
+          var factor = Math.pow(10, places);
+          var scaled = Math.abs(number) * factor;
+          var rounded = Math.round(Number(scaled.toPrecision(15))) / factor;
+          return number < 0 ? -rounded : rounded;
+        }
+
+        function callBuiltin(name, args, runtime) {
+          var a = args[0];
+          switch (name) {
+            case "LEN":
+              if (a.type !== "STRING") fail("LEN needs text, but got " + describe(a) + ".", "Use LEN(STR(x)) to count the digits in a number.");
+              return { type: "INT", v: Array.from(a.v).length };
+            case "STR":
+              return { type: "STRING", v: toText(a) };
+            case "INT":
+              if (a.type === "INT") return a;
+              if (a.type === "REAL") return { type: "INT", v: Math.trunc(a.v) };
+              if (a.type === "STRING" && /^\s*[+-]?\d+\s*$/.test(a.v)) return { type: "INT", v: parseInt(a.v, 10) };
+              fail("Can't convert " + describe(a) + " to INT.");
+              break;
+            case "REAL":
+              if (isNumber(a)) return { type: "REAL", v: a.v };
+              if (a.type === "STRING" && /^\s*[+-]?(\d+\.?\d*|\.\d+)\s*$/.test(a.v)) return { type: "REAL", v: parseFloat(a.v) };
+              fail("Can't convert " + describe(a) + " to REAL.");
+              break;
+            case "ROUND":
+              if (!isNumber(a)) fail("ROUND needs a number, but got " + describe(a) + ".");
+              if (args.length === 1) return { type: "INT", v: roundHalfAway(a.v, 0) };
+              if (args[1].type !== "INT" || args[1].v < 0) fail("The number of decimal places for ROUND must be a whole number of 0 or more.");
+              return { type: "REAL", v: roundHalfAway(a.v, args[1].v) };
+            case "RANDOM_INT":
+              if (a.type !== "INT" || args[1].type !== "INT") fail("RANDOM_INT needs two whole numbers (INT).");
+              if (a.v > args[1].v) fail("RANDOM_INT needs the lower number first.");
+              return { type: "INT", v: a.v + Math.floor(runtime.random() * (args[1].v - a.v + 1)) };
+          }
+          fail("Unknown function " + name + ".");
+        }
+
+        function evaluate(ast, scope, runtime) {
+          switch (ast.k) {
+            case "lit":
+              return ast.value;
+            case "var":
+              if (!scope.has(ast.name)) {
+                fail("The variable " + ast.name + " has not been given a value yet.", "Assign it, or INPUT it, before this block runs.");
+              }
+              return scope.get(ast.name);
+            case "neg": {
+              var inner = evaluate(ast.e, scope, runtime);
+              if (!isNumber(inner)) fail("Can't make " + describe(inner) + " negative.");
+              return makeNumber(-inner.v, inner.type === "REAL");
+            }
+            case "not":
+              return { type: "BOOL", v: !requireBool(evaluate(ast.e, scope, runtime), "NOT") };
+            case "call":
+              return callBuiltin(ast.name, ast.args.map(function (arg) { return evaluate(arg, scope, runtime); }), runtime);
+            case "bin": {
+              if (ast.op === "AND" || ast.op === "OR") {
+                var left = requireBool(evaluate(ast.l, scope, runtime), ast.op);
+                if (ast.op === "AND" && !left) return { type: "BOOL", v: false };
+                if (ast.op === "OR" && left) return { type: "BOOL", v: true };
+                return { type: "BOOL", v: requireBool(evaluate(ast.r, scope, runtime), ast.op) };
+              }
+              var l = evaluate(ast.l, scope, runtime);
+              var r = evaluate(ast.r, scope, runtime);
+              if (COMPARISONS[ast.op]) return { type: "BOOL", v: compare(ast.op, l, r) };
+              return arithmetic(ast.op, l, r);
+            }
+          }
+          fail("Unknown expression.");
+        }
+
+        /* ---------- Blocks ---------- */
+
+        var OUTPUT_PORTS = {
+          start: ["next"], process: ["next"], input: ["next"], output: ["next"], call: ["next"],
+          decision: ["true", "false"], end: [], "return": [],
+        };
+
+        function stripKeyword(text, keyword) {
+          var pattern = new RegExp("^\\s*" + keyword + "\\b\\s*", "i");
+          return String(text || "").replace(pattern, "");
+        }
+
+        function cleanCondition(text) {
+          return String(text || "").trim().replace(/\?+\s*$/, "").trim();
+        }
+
+        function parseAssignment(line, options) {
+          var tokens = tokenize(line);
+          var first = tokens[0];
+          if (first && first.t === "id" && /^(INPUT|OUTPUT)$/i.test(first.v)) {
+            fail(first.v.toUpperCase() + " has its own block.", "Use the parallelogram " + (/^input$/i.test(first.v) ? "Input" : "Output") + " block instead.");
+          }
+          if (first && first.t === "id" && /^RETURN$/i.test(first.v)) fail("RETURN has its own block.", "Use the rounded RETURN block.");
+          var at = -1;
+          for (var i = 0; i < tokens.length; i += 1) {
+            if (tokens[i].t === "assign") { at = i; break; }
+          }
+          if (at < 0) {
+            if (tokens.some(function (token) { return token.v === "=="; })) {
+              fail("== compares values; it doesn't store anything.", "To store a value use a single =, e.g. total = 0");
+            }
+            fail("A process block must store a value in a variable.", "e.g. total = total + 1");
+          }
+          if (at === 0) fail("There is no variable name before the =.", "e.g. total = 0");
+          if (at > 1 || tokens[0].t !== "id") {
+            fail("Only a single variable name can go before the =.", "Put the calculation on the right, e.g. total = num1 + num2");
+          }
+          var problem = nameProblem(tokens[0].v);
+          if (problem) throw problem;
+          var rest = tokens.slice(at + 1);
+          if (!rest.length) fail("There is nothing after the = to store in " + tokens[0].v + ".", "e.g. " + tokens[0].v + " = 0");
+          return { target: tokens[0].v, expr: parseTokens(rest, options), source: line.trim() };
+        }
+
+        // Turns one block's fields into executable form or throws a FlowError.
+        function compileNode(node, context) {
+          var options = { subprogramNames: context.subprogramNames || [] };
+          switch (node.type) {
+            case "start":
+            case "end":
+              return {};
+            case "process": {
+              var lines = String(node.text || "").split(/\r?\n/).map(function (line) { return line.trim(); })
+                .filter(Boolean);
+              if (!lines.length) fail("This process block is empty.", "Type an assignment such as total = 0");
+              return { assignments: lines.map(function (line) { return parseAssignment(line, options); }) };
+            }
+            case "input": {
+              var name = String(node.text || "").trim();
+              if (!name) fail("Type the variable that will store the input.", "e.g. guess");
+              if (/^input\b/i.test(name)) fail("INPUT is already shown on the block.", "Just type the variable name, e.g. guess");
+              var problem = nameProblem(name);
+              if (problem) throw problem;
+              return { target: name };
+            }
+            case "output": {
+              var text = String(node.text || "").trim();
+              if (!text) fail("Type what to OUTPUT.", "e.g. \"Score: \" + total");
+              if (/^output\b/i.test(text)) fail("OUTPUT is already shown on the block.", "Just type what to output, e.g. \"Score: \" + total");
+              return { expr: parseExpression(text, options) };
+            }
+            case "decision": {
+              var condition = cleanCondition(node.text);
+              if (!condition) fail("Type a condition for this decision.", "e.g. total > 10   (the ? is added for you)");
+              var ast = parseExpression(condition, options);
+              var notBoolean = (ast.k === "lit" && ast.value.type !== "BOOL")
+                || (ast.k === "bin" && !COMPARISONS[ast.op] && ast.op !== "AND" && ast.op !== "OR")
+                || ast.k === "neg";
+              if (notBoolean) {
+                fail("A decision needs a condition that is True or False.", "Compare values, e.g. total > 10 or guess != answer");
+              }
+              return { expr: ast };
+            }
+            case "return": {
+              var value = stripKeyword(node.text, "RETURN").trim();
+              if (/^return\b/i.test(String(node.text || "").trim())) {
+                fail("RETURN is already shown on the block.", "Just type the value to return, or leave it empty.");
+              }
+              return { expr: value ? parseExpression(value, options) : null };
+            }
+            case "call": {
+              var sub = context.subprograms && context.subprograms.get(node.calleeId);
+              if (!sub) fail("Choose which subprogram to call.");
+              var params = sub.params || [];
+              var args = (node.args || []).slice(0, params.length);
+              var compiledArgs = params.map(function (param, index) {
+                var argText = String(args[index] || "").trim();
+                if (!argText) fail("Give a value for the parameter " + param + ".", "e.g. a variable name or a number");
+                try {
+                  return parseExpression(argText, options);
+                } catch (error) {
+                  if (error instanceof FlowError) error.message = "Parameter " + param + ": " + error.message;
+                  throw error;
+                }
+              });
+              var extra = (node.args || []).slice(params.length).filter(function (arg) { return String(arg || "").trim(); });
+              if (extra.length) fail(sub.name + " only takes " + params.length + " parameter" + (params.length === 1 ? "" : "s") + ".");
+              var target = String(node.target || "").trim();
+              if (target) {
+                var targetProblem = nameProblem(target, "The variable to store the result in");
+                if (targetProblem) throw targetProblem;
+              }
+              return { calleeId: sub.id, args: compiledArgs, target: target || null };
+            }
+          }
+          fail("Unknown block type.");
+        }
+
+        function parseParams(text) {
+          var raw = String(text || "").trim();
+          if (!raw) return { params: [] };
+          var params = raw.split(",").map(function (part) { return part.trim(); });
+          for (var i = 0; i < params.length; i += 1) {
+            var problem = nameProblem(params[i], "A parameter name");
+            if (problem) return { params: params.filter(Boolean), error: problem };
+            if (params.indexOf(params[i]) !== i) {
+              return { params: params, error: new FlowError("The parameter " + params[i] + " is listed twice.") };
+            }
+          }
+          return { params: params };
+        }
+
+        function subprogramSignature(tab) {
+          return tab.name + "(" + parseParams(tab.paramsText).params.join(", ") + ")";
+        }
+
+        function nodeSummary(node, doc) {
+          switch (node.type) {
+            case "start": return "START";
+            case "end": return "END";
+            case "process": return String(node.text || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean).join("; ") || "(empty process)";
+            case "input": return "INPUT " + (String(node.text || "").trim() || "?");
+            case "output": return "OUTPUT " + (String(node.text || "").trim() || "?");
+            case "decision": return (cleanCondition(node.text) || "(empty condition)") + "?";
+            case "return": {
+              var value = String(node.text || "").trim();
+              return value ? "RETURN " + value : "RETURN";
+            }
+            case "call": return callText(node, doc) || "(choose a subprogram)";
+          }
+          return node.type;
+        }
+
+        function callText(node, doc) {
+          var sub = doc && doc.tabs.filter(function (tab) { return tab.id === node.calleeId; })[0];
+          if (!sub) return "";
+          var params = parseParams(sub.paramsText).params;
+          var args = params.map(function (_, index) { return String((node.args || [])[index] || "").trim() || "?"; });
+          var target = String(node.target || "").trim();
+          return (target ? target + " = " : "") + sub.name + "(" + args.join(", ") + ")";
+        }
+
+        /* ---------- Whole-flowchart checks ---------- */
+
+        function similarName(name, candidates) {
+          var lower = name.toLowerCase();
+          var best = null;
+          var bestScore = Infinity;
+          candidates.forEach(function (candidate) {
+            if (candidate === name) return;
+            var score = candidate.toLowerCase() === lower ? 0 : editDistance(lower, candidate.toLowerCase());
+            if (score < bestScore) { bestScore = score; best = candidate; }
+          });
+          return bestScore <= (name.length > 4 ? 2 : 1) ? best : null;
+        }
+
+        function editDistance(a, b) {
+          var previous = [];
+          for (var j = 0; j <= b.length; j += 1) previous[j] = j;
+          for (var i = 1; i <= a.length; i += 1) {
+            var current = [i];
+            for (var k = 1; k <= b.length; k += 1) {
+              current[k] = Math.min(previous[k] + 1, current[k - 1] + 1, previous[k - 1] + (a[i - 1] === b[k - 1] ? 0 : 1));
+            }
+            previous = current;
+          }
+          return previous[b.length];
+        }
+
+        function tabLabel(tab) {
+          return tab.kind === "main" ? "Main" : tab.name || "this subprogram";
+        }
+
+        var PORT_MESSAGES = {
+          next: "This block isn't connected to a next block.",
+          "true": "The True path of this decision isn't connected.",
+          "false": "The False path of this decision isn't connected.",
+        };
+
+        function validateDoc(doc) {
+          var problems = [];
+          function report(severity, tab, nodeId, message, hint, extra) {
+            var problem = { severity: severity, tabId: tab.id, nodeId: nodeId || null, message: message, hint: hint || "" };
+            if (extra) Object.keys(extra).forEach(function (key) { problem[key] = extra[key]; });
+            problems.push(problem);
+          }
+
+          var subs = doc.tabs.filter(function (tab) { return tab.kind === "sub"; });
+          var subprograms = new Map();
+          subs.forEach(function (tab) {
+            var parsed = parseParams(tab.paramsText);
+            subprograms.set(tab.id, { id: tab.id, name: tab.name, params: parsed.params, tab: tab });
+          });
+          var subprogramNames = subs.map(function (tab) { return tab.name; });
+          var context = { subprograms: subprograms, subprogramNames: subprogramNames };
+
+          var program = { mainId: null, tabs: new Map(), doc: doc };
+
+          doc.tabs.forEach(function (tab) {
+            var startNodes = tab.nodes.filter(function (node) { return node.type === "start"; });
+            var start = startNodes[0];
+            var startId = start ? start.id : null;
+
+            if (tab.kind === "sub") {
+              var nameError = nameProblem(String(tab.name || "").trim(), "The subprogram name");
+              if (nameError) report("error", tab, startId, nameError.message, nameError.hint, { field: "name" });
+              var clash = subs.filter(function (other) {
+                return other !== tab && String(other.name).toLowerCase() === String(tab.name).toLowerCase();
+              });
+              if (!nameError && clash.length) {
+                report("error", tab, startId, "Another subprogram is also called " + tab.name + ".", "Give each subprogram a different name.", { field: "name" });
+              }
+              var paramsError = parseParams(tab.paramsText).error;
+              if (paramsError) report("error", tab, startId, paramsError.message, paramsError.hint, { field: "params" });
+            } else {
+              program.mainId = tab.id;
+            }
+
+            if (!start) {
+              report("error", tab, null, tabLabel(tab) + " has no START block.");
+              return;
+            }
+
+            var nodesById = new Map();
+            tab.nodes.forEach(function (node) { nodesById.set(node.id, node); });
+            var next = new Map();
+            tab.nodes.forEach(function (node) { next.set(node.id, {}); });
+            tab.edges.forEach(function (edge) {
+              if (nodesById.has(edge.from) && nodesById.has(edge.to)) next.get(edge.from)[edge.port] = edge.to;
+            });
+
+            var compiled = new Map();
+            var assigned = (tab.kind === "sub" ? parseParams(tab.paramsText).params : []).slice();
+            var usage = [];
+            var missingPorts = false;
+
+            tab.nodes.forEach(function (node) {
+              if (tab.kind === "main" && node.type === "return") {
+                report("error", tab, node.id, "RETURN is only used at the end of a subprogram.", "Main finishes with an END block.");
+              }
+              if (tab.kind === "sub" && node.type === "end") {
+                report("error", tab, node.id, "A subprogram finishes with RETURN, not END.", "Delete this END and use a RETURN block.");
+              }
+              if (node.type === "start" && node !== start) {
+                report("error", tab, node.id, "Only one START block is allowed.");
+              }
+              try {
+                var result = compileNode(node, context);
+                compiled.set(node.id, result);
+                if (result.assignments) {
+                  result.assignments.forEach(function (assignment) {
+                    usage.push({ node: node, names: collectVariables(assignment.expr) });
+                    if (assigned.indexOf(assignment.target) < 0) assigned.push(assignment.target);
+                  });
+                }
+                if (node.type === "input" && assigned.indexOf(result.target) < 0) assigned.push(result.target);
+                if (result.expr) usage.push({ node: node, names: collectVariables(result.expr) });
+                if (result.args) {
+                  var names = [];
+                  result.args.forEach(function (arg) { collectVariables(arg, names); });
+                  usage.push({ node: node, names: names });
+                }
+                if (node.type === "call" && result.target && assigned.indexOf(result.target) < 0) assigned.push(result.target);
+              } catch (error) {
+                if (!(error instanceof FlowError)) throw error;
+                report("error", tab, node.id, error.message, error.hint);
+              }
+              (OUTPUT_PORTS[node.type] || []).forEach(function (port) {
+                if (!next.get(node.id)[port]) {
+                  missingPorts = true;
+                  report("error", tab, node.id, PORT_MESSAGES[port], port === "next" ? "Drag from the dot at the bottom of the block to the next block." : "Drag from the " + (port === "true" ? "True" : "False") + " dot to the block that should run next.");
+                }
+              });
+            });
+
+            var reported = {};
+            usage.forEach(function (use) {
+              use.names.forEach(function (name) {
+                if (assigned.indexOf(name) >= 0) return;
+                var key = use.node.id + ":" + name;
+                if (reported[key]) return;
+                reported[key] = true;
+                var suggestion = similarName(name, assigned);
+                var hint = suggestion ? "Did you mean " + suggestion + "? Names are case-sensitive." : "Give it a value first with a process or Input block.";
+                if (!suggestion && tab.kind === "sub") {
+                  var mainTab = doc.tabs.filter(function (t) { return t.kind === "main"; })[0];
+                  var mainVars = mainTab ? variablesInTab(mainTab, doc) : [];
+                  if (mainVars.indexOf(name) >= 0) hint = "Subprograms can't see Main's variables. Add " + name + " as a parameter and pass it in.";
+                }
+                report("error", tab, use.node.id, name + " is used here but is never given a value in " + tabLabel(tab) + ".", hint);
+              });
+            });
+
+            var lowerSeen = {};
+            assigned.forEach(function (name) {
+              var lower = name.toLowerCase();
+              if (lowerSeen[lower] && lowerSeen[lower] !== name) {
+                report("warning", tab, null, lowerSeen[lower] + " and " + name + " are different variables because names are case-sensitive.", "Use exactly the same capital letters each time.");
+              } else {
+                lowerSeen[lower] = name;
+              }
+            });
+
+            var terminalType = tab.kind === "main" ? "end" : "return";
+            var terminals = tab.nodes.filter(function (node) { return node.type === terminalType; });
+            if (!terminals.length) {
+              report("error", tab, startId, tab.kind === "main" ? "Main has no END block." : tabLabel(tab) + " has no RETURN block.", tab.kind === "main" ? "Every flowchart must finish at END." : "Every subprogram must finish at a RETURN.");
+            }
+
+            var reachable = {};
+            var queue = [startId];
+            reachable[startId] = true;
+            while (queue.length) {
+              var current = queue.shift();
+              var outs = next.get(current) || {};
+              Object.keys(outs).forEach(function (port) {
+                var target = outs[port];
+                if (!reachable[target]) { reachable[target] = true; queue.push(target); }
+              });
+            }
+            tab.nodes.forEach(function (node) {
+              if (!reachable[node.id]) {
+                report("warning", tab, node.id, "Nothing leads to this block from START, so it will never run.", "Connect it into the flow, or delete it.");
+              }
+            });
+
+            if (!missingPorts && terminals.length) {
+              var finishes = {};
+              terminals.forEach(function (node) { finishes[node.id] = true; });
+              var changed = true;
+              while (changed) {
+                changed = false;
+                tab.nodes.forEach(function (node) {
+                  if (finishes[node.id]) return;
+                  var outs = next.get(node.id) || {};
+                  if (Object.keys(outs).some(function (port) { return finishes[outs[port]]; })) {
+                    finishes[node.id] = true;
+                    changed = true;
+                  }
+                });
+              }
+              var stuck = tab.nodes.filter(function (node) { return reachable[node.id] && !finishes[node.id]; });
+              if (stuck.length) {
+                report("error", tab, stuck[0].id, "These blocks loop forever: there is no way out to " + terminalType.toUpperCase() + ".", "Add a decision so that one path leaves the loop.", { nodeIds: stuck.map(function (node) { return node.id; }) });
+              }
+            }
+
+            program.tabs.set(tab.id, {
+              id: tab.id, kind: tab.kind, name: tabLabel(tab), startId: startId,
+              params: tab.kind === "sub" ? parseParams(tab.paramsText).params : [],
+              nodes: nodesById, compiled: compiled, next: next,
+            });
+          });
+
+          // Calls that store a result need a subprogram that RETURNs a value.
+          doc.tabs.forEach(function (tab) {
+            tab.nodes.forEach(function (node) {
+              if (node.type !== "call" || !String(node.target || "").trim()) return;
+              var sub = subprograms.get(node.calleeId);
+              if (!sub) return;
+              var returns = sub.tab.nodes.filter(function (n) { return n.type === "return"; });
+              var withValue = returns.filter(function (n) { return String(n.text || "").trim(); });
+              if (returns.length && !withValue.length) {
+                report("error", tab, node.id, sub.name + " doesn't RETURN a value, so there is nothing to store in " + String(node.target).trim() + ".", "Type a value in " + sub.name + "'s RETURN block, or clear the result variable.");
+              } else if (withValue.length < returns.length) {
+                report("warning", tab, node.id, "Some RETURN blocks in " + sub.name + " don't return a value.", "Every RETURN should give a value if the result is stored.");
+              }
+            });
+          });
+
+          problems.sort(function (a, b) {
+            return (a.severity === "error" ? 0 : 1) - (b.severity === "error" ? 0 : 1);
+          });
+          var errors = problems.filter(function (problem) { return problem.severity === "error"; }).length;
+          return { problems: problems, errors: errors, program: errors ? null : program };
+        }
+
+        // Every variable name a tab gives a value to, in a stable order.
+        function variablesInTab(tab, doc) {
+          var names = tab.kind === "sub" ? parseParams(tab.paramsText).params.slice() : [];
+          function add(name) {
+            if (name && names.indexOf(name) < 0 && !nameProblem(name)) names.push(name);
+          }
+          tab.nodes.forEach(function (node) {
+            if (node.type === "process") {
+              String(node.text || "").split(/\r?\n/).forEach(function (line) {
+                var match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|←)(?!=)/);
+                if (match) add(match[1]);
+              });
+            }
+            if (node.type === "input") add(String(node.text || "").trim());
+            if (node.type === "call") add(String(node.target || "").trim());
+          });
+          return names;
+        }
+
+        /* ---------- Running ---------- */
+
+        function createRunner(program, options) {
+          options = options || {};
+          var runtime = { random: options.random || Math.random };
+          var main = program.tabs.get(program.mainId);
+          var state = {
+            status: "ready",
+            frames: [{ tabId: main.id, nodeId: main.startId, vars: new Map(), returnTo: null }],
+            output: [],
+            trace: [],
+            steps: 0,
+            lastEvent: null,
+            lastEdge: null,
+            error: null,
+            pendingInput: null,
+          };
+
+          function top() {
+            return state.frames[state.frames.length - 1];
+          }
+
+          function scopeKey(frame, name) {
+            var tab = program.tabs.get(frame.tabId);
+            return tab.kind === "main" ? name : tab.name + "." + name;
+          }
+
+          function record(frame, label, changes, output) {
+            state.trace.push({
+              step: state.steps,
+              scope: program.tabs.get(frame.tabId).name,
+              label: label,
+              changes: changes.map(function (change) {
+                return { key: scopeKey(frame, change.name), name: change.name, display: formatValue(change.value) };
+              }),
+              output: output === undefined ? null : output,
+            });
+          }
+
+          function advance(frame, port) {
+            var tab = program.tabs.get(frame.tabId);
+            var target = (tab.next.get(frame.nodeId) || {})[port];
+            if (!target) fail("This block has no " + port + " connection.");
+            state.lastEdge = { tabId: tab.id, from: frame.nodeId, port: port };
+            frame.nodeId = target;
+          }
+
+          function stop(error, frame) {
+            state.status = "error";
+            state.error = {
+              message: error.message,
+              hint: error.hint || "",
+              tabId: frame.tabId,
+              nodeId: frame.nodeId,
+            };
+          }
+
+          function currentNode() {
+            var frame = top();
+            var tab = program.tabs.get(frame.tabId);
+            return { frame: frame, tab: tab, node: tab.nodes.get(frame.nodeId), compiled: tab.compiled.get(frame.nodeId) };
+          }
+
+          function step() {
+            if (state.status !== "ready") return state;
+            var here = currentNode();
+            var frame = here.frame;
+            var node = here.node;
+            var compiled = here.compiled;
+            var label = nodeSummary(node, program.doc);
+            try {
+              state.steps += 1;
+              switch (node.type) {
+                case "start":
+                  state.lastEvent = here.tab.kind === "main" ? "START" : "START " + here.tab.name;
+                  advance(frame, "next");
+                  break;
+                case "process": {
+                  var changes = compiled.assignments.map(function (assignment) {
+                    var value = evaluate(assignment.expr, frame.vars, runtime);
+                    frame.vars.set(assignment.target, value);
+                    return { name: assignment.target, value: value };
+                  });
+                  state.lastEvent = changes.map(function (c) { return c.name + " ← " + formatValue(c.value); }).join(", ");
+                  record(frame, label, changes);
+                  advance(frame, "next");
+                  break;
+                }
+                case "input":
+                  state.steps -= 1;
+                  state.status = "input";
+                  state.pendingInput = { name: compiled.target };
+                  state.lastEvent = "Waiting for INPUT " + compiled.target;
+                  break;
+                case "output": {
+                  var text = toText(evaluate(compiled.expr, frame.vars, runtime));
+                  state.output.push({ kind: "output", text: text });
+                  state.lastEvent = "OUTPUT → " + text;
+                  record(frame, label, [], text);
+                  advance(frame, "next");
+                  break;
+                }
+                case "decision": {
+                  var result = evaluate(compiled.expr, frame.vars, runtime);
+                  if (result.type !== "BOOL") {
+                    fail("The condition gave " + describe(result) + ", not True or False.", "Compare values, e.g. total > 10");
+                  }
+                  state.lastEvent = label + " → " + (result.v ? "True" : "False");
+                  advance(frame, result.v ? "true" : "false");
+                  break;
+                }
+                case "call": {
+                  var sub = program.tabs.get(compiled.calleeId);
+                  var values = compiled.args.map(function (arg) { return evaluate(arg, frame.vars, runtime); });
+                  if (state.frames.length >= MAX_CALL_DEPTH) {
+                    fail("Too many subprogram calls inside each other (stack overflow).", "Does your recursion have a base case that stops it?");
+                  }
+                  var vars = new Map();
+                  sub.params.forEach(function (param, index) { vars.set(param, values[index]); });
+                  var callee = { tabId: sub.id, nodeId: sub.startId, vars: vars, returnTo: { nodeId: node.id, target: compiled.target } };
+                  state.frames.push(callee);
+                  state.lastEvent = "Call " + sub.name + "(" + values.map(formatValue).join(", ") + ")";
+                  state.lastEdge = null;
+                  if (sub.params.length) {
+                    record(callee, "Call " + label, sub.params.map(function (param, index) { return { name: param, value: values[index] }; }));
+                  }
+                  break;
+                }
+                case "return": {
+                  var returned = compiled.expr ? evaluate(compiled.expr, frame.vars, runtime) : null;
+                  var info = frame.returnTo;
+                  state.frames.pop();
+                  var caller = top();
+                  state.lastEvent = "RETURN" + (returned ? " " + formatValue(returned) : "") + " to " + program.tabs.get(caller.tabId).name;
+                  if (info.target) {
+                    if (!returned) {
+                      state.frames.push(frame);
+                      fail(here.tab.name + " finished without returning a value, so nothing can be stored in " + info.target + ".", "Type a value in this RETURN block.");
+                    }
+                    caller.vars.set(info.target, returned);
+                    record(caller, label, [{ name: info.target, value: returned }]);
+                  }
+                  caller.nodeId = info.nodeId;
+                  advance(caller, "next");
+                  break;
+                }
+                case "end":
+                  state.status = "done";
+                  state.lastEvent = "END";
+                  state.lastEdge = null;
+                  break;
+              }
+            } catch (error) {
+              if (!(error instanceof FlowError)) throw error;
+              stop(error, top());
+            }
+            return state;
+          }
+
+          function provideInput(raw) {
+            if (state.status !== "input") return state;
+            var frame = top();
+            var value = inputValue(raw);
+            frame.vars.set(state.pendingInput.name, value);
+            state.output.push({ kind: "input", text: String(raw) });
+            state.steps += 1;
+            state.lastEvent = state.pendingInput.name + " ← " + formatValue(value) + " (" + value.type + ")";
+            record(frame, "INPUT " + state.pendingInput.name, [{ name: state.pendingInput.name, value: value }]);
+            state.pendingInput = null;
+            state.status = "ready";
+            try {
+              advance(frame, "next");
+            } catch (error) {
+              if (!(error instanceof FlowError)) throw error;
+              stop(error, frame);
+            }
+            return state;
+          }
+
+          return { state: state, step: step, provideInput: provideInput, currentNode: currentNode };
+        }
+
+        return {
+          BUILTINS: BUILTINS,
+          OUTPUT_PORTS: OUTPUT_PORTS,
+          FlowError: FlowError,
+          tokenize: tokenize,
+          parseExpression: parseExpression,
+          evaluate: evaluate,
+          toText: toText,
+          formatValue: formatValue,
+          inputValue: inputValue,
+          nameProblem: nameProblem,
+          parseParams: parseParams,
+          subprogramSignature: subprogramSignature,
+          cleanCondition: cleanCondition,
+          stripKeyword: stripKeyword,
+          nodeSummary: nodeSummary,
+          callText: callText,
+          variablesInTab: variablesInTab,
+          validateDoc: validateDoc,
+          createRunner: createRunner,
+        };
+      })();
+
+      /* Example flowcharts. Positions are block centres on the canvas grid. */
+      var FlowExamples = (function () {
+        "use strict";
+
+        function node(id, type, x, y, text, extra) {
+          var result = { id: id, type: type, x: x, y: y, text: text || "" };
+          if (extra) Object.keys(extra).forEach(function (key) { result[key] = extra[key]; });
+          return result;
+        }
+
+        function link(from, to, port) {
+          port = port || "next";
+          return { id: from + "-" + port, from: from, port: port, to: to };
+        }
+
+        function main(nodes, edges) {
+          return { id: "main", kind: "main", name: "Main", paramsText: "", nodes: nodes, edges: edges };
+        }
+
+        function sub(id, name, paramsText, nodes, edges) {
+          return { id: id, kind: "sub", name: name, paramsText: paramsText, nodes: nodes, edges: edges };
+        }
+
+        function decision(id, x, y, text, trueSide, falseSide) {
+          return node(id, "decision", x, y, text, { trueSide: trueSide, falseSide: falseSide });
+        }
+
+        function call(id, x, y, calleeId, args, target) {
+          return node(id, "call", x, y, "", { calleeId: calleeId, args: args, target: target || "" });
+        }
+
+        var list = [
+          {
+            id: "guess",
+            label: "Guess the colour (loop)",
+            inputs: ["blue", "yellow"],
+            expectedOutput: ["What colour is a ripe banana?", "Correct, well done!"],
+            doc: {
+              tabs: [
+                main([
+                  node("s", "start", 300, 60),
+                  node("p1", "process", 300, 140, "answer = \"yellow\""),
+                  node("o1", "output", 300, 230, "\"What colour is a ripe banana?\""),
+                  node("i1", "input", 300, 330, "guess"),
+                  decision("d1", 300, 450, "answer != guess", "left", "bottom"),
+                  node("o2", "output", 300, 570, "\"Correct, well done!\""),
+                  node("e", "end", 300, 660),
+                ], [
+                  link("s", "p1"), link("p1", "o1"), link("o1", "i1"), link("i1", "d1"),
+                  link("d1", "i1", "true"), link("d1", "o2", "false"), link("o2", "e"),
+                ]),
+              ],
+            },
+          },
+          {
+            id: "times",
+            label: "Times table (count-controlled loop)",
+            inputs: ["7"],
+            expectedOutput: ["7 x 1 = 7", "7 x 2 = 14", "7 x 3 = 21", "7 x 4 = 28", "7 x 5 = 35",
+              "7 x 6 = 42", "7 x 7 = 49", "7 x 8 = 56", "7 x 9 = 63", "7 x 10 = 70", "7 x 11 = 77", "7 x 12 = 84"],
+            doc: {
+              tabs: [
+                main([
+                  node("s", "start", 300, 60),
+                  node("i1", "input", 300, 140, "n"),
+                  node("p1", "process", 300, 230, "i = 1"),
+                  decision("d1", 300, 340, "i <= 12", "bottom", "right"),
+                  node("o1", "output", 300, 460, "n + \" x \" + i + \" = \" + n * i"),
+                  node("p2", "process", 300, 550, "i = i + 1"),
+                  node("e", "end", 600, 620),
+                ], [
+                  link("s", "i1"), link("i1", "p1"), link("p1", "d1"), link("d1", "o1", "true"),
+                  link("d1", "e", "false"), link("o1", "p2"), link("p2", "d1"),
+                ]),
+              ],
+            },
+          },
+          {
+            id: "count",
+            label: "Count up or down (procedures)",
+            inputs: ["4", "3"],
+            expectedOutput: ["0", "1", "2", "3", "4", "5", "6"],
+            doc: {
+              tabs: [
+                main([
+                  node("s", "start", 300, 60),
+                  node("i1", "input", 300, 140, "num1"),
+                  node("i2", "input", 300, 230, "num2"),
+                  node("p1", "process", 300, 320, "total = num1 + num2"),
+                  decision("d1", 300, 430, "total > 10", "left", "right"),
+                  call("c1", 140, 550, "countdown", ["total"]),
+                  call("c2", 460, 550, "countup", ["total"]),
+                  node("e", "end", 300, 650),
+                ], [
+                  link("s", "i1"), link("i1", "i2"), link("i2", "p1"), link("p1", "d1"),
+                  link("d1", "c1", "true"), link("d1", "c2", "false"), link("c1", "e"), link("c2", "e"),
+                ]),
+                sub("countdown", "CountDown", "total", [
+                  node("s", "start", 300, 110),
+                  decision("d1", 300, 230, "total == 0", "right", "bottom"),
+                  node("r", "return", 520, 230),
+                  node("o1", "output", 300, 350, "total"),
+                  node("p1", "process", 300, 440, "total = total - 1"),
+                ], [
+                  link("s", "d1"), link("d1", "r", "true"), link("d1", "o1", "false"),
+                  link("o1", "p1"), link("p1", "d1"),
+                ]),
+                sub("countup", "CountUp", "total", [
+                  node("s", "start", 300, 110),
+                  node("p1", "process", 300, 200, "i = 0"),
+                  decision("d1", 300, 310, "i == total", "right", "bottom"),
+                  node("r", "return", 520, 310),
+                  node("o1", "output", 300, 430, "i"),
+                  node("p2", "process", 300, 520, "i = i + 1"),
+                ], [
+                  link("s", "p1"), link("p1", "d1"), link("d1", "r", "true"), link("d1", "o1", "false"),
+                  link("o1", "p2"), link("p2", "d1"),
+                ]),
+              ],
+            },
+          },
+          {
+            id: "largest",
+            label: "Largest of two (function with RETURN)",
+            inputs: ["12", "30"],
+            expectedOutput: ["Largest: 30"],
+            doc: {
+              tabs: [
+                main([
+                  node("s", "start", 300, 60),
+                  node("i1", "input", 300, 140, "a"),
+                  node("i2", "input", 300, 230, "b"),
+                  call("c1", 300, 320, "max", ["a", "b"], "biggest"),
+                  node("o1", "output", 300, 410, "\"Largest: \" + biggest"),
+                  node("e", "end", 300, 490),
+                ], [
+                  link("s", "i1"), link("i1", "i2"), link("i2", "c1"), link("c1", "o1"), link("o1", "e"),
+                ]),
+                sub("max", "Max", "x, y", [
+                  node("s", "start", 300, 110),
+                  decision("d1", 300, 220, "x > y", "bottom", "right"),
+                  node("r1", "return", 300, 340, "x"),
+                  node("r2", "return", 500, 340, "y"),
+                ], [
+                  link("s", "d1"), link("d1", "r1", "true"), link("d1", "r2", "false"),
+                ]),
+              ],
+            },
+          },
+          {
+            id: "factorial",
+            label: "Factorial (recursion)",
+            inputs: ["5"],
+            expectedOutput: ["5! = 120"],
+            doc: {
+              tabs: [
+                main([
+                  node("s", "start", 300, 60),
+                  node("i1", "input", 300, 140, "n"),
+                  call("c1", 300, 230, "factorial", ["n"], "result"),
+                  node("o1", "output", 300, 320, "n + \"! = \" + result"),
+                  node("e", "end", 300, 400),
+                ], [
+                  link("s", "i1"), link("i1", "c1"), link("c1", "o1"), link("o1", "e"),
+                ]),
+                sub("factorial", "Factorial", "n", [
+                  node("s", "start", 300, 110),
+                  decision("d1", 300, 220, "n <= 1", "right", "bottom"),
+                  node("r1", "return", 520, 220, "1"),
+                  call("c1", 300, 330, "factorial", ["n - 1"], "smaller"),
+                  node("r2", "return", 300, 420, "n * smaller"),
+                ], [
+                  link("s", "d1"), link("d1", "r1", "true"), link("d1", "c1", "false"), link("c1", "r2"),
+                ]),
+              ],
+            },
+          },
+        ];
+
+        function blank() {
+          return {
+            tabs: [main([
+              node("start", "start", 300, 60),
+              node("end", "end", 300, 160),
+            ], [link("start", "end")])],
+          };
+        }
+
+        return { list: list, blank: blank };
+      })();
+    </script>
+
+    <script type="text/babel">
+      const { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect, useImperativeHandle } = React;
+
+      const STORAGE_KEY = "flowchart-designer-v1";
+      const GRID = 10;
+      const SKEW = 16;
+      const LINE = 20;
+      const HEADER_GAP = 22;
+      const MIN_ZOOM = 0.3;
+      const MAX_ZOOM = 2.5;
+      const STEP_LIMIT = 20000;
+      const SPEEDS = [
+        { label: "Slow", delay: 1000, batch: 1 },
+        { label: "Medium", delay: 450, batch: 1 },
+        { label: "Fast", delay: 150, batch: 1 },
+        { label: "Very fast", delay: 30, batch: 1 },
+        { label: "Instant", delay: 16, batch: 250 },
+      ];
+      const CODE_FONT_FAMILY = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+      const KEY_FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+      const FONTS = {
+        code: { family: CODE_FONT_FAMILY, size: 14, weight: 500 },
+        key: { family: KEY_FONT_FAMILY, size: 13, weight: 700 },
+        hint: { family: KEY_FONT_FAMILY, size: 13, weight: 400 },
+      };
+      const BLOCKS = {
+        process: { label: "Process", help: "Assignment, e.g. total = 0" },
+        input: { label: "Input", help: "INPUT into a variable" },
+        output: { label: "Output", help: "OUTPUT text and values" },
+        decision: { label: "Decision", help: "True or False condition" },
+        call: { label: "Subprogram call", help: "Run a subprogram" },
+        end: { label: "End", help: "Finish the program" },
+        return: { label: "Return", help: "Finish the subprogram" },
+      };
+      const SIDE_NAMES = { bottom: "Bottom", left: "Left", right: "Right" };
+
+      const snap = (value) => Math.round(value / GRID) * GRID;
+      const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+      let idCounter = 0;
+      const newId = (prefix) => prefix + Date.now().toString(36) + (idCounter++).toString(36);
+      const clone = (value) => JSON.parse(JSON.stringify(value));
+
+      /* ---------------------------------------------------------------
+         Block geometry. Every block is positioned by its centre. A
+         subprogram's START also draws the double-bar header above it.
+         --------------------------------------------------------------- */
+      const measureContext = document.createElement("canvas").getContext("2d");
+      const widthCache = new Map();
+      function textWidth(text, kind) {
+        const key = kind + "|" + text;
+        if (widthCache.has(key)) return widthCache.get(key);
+        const font = FONTS[kind];
+        measureContext.font = `${font.weight} ${font.size}px ${font.family}`;
+        const width = Math.ceil(measureContext.measureText(text).width);
+        widthCache.set(key, width);
+        return width;
+      }
+
+      function widest(lines) {
+        return lines.reduce((max, line) => Math.max(max, textWidth(line.text, line.kind)), 0);
+      }
+
+      function blockLayout(node, tab, doc) {
+        const text = String(node.text || "");
+        switch (node.type) {
+          case "start": {
+            const lines = [{ text: "START", kind: "key" }];
+            const layout = { shape: "terminator", lines, w: Math.max(110, widest(lines) + 48), h: 42 };
+            if (tab.kind === "sub") {
+              const signature = FlowLang.subprogramSignature(tab);
+              layout.header = { text: signature, w: Math.max(150, textWidth(signature, "code") + 56), h: 40 };
+            }
+            return layout;
+          }
+          case "end": {
+            const lines = [{ text: "END", kind: "key" }];
+            return { shape: "terminator", lines, w: Math.max(110, widest(lines) + 48), h: 42 };
+          }
+          case "return": {
+            const value = text.trim();
+            const lines = [{ text: "RETURN", kind: "key" }];
+            if (value) lines.push({ text: value, kind: "code" });
+            return { shape: "terminator", lines, w: Math.max(120, widest(lines) + 52), h: value ? 58 : 42 };
+          }
+          case "process": {
+            const rows = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+            const lines = rows.length ? rows.map((line) => ({ text: line, kind: "code" })) : [{ text: "assignment", kind: "hint" }];
+            return { shape: "process", lines, w: Math.max(140, widest(lines) + 40), h: Math.max(46, lines.length * LINE + 24) };
+          }
+          case "input":
+          case "output": {
+            const lines = [
+              { text: node.type.toUpperCase(), kind: "key" },
+              text.trim() ? { text: text.trim(), kind: "code" } : { text: node.type === "input" ? "variable" : "value", kind: "hint" },
+            ];
+            return { shape: "io", lines, w: Math.max(150, widest(lines) + 44 + SKEW), h: 58 };
+          }
+          case "decision": {
+            const condition = FlowLang.cleanCondition(text);
+            const lines = [condition ? { text: condition, kind: "code" } : { text: "condition", kind: "hint" }];
+            return { shape: "decision", lines, w: Math.max(170, Math.round(widest(lines) * 1.45) + 44), h: 96 };
+          }
+          case "call": {
+            const label = FlowLang.callText(node, doc);
+            const lines = [label ? { text: label, kind: "code" } : { text: "choose subprogram", kind: "hint" }];
+            return { shape: "call", lines, w: Math.max(160, widest(lines) + 60), h: 48 };
+          }
+        }
+        return { shape: "process", lines: [{ text: node.type, kind: "hint" }], w: 140, h: 46 };
+      }
+
+      function blockBox(node, layout, withHeader) {
+        const box = {
+          left: node.x - layout.w / 2,
+          right: node.x + layout.w / 2,
+          top: node.y - layout.h / 2,
+          bottom: node.y + layout.h / 2,
+        };
+        if (withHeader && layout.header) {
+          box.top = node.y - layout.h / 2 - HEADER_GAP - layout.header.h;
+          box.left = Math.min(box.left, node.x - layout.header.w / 2);
+          box.right = Math.max(box.right, node.x + layout.header.w / 2);
+        }
+        return box;
+      }
+
+      function sidePoint(node, layout, side) {
+        const inset = layout.shape === "io" ? SKEW / 2 : 0;
+        if (side === "left") return { x: node.x - layout.w / 2 + inset, y: node.y };
+        if (side === "right") return { x: node.x + layout.w / 2 - inset, y: node.y };
+        if (side === "top") return { x: node.x, y: node.y - layout.h / 2 };
+        return { x: node.x, y: node.y + layout.h / 2 };
+      }
+
+      function portSide(node, port) {
+        if (port === "true") return node.trueSide || "bottom";
+        if (port === "false") return node.falseSide || "right";
+        return "bottom";
+      }
+
+      /* ---------------------------------------------------------------
+         Connector routing. Connectors are orthogonal: forward links drop
+         into the top of the next block; links that go back up (loops) run
+         round the outside of the blocks they pass and enter from the side.
+         --------------------------------------------------------------- */
+      function routeEdges(tab, layouts) {
+        const routes = new Map();
+        const nodes = new Map(tab.nodes.map((node) => [node.id, node]));
+        const loops = [];
+
+        tab.edges.forEach((edge) => {
+          const from = nodes.get(edge.from);
+          const to = nodes.get(edge.to);
+          if (!from || !to || !layouts.get(from.id) || !layouts.get(to.id)) return;
+          const fromLayout = layouts.get(from.id);
+          const toLayout = layouts.get(to.id);
+          const side = portSide(from, edge.port);
+          const p = sidePoint(from, fromLayout, side);
+          const target = blockBox(to, toLayout, false);
+          const top = { x: to.x, y: target.top };
+          let points = null;
+
+          const besideRight = side === "right" && target.left >= p.x + 24 && p.y >= target.top - 4 && p.y <= target.bottom + 4;
+          const besideLeft = side === "left" && target.right <= p.x - 24 && p.y >= target.top - 4 && p.y <= target.bottom + 4;
+          if (besideRight || besideLeft) {
+            const entry = sidePoint(to, toLayout, besideRight ? "left" : "right");
+            const midX = (p.x + entry.x) / 2;
+            points = Math.abs(p.y - entry.y) < 1 ? [p, entry] : [p, { x: midX, y: p.y }, { x: midX, y: entry.y }, entry];
+          } else if (target.top >= p.y + 20) {
+            if (side === "bottom") {
+              if (Math.abs(to.x - p.x) < 1) {
+                points = [p, top];
+              } else {
+                const midY = Math.max(p.y + 16, target.top - 20);
+                points = [p, { x: p.x, y: midY }, { x: to.x, y: midY }, top];
+              }
+            } else {
+              const direction = side === "right" ? 1 : -1;
+              if ((to.x - p.x) * direction >= 16) {
+                points = [p, { x: to.x, y: p.y }, top];
+              } else {
+                const outX = p.x + 24 * direction;
+                const midY = target.top - 20;
+                points = [p, { x: outX, y: p.y }, { x: outX, y: midY }, { x: to.x, y: midY }, top];
+              }
+            }
+          } else {
+            loops.push({ edge, from, to, fromLayout, toLayout, side, p });
+            return;
+          }
+          routes.set(edge.id, { points, side, start: p });
+        });
+
+        // Loops: choose a side, then a lane far enough out to clear every
+        // block in the column between the two ends. Nested loops use
+        // successively wider lanes.
+        loops.forEach((loop) => {
+          const { side, p, to } = loop;
+          loop.loopSide = side === "bottom" ? (to.x > p.x + 40 ? "right" : "left") : side;
+          loop.low = Math.min(to.y, p.y);
+          loop.high = Math.max(to.y, p.y) + (side === "bottom" ? 18 : 0);
+        });
+        loops.sort((a, b) => (a.high - a.low) - (b.high - b.low));
+        const placed = [];
+        loops.forEach((loop) => {
+          const { edge, from, to, fromLayout, toLayout, side, p, loopSide } = loop;
+          const fromBox = blockBox(from, fromLayout, false);
+          const toBox = blockBox(to, toLayout, false);
+          const columnLeft = Math.min(fromBox.left, toBox.left);
+          const columnRight = Math.max(fromBox.right, toBox.right);
+          let extreme = loopSide === "left" ? columnLeft : columnRight;
+          tab.nodes.forEach((node) => {
+            const layout = layouts.get(node.id);
+            if (!layout) return;
+            const box = blockBox(node, layout, true);
+            const overlapsRows = box.bottom >= loop.low - 4 && box.top <= loop.high + 4;
+            const overlapsColumn = box.right >= columnLeft - 4 && box.left <= columnRight + 4;
+            if (!overlapsRows || !overlapsColumn) return;
+            extreme = loopSide === "left" ? Math.min(extreme, box.left) : Math.max(extreme, box.right);
+          });
+          let lane = 0;
+          placed.forEach((other) => {
+            if (other.loopSide === loopSide && other.high >= loop.low && other.low <= loop.high) {
+              lane = Math.max(lane, other.lane + 1);
+            }
+          });
+          loop.lane = lane;
+          placed.push(loop);
+          // A loop leaving a side of a decision starts further out, so its
+          // True/False label sits clear of the vertical run.
+          const gap = side === "bottom" ? 28 : 66;
+          const laneX = loopSide === "left" ? extreme - gap - lane * 16 : extreme + gap + lane * 16;
+          const entry = sidePoint(to, toLayout, loopSide);
+          const points = [p];
+          if (side === "bottom") {
+            points.push({ x: p.x, y: p.y + 18 + lane * 6 });
+            points.push({ x: laneX, y: p.y + 18 + lane * 6 });
+          } else {
+            points.push({ x: laneX, y: p.y });
+          }
+          points.push({ x: laneX, y: entry.y });
+          points.push(entry);
+          routes.set(edge.id, { points, side, start: p });
+        });
+        return routes;
+      }
+
+      function pathFromPoints(points) {
+        return points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
+      }
+
+      function arrowHead(points) {
+        const end = points[points.length - 1];
+        const before = points[points.length - 2] || end;
+        const angle = Math.atan2(end.y - before.y, end.x - before.x);
+        const size = 9;
+        const spread = 0.42;
+        const a = { x: end.x - size * Math.cos(angle - spread), y: end.y - size * Math.sin(angle - spread) };
+        const b = { x: end.x - size * Math.cos(angle + spread), y: end.y - size * Math.sin(angle + spread) };
+        return `M${end.x} ${end.y} L${a.x} ${a.y} L${b.x} ${b.y} Z`;
+      }
+
+      function computeLayouts(tab, doc) {
+        const layouts = new Map();
+        tab.nodes.forEach((node) => layouts.set(node.id, blockLayout(node, tab, doc)));
+        return layouts;
+      }
+
+      function contentBounds(tab, layouts) {
+        let box = null;
+        tab.nodes.forEach((node) => {
+          const layout = layouts.get(node.id);
+          if (!layout) return;
+          const b = blockBox(node, layout, true);
+          if (!box) box = { ...b };
+          else {
+            box.left = Math.min(box.left, b.left);
+            box.right = Math.max(box.right, b.right);
+            box.top = Math.min(box.top, b.top);
+            box.bottom = Math.max(box.bottom, b.bottom);
+          }
+        });
+        return box || { left: 0, right: 400, top: 0, bottom: 300 };
+      }
+
+      function fitView(tab, layouts, size) {
+        const bounds = contentBounds(tab, layouts);
+        const pad = 36;
+        const width = bounds.right - bounds.left + pad * 2;
+        const height = bounds.bottom - bounds.top + pad * 2;
+        const z = clamp(Math.min(size.w / width, size.h / height, 1.15), MIN_ZOOM, MAX_ZOOM);
+        const x = (size.w - (bounds.right - bounds.left) * z) / 2 - bounds.left * z;
+        const fitsVertically = height * z <= size.h;
+        const y = fitsVertically ? Math.min((size.h - (bounds.bottom - bounds.top) * z) / 2, 36) - bounds.top * z : pad * z - bounds.top * z;
+        return { x, y, z };
+      }
+
+      /* ---------------------------------------------------------------
+         Document helpers
+         --------------------------------------------------------------- */
+      function makeNode(type, x, y) {
+        const node = { id: newId("n"), type, x: snap(x), y: snap(y), text: "" };
+        if (type === "decision") {
+          node.trueSide = "bottom";
+          node.falseSide = "right";
+        }
+        if (type === "call") {
+          node.calleeId = "";
+          node.args = [];
+          node.target = "";
+        }
+        return node;
+      }
+
+      function mapTab(doc, tabId, update) {
+        return { ...doc, tabs: doc.tabs.map((tab) => (tab.id === tabId ? update(tab) : tab)) };
+      }
+
+      function patchNode(doc, tabId, nodeId, patch) {
+        return mapTab(doc, tabId, (tab) => ({
+          ...tab,
+          nodes: tab.nodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node)),
+        }));
+      }
+
+      function uniqueSubName(doc) {
+        const taken = new Set(doc.tabs.map((tab) => String(tab.name).toLowerCase()));
+        let index = 1;
+        while (taken.has(("subprogram" + index).toLowerCase())) index += 1;
+        return "Subprogram" + index;
+      }
+
+      function newSubTab(doc) {
+        const id = newId("sub");
+        const start = makeNode("start", 300, 110);
+        const end = makeNode("return", 300, 220);
+        return {
+          id,
+          kind: "sub",
+          name: uniqueSubName(doc),
+          paramsText: "",
+          nodes: [start, end],
+          edges: [{ id: newId("e"), from: start.id, port: "next", to: end.id }],
+        };
+      }
+
+      const NODE_TYPES = new Set(["start", "end", "return", "process", "input", "output", "decision", "call"]);
+      const SIDES = new Set(["bottom", "left", "right"]);
+
+      // Accepts a saved or imported document and returns a clean copy, or
+      // null when it is not a flowchart file.
+      function normaliseDoc(raw) {
+        if (!raw || !Array.isArray(raw.tabs)) return null;
+        const tabs = [];
+        for (const rawTab of raw.tabs) {
+          if (!rawTab || !Array.isArray(rawTab.nodes) || !Array.isArray(rawTab.edges)) return null;
+          const kind = rawTab.kind === "sub" ? "sub" : "main";
+          const nodes = rawTab.nodes
+            .filter((node) => node && NODE_TYPES.has(node.type) && typeof node.id === "string")
+            .map((node) => {
+              const clean = {
+                id: node.id,
+                type: node.type,
+                x: Number.isFinite(node.x) ? node.x : 300,
+                y: Number.isFinite(node.y) ? node.y : 100,
+                text: typeof node.text === "string" ? node.text : "",
+              };
+              if (node.type === "decision") {
+                clean.trueSide = SIDES.has(node.trueSide) ? node.trueSide : "bottom";
+                clean.falseSide = SIDES.has(node.falseSide) && node.falseSide !== clean.trueSide ? node.falseSide : clean.trueSide === "right" ? "bottom" : "right";
+              }
+              if (node.type === "call") {
+                clean.calleeId = typeof node.calleeId === "string" ? node.calleeId : "";
+                clean.args = Array.isArray(node.args) ? node.args.map((arg) => String(arg ?? "")) : [];
+                clean.target = typeof node.target === "string" ? node.target : "";
+              }
+              return clean;
+            });
+          const ids = new Set(nodes.map((node) => node.id));
+          const usedPorts = new Set();
+          const edges = rawTab.edges
+            .filter((edge) => edge && ids.has(edge.from) && ids.has(edge.to) && ["next", "true", "false"].includes(edge.port))
+            .filter((edge) => {
+              const key = edge.from + ":" + edge.port;
+              if (usedPorts.has(key)) return false;
+              usedPorts.add(key);
+              return true;
+            })
+            .map((edge) => ({ id: typeof edge.id === "string" ? edge.id : newId("e"), from: edge.from, port: edge.port, to: edge.to }));
+          tabs.push({
+            id: typeof rawTab.id === "string" ? rawTab.id : newId("tab"),
+            kind,
+            name: kind === "main" ? "Main" : String(rawTab.name || "Subprogram"),
+            paramsText: kind === "sub" ? String(rawTab.paramsText || "") : "",
+            nodes,
+            edges,
+          });
+        }
+        const mains = tabs.filter((tab) => tab.kind === "main");
+        if (mains.length !== 1) return null;
+        tabs.sort((a, b) => (a.kind === "main" ? -1 : b.kind === "main" ? 1 : 0));
+        return { tabs };
+      }
+
+      function loadInitialDoc() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const doc = normaliseDoc(JSON.parse(saved));
+            if (doc) return doc;
+          }
+        } catch (error) {
+          // Storage can be unavailable; start with a fresh flowchart.
+        }
+        return FlowExamples.blank();
+      }
+
+      function logicKey(doc) {
+        return JSON.stringify(doc.tabs.map((tab) => [
+          tab.id, tab.kind, tab.name, tab.paramsText,
+          tab.nodes.map((node) => [node.id, node.type, node.text, node.calleeId, node.args, node.target]),
+          tab.edges.map((edge) => [edge.from, edge.port, edge.to]),
+        ]));
+      }
+
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      /* ---------------------------------------------------------------
+         SVG shapes
+         --------------------------------------------------------------- */
+      // Colours are CSS variables, so they are applied as styles: var() is not
+      // reliable in SVG presentation attributes across browsers.
+      function shapeElements(shape, cx, cy, w, h, { fill, stroke, ...rest }) {
+        const props = { ...rest, style: { fill, stroke } };
+        const left = cx - w / 2;
+        const top = cy - h / 2;
+        if (shape === "terminator") {
+          return [<rect key="s" x={left} y={top} width={w} height={h} rx={Math.min(h / 2, 24)} {...props} />];
+        }
+        if (shape === "io") {
+          const points = `${left + SKEW},${top} ${left + w},${top} ${left + w - SKEW},${top + h} ${left},${top + h}`;
+          return [<polygon key="s" points={points} {...props} />];
+        }
+        if (shape === "decision") {
+          const points = `${cx},${top} ${left + w},${cy} ${cx},${top + h} ${left},${cy}`;
+          return [<polygon key="s" points={points} {...props} />];
+        }
+        const elements = [<rect key="s" x={left} y={top} width={w} height={h} rx={2} {...props} />];
+        if (shape === "call") {
+          const lineProps = { ...rest, style: { stroke } };
+          elements.push(<line key="l" x1={left + 10} y1={top} x2={left + 10} y2={top + h} {...lineProps} />);
+          elements.push(<line key="r" x1={left + w - 10} y1={top} x2={left + w - 10} y2={top + h} {...lineProps} />);
+        }
+        return elements;
+      }
+
+      function TextLines({ lines, cx, cy }) {
+        const offset = -((lines.length - 1) * LINE) / 2;
+        return lines.map((line, index) => {
+          const font = FONTS[line.kind];
+          return (
+            <text
+              key={index}
+              x={cx}
+              y={cy + offset + index * LINE}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontFamily={font.family}
+              fontSize={font.size}
+              fontWeight={font.weight}
+              fontStyle={line.kind === "hint" ? "italic" : "normal"}
+              style={{ fill: line.kind === "hint" ? "var(--fc-muted)" : "var(--fc-text)" }}
+            >
+              {line.text}
+            </text>
+          );
+        });
+      }
+
+      function BlockGraphic({ node, layout, state, problem, design, connected, summary }) {
+        const { shape, w, h, lines, header } = layout;
+        const cx = node.x;
+        const cy = node.y;
+        const stroke = state === "error" ? "var(--fc-error)" : state === "current" ? "var(--fc-current)" : state === "selected" || state === "target" ? "var(--fc-select)" : "var(--fc-stroke)";
+        const strokeWidth = state === "plain" ? 2 : 3;
+        const textCy = shape === "decision" ? cy - 5 : cy;
+        const ports = FlowLang.OUTPUT_PORTS[node.type] || [];
+        return (
+          <React.Fragment>
+            <title>{summary}</title>
+            {header && (
+              <g>
+                <line x1={cx} y1={cy - h / 2 - HEADER_GAP} x2={cx} y2={cy - h / 2} style={{ stroke: "var(--fc-stroke)" }} strokeWidth={2} />
+                {shapeElements("call", cx, cy - h / 2 - HEADER_GAP - header.h / 2, header.w, header.h, {
+                  fill: "var(--fc-bg)",
+                  stroke: state === "selected" ? "var(--fc-select)" : "var(--fc-stroke)",
+                  strokeWidth: state === "selected" ? 3 : 2,
+                })}
+                <TextLines lines={[{ text: header.text, kind: "code" }]} cx={cx} cy={cy - h / 2 - HEADER_GAP - header.h / 2} />
+              </g>
+            )}
+            {(state === "current" || state === "error") &&
+              shapeElements(shape, cx, cy, w + 10, h + 10, {
+                fill: "none",
+                stroke: state === "error" ? "var(--fc-error)" : "var(--fc-current-glow)",
+                strokeWidth: 6,
+                opacity: state === "error" ? 0.3 : 1,
+                "data-export-skip": "",
+              })}
+            {shapeElements(shape, cx, cy, w, h, { fill: "var(--fc-bg)", stroke, strokeWidth, strokeLinejoin: "round" })}
+            {shapeElements(shape, cx, cy, w + 12, h + 12, { fill: "none", className: "fc-focus-ring", "data-export-skip": "" })}
+            <TextLines lines={lines} cx={cx} cy={textCy} />
+            {shape === "decision" && (
+              <text x={cx} y={cy + h / 2 - 15} textAnchor="middle" dominantBaseline="central" fontFamily={KEY_FONT_FAMILY} fontSize={16} fontWeight={700} style={{ fill: "var(--fc-text)" }}>
+                ?
+              </text>
+            )}
+            {node.type === "decision" &&
+              ports.map((port) => {
+                const side = portSide(node, port);
+                const p = sidePoint(node, layout, side);
+                const label = port === "true" ? "True" : "False";
+                const x = side === "left" ? p.x - 8 : p.x + 8;
+                const y = side === "bottom" ? p.y + 14 : p.y - 10;
+                return (
+                  <text
+                    key={port}
+                    className="fc-label"
+                    x={x}
+                    y={y}
+                    textAnchor={side === "left" ? "end" : "start"}
+                    dominantBaseline="central"
+                    fontFamily={KEY_FONT_FAMILY}
+                    fontSize={13}
+                    fontWeight={700}
+                    style={{ fill: port === "true" ? "var(--fc-true)" : "var(--fc-false)" }}
+                  >
+                    {label}
+                  </text>
+                );
+              })}
+            {problem && (
+              <g data-export-skip="" aria-hidden="true">
+                <circle cx={cx + w / 2 - (shape === "decision" ? w / 4 : 2)} cy={cy - h / 2 + (shape === "decision" ? h / 4 : 2)} r={10} style={{ fill: problem === "error" ? "var(--fc-error)" : "#d97706" }} />
+                <text x={cx + w / 2 - (shape === "decision" ? w / 4 : 2)} y={cy - h / 2 + (shape === "decision" ? h / 4 : 2) + 1} textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={800} fill="#fff" fontFamily={KEY_FONT_FAMILY}>
+                  !
+                </text>
+              </g>
+            )}
+            {state === "current" && (
+              <text data-export-skip="" x={cx - w / 2 + (shape === "io" ? SKEW : 0)} y={cy - h / 2 - 12} textAnchor="start" dominantBaseline="central" fontFamily={KEY_FONT_FAMILY} fontSize={13} fontWeight={800} style={{ fill: "var(--fc-current)" }} className="fc-label">
+                ▶ next
+              </text>
+            )}
+            {design &&
+              ports.map((port) => {
+                const p = sidePoint(node, layout, portSide(node, port));
+                const isConnected = connected.has(port);
+                return (
+                  <circle
+                    key={"port-" + port}
+                    data-port={port}
+                    data-export-skip=""
+                    className={"fc-port" + (isConnected ? " fc-port-connected" : "")}
+                    cx={p.x}
+                    cy={p.y}
+                    r={7}
+                    style={{ fill: isConnected ? "var(--fc-select)" : "var(--fc-bg)", stroke: "var(--fc-select)" }}
+                    strokeWidth={2.5}
+                  >
+                    <title>{port === "next" ? "Drag to connect to the next block" : `Drag to connect the ${port === "true" ? "True" : "False"} path`}</title>
+                  </circle>
+                );
+              })}
+          </React.Fragment>
+        );
+      }
+
+      /* ---------------------------------------------------------------
+         Canvas: pan, zoom, drag blocks and drag connectors.
+         --------------------------------------------------------------- */
+      const FlowCanvas = React.forwardRef(function FlowCanvas(props, ref) {
+        const {
+          doc, tab, layouts, routes, view, onViewChange, mode, selection, onSelect,
+          onNodeDragStart, onNodeDrag, onNodeDragEnd, onConnect, problemNodes, highlight,
+          reveal, onEditNode,
+        } = props;
+        const wrapRef = useRef(null);
+        const svgRef = useRef(null);
+        const dragRef = useRef(null);
+        const lastPressRef = useRef({ id: null, time: 0 });
+        const [size, setSize] = useState({ w: 0, h: 0 });
+        const [connect, setConnect] = useState(null);
+        const [panning, setPanning] = useState(false);
+        const design = mode === "design";
+
+        useLayoutEffect(() => {
+          const element = wrapRef.current;
+          const update = () => setSize({ w: element.clientWidth, h: element.clientHeight });
+          update();
+          const observer = new ResizeObserver(update);
+          observer.observe(element);
+          return () => observer.disconnect();
+        }, []);
+
+        useEffect(() => {
+          if (!view && size.w > 0 && size.h > 0) onViewChange(fitView(tab, layouts, size));
+        }, [view, size.w, size.h, tab.id]);
+
+        const v = view || { x: 0, y: 0, z: 1 };
+
+        const clientToWorld = useCallback((clientX, clientY) => {
+          const rect = svgRef.current.getBoundingClientRect();
+          return { x: (clientX - rect.left - v.x) / v.z, y: (clientY - rect.top - v.y) / v.z };
+        }, [v.x, v.y, v.z]);
+
+        const zoomAt = useCallback((factor, screenX, screenY) => {
+          const z = clamp(v.z * factor, MIN_ZOOM, MAX_ZOOM);
+          const sx = screenX ?? size.w / 2;
+          const sy = screenY ?? size.h / 2;
+          const wx = (sx - v.x) / v.z;
+          const wy = (sy - v.y) / v.z;
+          onViewChange({ x: sx - wx * z, y: sy - wy * z, z });
+        }, [v.x, v.y, v.z, size.w, size.h, onViewChange]);
+
+        useImperativeHandle(ref, () => ({
+          clientToWorld,
+          contains(clientX, clientY) {
+            const rect = svgRef.current.getBoundingClientRect();
+            return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+          },
+          centre() {
+            return { x: (size.w / 2 - v.x) / v.z, y: (size.h / 3 - v.y) / v.z };
+          },
+          fit() {
+            onViewChange(fitView(tab, layouts, size));
+          },
+          zoom(factor) {
+            zoomAt(factor);
+          },
+          svg() {
+            return svgRef.current;
+          },
+        }), [clientToWorld, zoomAt, size, v.x, v.y, v.z, tab, layouts, onViewChange]);
+
+        // Wheel: pinch or Ctrl+wheel zooms; otherwise the wheel pans.
+        useEffect(() => {
+          const svg = svgRef.current;
+          const onWheel = (event) => {
+            event.preventDefault();
+            const rect = svg.getBoundingClientRect();
+            if (event.ctrlKey || event.metaKey) {
+              zoomAt(Math.exp(-event.deltaY * 0.0022), event.clientX - rect.left, event.clientY - rect.top);
+            } else {
+              onViewChange({ ...v, x: v.x - event.deltaX, y: v.y - event.deltaY });
+            }
+          };
+          svg.addEventListener("wheel", onWheel, { passive: false });
+          return () => svg.removeEventListener("wheel", onWheel);
+        }, [zoomAt, v.x, v.y, v.z, onViewChange]);
+
+        // Keep the block that runs next, or a block just added, in view.
+        useEffect(() => {
+          if (!reveal || !reveal.id || !view || !size.w) return;
+          const node = tab.nodes.find((item) => item.id === reveal.id);
+          const layout = node && layouts.get(node.id);
+          if (!layout) return;
+          const box = blockBox(node, layout, true);
+          const margin = 30;
+          const inside = box.left * v.z + v.x >= margin && box.right * v.z + v.x <= size.w - margin
+            && box.top * v.z + v.y >= margin && box.bottom * v.z + v.y <= size.h - margin;
+          if (!inside) onViewChange({ ...v, x: size.w / 2 - node.x * v.z, y: size.h / 2 - node.y * v.z });
+        }, [reveal && reveal.key]);
+
+        function nodeAt(world, excludeId) {
+          for (let index = tab.nodes.length - 1; index >= 0; index -= 1) {
+            const node = tab.nodes[index];
+            if (node.id === excludeId) continue;
+            const layout = layouts.get(node.id);
+            if (!layout) continue;
+            const box = blockBox(node, layout, true);
+            if (world.x >= box.left - 6 && world.x <= box.right + 6 && world.y >= box.top - 6 && world.y <= box.bottom + 6) return node;
+          }
+          return null;
+        }
+
+        function onPointerDown(event) {
+          if (event.button !== 0 && event.pointerType === "mouse") return;
+          const world = clientToWorld(event.clientX, event.clientY);
+          const portElement = event.target.closest("[data-port]");
+          const nodeElement = event.target.closest("[data-node-id]");
+          const edgeElement = event.target.closest("[data-edge-id]");
+          svgRef.current.setPointerCapture(event.pointerId);
+
+          if (design && portElement && nodeElement) {
+            const node = tab.nodes.find((item) => item.id === nodeElement.dataset.nodeId);
+            const port = portElement.dataset.port;
+            const start = sidePoint(node, layouts.get(node.id), portSide(node, port));
+            dragRef.current = { kind: "connect" };
+            setConnect({ fromId: node.id, port, start, pointer: world, hoverId: null });
+            onSelect({ kind: "node", id: node.id });
+            event.preventDefault();
+            return;
+          }
+          if (nodeElement) {
+            const node = tab.nodes.find((item) => item.id === nodeElement.dataset.nodeId);
+            if (!node) return;
+            onSelect({ kind: "node", id: node.id });
+            // Pointer capture sends click events to the canvas, so a double
+            // press is detected here rather than with onDoubleClick.
+            const now = Date.now();
+            const last = lastPressRef.current;
+            lastPressRef.current = { id: node.id, time: now };
+            if (design && last.id === node.id && now - last.time < 400) {
+              dragRef.current = null;
+              onEditNode(node.id);
+              return;
+            }
+            if (design) {
+              dragRef.current = { kind: "node", id: node.id, origin: world, nodeX: node.x, nodeY: node.y, moved: false };
+            }
+            return;
+          }
+          if (edgeElement && design) {
+            onSelect({ kind: "edge", id: edgeElement.dataset.edgeId });
+            dragRef.current = null;
+            return;
+          }
+          dragRef.current = { kind: "pan", clientX: event.clientX, clientY: event.clientY, view: v, moved: false };
+        }
+
+        function onPointerMove(event) {
+          const drag = dragRef.current;
+          if (!drag) return;
+          if (drag.kind === "pan") {
+            const dx = event.clientX - drag.clientX;
+            const dy = event.clientY - drag.clientY;
+            if (!drag.moved && Math.hypot(dx, dy) < 3) return;
+            if (!drag.moved) setPanning(true);
+            drag.moved = true;
+            onViewChange({ ...drag.view, x: drag.view.x + dx, y: drag.view.y + dy });
+            return;
+          }
+          const world = clientToWorld(event.clientX, event.clientY);
+          if (drag.kind === "node") {
+            const x = snap(drag.nodeX + world.x - drag.origin.x);
+            const y = snap(drag.nodeY + world.y - drag.origin.y);
+            if (!drag.moved) {
+              if (Math.hypot(world.x - drag.origin.x, world.y - drag.origin.y) * v.z < 4) return;
+              drag.moved = true;
+              onNodeDragStart();
+            }
+            onNodeDrag(drag.id, x, y);
+            return;
+          }
+          if (drag.kind === "connect") {
+            setConnect((current) => {
+              if (!current) return current;
+              const over = nodeAt(world, current.fromId);
+              return { ...current, pointer: world, hoverId: over && over.type !== "start" ? over.id : null };
+            });
+          }
+        }
+
+        function onPointerUp(event) {
+          const drag = dragRef.current;
+          dragRef.current = null;
+          setPanning(false);
+          if (svgRef.current.hasPointerCapture(event.pointerId)) svgRef.current.releasePointerCapture(event.pointerId);
+          if (!drag) return;
+          if (drag.kind === "pan" && !drag.moved) onSelect(null);
+          if (drag.kind === "node" && drag.moved) onNodeDragEnd();
+          if (drag.kind === "connect") {
+            const current = connect;
+            setConnect(null);
+            if (current && current.hoverId) onConnect(current.fromId, current.port, current.hoverId);
+          }
+        }
+
+        function onPointerCancel() {
+          const drag = dragRef.current;
+          dragRef.current = null;
+          setPanning(false);
+          setConnect(null);
+          if (drag && drag.kind === "node" && drag.moved) onNodeDragEnd();
+        }
+
+        const connectedPorts = useMemo(() => {
+          const map = new Map();
+          tab.edges.forEach((edge) => {
+            if (!map.has(edge.from)) map.set(edge.from, new Set());
+            map.get(edge.from).add(edge.port);
+          });
+          return map;
+        }, [tab.edges]);
+
+        const activeEdgeId = highlight && highlight.edge
+          ? (tab.edges.find((edge) => edge.from === highlight.edge.from && edge.port === highlight.edge.port) || {}).id
+          : null;
+        const empty = new Set();
+
+        return (
+          <div
+            ref={wrapRef}
+            className={"fc-canvas relative h-full w-full overflow-hidden" + (panning ? " fc-panning" : "") + (design ? "" : " fc-run")}
+            style={{ backgroundSize: `${20 * v.z}px ${20 * v.z}px`, backgroundPosition: `${v.x}px ${v.y}px` }}
+          >
+            <svg
+              ref={svgRef}
+              className="absolute inset-0 block h-full w-full"
+              role="group"
+              aria-label={`Flowchart canvas for ${tab.kind === "main" ? "Main" : tab.name}`}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+            >
+              <g data-content="" transform={`translate(${v.x} ${v.y}) scale(${v.z})`}>
+                {tab.edges.map((edge) => {
+                  const route = routes.get(edge.id);
+                  if (!route) return null;
+                  const selected = selection && selection.kind === "edge" && selection.id === edge.id;
+                  const active = edge.id === activeEdgeId;
+                  const colour = selected ? "var(--fc-select)" : active ? "var(--fc-current)" : "var(--fc-edge)";
+                  const d = pathFromPoints(route.points);
+                  return (
+                    <g key={edge.id} data-edge-id={edge.id}>
+                      <path className="fc-edge-hit" d={d} fill="none" stroke="transparent" strokeWidth={14} data-export-skip="" />
+                      <path d={d} style={{ fill: "none", stroke: colour }} strokeWidth={selected || active ? 3 : 2} strokeLinejoin="round" pointerEvents="none" />
+                      <path d={arrowHead(route.points)} style={{ fill: colour, stroke: colour }} strokeWidth={1} strokeLinejoin="round" pointerEvents="none" />
+                    </g>
+                  );
+                })}
+                {tab.nodes.map((node) => {
+                  const layout = layouts.get(node.id);
+                  const selected = selection && selection.kind === "node" && selection.id === node.id;
+                  let state = "plain";
+                  if (highlight && highlight.errorId === node.id) state = "error";
+                  else if (highlight && highlight.currentId === node.id) state = "current";
+                  else if (connect && connect.hoverId === node.id) state = "target";
+                  else if (selected) state = "selected";
+                  const summary = FlowLang.nodeSummary(node, doc);
+                  return (
+                    <g
+                      key={node.id}
+                      data-node-id={node.id}
+                      className={"fc-node" + (selected ? " fc-node-selected" : "")}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`${BLOCKS[node.type] ? BLOCKS[node.type].label + " block" : "START block"}: ${summary}${problemNodes.get(node.id) ? " (has a problem)" : ""}`}
+                      aria-pressed={selected ? "true" : "false"}
+                      onFocus={() => {
+                        if (!selected) onSelect({ kind: "node", id: node.id });
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && design) {
+                          event.preventDefault();
+                          onEditNode(node.id);
+                        }
+                      }}
+                    >
+                      <BlockGraphic
+                        node={node}
+                        layout={layout}
+                        state={state}
+                        problem={design ? problemNodes.get(node.id) : null}
+                        design={design}
+                        connected={connectedPorts.get(node.id) || empty}
+                        summary={summary}
+                      />
+                    </g>
+                  );
+                })}
+                {connect && (
+                  <line
+                    x1={connect.start.x}
+                    y1={connect.start.y}
+                    x2={connect.pointer.x}
+                    y2={connect.pointer.y}
+                    style={{ stroke: "var(--fc-select)" }}
+                    strokeWidth={2}
+                    strokeDasharray="6 5"
+                    pointerEvents="none"
+                  />
+                )}
+              </g>
+            </svg>
+          </div>
+        );
+      });
+
+      /* ---------------------------------------------------------------
+         Palette
+         --------------------------------------------------------------- */
+      function PaletteIcon({ type }) {
+        const common = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinejoin: "round" };
+        let shape = null;
+        if (type === "process") shape = <rect x="6" y="9" width="44" height="22" rx="1.5" {...common} />;
+        if (type === "input" || type === "output") shape = <polygon points="14,9 50,9 42,31 6,31" {...common} />;
+        if (type === "decision") shape = <polygon points="28,3 52,20 28,37 4,20" {...common} />;
+        if (type === "call") {
+          shape = (
+            <g {...common}>
+              <rect x="6" y="9" width="44" height="22" rx="1.5" />
+              <line x1="11" y1="9" x2="11" y2="31" />
+              <line x1="45" y1="9" x2="45" y2="31" />
+            </g>
+          );
+        }
+        if (type === "end" || type === "return") shape = <rect x="6" y="10" width="44" height="20" rx="10" {...common} />;
+        return (
+          <svg viewBox="0 0 56 40" className="h-7 w-10 shrink-0" aria-hidden="true">
+            {shape}
+          </svg>
+        );
+      }
+
+      function Palette({ tabKind, disabled, onAdd, onDragStart }) {
+        const types = ["process", "input", "output", "decision", "call", tabKind === "sub" ? "return" : "end"];
+        return (
+          <aside
+            aria-label="Blocks"
+            className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-300 bg-white p-2 dark:border-slate-700 dark:bg-slate-900 lg:min-h-0 lg:overflow-y-auto"
+          >
+            <h2 className="px-1 text-sm font-bold text-slate-700 dark:text-slate-200">Blocks</h2>
+            <div className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap">
+              {types.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  disabled={disabled}
+                  onPointerDown={(event) => !disabled && onDragStart(type, event)}
+                  onClick={(event) => {
+                    if (event.detail === 0) onAdd(type);
+                  }}
+                  title={BLOCKS[type].help}
+                  className="flex min-w-[8.5rem] touch-none select-none items-center gap-2 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-left text-sm font-semibold text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-indigo-400 dark:hover:bg-slate-700 lg:min-w-0"
+                >
+                  <PaletteIcon type={type} />
+                  <span className="leading-tight">{BLOCKS[type].label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="px-1 text-xs leading-snug text-slate-600 dark:text-slate-400">
+              {disabled
+                ? "Switch to Design to change the flowchart."
+                : "Drag a block onto the canvas, or select a block and click here to add the next one below it."}
+            </p>
+          </aside>
+        );
+      }
+
+      /* ---------------------------------------------------------------
+         Inspector: edits the selected block with labelled fields.
+         --------------------------------------------------------------- */
+      const fieldClass =
+        "fc-mono w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100";
+      const smallButton =
+        "shrink-0 whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800";
+      const dangerButton =
+        "shrink-0 whitespace-nowrap rounded-md border border-red-300 px-2.5 py-1 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950";
+      const primaryButton =
+        "shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900";
+      const cardClass = "rounded-lg border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900";
+
+      function CodeField({ id, label, value, onChange, placeholder, multiline, help, fieldApi, focusKey, onNormalise }) {
+        const inputRef = useRef(null);
+        useEffect(() => {
+          if (focusKey && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+          }
+        }, [focusKey]);
+        const shared = {
+          id,
+          ref: inputRef,
+          value,
+          placeholder,
+          spellCheck: false,
+          autoCapitalize: "off",
+          autoCorrect: "off",
+          autoComplete: "off",
+          className: fieldClass,
+          onChange: (event) => onChange(event.target.value),
+          onFocus: (event) => fieldApi.focus(event.target, onChange),
+          onBlur: () => {
+            if (onNormalise) {
+              const cleaned = onNormalise(value);
+              if (cleaned !== value) onChange(cleaned);
+            }
+            fieldApi.blur();
+          },
+        };
+        return (
+          <div className="flex flex-col gap-1">
+            <label htmlFor={id} className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {label}
+            </label>
+            {multiline ? <textarea rows={3} {...shared} /> : <input type="text" {...shared} />}
+            {help && <p className="text-xs text-slate-600 dark:text-slate-400">{help}</p>}
+          </div>
+        );
+      }
+
+      function Chips({ label, items, onInsert, mono }) {
+        if (!items.length) return null;
+        return (
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{label}</p>
+            <div className="flex flex-wrap gap-1">
+              {items.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onInsert(item.insert)}
+                  className={(mono ? "fc-mono " : "") + "rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-xs font-semibold text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"}
+                  title={item.title || "Insert " + item.insert.trim()}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      function ProblemMessages({ problems }) {
+        if (!problems.length) return null;
+        return (
+          <ul className="flex flex-col gap-1.5" aria-live="polite">
+            {problems.map((problem, index) => (
+              <li
+                key={index}
+                className={
+                  "rounded-md border px-2 py-1.5 text-sm " +
+                  (problem.severity === "error"
+                    ? "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/60 dark:text-red-100"
+                    : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100")
+                }
+              >
+                <span className="font-bold">{problem.severity === "error" ? "Error: " : "Warning: "}</span>
+                {problem.message}
+                {problem.hint && <span className="mt-0.5 block text-xs opacity-90">{problem.hint}</span>}
+              </li>
+            ))}
+          </ul>
+        );
+      }
+
+      const COMPARISON_CHIPS = ["==", "!=", "<", "<=", ">", ">=", "AND", "OR", "NOT"].map((op) => ({ label: op, insert: ` ${op} ` }));
+      const OUTPUT_CHIPS = [
+        { label: "+ join", insert: " + ", title: "Join text and values with +" },
+        { label: '" "', insert: '" "', title: "Insert a pair of quotes for text" },
+      ];
+
+      function SubprogramSettings({ tab, problems, fieldApi, onUpdateTab, onDeleteTab, focusKey }) {
+        const [confirming, setConfirming] = useState(false);
+        useEffect(() => setConfirming(false), [tab.id]);
+        return (
+          <div className="flex flex-col gap-3">
+            <CodeField
+              id="fc-sub-name"
+              label="Subprogram name"
+              value={tab.name}
+              onChange={(name) => onUpdateTab({ name })}
+              placeholder="e.g. CountDown"
+              fieldApi={fieldApi}
+              focusKey={focusKey}
+            />
+            <CodeField
+              id="fc-sub-params"
+              label="Parameters (optional)"
+              value={tab.paramsText}
+              onChange={(paramsText) => onUpdateTab({ paramsText })}
+              placeholder="e.g. total, step"
+              help="Separate parameter names with commas. Each call gives every parameter a value."
+              fieldApi={fieldApi}
+            />
+            <ProblemMessages problems={problems} />
+            {confirming ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/60 dark:text-red-100">
+                <span>Delete {tab.name} and all of its blocks?</span>
+                <button type="button" className={smallButton} onClick={() => setConfirming(false)}>
+                  Cancel
+                </button>
+                <button type="button" className={dangerButton} onClick={onDeleteTab}>
+                  Delete
+                </button>
+              </div>
+            ) : (
+              <div>
+                <button type="button" className={dangerButton} onClick={() => setConfirming(true)}>
+                  Delete subprogram
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function Inspector(props) {
+        const {
+          doc, tab, selection, problems, fieldApi, editKey, variables,
+          onUpdateNode, onUpdateTab, onDeleteTab, onDeleteSelection, onCreateSub, onShowTab,
+        } = props;
+        const node = selection && selection.kind === "node" ? tab.nodes.find((item) => item.id === selection.id) : null;
+        const edge = selection && selection.kind === "edge" ? tab.edges.find((item) => item.id === selection.id) : null;
+        const nodeProblems = node ? problems.filter((problem) => problem.nodeId === node.id) : [];
+        const variableChips = variables.map((name) => ({ label: name, insert: name }));
+        const subs = doc.tabs.filter((item) => item.kind === "sub");
+
+        let title = "Edit block";
+        let body = null;
+
+        if (edge) {
+          const from = tab.nodes.find((item) => item.id === edge.from);
+          const to = tab.nodes.find((item) => item.id === edge.to);
+          title = "Connector";
+          body = (
+            <div className="flex flex-col gap-2 text-sm">
+              <p>
+                From <span className="fc-mono font-semibold">{from ? FlowLang.nodeSummary(from, doc) : "?"}</span>
+                {edge.port !== "next" && <span> ({edge.port === "true" ? "True" : "False"} path)</span>} to{" "}
+                <span className="fc-mono font-semibold">{to ? FlowLang.nodeSummary(to, doc) : "?"}</span>.
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400">To reconnect it, drag from the dot on the block it leaves to a different block.</p>
+              <div>
+                <button type="button" className={dangerButton} onClick={onDeleteSelection}>
+                  Delete connector
+                </button>
+              </div>
+            </div>
+          );
+        } else if (!node) {
+          title = tab.kind === "sub" ? "Subprogram" : "Getting started";
+          body = tab.kind === "sub" ? (
+            <SubprogramSettings
+              tab={tab}
+              problems={problems.filter((problem) => problem.field)}
+              fieldApi={fieldApi}
+              onUpdateTab={onUpdateTab}
+              onDeleteTab={onDeleteTab}
+            />
+          ) : (
+            <div className="flex flex-col gap-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              <p>
+                <strong>Select START</strong>, then click blocks in the palette: each new block is added and connected underneath the
+                selected one.
+              </p>
+              <p>Drag blocks to move them. Drag from a block's dot to another block to connect them. Double-click a block to type in it.</p>
+              <p>Press <strong>Simulate</strong> when the checks below are clear, or load an example from the title bar.</p>
+            </div>
+          );
+        } else {
+          const update = (patch) => onUpdateNode(node.id, patch);
+          const editFocus = editKey && editKey.nodeId === node.id ? editKey.count : 0;
+          switch (node.type) {
+            case "start":
+              if (tab.kind === "sub") {
+                title = "Subprogram header";
+                body = (
+                  <SubprogramSettings
+                    tab={tab}
+                    problems={nodeProblems}
+                    fieldApi={fieldApi}
+                    onUpdateTab={onUpdateTab}
+                    onDeleteTab={onDeleteTab}
+                    focusKey={editFocus}
+                  />
+                );
+              } else {
+                title = "START";
+                body = <p className="text-sm text-slate-700 dark:text-slate-300">Every run begins at START. Connect it to the first block of your flowchart.</p>;
+              }
+              break;
+            case "end":
+              title = "END";
+              body = <p className="text-sm text-slate-700 dark:text-slate-300">The program stops when it reaches END. Several paths may lead to the same END.</p>;
+              break;
+            case "return":
+              title = "RETURN";
+              body = (
+                <div className="flex flex-col gap-3">
+                  <CodeField
+                    id="fc-return"
+                    label="Value to return (optional)"
+                    value={node.text}
+                    onChange={(text) => update({ text })}
+                    onNormalise={(text) => FlowLang.stripKeyword(text, "RETURN").trim()}
+                    placeholder="e.g. total"
+                    help="Leave empty for a subprogram that only does a job. A value here can be stored by the call."
+                    fieldApi={fieldApi}
+                    focusKey={editFocus}
+                  />
+                  <Chips label="Variables" items={variableChips} onInsert={fieldApi.insert} mono />
+                </div>
+              );
+              break;
+            case "process":
+              title = "Process (assignment)";
+              body = (
+                <div className="flex flex-col gap-3">
+                  <CodeField
+                    id="fc-process"
+                    label="Assignment"
+                    value={node.text}
+                    onChange={(text) => update({ text })}
+                    placeholder="total = num1 + num2"
+                    multiline
+                    help="variable = value. Use one line for each assignment."
+                    fieldApi={fieldApi}
+                    focusKey={editFocus}
+                  />
+                  <Chips label="Variables" items={variableChips} onInsert={fieldApi.insert} mono />
+                </div>
+              );
+              break;
+            case "input":
+              title = "Input";
+              body = (
+                <div className="flex flex-col gap-3">
+                  <CodeField
+                    id="fc-input"
+                    label="INPUT into variable"
+                    value={node.text}
+                    onChange={(text) => update({ text })}
+                    onNormalise={(text) => FlowLang.stripKeyword(text, "INPUT").trim()}
+                    placeholder="guess"
+                    help="Whole numbers are stored as INT, decimals as REAL and anything else as STRING."
+                    fieldApi={fieldApi}
+                    focusKey={editFocus}
+                  />
+                  <Chips label="Variables" items={variableChips} onInsert={fieldApi.insert} mono />
+                </div>
+              );
+              break;
+            case "output":
+              title = "Output";
+              body = (
+                <div className="flex flex-col gap-3">
+                  <CodeField
+                    id="fc-output"
+                    label="OUTPUT"
+                    value={node.text}
+                    onChange={(text) => update({ text })}
+                    onNormalise={(text) => FlowLang.stripKeyword(text, "OUTPUT").trim()}
+                    placeholder={'"Score: " + total'}
+                    help="Put text in quotes. Join text and values with + (numbers and True/False are converted to text)."
+                    fieldApi={fieldApi}
+                    focusKey={editFocus}
+                  />
+                  <Chips label="Variables" items={variableChips} onInsert={fieldApi.insert} mono />
+                  <Chips label="Joining" items={OUTPUT_CHIPS} onInsert={fieldApi.insert} mono />
+                </div>
+              );
+              break;
+            case "decision": {
+              title = "Decision";
+              const setSide = (port, side) => {
+                const other = port === "true" ? "falseSide" : "trueSide";
+                const key = port === "true" ? "trueSide" : "falseSide";
+                const patch = { [key]: side };
+                if (node[other] === side) patch[other] = node[key];
+                update(patch);
+              };
+              body = (
+                <div className="flex flex-col gap-3">
+                  <CodeField
+                    id="fc-decision"
+                    label="Condition"
+                    value={node.text}
+                    onChange={(text) => update({ text })}
+                    onNormalise={(text) => FlowLang.cleanCondition(text)}
+                    placeholder="total > 10"
+                    help="Must be True or False. The ? is added at the bottom of the diamond for you."
+                    fieldApi={fieldApi}
+                    focusKey={editFocus}
+                  />
+                  <Chips label="Variables" items={variableChips} onInsert={fieldApi.insert} mono />
+                  <Chips label="Operators" items={COMPARISON_CHIPS} onInsert={fieldApi.insert} mono />
+                  <div className="grid grid-cols-2 gap-2">
+                    {["true", "false"].map((port) => (
+                      <label key={port} className="flex flex-col gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        {port === "true" ? "True path leaves" : "False path leaves"}
+                        <select
+                          value={portSide(node, port)}
+                          onChange={(event) => setSide(port, event.target.value)}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                        >
+                          {Object.keys(SIDE_NAMES).map((side) => (
+                            <option key={side} value={side}>
+                              {SIDE_NAMES[side]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  <div>
+                    <button type="button" className={smallButton} onClick={() => update({ trueSide: node.falseSide || "right", falseSide: node.trueSide || "bottom" })}>
+                      Swap True and False sides
+                    </button>
+                  </div>
+                </div>
+              );
+              break;
+            }
+            case "call": {
+              title = "Subprogram call";
+              const callee = subs.find((item) => item.id === node.calleeId);
+              const params = callee ? FlowLang.parseParams(callee.paramsText).params : [];
+              const args = node.args || [];
+              body = (
+                <div className="flex flex-col gap-3">
+                  {subs.length === 0 ? (
+                    <div className="flex flex-col gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <p>There are no subprograms yet. Create one, give it a name, then choose it here.</p>
+                      <div>
+                        <button type="button" className={primaryButton} onClick={onCreateSub}>
+                          + New subprogram
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      Subprogram to call
+                      <select
+                        value={callee ? callee.id : ""}
+                        autoFocus={!!editFocus}
+                        onChange={(event) => update({ calleeId: event.target.value })}
+                        className="fc-mono rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-normal text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                      >
+                        <option value="">Choose…</option>
+                        {subs.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {FlowLang.subprogramSignature(item)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {params.map((param, index) => (
+                    <CodeField
+                      key={callee.id + "-" + index}
+                      id={"fc-arg-" + index}
+                      label={`Value for ${param}`}
+                      value={args[index] || ""}
+                      onChange={(value) => {
+                        const next = params.map((_, i) => (i === index ? value : args[i] || ""));
+                        update({ args: next });
+                      }}
+                      placeholder="variable or value"
+                      fieldApi={fieldApi}
+                    />
+                  ))}
+                  {callee && (
+                    <CodeField
+                      id="fc-call-target"
+                      label="Store the returned value in (optional)"
+                      value={node.target || ""}
+                      onChange={(target) => update({ target })}
+                      placeholder="e.g. result"
+                      help={`Fill this in when ${callee.name} RETURNs a value, e.g. result = ${callee.name}(…).`}
+                      fieldApi={fieldApi}
+                    />
+                  )}
+                  {callee && <Chips label="Variables" items={variableChips} onInsert={fieldApi.insert} mono />}
+                  {callee && (
+                    <div>
+                      <button type="button" className={smallButton} onClick={() => onShowTab(callee.id)}>
+                        Open {callee.name}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+              break;
+            }
+          }
+        }
+
+        const deletable = node && node.type !== "start";
+        return (
+          <section aria-labelledby="fc-inspector-title" className={cardClass}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 id="fc-inspector-title" className="text-base font-bold">
+                {title}
+              </h2>
+              {deletable && (
+                <button type="button" className={dangerButton} onClick={onDeleteSelection}>
+                  Delete block
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-3">
+              {body}
+              {node && !(node.type === "start" && tab.kind === "sub") && <ProblemMessages problems={nodeProblems} />}
+            </div>
+          </section>
+        );
+      }
+
+      function ProblemsPanel({ doc, validation, onShowProblem, highlightKey }) {
+        const { problems, errors } = validation;
+        const sectionRef = useRef(null);
+        const [flashing, setFlashing] = useState(false);
+        useEffect(() => {
+          if (!highlightKey) return undefined;
+          setFlashing(true);
+          if (sectionRef.current) sectionRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          const timer = setTimeout(() => setFlashing(false), 1800);
+          return () => clearTimeout(timer);
+        }, [highlightKey]);
+        const warnings = problems.length - errors;
+        const tabName = (tabId) => {
+          const tab = doc.tabs.find((item) => item.id === tabId);
+          return tab ? (tab.kind === "main" ? "Main" : tab.name) : "";
+        };
+        return (
+          <section
+            ref={sectionRef}
+            aria-labelledby="fc-problems-title"
+            className={cardClass + (flashing ? " ring-2 ring-red-400 dark:ring-red-500" : "")}
+          >
+            <h2 id="fc-problems-title" className="mb-2 flex items-center gap-2 text-base font-bold">
+              Checks
+              <span
+                className={
+                  "rounded-full px-2 py-0.5 text-xs font-bold " +
+                  (errors
+                    ? "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100"
+                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100")
+                }
+              >
+                {errors ? `${errors} error${errors === 1 ? "" : "s"}` : "Ready to run"}
+              </span>
+              {warnings > 0 && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
+                  {warnings} warning{warnings === 1 ? "" : "s"}
+                </span>
+              )}
+            </h2>
+            {problems.length === 0 ? (
+              <p className="text-sm text-slate-700 dark:text-slate-300">✓ Every block is filled in and connected, and every path reaches the end.</p>
+            ) : (
+              <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
+                {problems.map((problem, index) => (
+                  <li key={index}>
+                    <button
+                      type="button"
+                      onClick={() => onShowProblem(problem)}
+                      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1 text-left text-sm hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-slate-800"
+                    >
+                      <span
+                        className={
+                          "mt-0.5 shrink-0 rounded px-1 text-[0.7rem] font-bold uppercase " +
+                          (problem.severity === "error"
+                            ? "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100"
+                            : "bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100")
+                        }
+                      >
+                        {problem.severity}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="font-semibold">{tabName(problem.tabId)}:</span> {problem.message}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      }
+
+      function ReferenceCard() {
+        const row = "border-t border-slate-200 py-1 align-top dark:border-slate-700";
+        return (
+          <details className={cardClass + " text-sm"}>
+            <summary className="cursor-pointer font-bold">Pseudocode reference</summary>
+            <table className="mt-2 w-full border-collapse text-left">
+              <tbody>
+                <tr>
+                  <th scope="row" className={row + " w-28 pr-2 font-semibold"}>Data types</th>
+                  <td className={row}>INT <span className="fc-mono">42</span>, REAL <span className="fc-mono">3.5</span>, STRING <span className="fc-mono">"hi"</span>, BOOL <span className="fc-mono">True</span>/<span className="fc-mono">False</span></td>
+                </tr>
+                <tr>
+                  <th scope="row" className={row + " pr-2 font-semibold"}>Assignment</th>
+                  <td className={row + " fc-mono"}>total = total + 1</td>
+                </tr>
+                <tr>
+                  <th scope="row" className={row + " pr-2 font-semibold"}>Arithmetic</th>
+                  <td className={row}><span className="fc-mono">+ - * / ^</span>, <span className="fc-mono">DIV</span> (whole-number division), <span className="fc-mono">MOD</span> (remainder). <span className="fc-mono">/</span> always gives a REAL.</td>
+                </tr>
+                <tr>
+                  <th scope="row" className={row + " pr-2 font-semibold"}>Comparison</th>
+                  <td className={row + " fc-mono"}>== != &lt; &lt;= &gt; &gt;=</td>
+                </tr>
+                <tr>
+                  <th scope="row" className={row + " pr-2 font-semibold"}>Logic</th>
+                  <td className={row + " fc-mono"}>AND OR NOT</td>
+                </tr>
+                <tr>
+                  <th scope="row" className={row + " pr-2 font-semibold"}>Joining text</th>
+                  <td className={row}><span className="fc-mono">"Score: " + total</span> — numbers and True/False are converted to text automatically.</td>
+                </tr>
+                <tr>
+                  <th scope="row" className={row + " pr-2 font-semibold"}>Functions</th>
+                  <td className={row}><span className="fc-mono">LEN(s) INT(x) REAL(x) STR(x) ROUND(x) ROUND(x, places) RANDOM_INT(low, high)</span></td>
+                </tr>
+                <tr>
+                  <th scope="row" className={row + " pr-2 font-semibold"}>Subprograms</th>
+                  <td className={row}>Each subprogram has its own tab and its own local variables. Values are passed in as parameters; RETURN can send one value back to the call.</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
+        );
+      }
+
+      /* ---------------------------------------------------------------
+         Run panel
+         --------------------------------------------------------------- */
+      function RunPanel({ runner, doc, autoRun, speed, onSpeed, onStep, onRun, onPause, onRestart, onStop, onInput, onEditError, limitNotice }) {
+        const state = runner.state;
+        const [inputValue, setInputValue] = useState("");
+        const inputRef = useRef(null);
+        const outputRef = useRef(null);
+        const traceRef = useRef(null);
+
+        useEffect(() => {
+          if (state.status === "input" && inputRef.current) inputRef.current.focus();
+        }, [state.status, state.steps, state.pendingInput]);
+        useEffect(() => {
+          if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
+          if (traceRef.current) traceRef.current.scrollTop = traceRef.current.scrollHeight;
+        });
+
+        const here = state.status === "ready" || state.status === "input" ? runner.currentNode() : null;
+        const finished = state.status === "done" || state.status === "error";
+        const columns = useMemo(() => {
+          const keys = [];
+          state.trace.forEach((row) => row.changes.forEach((change) => {
+            if (!keys.includes(change.key)) keys.push(change.key);
+          }));
+          return keys;
+        }, [state.trace.length]);
+        const hasOutput = state.trace.some((row) => row.output !== null);
+
+        function submit(event) {
+          event.preventDefault();
+          onInput(inputValue);
+          setInputValue("");
+        }
+
+        return (
+          <div className="flex min-h-0 flex-col gap-3">
+            <section aria-label="Run controls" className={cardClass + " flex flex-col gap-2"}>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className={smallButton} onClick={onRestart}>
+                  ⟲ Restart
+                </button>
+                <button type="button" className={smallButton} onClick={onStep} disabled={autoRun || state.status !== "ready"}>
+                  Step ▶|
+                </button>
+                {autoRun ? (
+                  <button type="button" className={primaryButton} onClick={onPause}>
+                    ❚❚ Pause
+                  </button>
+                ) : (
+                  <button type="button" className={primaryButton} onClick={onRun} disabled={finished}>
+                    ▶ Run
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Speed
+                  <select
+                    value={speed}
+                    onChange={(event) => onSpeed(Number(event.target.value))}
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+                  >
+                    {SPEEDS.map((item, index) => (
+                      <option key={item.label} value={index}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className={smallButton} onClick={onStop}>
+                  ✎ Back to Design
+                </button>
+              </div>
+            </section>
+
+            <section aria-label="Run status" aria-live="polite" className={cardClass + " flex flex-col gap-2 text-sm"}>
+              {state.status === "error" ? (
+                <div className="rounded-md border border-red-300 bg-red-50 p-2 text-red-900 dark:border-red-800 dark:bg-red-950/60 dark:text-red-100">
+                  <p className="font-bold">Run-time error</p>
+                  <p>{state.error.message}</p>
+                  {state.error.hint && <p className="mt-1 text-xs">{state.error.hint}</p>}
+                  <button type="button" className={smallButton + " mt-2 bg-white dark:bg-slate-900"} onClick={onEditError}>
+                    Edit this block
+                  </button>
+                </div>
+              ) : state.status === "done" ? (
+                <p className="font-semibold text-emerald-800 dark:text-emerald-300">✓ Finished: reached END after {state.steps} step{state.steps === 1 ? "" : "s"}.</p>
+              ) : state.status === "input" ? (
+                <form onSubmit={submit} className="flex flex-col gap-1.5">
+                  <label htmlFor="fc-run-input" className="font-semibold">
+                    INPUT <span className="fc-mono">{state.pendingInput.name}</span>: type a value and press Enter
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="fc-run-input"
+                      ref={inputRef}
+                      type="text"
+                      value={inputValue}
+                      onChange={(event) => setInputValue(event.target.value)}
+                      autoComplete="off"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className={fieldClass}
+                    />
+                    <button type="submit" className={primaryButton}>
+                      Enter
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Whole numbers become INT, decimals REAL, anything else STRING.</p>
+                </form>
+              ) : (
+                <p>
+                  <span className="font-semibold">Next block: </span>
+                  <span className="fc-mono">{here ? FlowLang.nodeSummary(here.node, doc) : ""}</span>
+                  {here && here.tab.kind === "sub" && <span> (in {here.tab.name})</span>}
+                </p>
+              )}
+              {state.lastEvent && state.status !== "input" && (
+                <p className="text-slate-600 dark:text-slate-400">
+                  <span className="font-semibold">Last step: </span>
+                  <span className="fc-mono">{state.lastEvent}</span>
+                </p>
+              )}
+              {limitNotice && (
+                <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+                  Paused after {STEP_LIMIT.toLocaleString()} steps. The flowchart may be stuck in an infinite loop. Press Run to carry on.
+                </p>
+              )}
+            </section>
+
+            <section aria-labelledby="fc-output-title" className={cardClass}>
+              <h2 id="fc-output-title" className="mb-1 text-sm font-bold">
+                Output
+              </h2>
+              <div
+                ref={outputRef}
+                className="fc-mono max-h-40 min-h-[3.5rem] overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+              >
+                {state.output.length === 0 ? (
+                  <p className="text-slate-500 dark:text-slate-400">Nothing output yet.</p>
+                ) : (
+                  state.output.map((line, index) =>
+                    line.kind === "input" ? (
+                      <p key={index} className="whitespace-pre-wrap break-words text-indigo-700 dark:text-indigo-300">
+                        <span aria-hidden="true">&gt; </span>
+                        <span className="sr-only">You entered </span>
+                        {line.text}
+                      </p>
+                    ) : (
+                      <p key={index} className="whitespace-pre-wrap break-words">
+                        {line.text}
+                      </p>
+                    ),
+                  )
+                )}
+              </div>
+            </section>
+
+            <section aria-labelledby="fc-vars-title" className={cardClass}>
+              <h2 id="fc-vars-title" className="mb-1 text-sm font-bold">
+                Variables
+              </h2>
+              <div className="flex flex-col gap-2">
+                {state.frames
+                  .slice()
+                  .reverse()
+                  .map((frame, index) => {
+                    const tab = doc.tabs.find((item) => item.id === frame.tabId);
+                    const name = tab.kind === "main" ? "Main" : tab.name;
+                    const entries = Array.from(frame.vars.entries());
+                    return (
+                      <div key={index}>
+                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          {name}
+                          {state.frames.length > 1 && index === 0 ? " (running)" : ""}
+                          {index > 0 ? " (waiting for the call to return)" : ""}
+                        </p>
+                        {entries.length === 0 ? (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No variables yet.</p>
+                        ) : (
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-xs text-slate-600 dark:text-slate-400">
+                                <th scope="col" className="py-0.5 pr-2 font-semibold">Name</th>
+                                <th scope="col" className="py-0.5 pr-2 font-semibold">Type</th>
+                                <th scope="col" className="py-0.5 font-semibold">Value</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {entries.map(([key, value]) => (
+                                <tr key={key} className="border-t border-slate-200 dark:border-slate-700">
+                                  <td className="fc-mono py-0.5 pr-2">{key}</td>
+                                  <td className="py-0.5 pr-2 text-xs font-semibold text-slate-600 dark:text-slate-400">{value.type}</td>
+                                  <td className="fc-mono break-all py-0.5">{FlowLang.formatValue(value)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </section>
+
+            <section aria-labelledby="fc-trace-title" className={cardClass + " flex min-h-0 flex-col"}>
+              <h2 id="fc-trace-title" className="mb-1 text-sm font-bold">
+                Trace table
+              </h2>
+              {state.trace.length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">A row is added each time a variable changes or something is output.</p>
+              ) : (
+                <div ref={traceRef} className="max-h-72 overflow-auto rounded-md border border-slate-200 dark:border-slate-700">
+                  <table className="fc-mono w-full border-collapse text-xs">
+                    <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800">
+                      <tr>
+                        <th scope="col" className="border-b border-slate-300 px-1.5 py-1 text-left font-sans font-semibold dark:border-slate-600">Step</th>
+                        {columns.map((key) => (
+                          <th key={key} scope="col" className="border-b border-slate-300 px-1.5 py-1 text-left font-semibold dark:border-slate-600">
+                            {key}
+                          </th>
+                        ))}
+                        {hasOutput && <th scope="col" className="border-b border-slate-300 px-1.5 py-1 text-left font-sans font-semibold dark:border-slate-600">Output</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.trace.slice(-400).map((row, index) => (
+                        <tr key={index} className="border-b border-slate-200 dark:border-slate-700" title={row.label}>
+                          <td className="px-1.5 py-0.5 text-slate-500 dark:text-slate-400">{row.step}</td>
+                          {columns.map((key) => {
+                            const change = row.changes.find((item) => item.key === key);
+                            return (
+                              <td key={key} className="whitespace-nowrap px-1.5 py-0.5">
+                                {change ? change.display : ""}
+                              </td>
+                            );
+                          })}
+                          {hasOutput && <td className="whitespace-pre px-1.5 py-0.5">{row.output !== null ? row.output : ""}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </div>
+        );
+      }
+
+      /* ---------------------------------------------------------------
+         Image export: the current tab as a PNG with light colours.
+         --------------------------------------------------------------- */
+      async function exportPng(svgElement, tab, layouts, filename) {
+        const bounds = contentBounds(tab, layouts);
+        const pad = 50;
+        const width = Math.ceil(bounds.right - bounds.left + pad * 2);
+        const height = Math.ceil(bounds.bottom - bounds.top + pad * 2);
+        const content = svgElement.querySelector("[data-content]").cloneNode(true);
+        content.querySelectorAll("[data-export-skip], title").forEach((element) => element.remove());
+        content.setAttribute("transform", `translate(${pad - bounds.left} ${pad - bounds.top})`);
+        const markup =
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+          "<style>svg{--fc-bg:#ffffff;--fc-stroke:#1e293b;--fc-text:#0f172a;--fc-muted:#64748b;--fc-edge:#334155;--fc-select:#1e293b;--fc-current:#334155;--fc-current-glow:transparent;--fc-error:#1e293b;--fc-true:#047857;--fc-false:#b91c1c}" +
+          ".fc-label{paint-order:stroke;stroke:#ffffff;stroke-width:4px;stroke-linejoin:round}</style>" +
+          `<rect width="${width}" height="${height}" fill="#ffffff"/>` +
+          new XMLSerializer().serializeToString(content) +
+          "</svg>";
+        const image = new Image();
+        const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = reject;
+          image.src = url;
+        });
+        const scale = 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const context = canvas.getContext("2d");
+        context.scale(scale, scale);
+        context.drawImage(image, 0, 0);
+        URL.revokeObjectURL(url);
+        await new Promise((resolve) => canvas.toBlob((blob) => {
+          if (blob) downloadBlob(blob, filename);
+          resolve();
+        }, "image/png"));
+      }
+
+      /* ---------------------------------------------------------------
+         App
+         --------------------------------------------------------------- */
+      function App() {
+        const [doc, setDocState] = useState(loadInitialDoc);
+        const docRef = useRef(doc);
+        const undoRef = useRef([]);
+        const redoRef = useRef([]);
+        const [, setHistoryVersion] = useState(0);
+        const [activeTabId, setActiveTabId] = useState(() => doc.tabs[0].id);
+        const [selection, setSelection] = useState(null);
+        const [views, setViews] = useState({});
+        const [mode, setMode] = useState("design");
+        const [notice, setNotice] = useState(null);
+        const [editKey, setEditKey] = useState(null);
+        const [problemsFlash, setProblemsFlash] = useState(0);
+        const [ghost, setGhost] = useState(null);
+        const [autoRun, setAutoRun] = useState(false);
+        const [speed, setSpeed] = useState(2);
+        const [runVersion, setRunVersion] = useState(0);
+        const [limitNotice, setLimitNotice] = useState(false);
+        const runnerRef = useRef(null);
+        const runStepsRef = useRef(0);
+        const canvasRef = useRef(null);
+        const fileRef = useRef(null);
+        const dragSnapshotRef = useRef(null);
+        const fieldRef = useRef({ element: null, apply: null, snapshot: null });
+
+        const tab = doc.tabs.find((item) => item.id === activeTabId) || doc.tabs[0];
+        const key = logicKey(doc);
+        const validation = useMemo(() => FlowLang.validateDoc(docRef.current), [key]);
+        const layouts = useMemo(() => computeLayouts(tab, doc), [tab, doc.tabs]);
+        const routes = useMemo(() => routeEdges(tab, layouts), [tab, layouts]);
+        const variables = useMemo(() => FlowLang.variablesInTab(tab, doc), [tab]);
+        const problemNodes = useMemo(() => {
+          const map = new Map();
+          validation.problems.forEach((problem) => {
+            if (problem.tabId !== tab.id) return;
+            (problem.nodeIds || (problem.nodeId ? [problem.nodeId] : [])).forEach((id) => {
+              if (map.get(id) !== "error") map.set(id, problem.severity);
+            });
+          });
+          return map;
+        }, [validation, tab.id]);
+
+        /* ----- document history ----- */
+        const setDoc = useCallback((next) => {
+          docRef.current = next;
+          setDocState(next);
+        }, []);
+
+        const remember = useCallback((snapshot) => {
+          undoRef.current.push(snapshot);
+          if (undoRef.current.length > 150) undoRef.current.shift();
+          redoRef.current = [];
+          setHistoryVersion((value) => value + 1);
+        }, []);
+
+        const commit = useCallback((update) => {
+          const previous = docRef.current;
+          const next = update(previous);
+          if (!next || next === previous) return previous;
+          remember(previous);
+          setDoc(next);
+          return next;
+        }, [remember, setDoc]);
+
+        const live = useCallback((update) => {
+          const next = update(docRef.current);
+          if (next && next !== docRef.current) setDoc(next);
+        }, [setDoc]);
+
+        function restore(target) {
+          setDoc(target);
+          if (!target.tabs.some((item) => item.id === activeTabId)) setActiveTabId(target.tabs[0].id);
+          setSelection(null);
+          setHistoryVersion((value) => value + 1);
+        }
+
+        function undo() {
+          if (!undoRef.current.length || mode !== "design") return;
+          redoRef.current.push(docRef.current);
+          restore(undoRef.current.pop());
+        }
+
+        function redo() {
+          if (!redoRef.current.length || mode !== "design") return;
+          undoRef.current.push(docRef.current);
+          restore(redoRef.current.pop());
+        }
+
+        // Typing in a field updates the flowchart live; one undo step is
+        // recorded per field visit.
+        const fieldApi = useMemo(() => ({
+          focus(element, apply) {
+            fieldRef.current = { element, apply, snapshot: docRef.current };
+          },
+          blur() {
+            const { snapshot } = fieldRef.current;
+            if (snapshot && snapshot !== docRef.current) remember(snapshot);
+            fieldRef.current = { ...fieldRef.current, snapshot: null };
+          },
+          insert(text) {
+            const { element, apply } = fieldRef.current;
+            if (!element || !apply || !element.isConnected) return;
+            if (document.activeElement !== element) remember(docRef.current);
+            const start = element.selectionStart ?? element.value.length;
+            const end = element.selectionEnd ?? element.value.length;
+            const value = element.value.slice(0, start) + text + element.value.slice(end);
+            apply(value);
+            requestAnimationFrame(() => {
+              element.focus();
+              element.setSelectionRange(start + text.length, start + text.length);
+            });
+          },
+        }), [remember]);
+
+        useEffect(() => {
+          const timer = setTimeout(() => {
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+            } catch (error) {
+              // Saving is a convenience; the designer still works without it.
+            }
+          }, 400);
+          return () => clearTimeout(timer);
+        }, [doc]);
+
+        useEffect(() => {
+          if (!notice) return undefined;
+          const timer = setTimeout(() => setNotice(null), notice.tone === "error" ? 7000 : 4500);
+          return () => clearTimeout(timer);
+        }, [notice]);
+
+        /* ----- editing actions ----- */
+        const showTab = useCallback((tabId) => {
+          setActiveTabId(tabId);
+          setSelection(null);
+        }, []);
+
+        function requestEdit(nodeId) {
+          setSelection({ kind: "node", id: nodeId });
+          setEditKey((current) => ({ nodeId, count: (current ? current.count : 0) + 1 }));
+        }
+
+        function placeNewBlock(type, worldPoint) {
+          const current = docRef.current;
+          const currentTab = current.tabs.find((item) => item.id === tab.id);
+          const node = makeNode(type, 0, 0);
+          const newLayout = blockLayout(node, currentTab, current);
+          let nodes = currentTab.nodes.slice();
+          let edges = currentTab.edges.slice();
+
+          if (worldPoint) {
+            node.x = snap(worldPoint.x);
+            node.y = snap(worldPoint.y);
+          } else {
+            const selected = selection && selection.kind === "node" ? nodes.find((item) => item.id === selection.id) : null;
+            const ports = selected ? FlowLang.OUTPUT_PORTS[selected.type] : [];
+            if (!selected || !ports.length) {
+              const centre = canvasRef.current ? canvasRef.current.centre() : { x: 300, y: 200 };
+              const base = selected ? { x: selected.x, y: selected.y + layouts.get(selected.id).h / 2 + 50 + newLayout.h / 2 } : centre;
+              node.x = snap(base.x);
+              node.y = snap(base.y);
+            } else {
+              const selectedLayout = layouts.get(selected.id);
+              const used = new Set(edges.filter((edge) => edge.from === selected.id).map((edge) => edge.port));
+              const ordered = ports.slice().sort((a, b) => (portSide(selected, a) === "bottom" ? -1 : 0) - (portSide(selected, b) === "bottom" ? -1 : 0));
+              const port = ordered.find((item) => !used.has(item)) || ordered[0];
+              const side = portSide(selected, port);
+              const existing = edges.find((edge) => edge.from === selected.id && edge.port === port);
+              if (side === "bottom") {
+                node.x = selected.x;
+                node.y = snap(selected.y + selectedLayout.h / 2 + 44 + newLayout.h / 2);
+                if (existing) {
+                  // Make room: everything below moves down by the new block's height.
+                  const shift = snap(newLayout.h + 44);
+                  nodes = nodes.map((item) => (item.y > selected.y && item.id !== selected.id ? { ...item, y: item.y + shift } : item));
+                }
+              } else {
+                const direction = side === "right" ? 1 : -1;
+                node.x = snap(selected.x + direction * (selectedLayout.w / 2 + 60 + newLayout.w / 2));
+                node.y = snap(selected.y + selectedLayout.h / 2 + 30 + newLayout.h / 2);
+              }
+              edges = edges.filter((edge) => edge !== existing);
+              edges.push({ id: newId("e"), from: selected.id, port, to: node.id });
+              if (existing && FlowLang.OUTPUT_PORTS[type].length) {
+                const outPort = type === "decision" ? "true" : "next";
+                edges.push({ id: newId("e"), from: node.id, port: outPort, to: existing.to });
+              }
+            }
+          }
+          nodes.push(node);
+          commit((value) => mapTab(value, tab.id, (item) => ({ ...item, nodes, edges })));
+          if (type === "call" && !current.tabs.some((item) => item.kind === "sub")) {
+            setNotice({ tone: "info", text: "Create a subprogram for this block to call." });
+          }
+          requestEdit(node.id);
+        }
+
+        function deleteSelection() {
+          if (!selection || mode !== "design") return;
+          if (selection.kind === "edge") {
+            commit((value) => mapTab(value, tab.id, (item) => ({ ...item, edges: item.edges.filter((edge) => edge.id !== selection.id) })));
+            setSelection(null);
+            return;
+          }
+          const node = tab.nodes.find((item) => item.id === selection.id);
+          if (!node) return;
+          if (node.type === "start") {
+            setNotice({ tone: "info", text: "START can't be deleted: every flowchart needs one." });
+            return;
+          }
+          commit((value) => mapTab(value, tab.id, (item) => {
+            const out = item.edges.filter((edge) => edge.from === node.id);
+            // A block with a single exit is removed from the middle of a
+            // sequence, so the blocks either side stay connected.
+            const successor = out.length === 1 && out[0].port === "next" ? out[0].to : null;
+            const edges = [];
+            item.edges.forEach((edge) => {
+              if (edge.from === node.id) return;
+              if (edge.to === node.id) {
+                if (successor && successor !== edge.from) edges.push({ ...edge, to: successor });
+                return;
+              }
+              edges.push(edge);
+            });
+            return { ...item, nodes: item.nodes.filter((other) => other.id !== node.id), edges };
+          }));
+          setSelection(null);
+        }
+
+        function connectBlocks(fromId, port, toId) {
+          if (fromId === toId) return;
+          commit((value) => mapTab(value, tab.id, (item) => {
+            const target = item.nodes.find((other) => other.id === toId);
+            if (!target || target.type === "start") return item;
+            const kept = item.edges.filter((edge) => !(edge.from === fromId && edge.port === port));
+            return { ...item, edges: [...kept, { id: newId("e"), from: fromId, port, to: toId }] };
+          }));
+        }
+
+        function createSubprogram() {
+          const sub = newSubTab(docRef.current);
+          let updated = commit((value) => ({ ...value, tabs: [...value.tabs, sub] }));
+          // A call block that is waiting for a subprogram now calls this one.
+          const waiting = selection && selection.kind === "node" ? tab.nodes.find((item) => item.id === selection.id) : null;
+          if (waiting && waiting.type === "call" && !waiting.calleeId) {
+            setDoc(patchNode(updated, tab.id, waiting.id, { calleeId: sub.id }));
+          }
+          setActiveTabId(sub.id);
+          const startNode = sub.nodes[0];
+          setSelection({ kind: "node", id: startNode.id });
+          setEditKey((current) => ({ nodeId: startNode.id, count: (current ? current.count : 0) + 1 }));
+        }
+
+        function deleteSubprogram() {
+          const id = tab.id;
+          if (tab.kind !== "sub") return;
+          commit((value) => ({ ...value, tabs: value.tabs.filter((item) => item.id !== id) }));
+          setActiveTabId(docRef.current.tabs[0].id);
+          setSelection(null);
+          setNotice({ tone: "info", text: "Subprogram deleted. Undo brings it back." });
+        }
+
+        function loadExample(id) {
+          const example = FlowExamples.list.find((item) => item.id === id);
+          if (!example) return;
+          stopRun();
+          commit(() => normaliseDoc(clone(example.doc)));
+          setViews({});
+          setActiveTabId("main");
+          setSelection(null);
+          setNotice({ tone: "info", text: `Loaded “${example.label}”. Undo returns to your previous flowchart.` });
+        }
+
+        function newFlowchart() {
+          stopRun();
+          commit(() => FlowExamples.blank());
+          setViews({});
+          setActiveTabId("main");
+          setSelection({ kind: "node", id: "start" });
+          setNotice({ tone: "info", text: "New flowchart started. Undo returns to your previous one." });
+        }
+
+        function saveFile() {
+          const blob = new Blob([JSON.stringify({ format: "flowchart-designer", version: 1, ...docRef.current }, null, 2)], { type: "application/json" });
+          downloadBlob(blob, "flowchart.json");
+        }
+
+        function openFile(file) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            let next = null;
+            try {
+              next = normaliseDoc(JSON.parse(String(reader.result)));
+            } catch (error) {
+              next = null;
+            }
+            if (!next) {
+              setNotice({ tone: "error", text: "That file isn't a flowchart saved from this designer." });
+              return;
+            }
+            stopRun();
+            commit(() => next);
+            setViews({});
+            setActiveTabId(next.tabs[0].id);
+            setSelection(null);
+            setNotice({ tone: "info", text: `Opened ${file.name}.` });
+          };
+          reader.readAsText(file);
+        }
+
+        async function saveImage() {
+          const svg = canvasRef.current && canvasRef.current.svg();
+          if (!svg) return;
+          try {
+            await exportPng(svg, tab, layouts, `flowchart-${(tab.kind === "main" ? "main" : tab.name).toLowerCase()}.png`);
+          } catch (error) {
+            setNotice({ tone: "error", text: "The image could not be created in this browser." });
+          }
+        }
+
+        /* ----- running ----- */
+        function startRun() {
+          if (validation.errors) {
+            setNotice({ tone: "error", text: `Fix the ${validation.errors} error${validation.errors === 1 ? "" : "s"} listed under Checks before simulating.` });
+            setProblemsFlash((value) => value + 1);
+            return;
+          }
+          if (fieldRef.current.element && document.activeElement === fieldRef.current.element) fieldRef.current.element.blur();
+          runnerRef.current = FlowLang.createRunner(validation.program);
+          runStepsRef.current = 0;
+          setLimitNotice(false);
+          setMode("run");
+          setSelection(null);
+          setActiveTabId(validation.program.mainId);
+          setRunVersion((value) => value + 1);
+        }
+
+        function stopRun() {
+          setAutoRun(false);
+          setLimitNotice(false);
+          runnerRef.current = null;
+          setMode("design");
+        }
+
+        function restartRun() {
+          setAutoRun(false);
+          setLimitNotice(false);
+          runnerRef.current = FlowLang.createRunner(validation.program);
+          runStepsRef.current = 0;
+          setActiveTabId(validation.program.mainId);
+          setRunVersion((value) => value + 1);
+        }
+
+        function stepRun() {
+          const runner = runnerRef.current;
+          if (!runner) return;
+          runner.step();
+          setRunVersion((value) => value + 1);
+        }
+
+        function provideInput(text) {
+          const runner = runnerRef.current;
+          if (!runner) return;
+          runner.provideInput(text);
+          setRunVersion((value) => value + 1);
+        }
+
+        function editRunError() {
+          const runner = runnerRef.current;
+          const error = runner && runner.state.error;
+          stopRun();
+          if (error) {
+            setActiveTabId(error.tabId);
+            requestEdit(error.nodeId);
+          }
+        }
+
+        useEffect(() => {
+          if (!autoRun) return undefined;
+          const runner = runnerRef.current;
+          if (!runner) return undefined;
+          if (runner.state.status === "done" || runner.state.status === "error") {
+            setAutoRun(false);
+            return undefined;
+          }
+          if (runner.state.status !== "ready") return undefined;
+          const { delay, batch } = SPEEDS[speed];
+          const timer = setTimeout(() => {
+            for (let count = 0; count < batch && runner.state.status === "ready"; count += 1) {
+              runner.step();
+              runStepsRef.current += 1;
+              if (runStepsRef.current >= STEP_LIMIT) {
+                runStepsRef.current = 0;
+                setAutoRun(false);
+                setLimitNotice(true);
+                break;
+              }
+            }
+            setRunVersion((value) => value + 1);
+          }, delay);
+          return () => clearTimeout(timer);
+        }, [autoRun, runVersion, speed]);
+
+        // Follow execution into subprogram tabs and back.
+        const runner = runnerRef.current;
+        let highlight = null;
+        if (mode === "run" && runner) {
+          const state = runner.state;
+          if (state.status === "error") {
+            highlight = state.error.tabId === tab.id ? { errorId: state.error.nodeId } : null;
+          } else if (state.status !== "done") {
+            const frame = state.frames[state.frames.length - 1];
+            highlight = frame.tabId === tab.id ? { currentId: frame.nodeId } : {};
+          } else {
+            highlight = {};
+          }
+          if (highlight && state.lastEdge && state.lastEdge.tabId === tab.id) highlight.edge = state.lastEdge;
+        }
+        useEffect(() => {
+          const current = runnerRef.current;
+          if (mode !== "run" || !current) return;
+          const state = current.state;
+          const target = state.status === "error" ? state.error.tabId : state.frames[state.frames.length - 1].tabId;
+          if (target !== activeTabId) setActiveTabId(target);
+        }, [runVersion]);
+
+        /* ----- palette drag ----- */
+        function startPaletteDrag(type, event) {
+          if (mode !== "design") return;
+          event.preventDefault();
+          const startX = event.clientX;
+          const startY = event.clientY;
+          let dragging = false;
+          const move = (moveEvent) => {
+            if (!dragging && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 5) return;
+            dragging = true;
+            setGhost({ type, x: moveEvent.clientX, y: moveEvent.clientY });
+          };
+          const up = (upEvent) => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", cancel);
+            setGhost(null);
+            if (!dragging) {
+              placeNewBlock(type);
+              return;
+            }
+            const canvas = canvasRef.current;
+            if (canvas && canvas.contains(upEvent.clientX, upEvent.clientY)) {
+              placeNewBlock(type, canvas.clientToWorld(upEvent.clientX, upEvent.clientY));
+            }
+          };
+          const cancel = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", cancel);
+            setGhost(null);
+          };
+          window.addEventListener("pointermove", move);
+          window.addEventListener("pointerup", up);
+          window.addEventListener("pointercancel", cancel);
+        }
+
+        /* ----- keyboard ----- */
+        useEffect(() => {
+          const onKey = (event) => {
+            const target = event.target;
+            const typing = target && (target.matches("input, textarea, select") || target.isContentEditable);
+            const modifier = event.ctrlKey || event.metaKey;
+            if (typing) return;
+            if (modifier && event.key.toLowerCase() === "z") {
+              event.preventDefault();
+              if (event.shiftKey) redo();
+              else undo();
+              return;
+            }
+            if (modifier && event.key.toLowerCase() === "y") {
+              event.preventDefault();
+              redo();
+              return;
+            }
+            if (mode !== "design" || !selection) return;
+            if (event.key === "Delete" || event.key === "Backspace") {
+              event.preventDefault();
+              deleteSelection();
+              return;
+            }
+            if (event.key === "Escape") {
+              setSelection(null);
+              return;
+            }
+            const arrows = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+            if (arrows[event.key] && selection.kind === "node" && target && target.closest && target.closest(".fc-canvas")) {
+              event.preventDefault();
+              const [dx, dy] = arrows[event.key];
+              const step = event.shiftKey ? GRID * 5 : GRID;
+              commit((value) => mapTab(value, tab.id, (item) => ({
+                ...item,
+                nodes: item.nodes.map((node) => (node.id === selection.id ? { ...node, x: node.x + dx * step, y: node.y + dy * step } : node)),
+              })));
+            }
+          };
+          window.addEventListener("keydown", onKey);
+          return () => window.removeEventListener("keydown", onKey);
+        });
+
+        const setView = useCallback((view) => setViews((current) => ({ ...current, [tab.id]: view })), [tab.id]);
+
+        function showProblem(problem) {
+          setActiveTabId(problem.tabId);
+          if (problem.nodeId) requestEdit(problem.nodeId);
+          else setSelection(null);
+        }
+
+        const subs = doc.tabs.filter((item) => item.kind === "sub");
+        const design = mode === "design";
+        const view = views[tab.id];
+        const titleButton =
+          "shrink-0 whitespace-nowrap rounded-md border border-white/40 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
+
+        return (
+          <div className="flowchart-app flex flex-col bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+            <header data-interactive-header className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">Flowchart Designer &amp; Simulator</h1>
+                <p className="text-sm opacity-90">Build a flowchart from standard symbols, check it, then run it step by step</p>
+              </div>
+              <div data-interactive-actions className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label="Load an example flowchart"
+                  value=""
+                  onChange={(event) => loadExample(event.target.value)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  <option value="">Load an example…</option>
+                  {FlowExamples.list.map((example) => (
+                    <option key={example.id} value={example.id}>
+                      {example.label}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className={titleButton} onClick={newFlowchart}>
+                  New
+                </button>
+                <button type="button" className={titleButton} onClick={() => fileRef.current.click()}>
+                  Open…
+                </button>
+                <button type="button" className={titleButton} onClick={saveFile}>
+                  Save
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onChange={(event) => {
+                    const file = event.target.files && event.target.files[0];
+                    if (file) openFile(file);
+                    event.target.value = "";
+                  }}
+                />
+              </div>
+            </header>
+
+            <div className="fc-main grid min-h-0 flex-1 gap-3 p-3">
+              <Palette tabKind={tab.kind} disabled={!design} onAdd={placeNewBlock} onDragStart={startPaletteDrag} />
+
+              <section aria-label="Flowchart" className="fc-canvas-column flex min-w-0 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-2 py-2 dark:border-slate-700">
+                  <div role="group" aria-label="Mode" className="flex overflow-hidden rounded-md border border-slate-300 dark:border-slate-600">
+                    <button
+                      type="button"
+                      aria-pressed={design}
+                      onClick={() => !design && stopRun()}
+                      className={"px-3 py-1.5 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " + (design ? "bg-indigo-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800")}
+                    >
+                      ✎ Design
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={!design}
+                      onClick={() => design && startRun()}
+                      className={"border-l border-slate-300 px-3 py-1.5 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:border-slate-600 " + (!design ? "bg-indigo-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800")}
+                    >
+                      ▶ Simulate
+                    </button>
+                  </div>
+                  {design && (
+                    <span
+                      className={
+                        "whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-bold " +
+                        (validation.errors
+                          ? "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100"
+                          : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100")
+                      }
+                    >
+                      {validation.errors ? `${validation.errors} error${validation.errors === 1 ? "" : "s"} to fix` : "✓ Ready to run"}
+                    </span>
+                  )}
+                  <div className="ml-auto flex flex-wrap items-center gap-1">
+                    <button type="button" className={smallButton} onClick={undo} disabled={!design || !undoRef.current.length} title="Undo (Ctrl+Z)">
+                      ↶ Undo
+                    </button>
+                    <button type="button" className={smallButton} onClick={redo} disabled={!design || !redoRef.current.length} title="Redo (Ctrl+Y)">
+                      ↷ Redo
+                    </button>
+                    <span className="mx-1 h-5 w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true"></span>
+                    <button type="button" className={smallButton} onClick={() => canvasRef.current.zoom(1 / 1.2)} aria-label="Zoom out">
+                      −
+                    </button>
+                    <span className="w-12 text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300" aria-live="polite">
+                      {Math.round((view ? view.z : 1) * 100)}%
+                    </span>
+                    <button type="button" className={smallButton} onClick={() => canvasRef.current.zoom(1.2)} aria-label="Zoom in">
+                      +
+                    </button>
+                    <button type="button" className={smallButton} onClick={() => canvasRef.current.fit()}>
+                      Fit
+                    </button>
+                    <button type="button" className={smallButton} onClick={saveImage} title="Download this tab as a PNG image">
+                      Image
+                    </button>
+                  </div>
+                </div>
+
+                <div role="tablist" aria-label="Flowcharts" className="flex items-end gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-2 pt-1.5 dark:border-slate-700 dark:bg-slate-950">
+                  {doc.tabs.map((item) => {
+                    const active = item.id === tab.id;
+                    const hasError = validation.problems.some((problem) => problem.tabId === item.id && problem.severity === "error");
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => showTab(item.id)}
+                        className={
+                          "fc-mono -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border px-3 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
+                          (active
+                            ? "border-slate-300 border-b-white bg-white text-indigo-700 dark:border-slate-600 dark:border-b-slate-900 dark:bg-slate-900 dark:text-indigo-300"
+                            : "border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800")
+                        }
+                      >
+                        {item.kind === "main" ? "Main" : FlowLang.subprogramSignature(item)}
+                        {hasError && design && (
+                          <span className="rounded-full bg-red-600 px-1.5 text-[0.65rem] font-bold leading-4 text-white" aria-label="has errors">
+                            !
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {design && (
+                    <button
+                      type="button"
+                      onClick={createSubprogram}
+                      className="mb-1 ml-1 shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-slate-800"
+                    >
+                      + New subprogram
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative min-h-0 flex-1">
+                  <FlowCanvas
+                    ref={canvasRef}
+                    doc={doc}
+                    tab={tab}
+                    layouts={layouts}
+                    routes={routes}
+                    view={view}
+                    onViewChange={setView}
+                    mode={mode}
+                    selection={selection}
+                    onSelect={design ? setSelection : () => {}}
+                    onNodeDragStart={() => {
+                      dragSnapshotRef.current = docRef.current;
+                    }}
+                    onNodeDrag={(id, x, y) => live((value) => patchNode(value, tab.id, id, { x, y }))}
+                    onNodeDragEnd={() => {
+                      if (dragSnapshotRef.current && dragSnapshotRef.current !== docRef.current) remember(dragSnapshotRef.current);
+                      dragSnapshotRef.current = null;
+                    }}
+                    onConnect={connectBlocks}
+                    problemNodes={problemNodes}
+                    highlight={highlight}
+                    reveal={
+                      mode === "run"
+                        ? { id: highlight && (highlight.errorId || highlight.currentId), key: runVersion + ":" + tab.id }
+                        : editKey && { id: editKey.nodeId, key: "edit" + editKey.count + ":" + tab.id }
+                    }
+                    onEditNode={requestEdit}
+                  />
+                  {notice && (
+                    <div
+                      role="status"
+                      className={
+                        "absolute bottom-3 left-3 right-3 z-10 mx-auto max-w-xl rounded-md border px-3 py-2 text-sm font-semibold shadow-md " +
+                        (notice.tone === "error"
+                          ? "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
+                          : "border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-100")
+                      }
+                    >
+                      {notice.text}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <aside aria-label={design ? "Block editor and checks" : "Simulation"} className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+                {design ? (
+                  <React.Fragment>
+                    <Inspector
+                      doc={doc}
+                      tab={tab}
+                      selection={selection}
+                      problems={validation.problems.filter((problem) => problem.tabId === tab.id)}
+                      fieldApi={fieldApi}
+                      editKey={editKey}
+                      variables={variables}
+                      onUpdateNode={(nodeId, patch) => live((value) => patchNode(value, tab.id, nodeId, patch))}
+                      onUpdateTab={(patch) => live((value) => mapTab(value, tab.id, (item) => ({ ...item, ...patch })))}
+                      onDeleteTab={deleteSubprogram}
+                      onDeleteSelection={deleteSelection}
+                      onCreateSub={createSubprogram}
+                      onShowTab={showTab}
+                    />
+                    <ProblemsPanel doc={doc} validation={validation} onShowProblem={showProblem} highlightKey={problemsFlash} />
+                    <ReferenceCard />
+                  </React.Fragment>
+                ) : (
+                  runner && (
+                    <RunPanel
+                      runner={runner}
+                      doc={doc}
+                      autoRun={autoRun}
+                      speed={speed}
+                      onSpeed={setSpeed}
+                      onStep={stepRun}
+                      onRun={() => {
+                        setLimitNotice(false);
+                        runStepsRef.current = 0;
+                        setAutoRun(true);
+                      }}
+                      onPause={() => setAutoRun(false)}
+                      onRestart={restartRun}
+                      onStop={stopRun}
+                      onInput={provideInput}
+                      onEditError={editRunError}
+                      limitNotice={limitNotice}
+                    />
+                  )
+                )}
+              </aside>
+            </div>
+
+            {ghost && (
+              <div className="fc-ghost flex items-center gap-2 rounded-md border border-indigo-400 bg-white px-2 py-1 text-sm font-semibold text-slate-800 shadow-lg dark:bg-slate-800 dark:text-slate-100" style={{ left: ghost.x, top: ghost.y }}>
+                <PaletteIcon type={ghost.type} />
+                {BLOCKS[ghost.type].label}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
