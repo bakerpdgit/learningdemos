@@ -1618,6 +1618,14 @@
         return { x: node.x, y: node.y + layout.h / 2 };
       }
 
+      // The exit a block added from the palette attaches to: the one the
+      // student picked by clicking its dot, otherwise the bottom exit.
+      function insertPortFor(node, chosen) {
+        const ports = FlowLang.OUTPUT_PORTS[node.type] || [];
+        if (chosen && chosen.nodeId === node.id && ports.includes(chosen.port)) return chosen.port;
+        return ports.find((port) => portSide(node, port) === "bottom") || ports[0] || null;
+      }
+
       function portSide(node, port) {
         if (port === "true") return node.trueSide || "bottom";
         if (port === "false") return node.falseSide || "right";
@@ -1972,7 +1980,7 @@
         });
       }
 
-      function BlockGraphic({ node, layout, state, problem, design, connected, summary }) {
+      function BlockGraphic({ node, layout, state, problem, design, connected, summary, insertPort }) {
         const { shape, w, h, lines, header } = layout;
         const cx = node.x;
         const cy = node.y;
@@ -2051,19 +2059,27 @@
               ports.map((port) => {
                 const p = sidePoint(node, layout, portSide(node, port));
                 const isConnected = connected.has(port);
+                const isInsert = insertPort === port;
+                const pathName = port === "true" ? "True" : "False";
                 return (
                   <circle
                     key={"port-" + port}
                     data-port={port}
                     data-export-skip=""
-                    className={"fc-port" + (isConnected ? " fc-port-connected" : "")}
+                    className={"fc-port" + (isConnected && !isInsert ? " fc-port-connected" : "")}
                     cx={p.x}
                     cy={p.y}
-                    r={7}
-                    style={{ fill: isConnected ? "var(--fc-select)" : "var(--fc-bg)", stroke: "var(--fc-select)" }}
+                    r={isInsert ? 8 : 7}
+                    style={{ fill: isInsert ? "var(--fc-select)" : "var(--fc-bg)", stroke: "var(--fc-select)" }}
                     strokeWidth={2.5}
                   >
-                    <title>{port === "next" ? "Drag to connect to the next block" : `Drag to connect the ${port === "true" ? "True" : "False"} path`}</title>
+                    <title>
+                      {port === "next"
+                        ? "Drag to connect to the next block"
+                        : isInsert
+                          ? `New blocks are added on the ${pathName} path. Drag to connect it.`
+                          : `Click to add new blocks on the ${pathName} path, or drag to connect it`}
+                    </title>
                   </circle>
                 );
               })}
@@ -2077,7 +2093,7 @@
       const FlowCanvas = React.forwardRef(function FlowCanvas(props, ref) {
         const {
           doc, tab, layouts, routes, view, onViewChange, mode, selection, onSelect,
-          onNodeDragStart, onNodeDrag, onNodeDragEnd, onConnect, problemNodes, highlight,
+          onNodeDragStart, onNodeDrag, onNodeDragEnd, onConnect, onChoosePort, insertPort, problemNodes, highlight,
           reveal, onEditNode,
         } = props;
         const wrapRef = useRef(null);
@@ -2191,7 +2207,7 @@
             const node = tab.nodes.find((item) => item.id === nodeElement.dataset.nodeId);
             const port = portElement.dataset.port;
             const start = sidePoint(node, layouts.get(node.id), portSide(node, port));
-            dragRef.current = { kind: "connect" };
+            dragRef.current = { kind: "connect", clientX: event.clientX, clientY: event.clientY };
             setConnect({ fromId: node.id, port, start, pointer: world, hoverId: null });
             onSelect({ kind: "node", id: node.id });
             event.preventDefault();
@@ -2269,6 +2285,9 @@
             const current = connect;
             setConnect(null);
             if (current && current.hoverId) onConnect(current.fromId, current.port, current.hoverId);
+            else if (current && Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) < 5) {
+              onChoosePort(current.fromId, current.port);
+            }
           }
         }
 
@@ -2362,6 +2381,7 @@
                         design={design}
                         connected={connectedPorts.get(node.id) || empty}
                         summary={summary}
+                        insertPort={selected ? insertPortFor(node, insertPort) : null}
                       />
                     </g>
                   );
@@ -2439,7 +2459,7 @@
             <p className="px-1 text-xs leading-snug text-slate-600 dark:text-slate-400">
               {disabled
                 ? "Switch to Design to change the flowchart."
-                : "Drag a block onto the canvas, or select a block and click here to add the next one below it."}
+                : "Drag a block onto the canvas, or select a block and click here to add the next one at its filled dot."}
             </p>
           </aside>
         );
@@ -2598,6 +2618,7 @@
         const {
           doc, tab, selection, problems, fieldApi, editKey, variables,
           onUpdateNode, onUpdateTab, onDeleteTab, onDeleteSelection, onCreateSub, onShowTab,
+          chosenPort, onChoosePort,
         } = props;
         const node = selection && selection.kind === "node" ? tab.nodes.find((item) => item.id === selection.id) : null;
         const edge = selection && selection.kind === "edge" ? tab.edges.find((item) => item.id === selection.id) : null;
@@ -2640,8 +2661,8 @@
           ) : (
             <div className="flex flex-col gap-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
               <p>
-                <strong>Select START</strong>, then click blocks in the palette: each new block is added and connected underneath the
-                selected one.
+                <strong>Select START</strong>, then click blocks in the palette: each new block is added and connected at the selected
+                block's filled dot. On a decision, click the other dot to build on that path instead.
               </p>
               <p>Drag blocks to move them. Drag from a block's dot to another block to connect them. Double-click a block to type in it.</p>
               <p>Press <strong>Simulate</strong> when the checks below are clear, or load an example from the title bar.</p>
@@ -2797,6 +2818,24 @@
                       Swap True and False sides
                     </button>
                   </div>
+                  <fieldset className="flex flex-col gap-1">
+                    <legend className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add the next block on</legend>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {["true", "false"].map((port) => (
+                        <label key={port} className="flex items-center gap-1.5 text-sm">
+                          <input
+                            type="radio"
+                            name={"fc-insert-" + node.id}
+                            checked={insertPortFor(node, chosenPort) === port}
+                            onChange={() => onChoosePort(node.id, port)}
+                            className="accent-indigo-600"
+                          />
+                          {port === "true" ? "True" : "False"} path ({SIDE_NAMES[portSide(node, port)].toLowerCase()})
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">The filled dot shows where. Click the other dot on the diamond to switch.</p>
+                  </fieldset>
                 </div>
               );
               break;
@@ -3320,6 +3359,11 @@
         const [notice, setNotice] = useState(null);
         const [editKey, setEditKey] = useState(null);
         const [problemsFlash, setProblemsFlash] = useState(0);
+        const [chosenPort, setChosenPort] = useState(null);
+        const selectedId = selection && selection.kind === "node" ? selection.id : null;
+        useEffect(() => {
+          if (chosenPort && chosenPort.nodeId !== selectedId) setChosenPort(null);
+        }, [selectedId]);
         const [ghost, setGhost] = useState(null);
         const [autoRun, setAutoRun] = useState(false);
         const [speed, setSpeed] = useState(2);
@@ -3470,9 +3514,7 @@
               node.y = snap(base.y);
             } else {
               const selectedLayout = layouts.get(selected.id);
-              const used = new Set(edges.filter((edge) => edge.from === selected.id).map((edge) => edge.port));
-              const ordered = ports.slice().sort((a, b) => (portSide(selected, a) === "bottom" ? -1 : 0) - (portSide(selected, b) === "bottom" ? -1 : 0));
-              const port = ordered.find((item) => !used.has(item)) || ordered[0];
+              const port = insertPortFor(selected, chosenPort);
               const side = portSide(selected, port);
               const existing = edges.find((edge) => edge.from === selected.id && edge.port === port);
               if (side === "bottom") {
@@ -3993,6 +4035,8 @@
                       dragSnapshotRef.current = null;
                     }}
                     onConnect={connectBlocks}
+                    onChoosePort={(nodeId, port) => setChosenPort({ nodeId, port })}
+                    insertPort={chosenPort}
                     problemNodes={problemNodes}
                     highlight={highlight}
                     reveal={
@@ -4035,6 +4079,8 @@
                       onDeleteSelection={deleteSelection}
                       onCreateSub={createSubprogram}
                       onShowTab={showTab}
+                      chosenPort={chosenPort}
+                      onChoosePort={(nodeId, port) => setChosenPort({ nodeId, port })}
                     />
                     <ProblemsPanel doc={doc} validation={validation} onShowProblem={showProblem} highlightKey={problemsFlash} />
                     <ReferenceCard />
