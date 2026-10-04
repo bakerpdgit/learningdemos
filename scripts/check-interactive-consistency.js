@@ -678,6 +678,79 @@ if (fs.existsSync(subnetMaskingPath)) {
   }
 }
 
+// The flowchart language is plain JavaScript inside the page so it can be
+// checked here: every example must pass the checks and produce its expected
+// output, and the core typing rules must not drift.
+{
+  const flowchartSource = fs.readFileSync(path.join(root, 'flowchart_designer.html'), 'utf8');
+  if (!/\.flowchart-app\s*\{[^}]*height:\s*100vh/.test(flowchartSource)
+    || !/body\[data-site-page="interactive"\]\s*\.flowchart-app\s*\{[^}]*height:\s*calc\(100vh - 58px\)/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: the app root must subtract the built site bar from the viewport height');
+  }
+  // A double press on a block must stop the browser's mousedown focus,
+  // which otherwise takes focus straight back from the block's editor.
+  if (!/now - last\.time < 400\)\s*\{\s*event\.preventDefault\(\);/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: double-clicking a block must prevent the default focus so its editor keeps focus');
+  }
+  if (!/role="separator"/.test(flowchartSource) || !/ArrowLeft/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: the side panel grip must be a keyboard-operable separator');
+  }
+  if (/\b(?:alert|confirm|prompt)\s*\(/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: input and feedback must be inline, not alert/confirm/prompt dialogs');
+  }
+  const languageScript = flowchartSource.match(/<script id="flowchart-language">([\s\S]*?)<\/script>/);
+  if (!languageScript) {
+    failures.push('flowchart_designer.html: missing the flowchart-language script');
+  } else {
+    const { FlowLang, FlowExamples } = require('vm').runInNewContext(
+      `${languageScript[1]}; ({ FlowLang, FlowExamples })`, {}, { timeout: 2000 },
+    );
+    for (const example of FlowExamples.list) {
+      const result = FlowLang.validateDoc(example.doc);
+      if (result.problems.length) {
+        failures.push(`flowchart_designer.html: example ${example.id} has problems: ${result.problems.map((p) => p.message).join('; ')}`);
+        continue;
+      }
+      const runner = FlowLang.createRunner(result.program, { random: () => 0 });
+      const inputs = example.inputs.slice();
+      for (let guard = 0; guard < 20000 && !['done', 'error'].includes(runner.state.status); guard += 1) {
+        if (runner.state.status === 'input') runner.provideInput(inputs.shift());
+        else runner.step();
+      }
+      const output = runner.state.output.filter((line) => line.kind === 'output').map((line) => line.text);
+      if (runner.state.status !== 'done' || JSON.stringify(output) !== JSON.stringify(example.expectedOutput)) {
+        failures.push(`flowchart_designer.html: example ${example.id} ended ${runner.state.status} with output ${JSON.stringify(output)}`);
+      }
+    }
+    const evaluate = (source, vars = {}) => {
+      const scope = new Map(Object.entries(vars).map(([name, raw]) => [name, FlowLang.inputValue(raw)]));
+      try {
+        const value = FlowLang.evaluate(FlowLang.parseExpression(source), scope, { random: () => 0 });
+        return `${value.type} ${FlowLang.toText(value)}`;
+      } catch (error) {
+        return `error ${error.message}`;
+      }
+    };
+    const expectations = [
+      ['"Score: " + total', { total: '7' }, 'STRING Score: 7'],
+      ['"Done: " + (total > 5)', { total: '7' }, 'STRING Done: True'],
+      ['7 / 2', {}, 'REAL 3.5'],
+      ['6 / 2', {}, 'REAL 3.0'],
+      ['7 DIV 2', {}, 'INT 3'],
+      ['7 MOD 2', {}, 'INT 1'],
+      ['1 + 2 * 3', {}, 'INT 7'],
+      ['NOT 5 > 3', {}, 'BOOL False'],
+    ];
+    for (const [source, vars, expected] of expectations) {
+      const actual = evaluate(source, vars);
+      if (actual !== expected) failures.push(`flowchart_designer.html: ${source} gave ${actual}, expected ${expected}`);
+    }
+    for (const [source, vars] of [['pin == "1234"', { pin: '1234' }], ['total = 5', {}], ['"Score:", total', { total: '1' }], ['5 % 2', {}]]) {
+      if (!evaluate(source, vars).startsWith('error')) failures.push(`flowchart_designer.html: ${source} must be reported as an error`);
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));
