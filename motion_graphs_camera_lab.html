@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Motion Graphs Camera Lab</title>
+  <script>
+    (function () {
+      try {
+        var mode = localStorage.getItem("uimode");
+        if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root { color-scheme: light; --page: #f3f6fb; --card: #fff; --ink: #18253b; --muted: #53647a; --line: #dce4ee; --soft: #edf4fa; --grid: #e7edf4; --accent: #4338ca; --accent-hover: #3730a3; --focus: #087ba6; --s-line: #0b6fb0; --v-line: #6d3fd0; --a-line: #b9480f; --target: #047857; --target-band: rgba(4, 120, 87, .13); --good: #047857; --good-bg: #e8f7f1; --warn: #92400e; --warn-bg: #fdf4e3; --stop: #b42318; --shadow: 0 3px 16px #18324e09; }
+    html.dark { color-scheme: dark; --page: #0d1727; --card: #162336; --ink: #edf3fc; --muted: #a9bad0; --line: #33445b; --soft: #1b2e43; --grid: #22344a; --accent: #6366f1; --accent-hover: #4f46e5; --focus: #62d6f5; --s-line: #5cc8f2; --v-line: #c0aefc; --a-line: #fbb174; --target: #34d399; --target-band: rgba(52, 211, 153, .16); --good: #4ade80; --good-bg: #12352a; --warn: #fbbf24; --warn-bg: #3a2c12; --stop: #dc2626; --shadow: 0 3px 16px #0002; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+    button, select, input { font: inherit; }
+    button, select, summary, input[type=range], input[type=checkbox] { cursor: pointer; }
+    button, select, input[type=number] { border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); padding: 8px 14px; }
+    button { font-weight: 650; white-space: nowrap; }
+    button:hover:not(:disabled) { background: var(--soft); }
+    button:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    h1, h2, h3, p { margin: 0; }
+    h2 { font-size: 17px; letter-spacing: -.01em; }
+    [data-interactive-header] { background: #4338ca; color: white; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 28px; }
+    [data-interactive-header] h1 { font-size: 22px; }
+    [data-interactive-header] p { font-size: 13px; opacity: .85; }
+    [data-interactive-actions] { display: flex; gap: 12px; min-width: 0; flex-wrap: wrap; }
+    main { max-width: 1320px; margin: 0 auto; padding: 20px 24px 32px; }
+    .lab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 18px; align-items: start; }
+    .card, details { border: 1px solid var(--line); border-radius: 15px; background: var(--card); box-shadow: var(--shadow); min-width: 0; }
+    .graph-card { padding: 16px 18px; }
+    .graph-top { display: flex; justify-content: space-between; align-items: center; gap: 12px 18px; flex-wrap: wrap; }
+    .eyebrow { font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .readouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+    .readout { border: 1px solid var(--line); border-radius: 10px; background: var(--soft); padding: 5px 12px; min-width: 118px; }
+    .readout span { display: block; font-size: 11px; color: var(--muted); }
+    .readout strong { display: block; font-size: 19px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap; }
+    .readout small { display: block; font-size: 11px; color: var(--muted); min-height: 16px; white-space: nowrap; }
+    .readout.s strong { color: var(--s-line); }
+    .readout.v strong { color: var(--v-line); }
+    .readout.a strong { color: var(--a-line); }
+    .task-panel { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--soft); display: flex; justify-content: space-between; align-items: flex-start; gap: 8px 16px; flex-wrap: wrap; }
+    .task-panel > div { min-width: 0; flex: 1 1 320px; }
+    .task-panel h3 { font-size: 14px; }
+    .task-panel p { font-size: 13px; color: var(--muted); }
+    .task-panel details { border: 0; box-shadow: none; background: transparent; margin-top: 4px; font-size: 13px; }
+    .task-panel details summary { padding: 0; font-weight: 650; color: var(--focus); display: inline; }
+    .task-panel details summary::after { content: none; }
+    .task-panel details p { margin-top: 4px; }
+    .position-help { font-size: 13px; font-weight: 650; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); white-space: nowrap; }
+    .position-help.ready { color: var(--good); border-color: currentColor; }
+    .graphs { position: relative; margin-top: 12px; display: grid; gap: 8px; }
+    .plot { position: relative; min-width: 0; height: clamp(240px, calc(100vh - 520px), 520px); }
+    .graphs.triple .plot { height: clamp(120px, calc((100vh - 540px) / 3), 230px); }
+    .plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: 8px; }
+    .plot canvas:focus-visible { outline-offset: 0; }
+    .countdown { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; border-radius: 10px; background: color-mix(in srgb, var(--card) 86%, transparent); }
+    .countdown[hidden] { display: none; }
+    .countdown strong { font-size: clamp(72px, 14vw, 150px); line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+    html.dark .countdown strong { color: #a5b4fc; }
+    .countdown span { font-size: 18px; font-weight: 650; }
+    .graph-note { min-height: 40px; color: var(--muted); font-size: 13px; margin-top: 8px; }
+    .graph-note:empty { min-height: 0; margin: 0; }
+    .feedback { margin-top: 8px; border: 1px solid currentColor; border-radius: 10px; padding: 9px 14px; font-size: 14px; }
+    .feedback[hidden] { display: none; }
+    .feedback.good { color: var(--good); background: var(--good-bg); }
+    .feedback.try { color: var(--warn); background: var(--warn-bg); }
+    .feedback span { color: var(--ink); }
+    .transport { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .transport label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+    .transport select { padding: 7px 10px; }
+    .transport .actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+    #record { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 120px; }
+    #record:hover:not(:disabled) { background: var(--accent-hover); }
+    #record.recording { background: var(--stop); border-color: var(--stop); }
+    .status { font-size: 12px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+    .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .side .card { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .segmented { border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin: 0; background: var(--soft); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; }
+    .segmented legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .segmented label { position: relative; text-align: center; padding: 6px 8px; border-radius: 8px; font-size: 13px; font-weight: 650; color: var(--muted); cursor: pointer; }
+    .segmented input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+    .segmented label:has(input:checked) { background: var(--card); color: var(--ink); box-shadow: 0 1px 4px #0002; }
+    .segmented label:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 1px; }
+    .stage { position: relative; aspect-ratio: 4 / 3; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--soft); cursor: crosshair; }
+    .stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; transform: scaleX(-1); }
+    .stage-message { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--muted); font-size: 13px; }
+    .stage-message[hidden] { display: none; }
+    .badge { position: absolute; left: 8px; bottom: 8px; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 650; background: color-mix(in srgb, var(--card) 90%, transparent); color: var(--ink); border: 1px solid var(--line); }
+    .badge[hidden] { display: none; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .row > button { flex: 1 1 auto; }
+    .field { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+    .field-head { display: flex; justify-content: space-between; gap: 8px; }
+    input[type=range] { width: 100%; margin: 4px 0 0; accent-color: #4338ca; }
+    html.dark input[type=range] { accent-color: #818cf8; }
+    .swatch { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--line); background: repeating-linear-gradient(45deg, var(--soft) 0 5px, var(--card) 5px 10px); }
+    .colour-row { display: flex; gap: 10px; align-items: center; }
+    .colour-row .field { flex: 1; }
+    .check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .calibrate { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+    .calibrate input { width: 100%; padding: 7px 10px; }
+    .cal-state { font-size: 12px; color: var(--muted); }
+    .cal-state.done { color: var(--good); font-weight: 650; }
+    .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+    .steps li { display: flex; gap: 8px; align-items: baseline; color: var(--muted); }
+    .steps li::before { content: attr(data-number); flex-shrink: 0; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--soft); color: var(--ink); font-size: 11px; font-weight: 700; }
+    .steps li.done { color: var(--ink); }
+    .steps li.done::before { content: "✓"; background: var(--good-bg); color: var(--good); }
+    .privacy { font-size: 12px; color: var(--muted); }
+    .slider-help { font-size: 13px; color: var(--muted); }
+    .virtual-track { position: relative; height: 54px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); overflow: hidden; }
+    .virtual-track .camera-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 700; color: var(--muted); }
+    .virtual-track .walker { position: absolute; top: 9px; width: 16px; height: 34px; margin-left: -8px; border-radius: 8px 8px 4px 4px; background: var(--s-line); }
+    .explainers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; margin-top: 18px; }
+    summary { padding: 15px 18px; font-weight: 650; list-style: none; display: flex; align-items: center; gap: 10px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; margin-left: auto; color: var(--muted); font-size: 22px; font-weight: 400; }
+    details[open] > summary::after { content: "−"; }
+    .number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; background: var(--soft); color: var(--accent); font-size: 12px; }
+    html.dark .number { color: #a5b4fc; }
+    .explanation { padding: 2px 18px 18px; border-top: 1px solid var(--line); font-size: 14px; }
+    .explanation p, .explanation ul { margin: 12px 0 0; color: var(--muted); }
+    .explanation ul { padding-left: 20px; }
+    .formula { margin-top: 10px; padding: 8px 12px; border-radius: 9px; background: var(--soft); font-family: "Cambria Math", Cambria, Georgia, serif; font-size: 16px; text-align: center; overflow-x: auto; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    @media (max-width: 1080px) {
+      .explainers { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 900px) {
+      main { padding: 16px 16px 28px; }
+      .lab { grid-template-columns: minmax(0, 1fr); }
+      .plot { height: 300px; }
+      .graphs.triple .plot { height: 190px; }
+      [data-interactive-header] { flex-wrap: wrap; }
+    }
+    @media (max-width: 560px) {
+      .readouts { width: 100%; }
+      .readout { min-width: 0; padding: 5px 8px; }
+      .readout strong { font-size: 16px; }
+      .transport .actions { margin-left: 0; width: 100%; }
+      .transport .actions button { flex: 1 1 auto; }
+      .plot { height: 260px; }
+    }
+  </style>
+  <script src="scripts/site-shell.js"></script>
+</head>
+<body>
+  <header data-interactive-header>
+    <div><h1>Motion Graphs Camera Lab</h1><p>Walk, record and plot displacement, velocity and acceleration live</p></div>
+    <div data-interactive-actions>
+      <select id="graph-kind" aria-label="Graph to plot">
+        <option value="s">Displacement–time</option>
+        <option value="v">Velocity–time</option>
+        <option value="a">Acceleration–time</option>
+        <option value="all">All three graphs</option>
+      </select>
+      <select id="task" aria-label="Task">
+        <option value="free">Free motion</option>
+        <option value="away">Match 1: s–t, steady walk</option>
+        <option value="returnTrip">Match 2: s–t, there and back</option>
+        <option value="fastSlow">Match 3: s–t, fast then slow</option>
+        <option value="steadyVelocity">Match 4: v–t, constant velocity</option>
+        <option value="towardsAway">Match 5: v–t, towards then away</option>
+        <option value="speedUpSlowDown">Match 6: v–t, speed up, slow down</option>
+      </select>
+    </div>
+  </header>
+  <main>
+    <div class="lab">
+      <section class="card graph-card" aria-labelledby="graph-title">
+        <div class="graph-top">
+          <div><div class="eyebrow">Live graph</div><h2 id="graph-title">Displacement–time graph</h2></div>
+          <div class="readouts" aria-label="Current motion">
+            <div class="readout s"><span>Distance from camera</span><strong id="readout-s">—</strong><small id="readout-s-note">&nbsp;</small></div>
+            <div class="readout v"><span>Velocity</span><strong id="readout-v">—</strong><small id="readout-v-note">&nbsp;</small></div>
+            <div class="readout a"><span>Acceleration</span><strong id="readout-a">—</strong><small id="readout-a-note">&nbsp;</small></div>
+          </div>
+        </div>
+        <div class="task-panel">
+          <div>
+            <h3 id="task-title"></h3>
+            <p id="task-text"></p>
+            <details id="task-hint" hidden><summary>Show a hint</summary><p id="task-hint-text"></p></details>
+          </div>
+          <span class="position-help" id="position-help" hidden></span>
+        </div>
+        <div class="graphs" id="graphs">
+          <div class="countdown" id="countdown" hidden aria-hidden="true"><strong id="countdown-number">3</strong><span id="countdown-text">Get ready…</span></div>
+        </div>
+        <p class="graph-note" id="graph-note"></p>
+        <p class="feedback" id="feedback" role="status" hidden></p>
+        <div class="transport">
+          <label>Duration
+            <select id="duration">
+              <option value="10">10 s</option>
+              <option value="15" selected>15 s</option>
+              <option value="20">20 s</option>
+              <option value="30">30 s</option>
+            </select>
+          </label>
+          <label>Smoothing
+            <select id="smoothing">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label>Origin
+            <select id="origin">
+              <option value="camera">At the camera</option>
+              <option value="start">At start position</option>
+            </select>
+          </label>
+          <label>Start delay
+            <select id="delay">
+              <option value="0">None</option>
+              <option value="3" selected>3 s</option>
+              <option value="5">5 s</option>
+            </select>
+          </label>
+          <div class="actions">
+            <button id="clear" type="button">Clear</button>
+            <button id="download" type="button" disabled>Download CSV</button>
+            <button id="record" type="button">● Record</button>
+          </div>
+        </div>
+        <p class="status" id="status" role="status"></p>
+      </section>
+
+      <aside class="side" aria-label="Motion tracking">
+        <section class="card" aria-labelledby="tracking-title">
+          <h2 id="tracking-title">Tracking</h2>
+          <fieldset class="segmented">
+            <legend>Motion source</legend>
+            <label><input type="radio" name="source" value="camera" checked>Camera</label>
+            <label><input type="radio" name="source" value="slider">No camera (slider)</label>
+          </fieldset>
+
+          <div id="camera-panel" class="side-panel" style="display: contents">
+            <div class="stage" id="stage" title="Click the coloured sheet to lock on to it">
+              <video id="video" muted playsinline aria-hidden="true"></video>
+              <canvas id="overlay" aria-hidden="true"></canvas>
+              <p class="stage-message" id="stage-message"><span>Camera off. Press <strong>Start camera</strong>; the video stays on this device.</span></p>
+              <span class="badge" id="badge" hidden></span>
+            </div>
+            <div class="row">
+              <button id="camera-toggle" type="button">Start camera</button>
+              <button id="pick-centre" type="button" disabled>Lock on to centre</button>
+            </div>
+            <ol class="steps" id="steps">
+              <li data-number="1" data-step="camera">Start the camera, about chest height</li>
+              <li data-number="2" data-step="colour">Hold a coloured A4 sheet facing the camera and click it in the video</li>
+              <li data-number="3" data-step="calibrate">Stand at a measured distance and calibrate</li>
+            </ol>
+            <div class="colour-row">
+              <span class="swatch" id="swatch" role="img" aria-label="No colour picked yet"></span>
+              <label class="field"><span class="field-head"><span>Colour tolerance</span><output id="tolerance-value" for="tolerance">40</output></span>
+                <input id="tolerance" type="range" min="15" max="90" step="1" value="40">
+              </label>
+            </div>
+            <label class="check"><input id="show-mask" type="checkbox"> Show what the camera detects</label>
+            <div class="calibrate">
+              <label class="field" for="cal-distance">Sheet’s measured distance from camera (m)
+                <input id="cal-distance" type="number" min="0.4" max="5" step="0.05" value="1.00">
+              </label>
+              <button id="calibrate" type="button" disabled>Calibrate</button>
+            </div>
+            <p class="cal-state" id="cal-state">Not calibrated: distances are estimates for an A4 sheet and a typical webcam.</p>
+            <p class="privacy">Video is processed in this browser only. Nothing is recorded or uploaded.</p>
+          </div>
+
+          <div id="slider-panel" class="side-panel" style="display: none">
+            <p class="slider-help">No camera? Move a virtual student instead. They speed up and slow down smoothly, like a real walker, as they follow the slider.</p>
+            <div class="virtual-track" aria-hidden="true"><span class="camera-icon">📷</span><span class="walker" id="walker"></span></div>
+            <label class="field"><span class="field-head"><span>Target distance from camera</span><output id="virtual-value" for="virtual-distance">1.50 m</output></span>
+              <input id="virtual-distance" type="range" min="0.5" max="3.5" step="0.01" value="1.5">
+            </label>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="explainers">
+      <details><summary><span class="number">01</span>How the camera measures distance</summary>
+        <div class="explanation">
+          <p>A camera behaves like a pinhole: the further away an object is, the smaller its image. By similar triangles, the image width is proportional to 1 ÷ distance. Image area is proportional to 1 ÷ distance², so the square root of the area works too.</p>
+          <div class="formula">d = k ÷ √A</div>
+          <p>Here <i>A</i> is the number of pixels the coloured sheet covers. Calibrating at a measured distance <i>d</i><sub>0</sub> fixes the constant: <i>k</i> = <i>d</i><sub>0</sub>√<i>A</i><sub>0</sub>.</p>
+          <p>Far from the camera the sheet covers few pixels, so a single pixel of error matters more. That is why readings are noisier beyond about 3 m.</p>
+        </div>
+      </details>
+      <details><summary><span class="number">02</span>From displacement to velocity and acceleration</summary>
+        <div class="explanation">
+          <p>Velocity is the gradient of the displacement–time graph. Acceleration is the gradient of the velocity–time graph.</p>
+          <div class="formula">v = ds⁄dt,&nbsp;&nbsp; a = dv⁄dt = d²s⁄dt²</div>
+          <p>Each gradient comes from a curve of best fit through the readings either side of that moment. Differentiating amplifies measurement noise, so the a–t graph is the most jagged. More smoothing uses a wider window. It reduces noise but rounds off sudden changes and delays the live graph slightly.</p>
+          <p>Hover over a recorded graph, or focus it and use the arrow keys. The s–t graph then shows a tangent. The v–t and a–t graphs show the area under the line, which gives the change in displacement or velocity.</p>
+        </div>
+      </details>
+      <details><summary><span class="number">03</span>Setting up the room</summary>
+        <div class="explanation">
+          <ul>
+            <li>Use a brightly coloured sheet. Bright pink, green or orange works best; white paper is easily confused with walls.</li>
+            <li>Remove anything else of that colour from the shot, including clothing.</li>
+            <li>Place the camera at chest height with a clear path from about 0.6 m to 3 m.</li>
+            <li>Light the room evenly and avoid standing in front of a bright window.</li>
+            <li>Hold the sheet flat with both hands, facing the camera, and keep it steady. Walk; do not run.</li>
+            <li>Tick “Show what the camera detects”. If the sheet is patchy, raise the tolerance. If the background lights up, lower it.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+    <noscript>This activity needs JavaScript enabled.</noscript>
+  </main>
+
+  <script id="motion-maths">
+    // Pure motion maths shared by the page and its regression check.
+    // Displacement is in metres from the camera (away is positive); time is in seconds.
+    const SMOOTHING_WINDOWS = {
+      low: { velocity: 0.2, acceleration: 0.4 },
+      medium: { velocity: 0.3, acceleration: 0.6 },
+      high: { velocity: 0.45, acceleration: 0.9 },
+    };
+
+    // Least-squares quadratic s = c0 + c1 u + c2 u², where u = t − centre.
+    function quadraticFit(times, values, centre, from, to) {
+      let n = 0, u1 = 0, u2 = 0, u3 = 0, u4 = 0, y0 = 0, y1 = 0, y2 = 0;
+      for (let j = from; j <= to; j += 1) {
+        const u = times[j] - centre;
+        const uu = u * u;
+        const y = values[j];
+        n += 1; u1 += u; u2 += uu; u3 += uu * u; u4 += uu * uu;
+        y0 += y; y1 += u * y; y2 += uu * y;
+      }
+      const det = n * (u2 * u4 - u3 * u3) - u1 * (u1 * u4 - u3 * u2) + u2 * (u1 * u3 - u2 * u2);
+      if (!(Math.abs(det) > 1e-12)) return null;
+      const c0 = (y0 * (u2 * u4 - u3 * u3) - u1 * (y1 * u4 - u3 * y2) + u2 * (y1 * u3 - u2 * y2)) / det;
+      const c1 = (n * (y1 * u4 - u3 * y2) - y0 * (u1 * u4 - u3 * u2) + u2 * (u1 * y2 - y1 * u2)) / det;
+      const c2 = (n * (u2 * y2 - y1 * u3) - u1 * (u1 * y2 - y1 * u2) + y0 * (u1 * u3 - u2 * u2)) / det;
+      return { value: c0, slope: c1, curvature: 2 * c2 };
+    }
+
+    // Stores accepted readings and centred-window derivatives. A derivative is
+    // only calculated once readings exist on both sides of it, so v and a lag s.
+    class MotionTrack {
+      constructor(smoothing = 'medium') {
+        this.t = [];
+        this.s = [];
+        this.v = [];
+        this.a = [];
+        this.nextV = 0;
+        this.nextA = 0;
+        this.rejected = 0;
+        this.windows = SMOOTHING_WINDOWS[smoothing] || SMOOTHING_WINDOWS.medium;
+      }
+
+      get length() {
+        return this.t.length;
+      }
+
+      setSmoothing(smoothing) {
+        this.windows = SMOOTHING_WINDOWS[smoothing] || SMOOTHING_WINDOWS.medium;
+        this.v.fill(NaN);
+        this.a.fill(NaN);
+        this.nextV = 0;
+        this.nextA = 0;
+        this.update(true);
+      }
+
+      add(time, distance) {
+        if (!Number.isFinite(distance) || distance <= 0) return false;
+        const last = this.t.length - 1;
+        if (last >= 0) {
+          const dt = time - this.t[last];
+          if (!(dt > 0)) return false;
+          // A jump faster than a sprint is a detection glitch, unless it persists.
+          if (Math.abs(distance - this.s[last]) > 0.25 + 3 * dt && this.rejected < 5) {
+            this.rejected += 1;
+            return false;
+          }
+        }
+        this.rejected = 0;
+        this.t.push(time);
+        this.s.push(distance);
+        this.v.push(NaN);
+        this.a.push(NaN);
+        this.update(false);
+        return true;
+      }
+
+      estimate(index, halfWidth) {
+        const times = this.t;
+        const centre = times[index];
+        let from = index;
+        while (from > 0 && times[from - 1] >= centre - halfWidth) from -= 1;
+        let to = index;
+        while (to < times.length - 1 && times[to + 1] <= centre + halfWidth) to += 1;
+        if (to - from + 1 < 5 || times[to] - times[from] < halfWidth) return null;
+        return quadraticFit(times, this.s, centre, from, to);
+      }
+
+      update(final) {
+        const lastTime = this.t[this.t.length - 1];
+        const { velocity, acceleration } = this.windows;
+        while (this.nextV < this.t.length && (final || lastTime >= this.t[this.nextV] + velocity)) {
+          const fit = this.estimate(this.nextV, velocity);
+          this.v[this.nextV] = fit ? fit.slope : NaN;
+          this.nextV += 1;
+        }
+        while (this.nextA < this.t.length && (final || lastTime >= this.t[this.nextA] + acceleration)) {
+          const fit = this.estimate(this.nextA, acceleration);
+          this.a[this.nextA] = fit ? fit.curvature : NaN;
+          this.nextA += 1;
+        }
+      }
+
+      finalize() {
+        this.update(true);
+      }
+
+      trimBefore(time) {
+        let count = 0;
+        while (count < this.t.length && this.t[count] < time) count += 1;
+        if (!count) return;
+        for (const series of [this.t, this.s, this.v, this.a]) series.splice(0, count);
+        this.nextV = Math.max(0, this.nextV - count);
+        this.nextA = Math.max(0, this.nextA - count);
+      }
+    }
+
+    // Graph-matching targets. 's' targets give distance from the camera;
+    // 'v' targets give velocity and a suggested starting distance.
+    const MOTION_TARGETS = {
+      away: {
+        kind: 's', duration: 10, tolerance: 0.15,
+        points: [[0, 1], [2, 1], [8, 2.5], [10, 2.5]],
+        title: 'Match 1: a steady walk',
+        hint: 'Stand still at 1.0 m for 2 s. Walk away steadily for 6 s, reaching 2.5 m, then stand still. A straight sloping line means a constant velocity.',
+      },
+      returnTrip: {
+        kind: 's', duration: 10, tolerance: 0.15,
+        points: [[0, 2.5], [1, 2.5], [5, 1], [7, 1], [10, 2]],
+        title: 'Match 2: there and back',
+        hint: 'A falling line means you are getting closer to the camera. Walk towards it from 2.5 m to 1.0 m in 4 s, pause for 2 s, then walk back out to 2.0 m.',
+      },
+      fastSlow: {
+        kind: 's', duration: 10, tolerance: 0.15,
+        points: [[0, 1], [1, 1], [3, 2.4], [4, 2.4], [10, 1]],
+        title: 'Match 3: fast then slow',
+        hint: 'A steeper gradient means a greater speed. Walk away briskly for 2 s, pause, then walk back slowly over 6 s.',
+      },
+      steadyVelocity: {
+        kind: 'v', duration: 10, tolerance: 0.15, start: 1,
+        points: [[0, 0], [1, 0], [1.5, 0.3], [6, 0.3], [6.5, 0], [10, 0]],
+        title: 'Match 4: constant velocity',
+        hint: 'Positive velocity means moving away from the camera. Stand still, then walk away at a steady pace (about one small step per second), then stop.',
+      },
+      towardsAway: {
+        kind: 'v', duration: 10, tolerance: 0.15, start: 2.5,
+        points: [[0, 0], [1, 0], [1.5, -0.25], [5.5, -0.25], [6, 0], [7, 0], [7.5, 0.25], [9.5, 0.25], [10, 0]],
+        title: 'Match 5: towards, then away',
+        hint: 'Negative velocity means moving towards the camera. Walk slowly towards it for 4 s, stop for a moment, then walk slowly away again.',
+      },
+      speedUpSlowDown: {
+        kind: 'v', duration: 10, tolerance: 0.15, start: 1,
+        points: [[0, 0], [1, 0], [4, 0.4], [7, 0], [10, 0]],
+        title: 'Match 6: speed up, then slow down',
+        hint: 'A straight rising line on a v–t graph means constant acceleration. Speed up gradually as you walk away, then slow down gradually to a stop. The gradients show acceleration and deceleration.',
+      },
+    };
+
+    function targetValue(target, time) {
+      const points = target.points;
+      if (time <= points[0][0]) return points[0][1];
+      for (let i = 1; i < points.length; i += 1) {
+        const [t1, y1] = points[i];
+        if (time <= t1) {
+          const [t0, y0] = points[i - 1];
+          return y0 + (y1 - y0) * (time - t0) / (t1 - t0);
+        }
+      }
+      return points[points.length - 1][1];
+    }
+
+    function targetStart(target) {
+      return target.kind === 's' ? target.points[0][1] : target.start;
+    }
+
+    function matchScore(track, target) {
+      const values = target.kind === 's' ? track.s : track.v;
+      let compared = 0, inside = 0, errorSum = 0, covered = 0, previous = null;
+      for (let i = 0; i < track.t.length; i += 1) {
+        const time = track.t[i];
+        const value = values[i];
+        if (time > target.duration || !Number.isFinite(value)) continue;
+        const error = Math.abs(value - targetValue(target, time));
+        compared += 1;
+        errorSum += error;
+        if (error <= target.tolerance) inside += 1;
+        if (previous !== null && time - previous <= 0.25) covered += time - previous;
+        previous = time;
+      }
+      if (!compared) return null;
+      return { percent: 100 * inside / compared, meanError: errorSum / compared, coverage: covered / target.duration };
+    }
+
+    // Largest 4-connected region of a 0/1 mask; labels and stack are reusable buffers.
+    function largestBlob(mask, labels, stack, width, height) {
+      labels.fill(0);
+      let label = 0;
+      let best = null;
+      const size = width * height;
+      for (let p = 0; p < size; p += 1) {
+        if (!mask[p] || labels[p]) continue;
+        label += 1;
+        let top = 0;
+        stack[top++] = p;
+        labels[p] = label;
+        let count = 0, minX = width, maxX = 0, minY = height, maxY = 0, sumX = 0, sumY = 0;
+        while (top) {
+          const q = stack[--top];
+          const x = q % width;
+          const y = (q - x) / width;
+          count += 1; sumX += x; sumY += y;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          if (x > 0 && mask[q - 1] && !labels[q - 1]) { labels[q - 1] = label; stack[top++] = q - 1; }
+          if (x < width - 1 && mask[q + 1] && !labels[q + 1]) { labels[q + 1] = label; stack[top++] = q + 1; }
+          if (y > 0 && mask[q - width] && !labels[q - width]) { labels[q - width] = label; stack[top++] = q - width; }
+          if (y < height - 1 && mask[q + width] && !labels[q + width]) { labels[q + width] = label; stack[top++] = q + width; }
+        }
+        if (!best || count > best.count) best = { label, count, minX, maxX, minY, maxY, x: sumX / count, y: sumY / count };
+      }
+      return best;
+    }
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const $ = id => document.getElementById(id);
+      const PROCESS_WIDTH = 480;
+      const MIN_BLOB_PIXELS = 40;
+      const A4_ROOT_AREA = Math.sqrt(0.210 * 0.297);
+      const ASSUMED_FIELD_OF_VIEW = 60 * Math.PI / 180;
+      const CALIBRATION_FRAMES = 15;
+      const MINUS = '−';
+      const GRAPHS = {
+        s: { title: 'Displacement–time graph', axis: 's (m)', unit: 'm', colour: '--s-line', symbol: 's' },
+        v: { title: 'Velocity–time graph', axis: 'v (m s⁻¹)', unit: 'm s⁻¹', colour: '--v-line', symbol: 'v' },
+        a: { title: 'Acceleration–time graph', axis: 'a (m s⁻²)', unit: 'm s⁻²', colour: '--a-line', symbol: 'a' },
+      };
+
+      const state = {
+        source: 'camera',
+        stream: null,
+        loopToken: 0,
+        procW: 0,
+        procH: 0,
+        procCtx: document.createElement('canvas').getContext('2d', { willReadFrequently: true }),
+        overlayCtx: $('overlay').getContext('2d'),
+        frame: null,
+        mask: null,
+        labels: null,
+        stack: null,
+        maskImage: null,
+        targetColour: null,
+        k: null,
+        calibrating: null,
+        liveTrack: new MotionTrack('medium'),
+        lastSampleAt: -Infinity,
+        lastReadoutAt: 0,
+        track: null,
+        recording: false,
+        recordStart: 0,
+        elapsed: 0,
+        stopTimer: null,
+        countdown: null,
+        inspectT: null,
+        drawPending: false,
+        virtual: { position: 1.5, velocity: 0, lastAt: null, frame: null },
+      };
+
+      // ---------- Formatting ----------
+      function signed(value, places) {
+        const text = Math.abs(value).toFixed(places);
+        if (Number(text) === 0) return (0).toFixed(places);
+        return `${value < 0 ? MINUS : '+'}${text}`;
+      }
+      function plain(value, places) {
+        return value < 0 ? `${MINUS}${Math.abs(value).toFixed(places)}` : value.toFixed(places);
+      }
+      function setStatus(message) {
+        if ($('status').textContent !== message) $('status').textContent = message;
+      }
+      function activeTarget() {
+        return MOTION_TARGETS[$('task').value] || null;
+      }
+      function duration() {
+        return Number($('duration').value);
+      }
+
+      // ---------- Camera ----------
+      function setStageMessage(message) {
+        $('stage-message').hidden = !message;
+        $('stage-message').innerHTML = message ? `<span>${message}</span>` : '';
+      }
+
+      async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStageMessage('This browser cannot use a camera here. Camera access needs a secure (https) page in a recent browser. Try the slider instead.');
+          return;
+        }
+        $('camera-toggle').disabled = true;
+        setStageMessage('Waiting for camera permission…');
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+          });
+          const video = $('video');
+          state.stream = stream;
+          video.srcObject = stream;
+          await video.play();
+          $('stage').style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+          setStageMessage('');
+          $('camera-toggle').textContent = 'Stop camera';
+          $('pick-centre').disabled = false;
+          state.loopToken += 1;
+          scheduleVideoFrame(state.loopToken);
+          setStatus(state.targetColour ? 'Camera on.' : 'Camera on. Hold the coloured sheet facing the camera and click it in the video.');
+        } catch (error) {
+          state.stream = null;
+          const messages = {
+            NotAllowedError: 'Camera permission was blocked. Allow the camera from the browser’s address bar, then try again, or use the slider.',
+            NotFoundError: 'No camera was found. Connect one, or use the slider.',
+            NotReadableError: 'The camera is in use by another app. Close that app and try again.',
+          };
+          setStageMessage(messages[error.name] || 'The camera could not start. Try again, or use the slider.');
+        } finally {
+          $('camera-toggle').disabled = false;
+          updateSteps();
+        }
+      }
+
+      function stopCamera() {
+        if (state.stream) state.stream.getTracks().forEach(track => track.stop());
+        state.stream = null;
+        state.loopToken += 1;
+        state.calibrating = null;
+        $('video').srcObject = null;
+        $('camera-toggle').textContent = 'Start camera';
+        $('pick-centre').disabled = true;
+        $('badge').hidden = true;
+        state.overlayCtx.clearRect(0, 0, state.procW, state.procH);
+        setStageMessage('Camera off. Press <strong>Start camera</strong>; the video stays on this device.');
+        if (state.recording) stopRecording(false, 'Recording stopped because the camera was turned off.');
+        updateSteps();
+      }
+
+      function scheduleVideoFrame(token) {
+        const video = $('video');
+        if (token !== state.loopToken || !state.stream) return;
+        if (video.requestVideoFrameCallback) {
+          video.requestVideoFrameCallback(now => {
+            if (token !== state.loopToken) return;
+            processFrame(now);
+            scheduleVideoFrame(token);
+          });
+        } else {
+          requestAnimationFrame(now => {
+            if (token !== state.loopToken) return;
+            if (video.currentTime !== state.lastVideoTime) {
+              state.lastVideoTime = video.currentTime;
+              processFrame(now);
+            }
+            scheduleVideoFrame(token);
+          });
+        }
+      }
+
+      function ensureProcessingSize(videoWidth, videoHeight) {
+        const width = Math.min(PROCESS_WIDTH, videoWidth);
+        const height = Math.round(width * videoHeight / videoWidth);
+        if (width === state.procW && height === state.procH) return;
+        state.procW = width;
+        state.procH = height;
+        state.procCtx.canvas.width = width;
+        state.procCtx.canvas.height = height;
+        $('overlay').width = width;
+        $('overlay').height = height;
+        state.mask = new Uint8Array(width * height);
+        state.labels = new Int32Array(width * height);
+        state.stack = new Int32Array(width * height);
+        state.maskImage = state.overlayCtx.createImageData(width, height);
+        state.maskPixels = new Uint32Array(state.maskImage.data.buffer);
+        if (state.k !== null) {
+          state.k = null;
+          setCalibrationState('The camera resolution changed. Please calibrate again.', false);
+        }
+      }
+
+      function processFrame(now) {
+        const video = $('video');
+        if (!video.videoWidth || video.readyState < 2) return;
+        ensureProcessingSize(video.videoWidth, video.videoHeight);
+        state.procCtx.drawImage(video, 0, 0, state.procW, state.procH);
+        state.frame = state.procCtx.getImageData(0, 0, state.procW, state.procH);
+        let distance = null;
+        if (state.targetColour) {
+          const blob = detectSheet();
+          drawOverlay(blob);
+          if (blob) {
+            const size = Math.sqrt(blob.count);
+            distance = defaultOrCalibratedK() / size;
+            if (state.calibrating) state.calibrating.sizes.push(size);
+          }
+          $('badge').hidden = false;
+          $('badge').textContent = blob ? `Sheet found · ${distance.toFixed(2)} m` : 'Sheet not found';
+        }
+        if (state.calibrating) progressCalibration(now);
+        handleSample(now, distance);
+      }
+
+      function detectSheet() {
+        const data = state.frame.data;
+        const mask = state.mask;
+        const { y: ty, cb: tcb, cr: tcr } = state.targetColour;
+        const tolerance = Number($('tolerance').value);
+        const limit = tolerance * tolerance;
+        // Compare in YCbCr, weighting brightness less so shadows still match.
+        for (let p = 0, i = 0; p < mask.length; p += 1, i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const dy = 0.35 * (0.299 * r + 0.587 * g + 0.114 * b - ty);
+          const dcb = -0.1687 * r - 0.3313 * g + 0.5 * b - tcb;
+          const dcr = 0.5 * r - 0.4187 * g - 0.0813 * b - tcr;
+          mask[p] = dy * dy + dcb * dcb + dcr * dcr < limit ? 1 : 0;
+        }
+        const blob = largestBlob(mask, state.labels, state.stack, state.procW, state.procH);
+        return blob && blob.count >= MIN_BLOB_PIXELS ? blob : null;
+      }
+
+      function drawOverlay(blob) {
+        const ctx = state.overlayCtx;
+        if ($('show-mask').checked) {
+          const pixels = state.maskPixels;
+          const { mask, labels } = state;
+          // Little-endian RGBA: tracked region green, other matches amber.
+          for (let p = 0; p < mask.length; p += 1) {
+            pixels[p] = !mask[p] ? 0 : blob && labels[p] === blob.label ? 0xbf5ec522 : 0x8015ccfa;
+          }
+          ctx.putImageData(state.maskImage, 0, 0);
+        } else {
+          ctx.clearRect(0, 0, state.procW, state.procH);
+        }
+        if (blob) {
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#22c55e';
+          ctx.strokeRect(blob.minX - 1, blob.minY - 1, blob.maxX - blob.minX + 3, blob.maxY - blob.minY + 3);
+        }
+      }
+
+      function defaultOrCalibratedK() {
+        if (state.k !== null) return state.k;
+        const focalPixels = (state.procW / 2) / Math.tan(ASSUMED_FIELD_OF_VIEW / 2);
+        return focalPixels * A4_ROOT_AREA;
+      }
+
+      function pickColour(fractionX, fractionY) {
+        if (!state.frame) return;
+        const { procW: w, procH: h } = state;
+        const cx = Math.round(fractionX * (w - 1));
+        const cy = Math.round(fractionY * (h - 1));
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let y = Math.max(0, cy - 3); y <= Math.min(h - 1, cy + 3); y += 1) {
+          for (let x = Math.max(0, cx - 3); x <= Math.min(w - 1, cx + 3); x += 1) {
+            const i = 4 * (y * w + x);
+            r += state.frame.data[i]; g += state.frame.data[i + 1]; b += state.frame.data[i + 2]; n += 1;
+          }
+        }
+        r /= n; g /= n; b /= n;
+        state.targetColour = {
+          y: 0.299 * r + 0.587 * g + 0.114 * b,
+          cb: -0.1687 * r - 0.3313 * g + 0.5 * b,
+          cr: 0.5 * r - 0.4187 * g - 0.0813 * b,
+        };
+        const css = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+        $('swatch').style.background = css;
+        $('swatch').setAttribute('aria-label', `Tracking colour ${css}`);
+        const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+        state.liveTrack = new MotionTrack($('smoothing').value);
+        $('calibrate').disabled = false;
+        setStatus(saturation < 40
+          ? 'Locked on, but that colour is quite grey or white. A brightly coloured sheet tracks far more reliably.'
+          : 'Locked on. Check the green box surrounds the sheet, then calibrate.');
+        updateSteps();
+      }
+
+      // ---------- Calibration ----------
+      function setCalibrationState(message, done) {
+        $('cal-state').textContent = message;
+        $('cal-state').classList.toggle('done', done);
+      }
+
+      function startCalibration() {
+        const distance = Number($('cal-distance').value);
+        if (!(distance >= 0.4 && distance <= 5)) {
+          setCalibrationState('Enter a distance between 0.4 m and 5 m.', false);
+          return;
+        }
+        if (!state.stream || !state.targetColour) return;
+        $('calibrate').disabled = true;
+        runCountdown(Number($('delay').value), `Stand ${distance.toFixed(2)} m from the camera`, () => {
+          if (!state.stream) return;
+          state.calibrating = { distance, sizes: [], startedAt: performance.now() };
+          setCalibrationState('Calibrating… hold still.', false);
+        });
+      }
+
+      function progressCalibration(now) {
+        const calibration = state.calibrating;
+        if (calibration.sizes.length >= CALIBRATION_FRAMES) {
+          const sizes = calibration.sizes.slice().sort((p, q) => p - q);
+          const median = sizes[Math.floor(sizes.length / 2)];
+          state.k = calibration.distance * median;
+          state.calibrating = null;
+          state.liveTrack = new MotionTrack($('smoothing').value);
+          $('calibrate').disabled = false;
+          setCalibrationState(`Calibrated at ${calibration.distance.toFixed(2)} m.`, true);
+          setStatus('Calibrated. Choose a graph and press Record.');
+          updateSteps();
+        } else if (now - calibration.startedAt > 3000) {
+          state.calibrating = null;
+          $('calibrate').disabled = false;
+          setCalibrationState('Calibration failed: the sheet was not found. Check the green box, then try again.', false);
+        }
+      }
+
+      // ---------- Virtual student ----------
+      function virtualLoop(now) {
+        const virtual = state.virtual;
+        if (state.source !== 'slider') {
+          virtual.frame = null;
+          virtual.lastAt = null;
+          return;
+        }
+        if (virtual.lastAt === null) virtual.lastAt = now;
+        const dt = (now - virtual.lastAt) / 1000;
+        if (dt >= 1 / 30) {
+          virtual.lastAt = now;
+          // A critically damped walker: smooth velocity, finite acceleration.
+          const goal = Number($('virtual-distance').value);
+          const omega = 6;
+          let remaining = Math.min(dt, 0.2);
+          while (remaining > 0) {
+            const step = Math.min(remaining, 0.01);
+            const acceleration = omega * omega * (goal - virtual.position) - 2 * omega * virtual.velocity;
+            virtual.velocity = Math.max(-1.6, Math.min(1.6, virtual.velocity + acceleration * step));
+            virtual.position += virtual.velocity * step;
+            remaining -= step;
+          }
+          $('walker').style.left = `${8 + 84 * (virtual.position - 0.3) / 3.4}%`;
+          handleSample(now, virtual.position);
+        }
+        virtual.frame = requestAnimationFrame(virtualLoop);
+      }
+
+      function chooseSource(source) {
+        if (state.recording || state.countdown) cancelActivity('Recording cancelled because the motion source changed.');
+        state.source = source;
+        $('camera-panel').style.display = source === 'camera' ? 'contents' : 'none';
+        $('slider-panel').style.display = source === 'slider' ? 'block' : 'none';
+        state.liveTrack = new MotionTrack($('smoothing').value);
+        state.lastSampleAt = -Infinity;
+        if (source === 'slider') {
+          if (state.stream) stopCamera();
+          if (!state.virtual.frame) state.virtual.frame = requestAnimationFrame(virtualLoop);
+          setStatus('Slider mode. Press Record, then drag the slider or use the arrow keys.');
+        } else {
+          setStatus('Camera mode. Press Start camera.');
+        }
+        updateReadouts(performance.now());
+      }
+
+      // ---------- Samples, recording and countdown ----------
+      function handleSample(now, distance) {
+        if (distance !== null) {
+          state.lastSampleAt = now;
+          state.liveTrack.add(now / 1000, distance);
+          if (state.liveTrack.length > 400) state.liveTrack.trimBefore(now / 1000 - 4);
+        }
+        if (state.recording) {
+          const elapsed = (now - state.recordStart) / 1000;
+          if (elapsed >= 0) {
+            state.elapsed = Math.min(elapsed, duration());
+            if (distance !== null && elapsed <= duration()) state.track.add(elapsed, distance);
+            if (elapsed >= duration()) stopRecording(true);
+          }
+          requestDraw();
+        }
+        if (now - state.lastReadoutAt > 100) {
+          state.lastReadoutAt = now;
+          updateReadouts(now);
+        }
+      }
+
+      function sourceReady() {
+        if (state.source === 'slider') return true;
+        if (!state.stream) {
+          setStatus('Start the camera first, or switch to the slider.');
+          return false;
+        }
+        if (!state.targetColour) {
+          setStatus('Click the coloured sheet in the video first so the camera knows what to track.');
+          return false;
+        }
+        return true;
+      }
+
+      function runCountdown(seconds, message, done) {
+        clearCountdown();
+        if (seconds <= 0) {
+          done();
+          return;
+        }
+        let remaining = seconds;
+        $('countdown').hidden = false;
+        $('countdown-number').textContent = remaining;
+        $('countdown-text').textContent = message;
+        setStatus(`${message}: starting in ${seconds} s.`);
+        state.countdown = setInterval(() => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            clearCountdown();
+            done();
+          } else {
+            $('countdown-number').textContent = remaining;
+          }
+        }, 1000);
+        updateRecordButton();
+      }
+
+      function clearCountdown() {
+        if (state.countdown) clearInterval(state.countdown);
+        state.countdown = null;
+        $('countdown').hidden = true;
+        updateRecordButton();
+      }
+
+      function startRecording() {
+        if (!sourceReady()) return;
+        const target = activeTarget();
+        const message = target ? `Go to ${targetStart(target).toFixed(1)} m from the camera` : 'Get ready';
+        $('feedback').hidden = true;
+        state.track = null;
+        state.inspectT = null;
+        requestDraw();
+        runCountdown(Number($('delay').value), message, () => {
+          state.track = new MotionTrack($('smoothing').value);
+          state.recording = true;
+          state.recordStart = performance.now();
+          state.elapsed = 0;
+          // Fallback in case frames stop arriving (for example, a frozen camera).
+          state.stopTimer = setTimeout(() => state.recording && stopRecording(true), duration() * 1000 + 600);
+          lockSettings(true);
+          updateRecordButton();
+          updateNote();
+          setStatus(`Recording for ${duration()} s… move now.`);
+          requestDraw();
+        });
+      }
+
+      function stopRecording(complete, message) {
+        clearTimeout(state.stopTimer);
+        state.recording = false;
+        lockSettings(false);
+        if (state.track) state.track.finalize();
+        const recorded = state.track && state.track.length > 1;
+        $('download').disabled = !recorded;
+        if (!recorded) state.track = null;
+        updateRecordButton();
+        if (!recorded) {
+          setStatus(message || 'No readings were recorded. Check that the green box follows the sheet.');
+        } else {
+          setStatus(message || (complete
+            ? 'Recording complete. Hover over the graph, or focus it and use the arrow keys, to read values.'
+            : 'Recording stopped early.'));
+          showScore();
+        }
+        updateGraphDescription();
+        updateNote();
+        requestDraw();
+      }
+
+      function cancelActivity(message) {
+        if (state.countdown) {
+          clearCountdown();
+          state.calibrating = null;
+          $('calibrate').disabled = !state.targetColour;
+          setStatus(message);
+        }
+        if (state.recording) stopRecording(false, message);
+      }
+
+      function lockSettings(locked) {
+        const target = activeTarget();
+        $('duration').disabled = locked || !!target;
+        $('origin').disabled = locked || !!(target && target.kind === 's');
+        for (const id of ['smoothing', 'delay', 'task', 'clear', 'calibrate']) $(id).disabled = locked;
+        if (!locked) $('calibrate').disabled = !state.targetColour || !state.stream;
+      }
+
+      function updateRecordButton() {
+        const button = $('record');
+        button.classList.toggle('recording', state.recording);
+        button.textContent = state.recording ? '■ Stop' : state.countdown ? '✕ Cancel' : state.track ? '● Record again' : '● Record';
+      }
+
+      function showScore() {
+        const target = activeTarget();
+        const feedback = $('feedback');
+        if (!target || !state.track) {
+          feedback.hidden = true;
+          return;
+        }
+        const score = matchScore(state.track, target);
+        if (!score) {
+          feedback.hidden = true;
+          return;
+        }
+        const unit = target.kind === 's' ? 'm' : 'm s⁻¹';
+        const within = `within ±${target.tolerance} ${unit} of the target for ${Math.round(score.percent)}% of the run (mean error ${score.meanError.toFixed(2)} ${unit})`;
+        let message;
+        if (score.percent >= 80) message = `Excellent match: you stayed ${within}.`;
+        else if (score.percent >= 50) message = `Good attempt: you stayed ${within}. Find where your line leaves the shaded band, then try again.`;
+        else message = target.kind === 's'
+          ? `Keep practising: you stayed ${within}. Compare your gradient with the target: a steeper line means a faster walk.`
+          : `Keep practising: you stayed ${within}. Check the sign: negative velocity means moving towards the camera.`;
+        if (score.coverage < 0.7) message += ' The sheet was lost for part of the run; keep it flat and facing the camera.';
+        feedback.className = `feedback ${score.percent >= 80 ? 'good' : 'try'}`;
+        feedback.innerHTML = `<strong>${score.percent >= 80 ? '✓ ' : ''}</strong><span></span>`;
+        feedback.querySelector('span').textContent = message;
+        feedback.hidden = false;
+      }
+
+      // ---------- Readouts and task panel ----------
+      function latestFinite(series) {
+        for (let i = series.length - 1; i >= Math.max(0, series.length - 60); i -= 1) {
+          if (Number.isFinite(series[i])) return series[i];
+        }
+        return null;
+      }
+
+      function updateReadouts(now) {
+        const fresh = now - state.lastSampleAt < 500;
+        const track = state.liveTrack;
+        const s = fresh ? track.s[track.length - 1] : null;
+        const v = fresh ? latestFinite(track.v) : null;
+        const a = fresh ? latestFinite(track.a) : null;
+        $('readout-s').textContent = s === null ? '—' : `${s.toFixed(2)} m`;
+        $('readout-v').textContent = v === null ? '—' : `${signed(v, 2)} m s⁻¹`;
+        $('readout-a').textContent = a === null ? '—' : `${signed(a, 2)} m s⁻²`;
+        $('readout-s-note').textContent = s === null ? (state.source === 'camera' && state.stream && state.targetColour ? 'Sheet not found' : ' ') : (state.k !== null || state.source === 'slider' ? ' ' : 'Estimate: calibrate');
+        $('readout-v-note').textContent = v === null ? ' ' : Math.abs(v) < 0.05 ? 'About stationary' : v > 0 ? 'Moving away' : 'Moving towards camera';
+        $('readout-a-note').textContent = a === null ? ' ' : Math.abs(a) < 0.1 ? 'About zero' : (v !== null && Math.abs(v) >= 0.05 && Math.sign(a) !== Math.sign(v)) ? 'Slowing down' : (v !== null && Math.abs(v) >= 0.05) ? 'Speeding up' : ' ';
+        const target = activeTarget();
+        const help = $('position-help');
+        help.hidden = !target || state.recording;
+        if (target && !state.recording) {
+          const start = targetStart(target);
+          if (s === null) {
+            help.textContent = `Start at ${start.toFixed(1)} m from the camera`;
+            help.classList.remove('ready');
+          } else if (Math.abs(s - start) <= 0.1) {
+            help.textContent = '✓ In position: press Record';
+            help.classList.add('ready');
+          } else {
+            help.textContent = s > start ? `Move ${(s - start).toFixed(2)} m closer` : `Move ${(start - s).toFixed(2)} m further away`;
+            help.classList.remove('ready');
+          }
+        }
+      }
+
+      function updateSteps() {
+        const done = {
+          camera: !!state.stream,
+          colour: !!state.targetColour && !!state.stream,
+          calibrate: state.k !== null,
+        };
+        document.querySelectorAll('#steps li').forEach(item => item.classList.toggle('done', done[item.dataset.step]));
+        $('calibrate').disabled = !done.colour || !!state.calibrating;
+      }
+
+      function chooseTask() {
+        cancelActivity('Recording cancelled because the task changed.');
+        const target = activeTarget();
+        if (target) {
+          $('duration').value = String(target.duration);
+          if (target.kind === 's') $('origin').value = 'camera';
+          if ($('graph-kind').value !== 'all') $('graph-kind').value = target.kind;
+          $('task-title').textContent = target.title;
+          $('task-text').textContent = target.kind === 's'
+            ? 'Read the dashed displacement–time graph, then move so your line stays inside the shaded band. Displacement is measured from the camera.'
+            : 'Read the dashed velocity–time graph, then move so your velocity stays inside the shaded band. Positive means moving away from the camera.';
+          $('task-hint-text').textContent = target.hint;
+          $('task-hint').hidden = false;
+          $('task-hint').open = false;
+        } else {
+          $('task-title').textContent = 'Free motion';
+          $('task-text').textContent = 'Hold the sheet flat in front of your chest and walk slowly towards and away from the camera. Away from the camera is the positive direction.';
+          $('task-hint').hidden = true;
+        }
+        lockSettings(false);
+        clearRecording();
+        layoutGraphs();
+        updateReadouts(performance.now());
+      }
+
+      function clearRecording() {
+        state.track = null;
+        state.inspectT = null;
+        $('feedback').hidden = true;
+        $('download').disabled = true;
+        updateRecordButton();
+        updateGraphDescription();
+        updateNote();
+        requestDraw();
+      }
+
+      // ---------- Graphs ----------
+      function visibleKinds() {
+        const kind = $('graph-kind').value;
+        return kind === 'all' ? ['s', 'v', 'a'] : [kind];
+      }
+
+      function layoutGraphs() {
+        const kinds = visibleKinds();
+        const container = $('graphs');
+        container.classList.toggle('triple', kinds.length > 1);
+        container.querySelectorAll('.plot').forEach(plot => plot.remove());
+        for (const kind of kinds) {
+          const plot = document.createElement('div');
+          plot.className = 'plot';
+          const canvas = document.createElement('canvas');
+          canvas.dataset.kind = kind;
+          canvas.tabIndex = 0;
+          canvas.setAttribute('role', 'img');
+          canvas.addEventListener('pointermove', event => inspectAt(canvas, event));
+          canvas.addEventListener('pointerdown', event => inspectAt(canvas, event));
+          canvas.addEventListener('pointerleave', () => {
+            if (state.inspectT === null) return;
+            state.inspectT = null;
+            updateNote();
+            requestDraw();
+          });
+          canvas.addEventListener('keydown', inspectWithKeys);
+          plot.appendChild(canvas);
+          container.insertBefore(plot, $('countdown'));
+        }
+        $('graph-title').textContent = kinds.length > 1 ? 'Motion graphs' : GRAPHS[kinds[0]].title;
+        updateGraphDescription();
+        updateNote();
+        requestDraw();
+      }
+
+      function plotArea(canvas) {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        return { width, height, left: 58, right: 16, top: 26, bottom: 32 };
+      }
+
+      function originOffset() {
+        return $('origin').value === 'start' && state.track && state.track.length ? state.track.s[0] : 0;
+      }
+
+      function seriesValues(kind) {
+        if (!state.track) return [];
+        if (kind === 's') {
+          const offset = originOffset();
+          return state.track.s.map(value => value - offset);
+        }
+        return state.track[kind];
+      }
+
+      // Smallest tidy step that keeps labels at least minGap pixels apart.
+      function niceStep(span, pixels, minGap, steps, maxCount = 8) {
+        for (const step of steps) if (span / step <= maxCount && pixels * step / span >= minGap) return step;
+        return steps[steps.length - 1];
+      }
+
+      function yRange(kind, values, target) {
+        let lo, hi;
+        if (kind === 's') [lo, hi] = $('origin').value === 'start' ? [-1.5, 1.5] : [0, 3];
+        else [lo, hi] = [-1, 1];
+        const caps = { s: 8, v: 3, a: 4 };
+        const include = value => {
+          if (!Number.isFinite(value)) return;
+          const capped = Math.max(-caps[kind], Math.min(caps[kind], value));
+          lo = Math.min(lo, capped);
+          hi = Math.max(hi, capped);
+        };
+        values.forEach(include);
+        if (target) target.points.forEach(([, value]) => { include(value - target.tolerance); include(value + target.tolerance); });
+        return [Math.floor(lo * 2) / 2, Math.ceil(hi * 2) / 2];
+      }
+
+      function nearestIndex(kind, time) {
+        if (!state.track) return -1;
+        const values = seriesValues(kind);
+        let best = -1, bestGap = Infinity;
+        state.track.t.forEach((t, i) => {
+          const gap = Math.abs(t - time);
+          if (Number.isFinite(values[i]) && gap < bestGap) { best = i; bestGap = gap; }
+        });
+        return bestGap <= 0.3 ? best : -1;
+      }
+
+      // Signed area under a series from the first reading to index end (trapezium rule).
+      function areaTo(values, end) {
+        const times = state.track.t;
+        let area = 0;
+        for (let i = 1; i <= end; i += 1) {
+          if (Number.isFinite(values[i]) && Number.isFinite(values[i - 1])) area += (times[i] - times[i - 1]) * (values[i] + values[i - 1]) / 2;
+        }
+        return area;
+      }
+
+      function firstFiniteIndex(values) {
+        return values.findIndex(Number.isFinite);
+      }
+
+      function drawGraph(canvas) {
+        const kind = canvas.dataset.kind;
+        const config = GRAPHS[kind];
+        const css = getComputedStyle(document.documentElement);
+        const token = name => css.getPropertyValue(name).trim();
+        const area = plotArea(canvas);
+        const { width, height } = area;
+        if (!width || !height) return;
+        const dpr = window.devicePixelRatio || 1;
+        if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+          canvas.width = Math.round(width * dpr);
+          canvas.height = Math.round(height * dpr);
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = token('--card');
+        ctx.fillRect(0, 0, width, height);
+
+        const total = duration();
+        const values = seriesValues(kind);
+        const target = activeTarget();
+        const showTarget = target && target.kind === kind;
+        const [lo, hi] = yRange(kind, values, showTarget ? target : null);
+        const innerW = width - area.left - area.right;
+        const innerH = height - area.top - area.bottom;
+        const x = t => area.left + innerW * t / total;
+        const y = value => area.top + innerH * (hi - value) / (hi - lo);
+        const clampY = value => Math.max(area.top, Math.min(area.top + innerH, y(value)));
+
+        // Grid and tick labels.
+        ctx.font = '12px "Segoe UI", system-ui, sans-serif';
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = token('--grid');
+        ctx.fillStyle = token('--muted');
+        const yStep = niceStep(hi - lo, innerH, 22, [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10]);
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let value = Math.ceil(lo / yStep) * yStep; value <= hi + 1e-9; value += yStep) {
+          const py = Math.round(y(value)) + 0.5;
+          ctx.beginPath(); ctx.moveTo(area.left, py); ctx.lineTo(area.left + innerW, py); ctx.stroke();
+          ctx.fillText(plain(Math.abs(value) < 1e-9 ? 0 : value, yStep < 0.5 ? 2 : 1), area.left - 7, py);
+        }
+        const tStep = niceStep(total, innerW, 30, [1, 2, 3, 5, 10].filter(step => total % step === 0), 10);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let t = 0; t <= total + 1e-9; t += tStep) {
+          const px = Math.round(x(t)) + 0.5;
+          ctx.beginPath(); ctx.moveTo(px, area.top); ctx.lineTo(px, area.top + innerH); ctx.stroke();
+          ctx.fillText(String(t), px, area.top + innerH + 6);
+        }
+
+        // Axes: the time axis sits at zero whenever zero is in range.
+        ctx.strokeStyle = token('--muted');
+        ctx.lineWidth = 1.5;
+        const axisY = lo <= 0 && hi >= 0 ? y(0) : area.top + innerH;
+        ctx.beginPath(); ctx.moveTo(area.left, area.top - 6); ctx.lineTo(area.left, area.top + innerH); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(area.left, axisY); ctx.lineTo(area.left + innerW + 6, axisY); ctx.stroke();
+        ctx.fillStyle = token('--muted');
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = '600 12px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(config.axis, 8, 15);
+        ctx.textAlign = 'right';
+        ctx.fillText('t (s)', width - area.right, height - 4);
+
+        // Target band and line.
+        if (showTarget) {
+          ctx.fillStyle = token('--target-band');
+          ctx.beginPath();
+          for (let t = 0; t <= target.duration + 1e-9; t += 0.05) ctx.lineTo(x(t), clampY(targetValue(target, t) + target.tolerance));
+          for (let t = target.duration; t >= -1e-9; t -= 0.05) ctx.lineTo(x(t), clampY(targetValue(target, t) - target.tolerance));
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = token('--target');
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([8, 6]);
+          ctx.beginPath();
+          target.points.forEach(([t, value], i) => (i ? ctx.lineTo(x(t), y(value)) : ctx.moveTo(x(t), y(value))));
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        const track = state.track;
+        const lineColour = token(config.colour);
+
+        // Inspection shading sits beneath the data line.
+        let inspectIndex = -1;
+        if (track && !state.recording && state.inspectT !== null) {
+          inspectIndex = nearestIndex(kind, state.inspectT);
+          if (inspectIndex >= 0 && kind !== 's') {
+            ctx.save();
+            ctx.globalAlpha = 0.2;
+            ctx.fillStyle = lineColour;
+            for (let i = 1; i <= inspectIndex; i += 1) {
+              if (!Number.isFinite(values[i]) || !Number.isFinite(values[i - 1]) || track.t[i] - track.t[i - 1] > 0.25) continue;
+              ctx.beginPath();
+              ctx.moveTo(x(track.t[i - 1]), y(0));
+              ctx.lineTo(x(track.t[i - 1]), clampY(values[i - 1]));
+              ctx.lineTo(x(track.t[i]), clampY(values[i]));
+              ctx.lineTo(x(track.t[i]), y(0));
+              ctx.closePath();
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+        }
+
+        // Data line, broken across gaps where the sheet was lost.
+        if (track) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(area.left, area.top, innerW, innerH);
+          ctx.clip();
+          ctx.strokeStyle = lineColour;
+          ctx.lineWidth = 2.5;
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          let drawing = false;
+          for (let i = 0; i < track.length; i += 1) {
+            const value = values[i];
+            if (!Number.isFinite(value)) { drawing = false; continue; }
+            if (drawing && track.t[i] - track.t[i - 1] > 0.25) drawing = false;
+            if (drawing) ctx.lineTo(x(track.t[i]), y(value));
+            else ctx.moveTo(x(track.t[i]), y(value));
+            drawing = true;
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (state.recording) {
+          ctx.strokeStyle = token('--muted');
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(x(state.elapsed), area.top); ctx.lineTo(x(state.elapsed), area.top + innerH); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Inspection marker, plus a tangent on the displacement graph.
+        if (inspectIndex >= 0) {
+          const t0 = track.t[inspectIndex];
+          const v0 = values[inspectIndex];
+          ctx.strokeStyle = token('--muted');
+          ctx.setLineDash([3, 4]);
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(x(t0), area.top); ctx.lineTo(x(t0), area.top + innerH); ctx.stroke();
+          ctx.setLineDash([]);
+          if (kind === 's' && Number.isFinite(track.v[inspectIndex])) {
+            const gradient = track.v[inspectIndex];
+            const reach = Math.max(0.8, total * 0.08);
+            ctx.save();
+            ctx.beginPath(); ctx.rect(area.left, area.top, innerW, innerH); ctx.clip();
+            ctx.strokeStyle = token('--v-line');
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x(t0 - reach), y(v0 - gradient * reach));
+            ctx.lineTo(x(t0 + reach), y(v0 + gradient * reach));
+            ctx.stroke();
+            ctx.restore();
+          }
+          ctx.fillStyle = lineColour;
+          ctx.strokeStyle = token('--card');
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(x(t0), clampY(v0), 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
+
+        if (!track && !state.recording) {
+          ctx.fillStyle = token('--muted');
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = '14px "Segoe UI", system-ui, sans-serif';
+          ctx.fillText(showTarget ? 'Get into position, then press Record' : 'Press Record, then move', area.left + innerW / 2, area.top + innerH / 2);
+        }
+      }
+
+      function drawAll() {
+        document.querySelectorAll('#graphs canvas').forEach(drawGraph);
+      }
+
+      function requestDraw() {
+        if (state.drawPending) return;
+        state.drawPending = true;
+        requestAnimationFrame(() => {
+          state.drawPending = false;
+          drawAll();
+        });
+      }
+
+      function inspectAt(canvas, event) {
+        if (!state.track || state.recording) return;
+        const rect = canvas.getBoundingClientRect();
+        const area = plotArea(canvas);
+        const fraction = (event.clientX - rect.left - area.left) / (area.width - area.left - area.right);
+        const last = state.track.t[state.track.length - 1];
+        state.inspectT = Math.max(0, Math.min(last, fraction * duration()));
+        updateNote();
+        requestDraw();
+      }
+
+      function inspectWithKeys(event) {
+        if (!state.track || state.recording) return;
+        const last = state.track.t[state.track.length - 1];
+        const step = event.shiftKey ? 1 : 0.1;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+          const current = state.inspectT === null ? (event.key === 'ArrowRight' ? -step : last + step) : state.inspectT;
+          state.inspectT = Math.max(0, Math.min(last, current + (event.key === 'ArrowRight' ? step : -step)));
+        } else if (event.key === 'Home') state.inspectT = 0;
+        else if (event.key === 'End') state.inspectT = last;
+        else if (event.key === 'Escape') state.inspectT = null;
+        else return;
+        event.preventDefault();
+        updateNote();
+        requestDraw();
+      }
+
+      function valueText(kind, value) {
+        return kind === 's' ? `${plain(value, 2)} m` : `${signed(value, 2)} ${GRAPHS[kind].unit}`;
+      }
+
+      function updateNote() {
+        const note = $('graph-note');
+        const kinds = visibleKinds();
+        const track = state.track;
+        if (state.recording) {
+          note.textContent = kinds.includes('s') && kinds.length === 1
+            ? 'Recording… velocity and acceleration are calculated a fraction of a second behind, once readings exist on both sides.'
+            : 'Recording… the v–t and a–t lines trail slightly because each gradient needs readings on both sides of it.';
+          return;
+        }
+        if (!track) {
+          note.textContent = 'Positive direction: away from the camera. Choose a graph in the title bar, then press Record.';
+          return;
+        }
+        if (state.inspectT === null) {
+          // Score feedback replaces the generic tip so the actions stay in view.
+          note.textContent = !$('feedback').hidden ? '' : 'Hover over the graph, or focus it and use the arrow keys, to read values. On the s–t graph a tangent shows the velocity; on the v–t and a–t graphs the shaded area shows the change in displacement or velocity.';
+          return;
+        }
+        const parts = [];
+        const sValues = seriesValues('s');
+        const index = nearestIndex(kinds[0], state.inspectT);
+        if (index < 0) {
+          note.textContent = `No reading near t = ${state.inspectT.toFixed(2)} s; the sheet may have been lost there.`;
+          return;
+        }
+        const t = track.t[index];
+        if (kinds.length > 1) {
+          for (const kind of kinds) {
+            const value = seriesValues(kind)[index];
+            parts.push(`${GRAPHS[kind].symbol} = ${Number.isFinite(value) ? valueText(kind, value) : '—'}`);
+          }
+          note.textContent = `At t = ${t.toFixed(2)} s: ${parts.join(' · ')}.`;
+          return;
+        }
+        const kind = kinds[0];
+        const values = seriesValues(kind);
+        if (kind === 's') {
+          const gradient = track.v[index];
+          note.textContent = `At t = ${t.toFixed(2)} s, s = ${valueText('s', values[index])}.` + (Number.isFinite(gradient)
+            ? ` The tangent’s gradient is the velocity: ${valueText('v', gradient)}.`
+            : ' There are too few readings around this point to draw a tangent.');
+          return;
+        }
+        const shaded = areaTo(values, index);
+        if (kind === 'v') {
+          const change = sValues[index] - sValues[0];
+          note.textContent = `At t = ${t.toFixed(2)} s, v = ${valueText('v', values[index])}. Shaded area = ${signed(shaded, 2)} m. This is the change in displacement; the measured change since t = 0 is ${signed(change, 2)} m.`;
+        } else {
+          const vFirst = firstFiniteIndex(track.v);
+          const change = vFirst >= 0 && Number.isFinite(track.v[index]) ? track.v[index] - track.v[vFirst] : null;
+          note.textContent = `At t = ${t.toFixed(2)} s, a = ${valueText('a', values[index])}. Shaded area = ${signed(shaded, 2)} m s⁻¹. This is the change in velocity` + (change === null ? '.' : `; the measured change is ${signed(change, 2)} m s⁻¹.`);
+        }
+      }
+
+      function updateGraphDescription() {
+        document.querySelectorAll('#graphs canvas').forEach(canvas => {
+          const kind = canvas.dataset.kind;
+          const config = GRAPHS[kind];
+          const values = state.track ? seriesValues(kind).filter(Number.isFinite) : [];
+          const description = values.length
+            ? `${config.title}: ${values.length} readings over ${duration()} seconds, ranging from ${valueText(kind, Math.min(...values))} to ${valueText(kind, Math.max(...values))}.`
+            : `${config.title}: no recording yet.`;
+          canvas.setAttribute('aria-label', `${description} Use the arrow keys to read values.`);
+        });
+      }
+
+      function downloadCsv() {
+        const track = state.track;
+        if (!track) return;
+        const offset = originOffset();
+        const header = `t (s),s ${offset ? 'from start position' : 'from camera'} (m),v (m/s),a (m/s^2)`;
+        const cell = value => (Number.isFinite(value) ? value.toFixed(4) : '');
+        const rows = track.t.map((t, i) => [t.toFixed(3), cell(track.s[i] - offset), cell(track.v[i]), cell(track.a[i])].join(','));
+        const blob = new Blob([`${header}\n${rows.join('\n')}\n`], { type: 'text/csv' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'motion-graph-data.csv';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      }
+
+      // ---------- Events ----------
+      $('camera-toggle').addEventListener('click', () => (state.stream ? stopCamera() : startCamera()));
+      $('stage').addEventListener('click', event => {
+        if (!state.stream) return;
+        const rect = $('stage').getBoundingClientRect();
+        // The preview is mirrored, so flip x back to camera coordinates.
+        pickColour(1 - (event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+      });
+      $('pick-centre').addEventListener('click', () => pickColour(0.5, 0.5));
+      $('tolerance').addEventListener('input', () => {
+        $('tolerance-value').textContent = $('tolerance').value;
+        if (state.k !== null) setCalibrationState('Tolerance changed: calibrate again for the best accuracy.', false);
+      });
+      $('show-mask').addEventListener('change', () => {
+        if (!$('show-mask').checked) state.overlayCtx.clearRect(0, 0, state.procW, state.procH);
+      });
+      $('calibrate').addEventListener('click', startCalibration);
+      document.querySelectorAll('input[name=source]').forEach(input => input.addEventListener('change', () => chooseSource(input.value)));
+      $('virtual-distance').addEventListener('input', () => {
+        $('virtual-value').textContent = `${Number($('virtual-distance').value).toFixed(2)} m`;
+      });
+      $('record').addEventListener('click', () => {
+        if (state.recording) stopRecording(false);
+        else if (state.countdown) cancelActivity('Cancelled.');
+        else startRecording();
+      });
+      $('clear').addEventListener('click', () => {
+        clearRecording();
+        setStatus('Graph cleared.');
+      });
+      $('download').addEventListener('click', downloadCsv);
+      $('graph-kind').addEventListener('change', layoutGraphs);
+      $('task').addEventListener('change', chooseTask);
+      $('duration').addEventListener('change', () => {
+        clearRecording();
+        updateGraphDescription();
+      });
+      $('origin').addEventListener('change', () => {
+        updateGraphDescription();
+        updateNote();
+        requestDraw();
+      });
+      $('smoothing').addEventListener('change', () => {
+        if (state.track) state.track.setSmoothing($('smoothing').value);
+        state.liveTrack.setSmoothing($('smoothing').value);
+        showScore();
+        updateGraphDescription();
+        updateNote();
+        requestDraw();
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) cancelActivity('Recording stopped because the page was hidden.');
+      });
+      window.addEventListener('site-theme-change', requestDraw);
+      new ResizeObserver(requestDraw).observe($('graphs'));
+
+      chooseTask();
+      updateSteps();
+      setStatus('Start the camera, or choose “No camera (slider)” to try it without one.');
+    });
+  </script>
+</body>
+</html>

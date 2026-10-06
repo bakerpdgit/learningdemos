@@ -751,6 +751,85 @@ if (fs.existsSync(subnetMaskingPath)) {
   }
 }
 
+// The camera lab's derivatives must recover exact motion, ignore single-frame
+// detection glitches, and offer graph-matching targets a classroom can walk.
+{
+  const motionSource = fs.readFileSync(path.join(root, 'motion_graphs_camera_lab.html'), 'utf8');
+  const mathsScript = motionSource.match(/<script id="motion-maths">([\s\S]*?)<\/script>/);
+  if (!mathsScript) {
+    failures.push('motion_graphs_camera_lab.html: missing motion maths');
+  } else {
+    const motion = require('vm').runInNewContext(
+      `${mathsScript[1]}; ({ MotionTrack, MOTION_TARGETS, SMOOTHING_WINDOWS, targetValue, targetStart, matchScore, largestBlob })`,
+      {},
+      { timeout: 2000 },
+    );
+    const displacement = (t) => 1 + 0.4 * t + 0.15 * t * t;
+    for (const smoothing of Object.keys(motion.SMOOTHING_WINDOWS)) {
+      const track = new motion.MotionTrack(smoothing);
+      for (let frame = 0; frame <= 180; frame += 1) {
+        const t = frame / 30;
+        track.add(t, frame === 90 ? displacement(t) + 1 : displacement(t));
+      }
+      track.finalize();
+      if (track.t.some((t) => Math.abs(t - 3) < 1e-9) || track.s.some((s, i) => Math.abs(s - displacement(track.t[i])) > 1e-9)) {
+        failures.push(`Motion lab (${smoothing}): a one-frame detection glitch must be rejected without altering other readings`);
+      }
+      const derivativesWrong = track.t.some((t, i) => t >= 1 && t <= 5
+        && (Math.abs(track.v[i] - (0.4 + 0.3 * t)) > 1e-6 || Math.abs(track.a[i] - 0.3) > 1e-6));
+      if (derivativesWrong) failures.push(`Motion lab (${smoothing}): v and a must match ds/dt and d²s/dt² for uniform acceleration`);
+    }
+    const live = new motion.MotionTrack('medium');
+    for (let frame = 0; frame < 60; frame += 1) live.add(frame / 30, 2);
+    for (let frame = 60; frame < 66; frame += 1) live.add(frame / 30, 3);
+    if (live.s[live.s.length - 1] !== 3) failures.push('Motion lab: a sustained change in distance must be accepted after brief rejection');
+
+    for (const [key, target] of Object.entries(motion.MOTION_TARGETS)) {
+      let position = motion.targetStart(target);
+      let lowest = position;
+      let highest = position;
+      for (let t = 0; t < target.duration; t += 0.01) {
+        if (target.kind === 's') position = motion.targetValue(target, t);
+        else position += motion.targetValue(target, t + 0.005) * 0.01;
+        lowest = Math.min(lowest, position);
+        highest = Math.max(highest, position);
+      }
+      const speeds = target.points.slice(1).map(([t, value], i) => {
+        const [t0, value0] = target.points[i];
+        return target.kind === 's' ? Math.abs((value - value0) / (t - t0)) : Math.abs(value);
+      });
+      if (lowest < 0.7 || highest > 2.8 || Math.max(...speeds) > 0.75) {
+        failures.push(`Motion lab target ${key}: must stay between 0.7 m and 2.8 m at walking speed`);
+      }
+      const perfect = new motion.MotionTrack('medium');
+      position = motion.targetStart(target);
+      for (let frame = 0; frame <= target.duration * 30; frame += 1) {
+        const t = frame / 30;
+        if (target.kind === 's') position = motion.targetValue(target, t);
+        else if (frame) position += (motion.targetValue(target, t - 1 / 60)) / 30;
+        perfect.add(t, position);
+      }
+      perfect.finalize();
+      const score = motion.matchScore(perfect, target);
+      if (!score || score.percent < 95 || score.coverage < 0.95) {
+        failures.push(`Motion lab target ${key}: following the target exactly must score as a match`);
+      }
+    }
+
+    const width = 6;
+    const mask = Uint8Array.from([
+      1, 1, 0, 0, 0, 0,
+      1, 1, 0, 1, 1, 1,
+      0, 0, 0, 1, 1, 1,
+      0, 0, 0, 0, 1, 0,
+    ]);
+    const blob = motion.largestBlob(mask, new Int32Array(mask.length), new Int32Array(mask.length), width, 4);
+    if (!blob || blob.count !== 7 || blob.minX !== 3 || blob.maxX !== 5 || blob.minY !== 1 || blob.maxY !== 3) {
+      failures.push('Motion lab: the sheet detector must keep the largest connected colour region');
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));
