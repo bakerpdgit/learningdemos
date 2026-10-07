@@ -1,0 +1,2720 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AQA A Level CS: Stack Frames in Assembly</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYQESQXT38"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-DYQESQXT38");
+    </script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f1f5f9;
+        --card: #ffffff;
+        --soft: #f8fafc;
+        --ink: #0f172a;
+        --muted: #475569;
+        --faint: #94a3b8;
+        --line: #cbd5e1;
+        --line-soft: #e2e8f0;
+        --shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+        --accent: #4f46e5;
+        --accent-hover: #4338ca;
+        --accent-soft: #eef2ff;
+        --accent-ink: #3730a3;
+        --focus: #4f46e5;
+        --on-strong: #ffffff;
+        --op-ink: #4338ca;
+        --label-ink: #9a3412;
+        --comment: #64748b;
+        --code-chip: #eef2ff;
+        --sp: #be123c;
+        --sp-strong: #be123c;
+        --bp: #6d28d9;
+        --bp-strong: #6d28d9;
+        --ip-strong: #4338ca;
+        --ip-soft: #e0e7ff;
+        --ret: #92400e;
+        --ret-soft: #fef3c7;
+        --ret-line: #d97706;
+        --param: #075985;
+        --param-soft: #e0f2fe;
+        --param-line: #0284c7;
+        --savedbp: #5b21b6;
+        --savedbp-soft: #ede9fe;
+        --savedbp-line: #7c3aed;
+        --saved: #334155;
+        --saved-soft: #e2e8f0;
+        --saved-line: #64748b;
+        --local: #065f46;
+        --local-soft: #d1fae5;
+        --local-line: #059669;
+        --changed: #fef9c3;
+        --changed-line: #ca8a04;
+        --tag-write-bg: #a16207;
+        --tag-write-ink: #ffffff;
+        --tag-read-bg: #0369a1;
+        --tag-read-ink: #ffffff;
+        --frame-line: #94a3b8;
+        --good: #047857;
+        --good-soft: #ecfdf5;
+        --bad: #b91c1c;
+        --bad-soft: #fef2f2;
+        --mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, "Courier New", monospace;
+      }
+
+      html.dark {
+        color-scheme: dark;
+        --page: #020617;
+        --card: #0f172a;
+        --soft: #131d33;
+        --ink: #e2e8f0;
+        --muted: #a3b1c6;
+        --faint: #64748b;
+        --line: #334155;
+        --line-soft: #1e293b;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        --accent: #6366f1;
+        --accent-hover: #4f46e5;
+        --accent-soft: #1e1b4b;
+        --accent-ink: #c7d2fe;
+        --focus: #a5b4fc;
+        --on-strong: #0f172a;
+        --op-ink: #a5b4fc;
+        --label-ink: #fdba74;
+        --comment: #8b9bb4;
+        --code-chip: #1e293b;
+        --sp: #fda4af;
+        --sp-strong: #fb7185;
+        --bp: #c4b5fd;
+        --bp-strong: #a78bfa;
+        --ip-strong: #818cf8;
+        --ip-soft: #1e1b4b;
+        --ret: #fcd34d;
+        --ret-soft: #2d1f05;
+        --ret-line: #d97706;
+        --param: #7dd3fc;
+        --param-soft: #0a2540;
+        --param-line: #0284c7;
+        --savedbp: #c4b5fd;
+        --savedbp-soft: #23124a;
+        --savedbp-line: #7c3aed;
+        --saved: #cbd5e1;
+        --saved-soft: #1e293b;
+        --saved-line: #64748b;
+        --local: #6ee7b7;
+        --local-soft: #062e22;
+        --local-line: #059669;
+        --changed: #33290a;
+        --changed-line: #eab308;
+        --tag-write-bg: #facc15;
+        --tag-write-ink: #1c1917;
+        --tag-read-bg: #38bdf8;
+        --tag-read-ink: #082f49;
+        --frame-line: #64748b;
+        --good: #4ade80;
+        --good-soft: #052e1a;
+        --bad: #fca5a5;
+        --bad-soft: #3b0d0d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+      button,
+      select {
+        font: inherit;
+      }
+      :focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .mono {
+        font-family: var(--mono);
+      }
+
+      /* Full-height app shell once the three panels sit side by side. The
+         production site bar is 58px tall, so the built page subtracts it or
+         the step controls fall below the viewport. Narrower than that the
+         page scrolls and the controls stick to the bottom. */
+      .stack-lab {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      @media (min-width: 1280px) {
+        .stack-lab {
+          height: 100vh;
+          min-height: 0;
+        }
+        body[data-site-page="interactive"] .stack-lab {
+          height: calc(100vh - 58px);
+        }
+      }
+
+      [data-interactive-header] {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px 20px;
+        padding: 14px 24px;
+        background: #4338ca;
+        color: #fff;
+      }
+      [data-interactive-header] h1 {
+        margin: 0;
+        font-size: 1.3rem;
+      }
+      [data-interactive-header] p {
+        margin: 0;
+        font-size: 0.85rem;
+      }
+      [data-interactive-actions] {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+      .predict-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 12px;
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: 8px;
+        background: transparent;
+        color: #fff;
+        font-size: 0.84rem;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .predict-toggle:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      .predict-toggle:focus-visible {
+        outline-color: #fff;
+      }
+      .switch {
+        position: relative;
+        flex-shrink: 0;
+        width: 30px;
+        height: 18px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .switch::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 0.15s;
+      }
+      .predict-toggle[aria-pressed="true"] .switch {
+        background: #10b981;
+      }
+      .predict-toggle[aria-pressed="true"] .switch::after {
+        transform: translateX(12px);
+      }
+
+      .lab-main {
+        flex: 1 1 auto;
+        display: grid;
+        gap: 12px;
+        padding: 12px;
+        align-items: start;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "code" "cpu" "stack";
+      }
+      @media (min-width: 768px) {
+        .lab-main {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          grid-template-areas: "code stack" "cpu stack";
+        }
+      }
+      /* With two columns the page scrolls, so keep the stack in view beside
+         the code and the explanation. */
+      @media (min-width: 768px) and (max-width: 1279px) {
+        .stack-panel {
+          position: sticky;
+          top: 12px;
+          max-height: calc(100vh - 90px);
+        }
+        .stack-panel .panel-scroll {
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow: auto;
+        }
+      }
+      @media (min-width: 1280px) {
+        /* An explicit flexible row, so the shared shell's align-content
+           rule for post-header grids cannot collapse the panels. */
+        .lab-main {
+          min-height: 0;
+          overflow: hidden;
+          align-items: stretch;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr) minmax(0, 1.22fr);
+          grid-template-rows: minmax(0, 1fr);
+          grid-template-areas: "code cpu stack";
+        }
+        .panel,
+        .cpu-panel {
+          min-height: 0;
+        }
+        .panel-scroll {
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow: auto;
+        }
+      }
+      .code-panel {
+        grid-area: code;
+      }
+      .cpu-panel {
+        grid-area: cpu;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      .stack-panel {
+        grid-area: stack;
+      }
+
+      .panel {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+      }
+      .panel-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px 12px;
+        padding: 9px 14px 8px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+      .panel-head h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+      .panel-note {
+        font-size: 0.78rem;
+        color: var(--muted);
+      }
+      .panel-scroll {
+        overflow-x: auto;
+      }
+
+      .mini-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--card);
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .mini-toggle[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+      }
+
+      /* Code listing */
+      .code-table,
+      .stack-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+      .code-table th,
+      .stack-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--line-soft);
+        background: var(--card);
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-align: left;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .code-table td {
+        padding: 2px 8px;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.45;
+        vertical-align: top;
+        white-space: nowrap;
+      }
+      .code-table td.marker {
+        width: 3.6rem;
+        padding-right: 0;
+      }
+      .code-table .addr {
+        color: var(--muted);
+      }
+      .code-table .bytes {
+        color: var(--faint);
+      }
+      .code-table .comment {
+        min-width: 7rem;
+        color: var(--comment);
+        white-space: normal;
+      }
+      .hide-bytes .bytes {
+        display: none;
+      }
+      .code-label-row td {
+        padding-top: 9px;
+      }
+      .code-label {
+        color: var(--label-ink);
+        font-weight: 700;
+      }
+      .code-directive td {
+        color: var(--comment);
+      }
+      .code-row.is-last td {
+        background: var(--soft);
+      }
+      .code-row.is-last td:first-child {
+        box-shadow: inset 4px 0 0 var(--faint);
+      }
+      .code-row.is-ip td {
+        background: var(--ip-soft);
+      }
+      .code-row.is-ip td:first-child {
+        box-shadow: inset 4px 0 0 var(--ip-strong);
+      }
+      .tok-op {
+        color: var(--op-ink);
+        font-weight: 700;
+      }
+      .tok-sp {
+        color: var(--sp);
+        font-weight: 700;
+      }
+      .tok-bp {
+        color: var(--bp);
+        font-weight: 700;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin: 1px 3px 1px 0;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font: 700 10.5px/1.2 "Segoe UI", system-ui, sans-serif;
+        white-space: nowrap;
+      }
+      .chip-ip {
+        background: var(--ip-strong);
+        color: var(--on-strong);
+      }
+      .chip-ret {
+        border: 1px solid var(--ret-line);
+        background: var(--ret-soft);
+        color: var(--ret);
+      }
+      .code-key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin: 0;
+        padding: 8px 14px 10px;
+        border-top: 1px solid var(--line-soft);
+        color: var(--muted);
+        font-size: 0.75rem;
+        list-style: none;
+      }
+
+      /* Registers */
+      .reg-card {
+        flex: 0 0 auto;
+      }
+      .reg-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        padding: 10px 12px 0;
+      }
+      .reg-grid + .reg-grid {
+        padding-bottom: 12px;
+      }
+      .reg-grid.pointers {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .reg-grid.pointers.with-flags {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.75fr);
+      }
+      .reg {
+        min-width: 0;
+        padding: 4px 8px 5px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+      }
+      .reg-name {
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+      .reg-value {
+        font: 600 1.1rem/1.25 var(--mono);
+      }
+      .reg-sub {
+        overflow: hidden;
+        min-height: 1rem;
+        color: var(--muted);
+        font-size: 0.7rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .reg-sp {
+        box-shadow: inset 4px 0 0 var(--sp-strong);
+      }
+      .reg-bp {
+        box-shadow: inset 4px 0 0 var(--bp-strong);
+      }
+      .reg-ip {
+        box-shadow: inset 4px 0 0 var(--ip-strong);
+      }
+      .reg.is-changed {
+        border-color: var(--changed-line);
+        background: var(--changed);
+      }
+      .reg.is-changed .reg-sub {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      /* Explanation and prediction */
+      .guide-card {
+        flex: 1 1 auto;
+      }
+      .guide-section {
+        padding: 12px 14px;
+      }
+      .guide-section + .guide-section {
+        border-top: 1px solid var(--line);
+      }
+      .guide-section p {
+        margin: 0 0 8px;
+      }
+      .guide-section ul {
+        margin: 0 0 10px;
+        padding-left: 1.2rem;
+      }
+      .guide-section li {
+        margin: 2px 0;
+      }
+      .guide-section h3 {
+        margin: 2px 0 8px;
+        font-size: 1.05rem;
+        line-height: 1.3;
+      }
+      .guide-section h4 {
+        margin: 10px 0 4px;
+        font-size: 0.85rem;
+      }
+      .kicker {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .inline-code {
+        padding: 0 4px;
+        border-radius: 4px;
+        background: var(--code-chip);
+        font-family: var(--mono);
+        font-size: 0.9em;
+        white-space: nowrap;
+      }
+      .note {
+        margin: 10px 0;
+        padding: 8px 10px;
+        border-left: 4px solid var(--accent);
+        border-radius: 0 8px 8px 0;
+        background: var(--accent-soft);
+      }
+      .pseudo {
+        overflow-x: auto;
+        margin: 4px 0 10px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.45;
+        white-space: pre;
+      }
+      .changes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 4px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .changes li {
+        margin: 0;
+        padding: 3px 7px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--soft);
+        font: 12px/1.3 var(--mono);
+      }
+      .result {
+        font-weight: 700;
+      }
+      .predict-section {
+        background: var(--accent-soft);
+        border-radius: 12px 12px 0 0;
+      }
+      .predict-section h3:focus {
+        outline: none;
+      }
+      .options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .option {
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--card);
+        color: var(--ink);
+        font: 600 14px/1.2 var(--mono);
+        cursor: pointer;
+      }
+      .option:hover:not(:disabled) {
+        border-color: var(--accent);
+      }
+      .option:disabled {
+        cursor: default;
+      }
+      .option.is-wrong {
+        border-color: var(--bad);
+        background: var(--bad-soft);
+        color: var(--bad);
+        text-decoration: line-through;
+      }
+      .option.is-right {
+        border-color: var(--good);
+        background: var(--good-soft);
+        color: var(--good);
+      }
+      .feedback {
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      .feedback.good {
+        color: var(--good);
+      }
+      .feedback.bad {
+        color: var(--bad);
+      }
+      .predict-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px 12px;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      /* Stack memory */
+      .stack-table th {
+        padding: 6px;
+      }
+      .stack-table td {
+        height: 30px;
+        padding: 0 6px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13px;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+      .stack-table .ptr-cell {
+        width: 2.9rem;
+        padding-right: 0;
+      }
+      .stack-table .offset-cell,
+      .stack-table .addr-cell,
+      .stack-table .value-cell {
+        font-family: var(--mono);
+      }
+      .stack-table .offset-cell {
+        color: var(--bp);
+        font-size: 12px;
+      }
+      .stack-table .addr-cell {
+        color: var(--muted);
+      }
+      .stack-table .value-cell {
+        font-weight: 600;
+      }
+      .stack-table .meaning-cell {
+        min-width: 9rem;
+        border-left: 4px solid transparent;
+        line-height: 1.25;
+        white-space: normal;
+      }
+      .meaning-cell.kind-ret {
+        border-left-color: var(--ret-line);
+        background: var(--ret-soft);
+        color: var(--ret);
+      }
+      .meaning-cell.kind-param {
+        border-left-color: var(--param-line);
+        background: var(--param-soft);
+        color: var(--param);
+      }
+      .meaning-cell.kind-bp {
+        border-left-color: var(--savedbp-line);
+        background: var(--savedbp-soft);
+        color: var(--savedbp);
+      }
+      .meaning-cell.kind-saved {
+        border-left-color: var(--saved-line);
+        background: var(--saved-soft);
+        color: var(--saved);
+      }
+      .meaning-cell.kind-local {
+        border-left-color: var(--local-line);
+        background: var(--local-soft);
+        color: var(--local);
+      }
+      .slot-free td {
+        color: var(--faint);
+      }
+      .slot-free .meaning-cell {
+        font-style: italic;
+      }
+      .slot-free .value-cell {
+        font-weight: 400;
+      }
+      .slot-base td {
+        border-top: 2px solid var(--line);
+        color: var(--muted);
+      }
+      .slot-base .meaning-cell {
+        font-size: 12px;
+      }
+      .is-sp td:not(.frame-cell) {
+        box-shadow: inset 0 2px 0 var(--sp-strong);
+      }
+      .slot-written .value-cell,
+      .slot-written .addr-cell {
+        background: var(--changed);
+        color: var(--ink);
+      }
+      .slot-read .value-cell {
+        box-shadow: inset 0 0 0 2px var(--tag-read-bg);
+      }
+      .is-sp.slot-read .value-cell {
+        box-shadow: inset 0 2px 0 var(--sp-strong), inset 0 0 0 2px var(--tag-read-bg);
+      }
+      .slot-tag {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font: 700 9.5px/1.2 "Segoe UI", system-ui, sans-serif;
+        font-style: normal;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        vertical-align: 1px;
+      }
+      .slot-tag.write {
+        background: var(--tag-write-bg);
+        color: var(--tag-write-ink);
+      }
+      .slot-tag.read {
+        background: var(--tag-read-bg);
+        color: var(--tag-read-ink);
+      }
+      /* SP and BP can point at the same slot, so the chips stack. */
+      .ptr {
+        display: block;
+        width: fit-content;
+        margin: 1px 0;
+        padding: 2px 4px;
+        border-radius: 4px;
+        color: var(--on-strong);
+        font: 700 10px/1.1 "Segoe UI", system-ui, sans-serif;
+        white-space: nowrap;
+      }
+      .ptr-sp {
+        background: var(--sp-strong);
+      }
+      .ptr-bp {
+        background: var(--bp-strong);
+      }
+      .stack-table .frame-cell {
+        position: relative;
+        width: 7.5rem;
+        min-width: 6.5rem;
+        padding: 3px 6px 3px 20px;
+        border-bottom-color: transparent;
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.2;
+        white-space: normal;
+      }
+      .frame-cell.has-frame::before {
+        content: "";
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        left: 4px;
+        width: 9px;
+        border: 2px solid var(--frame-line);
+        border-left: none;
+        border-radius: 0 7px 7px 0;
+      }
+      .frame-cell.is-current {
+        color: var(--ink);
+      }
+      .frame-cell.is-current::before {
+        border-color: var(--accent);
+        border-width: 3px;
+        border-left: none;
+      }
+      .frame-name,
+      .frame-args {
+        display: block;
+        font-family: var(--mono);
+        overflow-wrap: anywhere;
+      }
+      .frame-name {
+        font-weight: 700;
+      }
+      .frame-current {
+        display: block;
+        color: var(--accent-ink);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        margin: 0;
+        padding: 10px 14px 12px;
+        border-top: 1px solid var(--line-soft);
+        font-size: 0.75rem;
+        list-style: none;
+      }
+      .legend li {
+        padding: 2px 7px;
+        border-left: 4px solid var(--line);
+        border-radius: 0 4px 4px 0;
+      }
+      .legend .kind-ret {
+        border-left-color: var(--ret-line);
+        background: var(--ret-soft);
+        color: var(--ret);
+      }
+      .legend .kind-param {
+        border-left-color: var(--param-line);
+        background: var(--param-soft);
+        color: var(--param);
+      }
+      .legend .kind-bp {
+        border-left-color: var(--savedbp-line);
+        background: var(--savedbp-soft);
+        color: var(--savedbp);
+      }
+      .legend .kind-saved {
+        border-left-color: var(--saved-line);
+        background: var(--saved-soft);
+        color: var(--saved);
+      }
+      .legend .kind-local {
+        border-left-color: var(--local-line);
+        background: var(--local-soft);
+        color: var(--local);
+      }
+      .legend .kind-free {
+        color: var(--faint);
+        font-style: italic;
+      }
+
+      /* Step controls */
+      .lab-controls {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 12px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--line);
+        background: var(--card);
+      }
+      .control-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 38px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--card);
+        color: var(--ink);
+        font-size: 0.875rem;
+        font-weight: 700;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .btn:hover:not(:disabled) {
+        background: var(--soft);
+      }
+      .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+      .btn-primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover:not(:disabled) {
+        background: var(--accent-hover);
+      }
+      .btn-small {
+        height: 32px;
+        padding: 0 10px;
+        font-size: 0.8rem;
+      }
+      .step-count {
+        color: var(--muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      .blocked-hint {
+        color: var(--accent-ink);
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      @media (max-width: 640px) {
+        [data-interactive-header] {
+          padding: 12px 16px;
+        }
+        .lab-main {
+          padding: 10px;
+        }
+        .lab-controls {
+          padding: 8px 10px;
+        }
+        .reg-grid {
+          gap: 4px;
+          padding-left: 8px;
+          padding-right: 8px;
+        }
+        .reg {
+          padding-left: 6px;
+          padding-right: 4px;
+        }
+        .reg-value {
+          font-size: 1rem;
+        }
+      }
+    </style>
+
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("uimode");
+          if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script src="scripts/site-shell.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>This activity needs JavaScript enabled.</noscript>
+
+    <script id="stack-machine">
+    // A small 16-bit 8086 simulator for the stack-frame walkthroughs.
+    // Each program is real NASM-syntax 8086 code laid out as a DOS .COM
+    // program: code is loaded at 0100h and SP starts at FFFEh. The
+    // assembler encodes the instruction forms used here so the listed
+    // addresses and machine code match what NASM produces, and the run
+    // records what every stack slot means so the page can label it.
+    const StackLab = (function () {
+      "use strict";
+
+      const ORIGIN = 0x0100;
+      const STACK_BASE = 0xfffe;
+      const STACK_LIMIT = 0xff00;
+      const REG_CODES = { ax: 0, cx: 1, dx: 2, bx: 3, sp: 4, bp: 5, si: 6, di: 7 };
+      const ALU = { add: 0, or: 1, and: 4, sub: 5, xor: 6, cmp: 7 };
+      const JUMPS = { jmp: 0xeb, je: 0x74, jz: 0x74, jne: 0x75, jnz: 0x75, jl: 0x7c, jge: 0x7d, jle: 0x7e, jg: 0x7f };
+      const STACK_OPS = new Set(["push", "pop", "call", "ret"]);
+
+      const hex4 = (value) => (value & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+      const hex2 = (value) => (value & 0xff).toString(16).toUpperCase().padStart(2, "0");
+      const signed = (value) => ((value & 0x8000) ? (value & 0xffff) - 0x10000 : value & 0xffff);
+      const has = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+      const offsetText = (disp) => (disp === 0 ? "bp" : disp > 0 ? "bp+" + disp : "bp-" + -disp);
+
+      function parseNumber(text) {
+        const value = text.trim().toLowerCase();
+        if (/^-?\d+$/.test(value)) return parseInt(value, 10);
+        if (/^0x[0-9a-f]+$/.test(value)) return parseInt(value.slice(2), 16);
+        if (/^[0-9][0-9a-f]*h$/.test(value)) return parseInt(value.slice(0, -1), 16);
+        return null;
+      }
+
+      function parseOperand(text) {
+        const raw = text.trim();
+        const value = raw.toLowerCase();
+        if (has(REG_CODES, value)) return { type: "reg", reg: value };
+        const memory = value.match(/^(word\s+)?\[\s*bp\s*(?:([+-])\s*([0-9a-fx]+h?))?\s*\]$/);
+        if (memory) {
+          const amount = memory[3] ? parseNumber(memory[3]) : 0;
+          if (amount === null) throw new Error("Bad displacement in " + raw);
+          return { type: "mem", disp: memory[2] === "-" ? -amount : amount, sized: Boolean(memory[1]) };
+        }
+        const number = parseNumber(value);
+        if (number !== null) return { type: "imm", value: number };
+        if (/^[a-z_][a-z0-9_]*$/i.test(raw)) return { type: "label", name: raw };
+        throw new Error("Unsupported operand " + raw);
+      }
+
+      function parseInstruction(code) {
+        const match = code.trim().match(/^([a-z]+)\s*(.*)$/i);
+        if (!match) throw new Error("Cannot read instruction " + code);
+        return { op: match[1].toLowerCase(), operands: match[2] ? match[2].split(",").map(parseOperand) : [] };
+      }
+
+      const imm16 = (value) => [value & 0xff, (value >> 8) & 0xff];
+      const fitsImm8 = (value) => signed(value) >= -128 && signed(value) <= 127;
+
+      function memoryModrm(reg, disp) {
+        if (disp < -128 || disp > 127) throw new Error("Displacement out of range");
+        // mod 01, r/m 110 is [bp + disp8]. [bp] with no displacement still
+        // needs a zero disp8 because mod 00, r/m 110 means a direct address.
+        return [0x46 | (reg << 3), disp & 0xff];
+      }
+
+      // Returns the machine code NASM emits for one instruction. While the
+      // first pass is still measuring sizes, jump ranges are not checked.
+      function encode(ins, address, labels, measuring) {
+        const [a, b] = ins.operands;
+        const reg = (operand) => REG_CODES[operand.reg];
+        const target = (operand) => {
+          if (!operand || operand.type !== "label") throw new Error(ins.op + " needs a label");
+          if (!has(labels, operand.name)) throw new Error("Unknown label " + operand.name);
+          return labels[operand.name];
+        };
+        const shape = ins.operands.map((operand) => operand.type).join(",");
+        switch (ins.op) {
+          case "push":
+            if (shape === "reg") return [0x50 + reg(a)];
+            break;
+          case "pop":
+            if (shape === "reg") return [0x58 + reg(a)];
+            break;
+          case "mov":
+            if (shape === "reg,reg") return [0x89, 0xc0 | (reg(b) << 3) | reg(a)];
+            if (shape === "reg,imm") return [0xb8 + reg(a), ...imm16(b.value)];
+            if (shape === "reg,mem") return [0x8b, ...memoryModrm(reg(a), b.disp)];
+            if (shape === "mem,reg") return [0x89, ...memoryModrm(reg(b), a.disp)];
+            if (shape === "mem,imm" && a.sized) return [0xc7, ...memoryModrm(0, a.disp), ...imm16(b.value)];
+            break;
+          case "add":
+          case "or":
+          case "and":
+          case "sub":
+          case "xor":
+          case "cmp": {
+            const ext = ALU[ins.op];
+            const base = ext << 3;
+            if (shape === "reg,reg") return [base + 1, 0xc0 | (reg(b) << 3) | reg(a)];
+            if (shape === "reg,mem") return [base + 3, ...memoryModrm(reg(a), b.disp)];
+            if (shape === "mem,reg") return [base + 1, ...memoryModrm(reg(b), a.disp)];
+            if (shape === "reg,imm") {
+              if (fitsImm8(b.value)) return [0x83, 0xc0 | (ext << 3) | reg(a), b.value & 0xff];
+              if (reg(a) === 0) return [base + 5, ...imm16(b.value)];
+              return [0x81, 0xc0 | (ext << 3) | reg(a), ...imm16(b.value)];
+            }
+            if (shape === "mem,imm" && a.sized) {
+              if (fitsImm8(b.value)) return [0x83, ...memoryModrm(ext, a.disp), b.value & 0xff];
+              return [0x81, ...memoryModrm(ext, a.disp), ...imm16(b.value)];
+            }
+            break;
+          }
+          case "inc":
+            if (shape === "reg") return [0x40 + reg(a)];
+            break;
+          case "dec":
+            if (shape === "reg") return [0x48 + reg(a)];
+            break;
+          case "call":
+            if (shape === "label") return [0xe8, ...imm16(target(a) - (address + 3))];
+            break;
+          case "ret":
+            if (shape === "") return [0xc3];
+            if (shape === "imm") return [0xc2, ...imm16(a.value)];
+            break;
+          case "int":
+            if (shape === "imm") return [0xcd, a.value & 0xff];
+            break;
+          default:
+            if (has(JUMPS, ins.op) && shape === "label") {
+              const rel = target(a) - (address + 2);
+              if (!measuring && (rel < -128 || rel > 127)) throw new Error("Short jump out of range");
+              return [JUMPS[ins.op], rel & 0xff];
+            }
+        }
+        throw new Error("Unsupported instruction form: " + ins.op + " " + shape);
+      }
+
+      // Lines are [label, code, comment, options]. A label may stand alone
+      // (code empty) and then names the next instruction.
+      function assemble(source) {
+        const lines = [];
+        let pendingLabel = null;
+        source.forEach(([label, code, comment, options]) => {
+          if (!code) {
+            pendingLabel = label;
+            return;
+          }
+          lines.push({
+            index: lines.length,
+            label: label || pendingLabel || "",
+            code,
+            comment: comment || "",
+            options: options || {},
+            ins: parseInstruction(code),
+          });
+          pendingLabel = null;
+        });
+
+        const placeholder = {};
+        lines.forEach((line) => {
+          if (line.label) placeholder[line.label] = ORIGIN;
+        });
+        const labels = {};
+        let address = ORIGIN;
+        lines.forEach((line) => {
+          line.address = address;
+          if (line.label) {
+            if (has(labels, line.label)) throw new Error("Duplicate label " + line.label);
+            labels[line.label] = address;
+          }
+          address += encode(line.ins, address, placeholder, true).length;
+        });
+        lines.forEach((line) => {
+          line.bytes = encode(line.ins, line.address, labels, false);
+          line.next = line.address + line.bytes.length;
+        });
+
+        const functionNames = new Set([lines[0].label]);
+        lines.forEach((line) => {
+          if (line.ins.op === "call") functionNames.add(line.ins.operands[0].name);
+        });
+        const functions = Array.from(functionNames)
+          .map((name) => ({ name, address: labels[name] }))
+          .sort((left, right) => left.address - right.address);
+        const byAddress = new Map(lines.map((line) => [line.address, line]));
+        const functionAt = (where) => functions.filter((fn) => fn.address <= where).pop().name;
+        return { lines, labels, byAddress, functions, functionAt, end: address };
+      }
+
+      function frameLabel(frame) {
+        if (!frame.args.length) return frame.fn;
+        return frame.fn + "(" + frame.args.map((arg) => arg.name + "=" + arg.value).join(", ") + ")";
+      }
+
+      // Short enough for a stack slot: a single argument identifies a
+      // recursive level, more than one would crowd the row.
+      function shortLabel(frame) {
+        return frame.args.length === 1 ? frameLabel(frame) : frame.fn;
+      }
+
+      function run(scenario) {
+        const program = assemble(scenario.source);
+        const regs = { ax: 0, bx: 0, cx: 0, dx: 0, si: 0, di: 0, bp: 0, sp: STACK_BASE, ip: ORIGIN };
+        const flags = { zf: 0, sf: 0, cf: 0, of: 0 };
+        const memory = new Map([[STACK_BASE, 0]]);
+        const meta = new Map([[STACK_BASE, { kind: "base" }]]);
+        const frames = [{ id: 0, fn: program.lines[0].label, args: [], label: program.lines[0].label, active: true }];
+        const frameStack = [0];
+        const steps = [];
+        const states = [];
+        let halted = false;
+
+        const current = () => frames[frameStack[frameStack.length - 1]];
+        const caller = () => frames[frameStack[frameStack.length - 2]] || null;
+
+        function snapshot() {
+          const metaCopy = {};
+          meta.forEach((value, key) => {
+            metaCopy[key] = Object.assign({}, value);
+          });
+          return {
+            regs: Object.assign({}, regs),
+            flags: Object.assign({}, flags),
+            mem: Object.fromEntries(memory),
+            meta: metaCopy,
+            frames: frames.map((frame) => Object.assign({}, frame, { args: frame.args.slice() })),
+            frameStack: frameStack.slice(),
+          };
+        }
+
+        function checkAddress(where) {
+          if (where % 2 !== 0 || where < STACK_LIMIT || where > STACK_BASE) {
+            throw new Error(scenario.id + ": memory access outside the stack at " + hex4(where));
+          }
+        }
+        function read(where, step) {
+          checkAddress(where);
+          step.reads.push(where);
+          return memory.has(where) ? memory.get(where) : 0;
+        }
+        function write(where, value, info, step) {
+          checkAddress(where);
+          memory.set(where, value & 0xffff);
+          if (info) meta.set(where, info);
+          step.writes.push(where);
+        }
+        function push(value, info, step) {
+          regs.sp = (regs.sp - 2) & 0xffff;
+          write(regs.sp, value, info, step);
+        }
+        function pop(step) {
+          const value = read(regs.sp, step);
+          regs.sp = (regs.sp + 2) & 0xffff;
+          return value;
+        }
+
+        function arithmetic(op, x, y) {
+          const raw = op === "add" ? x + y : x - y;
+          const result = raw & 0xffff;
+          flags.zf = result === 0 ? 1 : 0;
+          flags.sf = result & 0x8000 ? 1 : 0;
+          if (op === "add") {
+            flags.cf = raw > 0xffff ? 1 : 0;
+            flags.of = (x ^ result) & (y ^ result) & 0x8000 ? 1 : 0;
+          } else {
+            flags.cf = x < y ? 1 : 0;
+            flags.of = (x ^ y) & (x ^ result) & 0x8000 ? 1 : 0;
+          }
+          return result;
+        }
+
+        function jumpTaken(op) {
+          switch (op) {
+            case "jmp": return true;
+            case "je": case "jz": return flags.zf === 1;
+            case "jne": case "jnz": return flags.zf === 0;
+            case "jl": return flags.sf !== flags.of;
+            case "jge": return flags.sf === flags.of;
+            case "jle": return flags.zf === 1 || flags.sf !== flags.of;
+            case "jg": return flags.zf === 0 && flags.sf === flags.of;
+            default: return false;
+          }
+        }
+
+        function describeMemory(where) {
+          const info = meta.get(where);
+          if (!info) return "";
+          if (info.kind === "ret") return "the return address";
+          if (info.kind === "param") return "parameter " + info.name;
+          if (info.kind === "bp") return "the saved BP";
+          if (info.kind === "local") return info.name ? "local variable " + info.name : "a local variable";
+          if (info.kind === "saved") return "the saved " + info.reg.toUpperCase();
+          return "";
+        }
+
+        const value = (number) => "`" + hex4(number) + "` (" + signed(number) + ")";
+
+        function execute(line, step) {
+          const { op, operands } = line.ins;
+          const [a, b] = operands;
+          const say = (text) => step.explain.push(text);
+          let nextIp = line.next;
+
+          const operandValue = (operand) => {
+            if (operand.type === "reg") return regs[operand.reg];
+            if (operand.type === "imm") return operand.value & 0xffff;
+            if (operand.type === "mem") return read((regs.bp + operand.disp) & 0xffff, step);
+            throw new Error("Cannot read " + operand.type);
+          };
+          const operandName = (operand) => {
+            if (operand.type === "reg") return operand.reg.toUpperCase();
+            if (operand.type === "mem") return "[" + offsetText(operand.disp) + "]";
+            return String(operand.value);
+          };
+          const addressOf = (operand) => (regs.bp + operand.disp) & 0xffff;
+          const addressSum = (operand) =>
+            "BP " + (operand.disp < 0 ? "− " + -operand.disp : "+ " + operand.disp) + " = `" + hex4(regs.bp) + "` " +
+            (operand.disp < 0 ? "− " + -operand.disp : "+ " + operand.disp) + " = `" + hex4(addressOf(operand)) + "`";
+
+          switch (op) {
+            case "push": {
+              const sp = regs.sp;
+              const name = a.reg.toUpperCase();
+              let info;
+              if (line.options.param) {
+                info = { kind: "param", name: line.options.param, owner: current().id, pending: true };
+              } else if (a.reg === "bp") {
+                info = { kind: "bp", owner: current().id, of: caller() ? shortLabel(caller()) : "the caller" };
+              } else {
+                info = { kind: "saved", reg: a.reg, owner: current().id, of: shortLabel(caller() || current()) };
+              }
+              push(regs[a.reg], info, step);
+              say("`push " + a.reg + "` puts a copy of " + name + " on top of the stack. SP goes down by 2 first (`" + hex4(sp) + "` → `" + hex4(regs.sp) + "`), then " + name + "'s value " + value(regs[a.reg]) + " is written to address `" + hex4(regs.sp) + "`.");
+              if (info.kind === "param") say("This is parameter " + info.name + " for the next call.");
+              else if (info.kind === "bp") say("This saves the caller's BP so that it can be put back before returning.");
+              else say("This keeps the caller's " + name + " safe while the subroutine uses " + name + " for its own work.");
+              break;
+            }
+            case "pop": {
+              const sp = regs.sp;
+              const name = a.reg.toUpperCase();
+              const popped = pop(step);
+              regs[a.reg] = popped;
+              say("`pop " + a.reg + "` copies the value on top of the stack (" + value(popped) + " at `" + hex4(sp) + "`) into " + name + ", then SP goes up by 2 (`" + hex4(sp) + "` → `" + hex4(regs.sp) + "`).");
+              say("The value is still in memory, but that slot is now free space and can be overwritten.");
+              break;
+            }
+            case "call": {
+              const sp = regs.sp;
+              const targetName = a.name;
+              const callerFrame = current();
+              const args = [];
+              for (let where = regs.sp; where < STACK_BASE; where += 2) {
+                const info = meta.get(where);
+                if (!info || info.kind !== "param" || !info.pending || info.owner !== callerFrame.id) break;
+                args.push({ where, name: info.name, value: signed(memory.get(where)) });
+              }
+              const frame = { id: frames.length, fn: targetName, args: args.map(({ name, value: argValue }) => ({ name, value: argValue })), active: true };
+              frame.label = frameLabel(frame);
+              frames.push(frame);
+              args.forEach(({ where }) => {
+                meta.set(where, Object.assign({}, meta.get(where), { owner: frame.id, pending: false }));
+              });
+              frameStack.push(frame.id);
+              push(line.next, { kind: "ret", owner: frame.id, to: shortLabel(callerFrame) }, step);
+              nextIp = program.labels[targetName];
+              step.frame = frame.label;
+              say("`call " + targetName + "` does two things. First it pushes the return address `" + hex4(line.next) + "`, the address of the instruction straight after the call, so SP goes `" + hex4(sp) + "` → `" + hex4(regs.sp) + "`.");
+              say("Then it jumps: IP becomes `" + hex4(nextIp) + "`, the first instruction of " + targetName + ".");
+              break;
+            }
+            case "ret": {
+              const sp = regs.sp;
+              const returning = current();
+              const address = pop(step);
+              if (a) regs.sp = (regs.sp + a.value) & 0xffff;
+              nextIp = address;
+              returning.active = false;
+              frameStack.pop();
+              step.frame = returning.label;
+              const back = program.byAddress.get(address);
+              say("`ret` pops the value on top of the stack (`" + hex4(address) + "` at `" + hex4(sp) + "`) into IP, so SP goes `" + hex4(sp) + "` → `" + hex4(regs.sp) + "`.");
+              say("Execution carries on at `" + hex4(address) + "`" + (back ? ", the `" + back.code + "` just after the call in " + program.functionAt(address) : "") + ". " + returning.label + " has finished, so its stack frame is no longer in use.");
+              break;
+            }
+            case "mov": {
+              if (a.type === "reg" && b.type === "reg" && a.reg === "bp" && b.reg === "sp") {
+                regs.bp = regs.sp;
+                say("`mov bp, sp` copies SP into BP, so BP = `" + hex4(regs.bp) + "`. BP now stays fixed for the rest of this subroutine, even when SP moves.");
+                say("From BP, `[bp+2]` is the return address, `[bp+4]` is the first parameter and `[bp-2]` would be the first local variable.");
+              } else if (a.type === "reg" && b.type === "reg" && a.reg === "sp" && b.reg === "bp") {
+                const sp = regs.sp;
+                regs.sp = regs.bp;
+                say("`mov sp, bp` copies BP into SP (`" + hex4(sp) + "` → `" + hex4(regs.sp) + "`). In one move this discards everything above the saved BP, including the local variables.");
+              } else if (a.type === "reg" && b.type === "mem") {
+                const where = addressOf(b);
+                const loaded = read(where, step);
+                const what = describeMemory(where);
+                regs[a.reg] = loaded;
+                say("Reads memory at " + addressSum(b) + (what ? ", which holds " + what : "") + ". " + a.reg.toUpperCase() + " = " + value(loaded) + ".");
+              } else if (a.type === "mem") {
+                const where = addressOf(a);
+                const stored = operandValue(b);
+                const old = meta.get(where);
+                const info = old && old.kind === "local" ? Object.assign({}, old, { set: true }) : { kind: "local", name: null, owner: current().id, set: true };
+                write(where, stored, info, step);
+                say("Writes " + operandName(b) + "'s value " + value(stored) + " to memory at " + addressSum(a) + (info.name ? ": this is the local variable " + info.name : "") + ".");
+              } else {
+                const copied = operandValue(b);
+                regs[a.reg] = copied;
+                say(b.type === "imm"
+                  ? "Puts the value " + value(copied) + " into " + a.reg.toUpperCase() + "."
+                  : "Copies " + b.reg.toUpperCase() + " into " + a.reg.toUpperCase() + ", so " + a.reg.toUpperCase() + " = " + value(copied) + ".");
+              }
+              break;
+            }
+            case "add":
+            case "sub":
+            case "cmp": {
+              if (a.type === "reg" && a.reg === "sp" && b.type === "imm") {
+                const sp = regs.sp;
+                regs.sp = arithmetic(op, regs.sp, b.value);
+                if (op === "add") {
+                  say("`add sp, " + b.value + "` moves SP up by " + b.value + " (`" + hex4(sp) + "` → `" + hex4(regs.sp) + "`). This removes " + b.value / 2 + " word" + (b.value === 2 ? "" : "s") + " from the top of the stack in one go, without reading them.");
+                  say("The values are still in memory, but those slots are now free space.");
+                } else {
+                  const names = line.options.locals || [];
+                  for (let slot = 0; slot < b.value / 2; slot += 1) {
+                    const where = (regs.bp - 2 * (slot + 1)) & 0xffff;
+                    meta.set(where, { kind: "local", name: names[slot] || null, owner: current().id, set: false });
+                  }
+                  say("`sub sp, " + b.value + "` moves SP down by " + b.value + " (`" + hex4(sp) + "` → `" + hex4(regs.sp) + "`), reserving " + b.value / 2 + " word" + (b.value === 2 ? "" : "s") + " for local variables" + (names.length ? " (" + names.join(", ") + ")" : "") + ".");
+                  say("Nothing is written, so the new space still holds whatever was left there before.");
+                }
+                break;
+              }
+              const x = operandValue(a);
+              const y = operandValue(b);
+              const result = arithmetic(op, x, y);
+              const destination = operandName(a);
+              const sourceName = b.type === "mem" ? "the value at " + operandName(b) : b.type === "reg" ? b.reg.toUpperCase() : String(b.value);
+              if (op === "cmp") {
+                say("`cmp` compares " + destination + " (" + signed(x) + ") with " + sourceName + " (" + signed(y) + ") by working out " + signed(x) + " − " + signed(y) + " = " + signed(result) + ". The answer is thrown away; only the flags are kept.");
+                say(result === 0 ? "The result is zero, so the zero flag ZF = 1 (they are equal)." : "The result is not zero, so the zero flag ZF = 0 (they are not equal).");
+              } else {
+                if (b.type === "mem") read((regs.bp + b.disp) & 0xffff, step);
+                if (a.type === "reg") regs[a.reg] = result;
+                else write(addressOf(a), result, null, step);
+                say((op === "add" ? "Adds " : "Subtracts ") + sourceName + (b.type === "mem" ? " (address `" + hex4(addressOf(b)) + "`)" : "") + (op === "add" ? " to " : " from ") + destination + ": " + signed(x) + (op === "add" ? " + " : " − ") + signed(y) + " = " + signed(result) + ". " + destination + " = " + value(result) + ".");
+              }
+              break;
+            }
+            case "inc":
+            case "dec": {
+              const x = regs[a.reg];
+              const keepCarry = flags.cf;
+              regs[a.reg] = arithmetic(op === "inc" ? "add" : "sub", x, 1);
+              flags.cf = keepCarry;
+              say((op === "inc" ? "Adds 1 to " : "Subtracts 1 from ") + a.reg.toUpperCase() + ": " + signed(x) + (op === "inc" ? " + 1" : " − 1") + " = " + signed(regs[a.reg]) + ".");
+              break;
+            }
+            case "int": {
+              if (a.value !== 0x20) throw new Error("Only int 20h is simulated");
+              halted = true;
+              nextIp = line.address;
+              say("`int 20h` hands control back to DOS, which ends the program.");
+              break;
+            }
+            default: {
+              if (!has(JUMPS, op)) throw new Error("Cannot execute " + op);
+              const taken = jumpTaken(op);
+              if (taken) nextIp = program.labels[a.name];
+              if (op === "jmp") say("Jumps to " + a.name + " at `" + hex4(nextIp) + "`.");
+              else if (taken) say("ZF = 1, so the jump is taken: IP becomes `" + hex4(nextIp) + "` (" + a.name + ").");
+              else say("ZF = 0, so the jump is not taken: execution continues with the next instruction.");
+            }
+          }
+          step.jumped = nextIp !== line.next && !halted;
+          regs.ip = nextIp;
+        }
+
+        states.push(snapshot());
+        while (!halted) {
+          if (steps.length >= 400) throw new Error(scenario.id + ": the program did not finish");
+          const line = program.byAddress.get(regs.ip);
+          if (!line) throw new Error(scenario.id + ": IP " + hex4(regs.ip) + " is not the start of an instruction");
+          const step = { index: steps.length, line: line.index, address: line.address, op: line.ins.op, reads: [], writes: [], explain: [], frame: null };
+          execute(line, step);
+          if (line.options.note) step.note = line.options.note;
+          step.halted = halted;
+          steps.push(step);
+          states.push(snapshot());
+        }
+
+        const lowestSp = Math.min(...states.map((state) => state.regs.sp));
+        return { scenario, program, steps, states, lowestSp };
+      }
+
+      // The meaning of one stack slot in a given state.
+      function describeSlot(state, where) {
+        const info = state.meta[where];
+        const live = where >= state.regs.sp;
+        const kindNames = { ret: "return address", param: "parameter", bp: "saved BP", saved: "saved register", local: "local variable" };
+        if (info && info.kind === "base") return { kind: "base", live: true, text: "bottom of the stack (DOS left 0000 here)" };
+        if (!live) {
+          return { kind: "free", live: false, text: info && kindNames[info.kind] ? "free · was " + kindNames[info.kind] : "free" };
+        }
+        if (!info) return { kind: "data", live: true, text: "data" };
+        const frameActive = state.frames[info.owner] && state.frames[info.owner].active;
+        const number = signed(state.mem[where] || 0);
+        switch (info.kind) {
+          case "ret":
+            return { kind: "ret", live, text: "return address → " + info.to };
+          case "param":
+            if (info.pending) return { kind: "param", live, text: "parameter " + info.name + " = " + number + " (for the next call)" };
+            return { kind: "param", live, text: "parameter " + info.name + " = " + number + (frameActive ? "" : " · call finished") };
+          case "bp":
+            return { kind: "bp", live, text: "saved BP (" + info.of + "'s)" };
+          case "saved":
+            return { kind: "saved", live, text: "saved " + info.reg.toUpperCase() + " = " + number + " (" + info.of + "'s)" };
+          case "local":
+            return { kind: "local", live, text: (info.name ? "local " + info.name : "local variable") + (info.set ? " = " + number : " (not set yet)") };
+          default:
+            return { kind: "data", live, text: "data" };
+        }
+      }
+
+      // Live frames with the address range each one occupies.
+      function liveFrames(state) {
+        const ranges = [];
+        state.frameStack.forEach((id, depth) => {
+          let low = Infinity;
+          let high = -Infinity;
+          Object.keys(state.meta).forEach((key) => {
+            const where = Number(key);
+            const info = state.meta[key];
+            if (info.owner === id && where >= state.regs.sp && info.kind !== "base") {
+              low = Math.min(low, where);
+              high = Math.max(high, where);
+            }
+          });
+          if (low !== Infinity) {
+            ranges.push({ id, label: state.frames[id].label, fn: state.frames[id].fn, args: state.frames[id].args, low, high, current: depth === state.frameStack.length - 1 });
+          }
+        });
+        return ranges;
+      }
+
+      // The frame whose saved BP sits at BP, so its slots can show [bp±n].
+      function bpFrame(state) {
+        const info = state.meta[state.regs.bp];
+        return info && info.kind === "bp" && state.regs.bp >= state.regs.sp ? info.owner : null;
+      }
+
+      // A prediction for the instruction about to run, or null when the
+      // instruction does not touch the stack. Answers come from the next
+      // state so they always agree with the simulation.
+      function questionFor(trace, index) {
+        const step = trace.steps[index];
+        if (!step) return null;
+        const before = trace.states[index];
+        const after = trace.states[index + 1];
+        const line = trace.program.lines[step.line];
+        const { op, operands } = line.ins;
+        const [a, b] = operands;
+        const sp = before.regs.sp;
+        const code = "`" + line.code + "`";
+
+        // Stack-address answers only offer addresses inside the stack, so
+        // that no option wraps round past FFFF.
+        function build(kind, prompt, correct, candidates, format, hint, reason) {
+          const inStack = format === stackAddress;
+          const values = [correct];
+          const offer = (candidate) => {
+            const wrapped = candidate & 0xffff;
+            const allowed = !inStack || (wrapped >= STACK_LIMIT && wrapped <= STACK_BASE);
+            if (allowed && values.length < 4 && !values.includes(wrapped)) values.push(wrapped);
+          };
+          candidates.forEach(offer);
+          for (let delta = 2; values.length < 4 && delta < 0x100; delta += 2) {
+            offer(correct - delta);
+            offer(correct + delta);
+          }
+          values.sort((left, right) => left - right);
+          return {
+            kind,
+            prompt,
+            options: values.map((number) => ({ id: hex4(number), text: format(number) })),
+            answer: hex4(correct),
+            hint,
+            reason,
+          };
+        }
+        const address = (number) => hex4(number);
+        const stackAddress = (number) => hex4(number);
+        // Small values are data and read more easily in denary as well;
+        // larger ones in these programs are always addresses.
+        const data = (number) => (number < 0x100 ? hex4(number) + " (" + number + ")" : hex4(number));
+
+        // Distractors: the wrong direction, no change, a one-byte move and
+        // twice the move.
+        const spQuestion = () => {
+          const delta = signed((after.regs.sp - sp) & 0xffff);
+          return build(
+          "sp",
+          "What will SP be after " + code + " runs?",
+          after.regs.sp,
+          [sp - delta, sp, sp + Math.sign(delta), sp + 2 * delta],
+          stackAddress,
+          after.regs.sp < sp
+            ? "The stack grows towards lower addresses, and each slot is one 16-bit word: 2 bytes."
+            : "Taking items off the stack moves SP back towards the bottom of the stack (higher addresses).",
+          "SP goes from " + hex4(sp) + " to " + hex4(after.regs.sp) + ".",
+          );
+        };
+
+        if (op === "push") return spQuestion();
+        if (op === "call") {
+          // Alternate between the two things a call changes.
+          const earlierCalls = trace.steps.slice(0, index).filter((earlier) => earlier.op === "call").length;
+          if (earlierCalls % 2 === 1) return spQuestion();
+          return build(
+            "return",
+            "Which return address will " + code + " push onto the stack?",
+            line.next,
+            [line.address, trace.program.labels[a.name], sp - 2],
+            address,
+            "When the subroutine finishes, which instruction should run next?",
+            hex4(line.next) + " is the address of the instruction straight after the call.",
+          );
+        }
+        if (op === "ret") {
+          const deeper = [];
+          for (let where = sp + 2; where < STACK_BASE; where += 2) {
+            if (before.meta[where] && before.meta[where].kind === "ret") deeper.push(before.mem[where]);
+          }
+          const fn = trace.program.labels[trace.program.functionAt(line.address)];
+          return build(
+            "ret",
+            "Where will execution continue after " + code + "?",
+            after.regs.ip,
+            deeper.concat([line.next, fn, sp]),
+            address,
+            "`ret` uses whatever address is on the top of the stack, where SP points.",
+            hex4(after.regs.ip) + " is the value on top of the stack at " + hex4(sp) + ".",
+          );
+        }
+        if (op === "pop") {
+          return build(
+            "pop",
+            "What value will " + a.reg.toUpperCase() + " hold after " + code + "?",
+            after.regs[a.reg],
+            [before.regs[a.reg], before.mem[sp + 2] || 0, sp],
+            data,
+            "Look at the slot that SP points to.",
+            "The top of the stack (address " + hex4(sp) + ") holds " + hex4(after.regs[a.reg]) + ".",
+          );
+        }
+        if ((op === "add" || op === "sub" || op === "mov") && a.type === "reg" && a.reg === "sp") return spQuestion();
+        if (op === "mov" && a.type === "reg" && a.reg === "bp" && b.type === "reg") {
+          return build(
+            "bp",
+            "What will BP be after " + code + "?",
+            after.regs.bp,
+            [before.regs.bp, sp + 2, sp - 2],
+            stackAddress,
+            "`mov bp, sp` copies the value that is in SP.",
+            "BP becomes a copy of SP: " + hex4(after.regs.bp) + ".",
+          );
+        }
+        if (op === "mov" && a.type === "reg" && b.type === "mem") {
+          const where = (before.regs.bp + b.disp) & 0xffff;
+          return build(
+            "load",
+            "Which value will " + code + " load into " + a.reg.toUpperCase() + "?",
+            after.regs[a.reg],
+            [before.mem[where + 2] || 0, before.mem[where - 2] || 0, where],
+            data,
+            "Work out the address BP " + (b.disp < 0 ? "− " + -b.disp : "+ " + b.disp) + " first, then find it in the stack.",
+            "BP " + (b.disp < 0 ? "− " + -b.disp : "+ " + b.disp) + " = " + hex4(where) + ", which holds " + hex4(after.regs[a.reg]) + ".",
+          );
+        }
+        if (op === "mov" && a.type === "mem") {
+          const where = (before.regs.bp + a.disp) & 0xffff;
+          return build(
+            "store",
+            "Which memory address will " + code + " write to?",
+            where,
+            [before.regs.bp, sp, where + 4, (before.regs.bp - a.disp) & 0xffff],
+            stackAddress,
+            "Work out BP " + (a.disp < 0 ? "− " + -a.disp : "+ " + a.disp) + ".",
+            "BP " + (a.disp < 0 ? "− " + -a.disp : "+ " + a.disp) + " = " + hex4(before.regs.bp) + (a.disp < 0 ? " − " + -a.disp : " + " + a.disp) + " = " + hex4(where) + ".",
+          );
+        }
+        return null;
+      }
+
+      return { ORIGIN, STACK_BASE, STACK_OPS, hex2, hex4, signed, offsetText, assemble, run, describeSlot, liveFrames, bpFrame, questionFor };
+    })();
+    // The walkthroughs, simplest first. Each source line is
+    // [label, instruction, comment, options]; options.note is shown after
+    // that line runs, options.param names a pushed parameter and
+    // options.locals names the slots made by sub sp. expect is checked
+    // by the build so a program cannot silently stop teaching its point.
+    const STACK_SCENARIOS = [
+      {
+        id: "return-addresses",
+        title: "1. Return addresses",
+        heading: "Return addresses",
+        intro: "When a subroutine is called, the CPU must remember where to come back to. `call` saves that return address on the stack and `ret` takes it off again. Here `triple` calls `double`, so two return addresses are on the stack at once.",
+        watch: [
+          "SP goes down by 2 on each `call` and back up by 2 on each `ret`.",
+          "The return address is the address of the instruction after the `call`.",
+          "The most recent return address is used first: last in, first out.",
+        ],
+        pseudocode: [
+          "SUBROUTINE double(x)",
+          "  RETURN x + x",
+          "ENDSUBROUTINE",
+          "",
+          "SUBROUTINE triple(x)",
+          "  RETURN double(x) + x",
+          "ENDSUBROUTINE",
+          "",
+          "answer ← triple(3)",
+        ],
+        aside: "To keep this first program simple, x is passed in register AX, so the stack holds only return addresses.",
+        source: [
+          ["main", "mov ax, 3", "AX = 3"],
+          ["", "call triple", "AX = triple(AX)", { note: "The address of main's next instruction is now safe on the stack, so the CPU can find its way back to main later." }],
+          ["", "int 20h", "end the program"],
+          ["triple", ""],
+          ["", "mov bx, ax", "BX = x (keep a copy)"],
+          ["", "call double", "AX = double(AX)", { note: "This is a nested call: triple has not finished, so its return address stays on the stack and a second one goes on top." }],
+          ["", "add ax, bx", "AX = 2x + x = 3x"],
+          ["", "ret", "back to whoever called triple", { note: "SP is back at FFFE: every push has been matched by a pop, so the stack is balanced." }],
+          ["double", ""],
+          ["", "add ax, ax", "AX = x + x"],
+          ["", "ret", "back to whoever called double", { note: "Only the top return address was used. main's return address is still underneath, waiting for triple's ret." }],
+        ],
+        expect: { ax: 9 },
+        result: "AX = 0009: triple(3) = 9.",
+        takeaways: [
+          "`call` pushes the address of the next instruction, then jumps to the subroutine.",
+          "`ret` pops the top of the stack into IP, so it returns to whoever called most recently.",
+          "Nested calls stack up their return addresses, which are used in reverse order (LIFO).",
+          "At the end SP is back at FFFE: the stack is balanced.",
+        ],
+      },
+      {
+        id: "overwritten-register",
+        title: "2. A register gets overwritten",
+        heading: "A register gets overwritten",
+        intro: "Every part of a program shares the same registers. Here `main` keeps a running total in BX, but `times5` also uses BX for its own working. Watch what happens to main's total.",
+        watch: [
+          "BX before and after the call.",
+          "The stack holds only the return address, so nothing protects BX.",
+        ],
+        pseudocode: [
+          "SUBROUTINE times5(n)",
+          "  RETURN 4 × n + n",
+          "ENDSUBROUTINE",
+          "",
+          "total ← 10",
+          "total ← total + times5(3)   # should be 25",
+        ],
+        source: [
+          ["main", "mov bx, 10", "total = 10 (main is using BX)"],
+          ["", "mov ax, 3", "AX = 3"],
+          ["", "call times5", "AX = times5(AX)"],
+          ["", "add bx, ax", "total = total + AX", { note: "main assumes BX still holds its total of 10, so it expects 10 + 15 = 25. It gets 3 + 15 = 18." }],
+          ["", "int 20h", "end the program"],
+          ["times5", ""],
+          ["", "mov bx, ax", "BX = n", { note: "main was still relying on BX = 10, but it has just been replaced by 3. There is no copy of it anywhere." }],
+          ["", "add ax, ax", "AX = 2n"],
+          ["", "add ax, ax", "AX = 4n"],
+          ["", "add ax, bx", "AX = 4n + n = 5n"],
+          ["", "ret", "back to the caller"],
+        ],
+        expect: { ax: 15, bx: 18 },
+        result: "BX = 0012 (18), but main expected 25.",
+        takeaways: [
+          "`times5` overwrote BX, destroying main's total of 10.",
+          "A subroutine must not damage values that its caller is still using.",
+          "The fix is to save the register on the stack and restore it before returning: see scenario 3.",
+        ],
+      },
+      {
+        id: "saved-registers",
+        title: "3. Saving registers",
+        heading: "Saving registers with push and pop",
+        intro: "The same program, but `times5` now starts with `push bx` and ends with `pop bx`. main's value is kept safe on the stack while the subroutine borrows the register.",
+        watch: [
+          "The saved BX goes on top of the return address.",
+          "`pop bx` must happen before `ret`, so the return address is back on top when `ret` runs.",
+        ],
+        pseudocode: [
+          "SUBROUTINE times5(n)",
+          "  RETURN 4 × n + n",
+          "ENDSUBROUTINE",
+          "",
+          "total ← 10",
+          "total ← total + times5(3)   # should be 25",
+        ],
+        source: [
+          ["main", "mov bx, 10", "total = 10 (main is using BX)"],
+          ["", "mov ax, 3", "AX = 3"],
+          ["", "call times5", "AX = times5(AX)"],
+          ["", "add bx, ax", "total = total + AX", { note: "BX still holds main's total, so the answer is right: 10 + 15 = 25." }],
+          ["", "int 20h", "end the program"],
+          ["times5", ""],
+          ["", "push bx", "save main's BX", { note: "main's total is now on the stack, just above the return address. times5 is free to use BX." }],
+          ["", "mov bx, ax", "BX = n"],
+          ["", "add ax, ax", "AX = 2n"],
+          ["", "add ax, ax", "AX = 4n"],
+          ["", "add ax, bx", "AX = 4n + n = 5n"],
+          ["", "pop bx", "restore main's BX", { note: "BX is main's 10 again, and the return address is back on top of the stack, ready for ret." }],
+          ["", "ret", "back to the caller"],
+        ],
+        expect: { ax: 15, bx: 25 },
+        result: "BX = 0019 (25), as main expected.",
+        takeaways: [
+          "Register values the caller still needs are part of its state. Saving them on the stack preserves them across the call.",
+          "Pushes and pops must balance and happen in reverse order.",
+          "Without `pop bx`, `ret` would pop 000A as the return address and jump to the wrong place: the program would crash.",
+        ],
+      },
+      {
+        id: "parameters",
+        title: "4. Parameters and BP",
+        heading: "Parameters and the base pointer",
+        intro: "Programs usually pass parameters on the stack. `main` pushes b and then a before calling `addTwo`. Inside, `addTwo` copies SP into BP so that it has a fixed point from which to find its parameters.",
+        watch: [
+          "The parameters, return address and saved BP together make up the stack frame for `addTwo`.",
+          "`[bp+4]` is a and `[bp+6]` is b, wherever SP moves.",
+          "After the call, `add sp, 4` removes the parameters.",
+        ],
+        pseudocode: [
+          "SUBROUTINE addTwo(a, b)",
+          "  RETURN a + b",
+          "ENDSUBROUTINE",
+          "",
+          "answer ← addTwo(5, 7)",
+        ],
+        source: [
+          ["main", "mov ax, 7", "AX = 7"],
+          ["", "push ax", "parameter b = 7", { param: "b", note: "C compilers push parameters from right to left, so b goes first and a will end up nearer the top." }],
+          ["", "mov ax, 5", "AX = 5"],
+          ["", "push ax", "parameter a = 5", { param: "a" }],
+          ["", "call addTwo", "AX = addTwo(5, 7)", { note: "addTwo's stack frame so far: its two parameters and the return address." }],
+          ["", "add sp, 4", "remove both parameters", { note: "The caller tidies up. The parameters are still in memory but count as free space now." }],
+          ["", "int 20h", "end the program"],
+          ["addTwo", ""],
+          ["", "push bp", "save main's BP", { note: "Prologue, part 1: keep the caller's BP so that it can be restored before returning." }],
+          ["", "mov bp, sp", "BP marks this frame", { note: "Prologue, part 2. From here on, a is always at [bp+4] and b at [bp+6]." }],
+          ["", "mov ax, [bp+4]", "AX = a", { note: "16-bit 8086 code cannot address memory as [sp+4], which is one reason subroutines set up BP." }],
+          ["", "add ax, [bp+6]", "AX = a + b"],
+          ["", "pop bp", "restore main's BP", { note: "Epilogue: BP is main's again and the return address is back on top of the stack." }],
+          ["", "ret", "back to main"],
+        ],
+        expect: { ax: 12 },
+        result: "AX = 000C (12): addTwo(5, 7) = 12.",
+        takeaways: [
+          "The caller pushes the parameters before `call`, so they sit just below the return address.",
+          "`push bp` and `mov bp, sp` set up the frame; `pop bp` takes it down again.",
+          "Parameters are found at fixed offsets from BP: `[bp+4]`, `[bp+6]` and so on.",
+          "The caller removes the parameters afterwards with `add sp, 4`.",
+        ],
+      },
+      {
+        id: "local-variables",
+        title: "5. Local variables",
+        heading: "Local variables and nested frames",
+        intro: "A complete stack frame: parameters, return address, saved BP and a local variable. `perimeter` keeps `total` on the stack because AX will be overwritten by its second call to `double`. Each call to `double` builds a frame of its own on top.",
+        watch: [
+          "`sub sp, 2` makes room for the local variable total at `[bp-2]`.",
+          "While `double` runs there are two frames on the stack, with the current one on top.",
+          "`mov sp, bp` and `pop bp` take perimeter's frame down before `ret`.",
+        ],
+        pseudocode: [
+          "SUBROUTINE double(n)",
+          "  RETURN n + n",
+          "ENDSUBROUTINE",
+          "",
+          "SUBROUTINE perimeter(width, height)",
+          "  total ← double(width)",
+          "  RETURN total + double(height)",
+          "ENDSUBROUTINE",
+          "",
+          "answer ← perimeter(3, 4)",
+        ],
+        source: [
+          ["main", "mov ax, 4", "AX = 4"],
+          ["", "push ax", "parameter height = 4", { param: "height" }],
+          ["", "mov ax, 3", "AX = 3"],
+          ["", "push ax", "parameter width = 3", { param: "width" }],
+          ["", "call perimeter", "AX = perimeter(3, 4)"],
+          ["", "add sp, 4", "remove both parameters", { note: "The stack is empty again. perimeter's whole frame, including total, is now just free space." }],
+          ["", "int 20h", "end the program"],
+          ["perimeter", ""],
+          ["", "push bp", "save main's BP"],
+          ["", "mov bp, sp", "BP marks this frame"],
+          ["", "sub sp, 2", "make room for total", { locals: ["total"], note: "The frame is complete: parameters at positive offsets from BP, the local variable at a negative offset." }],
+          ["", "mov ax, [bp+4]", "AX = width"],
+          ["", "push ax", "parameter n = width", { param: "n" }],
+          ["", "call double", "AX = double(width)", { note: "Two frames are on the stack now: perimeter's underneath and double's on top." }],
+          ["", "add sp, 2", "remove the parameter"],
+          ["", "mov [bp-2], ax", "total = AX", { note: "AX is about to be reused, so the first result is kept in the local variable total." }],
+          ["", "mov ax, [bp+6]", "AX = height"],
+          ["", "push ax", "parameter n = height", { param: "n" }],
+          ["", "call double", "AX = double(height)", { note: "double gets a fresh frame in the same place as before, this time with n = 4." }],
+          ["", "add sp, 2", "remove the parameter"],
+          ["", "add ax, [bp-2]", "AX = AX + total"],
+          ["", "mov sp, bp", "discard the local variable", { note: "Epilogue, part 1: total's slot is now free space." }],
+          ["", "pop bp", "restore main's BP"],
+          ["", "ret", "back to main"],
+          ["double", ""],
+          ["", "push bp", "save perimeter's BP"],
+          ["", "mov bp, sp", "BP marks this frame", { note: "double has its own BP, so its parameter n is at [bp+4] in its own frame." }],
+          ["", "mov ax, [bp+4]", "AX = n"],
+          ["", "add ax, ax", "AX = 2n"],
+          ["", "pop bp", "restore perimeter's BP", { note: "BP points at perimeter's frame again, so [bp-2] and [bp+6] mean total and height once more." }],
+          ["", "ret", "back to perimeter"],
+        ],
+        expect: { ax: 14 },
+        result: "AX = 000E (14): perimeter(3, 4) = 2 × 3 + 2 × 4 = 14.",
+        takeaways: [
+          "A stack frame holds the parameters, the return address and the local variables, plus saved registers such as BP.",
+          "Parameters are at positive offsets from BP and local variables at negative offsets.",
+          "A local variable exists only while its frame does. Afterwards its slot is free space.",
+          "Each call gets a fresh frame, so `double` can be called twice without mixing up its n.",
+        ],
+      },
+      {
+        id: "recursion",
+        title: "6. Recursion",
+        heading: "Recursion",
+        intro: "A recursive subroutine calls itself. Each call gets its own stack frame with its own n, so sum(3), sum(2), sum(1) and sum(0) can all be in progress at the same time.",
+        watch: [
+          "The stack grows by one frame (3 words) for each call.",
+          "The base case sum(0) returns without calling again.",
+          "The frames unwind in reverse order, adding their own n as each one returns.",
+        ],
+        pseudocode: [
+          "SUBROUTINE sum(n)",
+          "  IF n = 0 THEN",
+          "    RETURN 0",
+          "  ENDIF",
+          "  RETURN sum(n - 1) + n",
+          "ENDSUBROUTINE",
+          "",
+          "answer ← sum(3)",
+        ],
+        source: [
+          ["main", "mov ax, 3", "AX = 3"],
+          ["", "push ax", "parameter n = 3", { param: "n" }],
+          ["", "call sum", "AX = sum(3)"],
+          ["", "add sp, 2", "remove the parameter"],
+          ["", "int 20h", "end the program"],
+          ["sum", ""],
+          ["", "push bp", "save the caller's BP", { note: "Each level saves the BP of the level that called it, so the frames are chained together." }],
+          ["", "mov bp, sp", "BP marks this frame"],
+          ["", "mov ax, [bp+4]", "AX = n"],
+          ["", "cmp ax, 0", "is n = 0?"],
+          ["", "je done", "base case: return 0"],
+          ["", "dec ax", "AX = n - 1"],
+          ["", "push ax", "parameter n - 1", { param: "n" }],
+          ["", "call sum", "AX = sum(n - 1)", { note: "Another sum frame is built on top. The level below is paused, not finished." }],
+          ["", "add sp, 2", "remove the parameter"],
+          ["", "add ax, [bp+4]", "AX = sum(n - 1) + n", { note: "Each level adds its own n, which is safe at [bp+4] in its own frame." }],
+          ["done", "pop bp", "restore the caller's BP"],
+          ["", "ret", "back to the caller"],
+        ],
+        expect: { ax: 6 },
+        result: "AX = 0006 (6): sum(3) = 3 + 2 + 1 + 0 = 6.",
+        takeaways: [
+          "Every recursive call pushes a new frame. Nothing is overwritten, because each frame has its own n at `[bp+4]`.",
+          "Without a base case the stack would keep growing until it ran out of memory: a stack overflow.",
+          "Recursion costs memory: each level here uses 6 bytes of stack.",
+        ],
+      },
+    ];
+    </script>
+
+    <script type="text/babel">
+      const { useState, useMemo, useEffect, useRef, useCallback } = React;
+      const { hex2, hex4, signed, offsetText, run, describeSlot, liveFrames, bpFrame, questionFor, STACK_BASE } = StackLab;
+
+      const KIND_LEGEND = [
+        ["ret", "return address"],
+        ["param", "parameter"],
+        ["bp", "saved BP"],
+        ["saved", "saved register"],
+        ["local", "local variable"],
+        ["free", "free space"],
+      ];
+
+      // Text with `code` spans, as written in the scenario data.
+      function Rich({ text }) {
+        return String(text)
+          .split("`")
+          .map((part, index) =>
+            index % 2 ? (
+              <code key={index} className="inline-code">
+                {part}
+              </code>
+            ) : (
+              <React.Fragment key={index}>{part}</React.Fragment>
+            ),
+          );
+      }
+
+      function Instruction({ code }) {
+        const [, mnemonic, operands] = code.match(/^(\S+)\s*(.*)$/);
+        const pieces = operands.split(/\b(sp|bp)\b/);
+        return (
+          <React.Fragment>
+            <span className="tok-op">{mnemonic}</span>
+            {operands ? " " : ""}
+            {pieces.map((piece, index) =>
+              index % 2 ? (
+                <span key={index} className={"tok-" + piece}>
+                  {piece}
+                </span>
+              ) : (
+                piece
+              ),
+            )}
+          </React.Fragment>
+        );
+      }
+
+      // Scrolls a row into view inside its own panel only. When the panel is
+      // not a scroll box (narrow layouts) the page is left alone.
+      function keepRowVisible(box, row, above) {
+        if (!box || !row || box.scrollHeight <= box.clientHeight + 1) return;
+        const head = box.querySelector("thead");
+        const headHeight = head ? head.offsetHeight : 0;
+        const boxRect = box.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        if (rowRect.top < boxRect.top + headHeight + 4) {
+          box.scrollTop -= boxRect.top + headHeight + above - rowRect.top;
+        } else if (rowRect.bottom > boxRect.bottom - 4) {
+          box.scrollTop += rowRect.bottom - boxRect.bottom + 48;
+        }
+      }
+
+      function CodePanel({ trace, stepIndex, done }) {
+        const scrollRef = useRef(null);
+        const [showBytes, setShowBytes] = useState(() => window.innerWidth >= 1440 || (window.innerWidth >= 768 && window.innerWidth < 1100));
+        const state = trace.states[stepIndex];
+        const lastStep = stepIndex > 0 ? trace.steps[stepIndex - 1] : null;
+        const returnTargets = new Set();
+        for (let where = state.regs.sp; where < STACK_BASE; where += 2) {
+          const info = state.meta[where];
+          if (info && info.kind === "ret") returnTargets.add(state.mem[where]);
+        }
+
+        useEffect(() => {
+          const box = scrollRef.current;
+          if (box) keepRowVisible(box, box.querySelector('[data-ip-row="true"]'), 40);
+        }, [trace, stepIndex]);
+        useEffect(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = 0;
+        }, [trace]);
+
+        return (
+          <section className="panel code-panel" aria-labelledby="code-title">
+            <div className="panel-head">
+              <h2 id="code-title">Code</h2>
+              <span className="panel-note">8086 assembly, NASM syntax</span>
+              <button type="button" className="mini-toggle" aria-pressed={showBytes} onClick={() => setShowBytes((value) => !value)}>
+                Machine code
+              </button>
+            </div>
+            <div className={"panel-scroll" + (showBytes ? "" : " hide-bytes")} ref={scrollRef}>
+              <table className="code-table">
+                <caption className="sr-only">Program listing with the address and machine code of each instruction</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">
+                      <span className="sr-only">Markers</span>
+                    </th>
+                    <th scope="col">Address</th>
+                    <th scope="col" className="bytes">
+                      Machine code
+                    </th>
+                    <th scope="col">Instruction</th>
+                    <th scope="col">Comment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="code-directive">
+                    <td className="marker"></td>
+                    <td className="addr"></td>
+                    <td className="bytes"></td>
+                    <td>org 100h</td>
+                    <td className="comment">; DOS loads a .COM program at 0100</td>
+                  </tr>
+                  {trace.program.lines.map((line, index) => {
+                    const isIp = !done && line.address === state.regs.ip;
+                    const isLast = Boolean(lastStep) && lastStep.line === line.index && !isIp;
+                    const isReturn = returnTargets.has(line.address);
+                    const labelRow = line.label ? (
+                      <tr key={"label-" + line.label} className="code-label-row">
+                        <td className="marker"></td>
+                        <td className="addr"></td>
+                        <td className="bytes"></td>
+                        <td colSpan={2}>
+                          <span className="code-label">{line.label}:</span>
+                        </td>
+                      </tr>
+                    ) : null;
+                    return (
+                      <React.Fragment key={line.index}>
+                        {labelRow}
+                        <tr
+                          className={"code-row" + (isIp ? " is-ip" : "") + (isLast ? " is-last" : "")}
+                          data-ip-row={isIp ? "true" : undefined}
+                          aria-current={isIp ? "step" : undefined}
+                        >
+                          <td className="marker">
+                            {isIp && (
+                              <span className="chip chip-ip" title="IP: the next instruction to run">
+                                IP ▸
+                              </span>
+                            )}
+                            {isReturn && (
+                              <span className="chip chip-ret" title="A return address on the stack points here">
+                                ↩<span className="sr-only">a return address on the stack points here</span>
+                              </span>
+                            )}
+                            {isLast && <span className="sr-only">just ran</span>}
+                          </td>
+                          <td className="addr">{hex4(line.address)}</td>
+                          <td className="bytes">{line.bytes.map(hex2).join(" ")}</td>
+                          <td>
+                            <Instruction code={line.code} />
+                          </td>
+                          <td className="comment">; {line.comment}</td>
+                        </tr>
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <ul className="code-key" aria-label="Key">
+              <li>
+                <span className="chip chip-ip">IP ▸</span> next instruction
+              </li>
+              <li>
+                <span className="chip chip-ret">↩</span> a return address on the stack points here
+              </li>
+            </ul>
+          </section>
+        );
+      }
+
+      function Registers({ trace, stepIndex }) {
+        const state = trace.states[stepIndex];
+        const previous = stepIndex > 0 ? trace.states[stepIndex - 1] : null;
+        const lastStep = stepIndex > 0 ? trace.steps[stepIndex - 1] : null;
+        const usesFlags = trace.program.lines.some((line) => line.ins.op === "cmp");
+        const changed = (name) => Boolean(previous) && previous.regs[name] !== state.regs[name] && (name !== "ip" || lastStep.jumped);
+
+        const general = ["ax", "bx", "cx", "dx"].map((name) => {
+          const value = state.regs[name];
+          const isChanged = changed(name);
+          return (
+            <div key={name} className={"reg" + (isChanged ? " is-changed" : "")}>
+              <div className="reg-name">{name.toUpperCase()}</div>
+              <div className="reg-value">{hex4(value)}</div>
+              <div className="reg-sub">
+                = {signed(value)}
+                {isChanged ? ", was " + signed(previous.regs[name]) : ""}
+              </div>
+            </div>
+          );
+        });
+        const pointerRoles = { sp: "top of stack", bp: "frame base", ip: "next to run" };
+        const pointers = ["sp", "bp", "ip"].map((name) => {
+          const isChanged = changed(name);
+          return (
+            <div key={name} className={"reg reg-" + name + (isChanged ? " is-changed" : "")}>
+              <div className="reg-name">{name.toUpperCase()}</div>
+              <div className="reg-value">{hex4(state.regs[name])}</div>
+              <div className="reg-sub">{isChanged ? "was " + hex4(previous.regs[name]) : pointerRoles[name]}</div>
+            </div>
+          );
+        });
+        const zfChanged = Boolean(previous) && previous.flags.zf !== state.flags.zf;
+
+        return (
+          <section className="panel reg-card" aria-labelledby="registers-title">
+            <div className="panel-head">
+              <h2 id="registers-title">Registers</h2>
+              <span className="panel-note">16-bit values in hex</span>
+            </div>
+            <div className="reg-grid">{general}</div>
+            <div className={"reg-grid pointers" + (usesFlags ? " with-flags" : "")}>
+              {pointers}
+              {usesFlags && (
+                <div className={"reg" + (zfChanged ? " is-changed" : "")}>
+                  <div className="reg-name">ZF</div>
+                  <div className="reg-value">{state.flags.zf}</div>
+                  <div className="reg-sub">{zfChanged ? "was " + previous.flags.zf : "zero flag"}</div>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
+
+      function changesFor(trace, stepIndex) {
+        const before = trace.states[stepIndex - 1];
+        const after = trace.states[stepIndex];
+        const step = trace.steps[stepIndex - 1];
+        const items = [];
+        ["ax", "bx", "cx", "dx", "sp", "bp"].forEach((name) => {
+          if (before.regs[name] !== after.regs[name]) items.push(name.toUpperCase() + " " + hex4(before.regs[name]) + " → " + hex4(after.regs[name]));
+        });
+        if (step.jumped) items.push("IP " + hex4(before.regs.ip) + " → " + hex4(after.regs.ip));
+        step.writes.forEach((where) => items.push("[" + hex4(where) + "] ← " + hex4(after.mem[where])));
+        if (before.flags.zf !== after.flags.zf) items.push("ZF " + before.flags.zf + " → " + after.flags.zf);
+        return items;
+      }
+
+      function IntroSection({ scenario, number }) {
+        return (
+          <div className="guide-section">
+            <p className="kicker">Scenario {number} of {STACK_SCENARIOS.length}</p>
+            <h3>{scenario.heading}</h3>
+            <p>
+              <Rich text={scenario.intro} />
+            </p>
+            <h4>Watch for</h4>
+            <ul>
+              {scenario.watch.map((item) => (
+                <li key={item}>
+                  <Rich text={item} />
+                </li>
+              ))}
+            </ul>
+            <h4>The same idea in AQA pseudocode</h4>
+            <pre className="pseudo">{scenario.pseudocode.join("\n")}</pre>
+            {scenario.aside && (
+              <p className="note">
+                <Rich text={scenario.aside} />
+              </p>
+            )}
+            <p>
+              Press <strong>Step</strong> (or the → key) to run the first instruction.
+            </p>
+          </div>
+        );
+      }
+
+      function StepSection({ trace, stepIndex }) {
+        const step = trace.steps[stepIndex - 1];
+        const line = trace.program.lines[step.line];
+        const changes = changesFor(trace, stepIndex);
+        return (
+          <div className="guide-section">
+            <p className="kicker">
+              Step {stepIndex} of {trace.steps.length} · just ran
+            </p>
+            <h3>
+              <code className="inline-code">{line.code}</code> <span className="panel-note">at {hex4(line.address)}</span>
+            </h3>
+            {step.explain.map((text, index) => (
+              <p key={index}>
+                <Rich text={text} />
+              </p>
+            ))}
+            {step.note && (
+              <p className="note">
+                <Rich text={step.note} />
+              </p>
+            )}
+            <h4>Changed</h4>
+            {changes.length ? (
+              <ul className="changes">
+                {changes.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>
+                Nothing apart from IP, which moved on to the next instruction.
+                {step.op === "cmp" ? " ZF already held " + trace.states[stepIndex].flags.zf + " from an earlier instruction." : ""}
+              </p>
+            )}
+          </div>
+        );
+      }
+
+      function SummarySection({ scenario, nextScenario }) {
+        return (
+          <div className="guide-section">
+            <p className="kicker">Program finished</p>
+            <h3>{scenario.heading}</h3>
+            <p className="result">
+              <Rich text={scenario.result} />
+            </p>
+            <h4>Key points</h4>
+            <ul>
+              {scenario.takeaways.map((item) => (
+                <li key={item}>
+                  <Rich text={item} />
+                </li>
+              ))}
+            </ul>
+            <p>
+              {nextScenario ? (
+                <React.Fragment>
+                  Next: <strong>{nextScenario.title}</strong>. Use Back to review any step.
+                </React.Fragment>
+              ) : (
+                "That is the last scenario. Use Back to review any step, or choose another scenario."
+              )}
+            </p>
+          </div>
+        );
+      }
+
+      function PredictSection({ question, answer, tally, onPick, onReveal, headingRef }) {
+        const finished = answer.solved || answer.revealed;
+        const tried = answer.tried;
+        const answerText = question.options.find((option) => option.id === question.answer).text;
+        return (
+          <div className="guide-section predict-section" role="group" aria-labelledby="predict-title">
+            <p className="kicker">Predict before you step</p>
+            <h3 id="predict-title" tabIndex={-1} ref={headingRef}>
+              <Rich text={question.prompt} />
+            </h3>
+            <div className="options">
+              {question.options.map((option) => {
+                const wrong = tried.includes(option.id) && option.id !== question.answer;
+                const right = finished && option.id === question.answer;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={"option" + (wrong ? " is-wrong" : "") + (right ? " is-right" : "")}
+                    disabled={finished || wrong}
+                    onClick={() => onPick(option.id)}
+                  >
+                    {option.text}
+                    {wrong && <span className="sr-only"> (incorrect)</span>}
+                    {right && <span className="sr-only"> (correct)</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div aria-live="polite">
+              {answer.solved && (
+                <p className="feedback good">
+                  ✓ Correct. {question.reason} Press Step to run it.
+                </p>
+              )}
+              {!answer.solved && answer.revealed && (
+                <p className="feedback">
+                  The answer is {answerText}. {question.reason} Press Step to run it.
+                </p>
+              )}
+              {!finished && tried.length > 0 && (
+                <p className="feedback bad">
+                  ✗ Not quite. <Rich text={question.hint} />
+                </p>
+              )}
+            </div>
+            <div className="predict-foot">
+              <span>
+                Right first time: {tally.first} of {tally.answered}
+              </span>
+              {!finished && tried.length > 0 && (
+                <button type="button" className="btn btn-small" onClick={onReveal}>
+                  Show answer
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function StackPanel({ trace, stepIndex }) {
+        const scrollRef = useRef(null);
+        const state = trace.states[stepIndex];
+        const step = stepIndex > 0 ? trace.steps[stepIndex - 1] : null;
+        const lowest = Math.min(trace.lowestSp - 4, STACK_BASE - 2 * 7);
+        const addresses = [];
+        for (let where = lowest; where <= STACK_BASE; where += 2) addresses.push(where);
+        const frames = liveFrames(state);
+        const frameAt = new Map(frames.map((frame) => [frame.low, frame]));
+        const covered = new Set();
+        frames.forEach((frame) => {
+          for (let where = frame.low; where <= frame.high; where += 2) covered.add(where);
+        });
+        const offsetOwner = bpFrame(state);
+        const reads = new Set(step ? step.reads : []);
+        const writes = new Set(step ? step.writes : []);
+        const pushed = step && (step.op === "push" || step.op === "call");
+        const { sp, bp } = state.regs;
+
+        useEffect(() => {
+          const box = scrollRef.current;
+          if (box) keepRowVisible(box, box.querySelector('[data-sp-row="true"]'), 70);
+        }, [trace, stepIndex]);
+
+        return (
+          <section className="panel stack-panel" aria-labelledby="stack-title">
+            <div className="panel-head">
+              <h2 id="stack-title">Stack in memory</h2>
+              <span className="panel-note">One 16-bit word (2 bytes) per slot · grows up the screen, towards lower addresses</span>
+            </div>
+            <div className="panel-scroll" ref={scrollRef}>
+              <table className="stack-table">
+                <caption className="sr-only">
+                  Stack memory from address {hex4(lowest)} down to the bottom of the stack at {hex4(STACK_BASE)}. SP is {hex4(sp)} and BP is {hex4(bp)}.
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">
+                      <span className="sr-only">Pointer</span>
+                    </th>
+                    <th scope="col">Offset</th>
+                    <th scope="col">Address</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">What it holds</th>
+                    <th scope="col">Frame</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {addresses.map((where) => {
+                    const slot = describeSlot(state, where);
+                    const info = state.meta[where];
+                    const showOffset = offsetOwner !== null && info && info.owner === offsetOwner && where >= sp;
+                    const written = writes.has(where);
+                    const read = reads.has(where) && !written;
+                    const classes = [
+                      slot.kind === "base" ? "slot-base" : slot.live ? "slot-live" : "slot-free",
+                      where === sp ? "is-sp" : "",
+                      written ? "slot-written" : "",
+                      read ? "slot-read" : "",
+                    ].filter(Boolean);
+                    let frameCell = null;
+                    if (frameAt.has(where)) {
+                      const frame = frameAt.get(where);
+                      frameCell = (
+                        <td rowSpan={(frame.high - frame.low) / 2 + 1} className={"frame-cell has-frame" + (frame.current ? " is-current" : "")}>
+                          <span className="frame-name">{frame.fn}</span>
+                          {frame.args.length > 0 && <span className="frame-args">{frame.args.map((arg) => arg.name + "=" + arg.value).join(", ")}</span>}
+                          {frame.current && <span className="frame-current">current</span>}
+                        </td>
+                      );
+                    } else if (!covered.has(where)) {
+                      frameCell = <td className="frame-cell"></td>;
+                    }
+                    return (
+                      <tr key={where} className={classes.join(" ")} data-sp-row={where === sp ? "true" : undefined}>
+                        <td className="ptr-cell">
+                          {where === sp && <span className="ptr ptr-sp">SP ▸</span>}
+                          {where === bp && <span className="ptr ptr-bp">BP ▸</span>}
+                        </td>
+                        <td className="offset-cell">{showOffset ? offsetText(where - bp) : ""}</td>
+                        <td className="addr-cell">{hex4(where)}</td>
+                        <td className="value-cell">{hex4(state.mem[where] || 0)}</td>
+                        <td className={"meaning-cell kind-" + slot.kind}>
+                          {slot.text}
+                          {written && <span className="slot-tag write">{pushed ? "pushed" : "written"}</span>}
+                          {read && <span className="slot-tag read">{slot.live ? "read" : "popped"}</span>}
+                        </td>
+                        {frameCell}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <ul className="legend" aria-label="Key">
+              {KIND_LEGEND.map(([kind, text]) => (
+                <li key={kind} className={"kind-" + kind}>
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      }
+
+      const EMPTY_ANSWER = { tried: [], solved: false, revealed: false };
+      const resolved = (answer) => Boolean(answer && (answer.solved || answer.revealed));
+
+      function initialScenarioId() {
+        const fromHash = decodeURIComponent(window.location.hash.slice(1));
+        return STACK_SCENARIOS.some((scenario) => scenario.id === fromHash) ? fromHash : STACK_SCENARIOS[0].id;
+      }
+
+      function App() {
+        const [scenarioId, setScenarioId] = useState(initialScenarioId);
+        const [stepIndex, setStepIndex] = useState(0);
+        const [predict, setPredict] = useState(false);
+        const [answers, setAnswers] = useState({});
+        const predictHeadingRef = useRef(null);
+        const guideRef = useRef(null);
+        const stepByUser = useRef(false);
+
+        const scenarioNumber = STACK_SCENARIOS.findIndex((scenario) => scenario.id === scenarioId);
+        const scenario = STACK_SCENARIOS[scenarioNumber];
+        const nextScenario = STACK_SCENARIOS[scenarioNumber + 1] || null;
+        const trace = useMemo(() => run(scenario), [scenario]);
+        const total = trace.steps.length;
+        const done = stepIndex >= total;
+        const question = useMemo(() => (predict && !done ? questionFor(trace, stepIndex) : null), [predict, done, trace, stepIndex]);
+        const answer = answers[stepIndex] || EMPTY_ANSWER;
+        const blocked = Boolean(question) && !resolved(answer);
+
+        const tally = useMemo(() => {
+          let answered = 0;
+          let first = 0;
+          Object.keys(answers).forEach((key) => {
+            const entry = answers[key];
+            const asked = questionFor(trace, Number(key));
+            if (!asked || !entry.tried.length && !entry.revealed) return;
+            answered += 1;
+            if (entry.tried[0] === asked.answer) first += 1;
+          });
+          return { answered, first };
+        }, [answers, trace]);
+
+        const changeScenario = (id) => {
+          setScenarioId(id);
+          setStepIndex(0);
+          setAnswers({});
+          try {
+            window.history.replaceState(null, "", "#" + id);
+          } catch (error) {
+            // A local file preview may not allow history changes.
+          }
+        };
+
+        const step = useCallback(() => {
+          if (blocked || done) return;
+          stepByUser.current = true;
+          setStepIndex((index) => Math.min(total, index + 1));
+        }, [blocked, done, total]);
+        const back = useCallback(() => {
+          stepByUser.current = false;
+          setStepIndex((index) => Math.max(0, index - 1));
+        }, []);
+        const restart = () => {
+          stepByUser.current = false;
+          setStepIndex(0);
+        };
+        const runToCallOrReturn = () => {
+          let index = stepIndex;
+          while (index < total) {
+            if (predict && questionFor(trace, index) && !resolved(answers[index])) break;
+            const op = trace.steps[index].op;
+            index += 1;
+            if (op === "call" || op === "ret") break;
+          }
+          stepByUser.current = true;
+          setStepIndex(index);
+        };
+
+        const pick = (id) => {
+          setAnswers((current) => {
+            const entry = current[stepIndex] || EMPTY_ANSWER;
+            if (resolved(entry) || entry.tried.includes(id)) return current;
+            return { ...current, [stepIndex]: { ...entry, tried: entry.tried.concat(id), solved: id === question.answer } };
+          });
+        };
+        const reveal = () => {
+          setAnswers((current) => ({ ...current, [stepIndex]: { ...(current[stepIndex] || EMPTY_ANSWER), revealed: true } }));
+        };
+
+        useEffect(() => {
+          if (guideRef.current) guideRef.current.scrollTop = 0;
+        }, [scenarioId, stepIndex]);
+
+        // Links such as #recursion choose a scenario, even on this page.
+        useEffect(() => {
+          const onHash = () => {
+            const id = initialScenarioId();
+            if (window.location.hash && id !== scenarioId) changeScenario(id);
+          };
+          window.addEventListener("hashchange", onHash);
+          return () => window.removeEventListener("hashchange", onHash);
+        });
+
+        // After a step lands on a new prediction, move focus to it so that
+        // keyboard users are not left on the now-disabled Step button.
+        useEffect(() => {
+          if (stepByUser.current && blocked && predictHeadingRef.current) predictHeadingRef.current.focus();
+          stepByUser.current = false;
+        }, [stepIndex, blocked]);
+
+        useEffect(() => {
+          const onKey = (event) => {
+            if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+            if (event.target.closest && event.target.closest("input, select, textarea, [contenteditable]")) return;
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              step();
+            } else if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              back();
+            }
+          };
+          window.addEventListener("keydown", onKey);
+          return () => window.removeEventListener("keydown", onKey);
+        }, [step, back]);
+
+        return (
+          <div className="stack-lab">
+            <header data-interactive-header>
+              <div>
+                <h1>Stack Frames in Assembly</h1>
+                <p>Step through real 8086 code and watch SP, BP and the stack change in memory</p>
+              </div>
+              <div data-interactive-actions>
+                <select aria-label="Scenario" value={scenarioId} onChange={(event) => changeScenario(event.target.value)}>
+                  {STACK_SCENARIOS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="predict-toggle" aria-pressed={predict} onClick={() => setPredict((value) => !value)}>
+                  <span className="switch" aria-hidden="true"></span>
+                  Predict mode
+                </button>
+              </div>
+            </header>
+
+            <main className="lab-main">
+              <CodePanel trace={trace} stepIndex={stepIndex} done={done} />
+
+              <div className="cpu-panel">
+                <Registers trace={trace} stepIndex={stepIndex} />
+                <section className="panel guide-card" aria-label="Explanation">
+                  <div className="panel-scroll" ref={guideRef}>
+                    {question && (
+                      <PredictSection
+                        question={question}
+                        answer={answer}
+                        tally={tally}
+                        onPick={pick}
+                        onReveal={reveal}
+                        headingRef={predictHeadingRef}
+                      />
+                    )}
+                    {stepIndex === 0 && <IntroSection scenario={scenario} number={scenarioNumber + 1} />}
+                    {stepIndex > 0 && !done && <StepSection trace={trace} stepIndex={stepIndex} />}
+                    {done && <SummarySection scenario={scenario} nextScenario={nextScenario} />}
+                  </div>
+                </section>
+              </div>
+
+              <StackPanel trace={trace} stepIndex={stepIndex} />
+            </main>
+
+            <div className="lab-controls">
+              <div className="control-group">
+                <button type="button" className="btn" onClick={restart} disabled={stepIndex === 0}>
+                  Restart
+                </button>
+                <button type="button" className="btn" onClick={runToCallOrReturn} disabled={done || blocked}>
+                  Run to next call or ret
+                </button>
+              </div>
+              <div className="control-group">
+                {blocked && <span className="blocked-hint">Make your prediction to continue</span>}
+                <span className="step-count" aria-live="polite">
+                  {done ? "Finished: " + total + " instructions" : "Step " + stepIndex + " of " + total}
+                </span>
+                <button type="button" className="btn" onClick={back} disabled={stepIndex === 0} title="Back one instruction (← key)">
+                  ◀ Back
+                </button>
+                {!done && (
+                  <button type="button" className="btn btn-primary" onClick={step} disabled={blocked} title="Run the next instruction (→ key)">
+                    Step ▶
+                  </button>
+                )}
+                {done && nextScenario && (
+                  <button type="button" className="btn btn-primary" onClick={() => changeScenario(nextScenario.id)}>
+                    Next scenario ▶
+                  </button>
+                )}
+                {done && !nextScenario && (
+                  <button type="button" className="btn btn-primary" onClick={() => changeScenario(STACK_SCENARIOS[0].id)}>
+                    Back to scenario 1 ▶
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

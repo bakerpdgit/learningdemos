@@ -830,6 +830,82 @@ if (fs.existsSync(subnetMaskingPath)) {
   }
 }
 
+// The stack-frame walkthroughs run real 8086 code. Every program must
+// assemble to NASM's encodings, finish with the stack balanced and the
+// expected answer, and every prediction must agree with the simulation.
+{
+  const stackSource = fs.readFileSync(path.join(root, 'stack_frames_in_assembly.html'), 'utf8');
+  if (!/\.stack-lab\s*\{[^}]*height:\s*100vh/.test(stackSource)
+    || !/body\[data-site-page="interactive"\]\s*\.stack-lab\s*\{[^}]*height:\s*calc\(100vh - 58px\)/.test(stackSource)) {
+    failures.push('stack_frames_in_assembly.html: the app root must subtract the built site bar from the viewport height');
+  }
+  const machineScript = stackSource.match(/<script id="stack-machine">([\s\S]*?)<\/script>/);
+  if (!machineScript) {
+    failures.push('stack_frames_in_assembly.html: missing the stack-machine script');
+  } else {
+    const { StackLab, STACK_SCENARIOS } = require('vm').runInNewContext(
+      `${machineScript[1]}; ({ StackLab, STACK_SCENARIOS })`, {}, { timeout: 2000 },
+    );
+    const encoded = StackLab.assemble([
+      ['main', 'push bp', ''], ['', 'mov bp, sp', ''], ['', 'sub sp, 2', ''], ['', 'mov ax, [bp+4]', ''],
+      ['', 'add ax, [bp+6]', ''], ['', 'mov [bp-2], ax', ''], ['', 'cmp ax, 0', ''], ['', 'je main', ''],
+      ['', 'call main', ''], ['', 'add sp, 4', ''], ['', 'mov sp, bp', ''], ['', 'pop bp', ''], ['', 'ret', ''],
+      ['', 'mov bx, 10', ''], ['', 'add ax, bx', ''], ['', 'dec ax', ''], ['', 'int 20h', ''],
+    ]).lines.map((line) => line.bytes.map(StackLab.hex2).join(' ')).join(' | ');
+    const nasm = '55 | 89 E5 | 83 EC 02 | 8B 46 04 | 03 46 06 | 89 46 FE | 83 F8 00 | 74 EC | E8 E9 FF | 83 C4 04 | 89 EC | 5D | C3 | BB 0A 00 | 01 D8 | 48 | CD 20';
+    if (encoded !== nasm) failures.push(`stack_frames_in_assembly.html: machine code ${encoded} does not match NASM's ${nasm}`);
+
+    for (const scenario of STACK_SCENARIOS) {
+      let trace;
+      try {
+        trace = StackLab.run(scenario);
+      } catch (error) {
+        failures.push(`stack_frames_in_assembly.html: ${scenario.id} failed to run: ${error.message}`);
+        continue;
+      }
+      const final = trace.states[trace.states.length - 1];
+      for (const [register, value] of Object.entries(scenario.expect)) {
+        if (final.regs[register] !== value) failures.push(`stack_frames_in_assembly.html: ${scenario.id} ends with ${register} = ${final.regs[register]}, expected ${value}`);
+      }
+      if (final.regs.sp !== StackLab.STACK_BASE || final.frameStack.length !== 1) {
+        failures.push(`stack_frames_in_assembly.html: ${scenario.id} must finish with the stack balanced`);
+      }
+      trace.states.forEach((state, index) => {
+        const frames = StackLab.liveFrames(state);
+        frames.forEach((frame, position) => {
+          const next = frames[position + 1];
+          if (next && next.high >= frame.low) failures.push(`stack_frames_in_assembly.html: ${scenario.id} state ${index} has overlapping frames`);
+        });
+      });
+      trace.steps.forEach((step, index) => {
+        const question = StackLab.questionFor(trace, index);
+        if (!question) return;
+        const after = trace.states[index + 1];
+        const before = trace.states[index];
+        const destination = () => after.regs[trace.program.lines[step.line].ins.operands[0].reg];
+        const actual = {
+          sp: () => after.regs.sp,
+          bp: () => after.regs.bp,
+          return: () => after.mem[after.regs.sp],
+          ret: () => after.regs.ip,
+          pop: destination,
+          load: destination,
+          store: () => step.writes[0],
+        }[question.kind]();
+        const ids = question.options.map((option) => option.id);
+        if (question.answer !== StackLab.hex4(actual) || !ids.includes(question.answer)
+          || new Set(ids).size !== ids.length || ids.length !== 4) {
+          failures.push(`stack_frames_in_assembly.html: ${scenario.id} step ${index + 1} prediction does not match the simulation`);
+        }
+        if (['sp', 'bp', 'store'].includes(question.kind)
+          && question.options.some((option) => parseInt(option.id, 16) > StackLab.STACK_BASE || parseInt(option.id, 16) < before.regs.sp - 0x40)) {
+          failures.push(`stack_frames_in_assembly.html: ${scenario.id} step ${index + 1} offers a stack address outside the stack`);
+        }
+      });
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));
