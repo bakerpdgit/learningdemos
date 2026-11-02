@@ -1,0 +1,2319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Transmission Camera Lab</title>
+  <script>
+    (function () {
+      try {
+        var mode = localStorage.getItem("uimode");
+        if (mode === "dark" || (!mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root { color-scheme: light; --page: #f3f6fb; --card: #fff; --ink: #18253b; --muted: #53647a; --line: #dce4ee; --soft: #edf4fa; --accent: #4338ca; --accent-hover: #3730a3; --focus: #087ba6; --data-line: #047857; --clock-line: #b45309; --rx-clock: #6d28d9; --tx-clock: #b45309; --good: #047857; --good-bg: #e8f7f1; --warn: #92400e; --warn-bg: #fdf4e3; --bad: #b42318; --bad-bg: #fdecea; --grid: #e2e8f0; --shadow: 0 3px 16px #18324e09; }
+    html.dark { color-scheme: dark; --page: #0d1727; --card: #162336; --ink: #edf3fc; --muted: #a9bad0; --line: #33445b; --soft: #1b2e43; --accent: #6366f1; --accent-hover: #4f46e5; --focus: #62d6f5; --data-line: #4ade80; --clock-line: #fbbf24; --rx-clock: #c4b5fd; --tx-clock: #fbbf24; --good: #4ade80; --good-bg: #12352a; --warn: #fbbf24; --warn-bg: #3a2c12; --bad: #f87171; --bad-bg: #3b1717; --grid: #26384e; --shadow: 0 3px 16px #0002; }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+    button, select, input { font: inherit; }
+    button, select, summary, input[type=range], input[type=checkbox] { cursor: pointer; }
+    button, select, input[type=text], input[type=number] { border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); padding: 7px 12px; }
+    button { font-weight: 650; white-space: nowrap; }
+    button:hover:not(:disabled) { background: var(--soft); }
+    button:disabled, select:disabled, input:disabled { opacity: .55; cursor: not-allowed; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+    button.primary.stop, button.primary.stop:hover:not(:disabled) { background: #b42318; border-color: #b42318; }
+    button[aria-pressed=true] { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    h1, h2, h3, p { margin: 0; }
+    h2 { font-size: 17px; letter-spacing: -.01em; }
+    h3 { font-size: 14px; }
+    code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+    [data-interactive-header] { background: #4338ca; color: white; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 28px; }
+    [data-interactive-header] h1 { font-size: 22px; }
+    [data-interactive-header] p { font-size: 13px; opacity: .85; }
+    [data-interactive-actions] { display: flex; gap: 12px; min-width: 0; flex-wrap: wrap; }
+    main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 32px; }
+    .card, details.explain { border: 1px solid var(--line); border-radius: 15px; background: var(--card); box-shadow: var(--shadow); min-width: 0; }
+    .eyebrow { font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; }
+
+    .settings { padding: 16px 18px; }
+    .settings-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px 18px; flex-wrap: wrap; }
+    .settings-head p { font-size: 13px; color: var(--muted); }
+    .code-box { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+    .code-box input { width: 150px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; text-transform: uppercase; }
+    .settings-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; margin-top: 10px; }
+    .field { display: grid; gap: 3px; font-size: 13px; color: var(--muted); min-width: 0; }
+    .field select, .field input { width: 100%; min-width: 0; }
+    .field-head { display: flex; justify-content: space-between; gap: 8px; }
+    .field output { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+    .note { margin-top: 8px; font-size: 13px; color: var(--muted); }
+    .note:empty { display: none; }
+    .note strong { color: var(--ink); }
+    .rates { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; margin-top: 10px; }
+    .rate { border: 1px solid var(--line); border-radius: 10px; background: var(--soft); padding: 6px 12px; min-width: 0; }
+    .rate span { display: block; font-size: 11px; color: var(--muted); }
+    .rate strong { display: block; font-size: 18px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+    .rate small { display: block; font-size: 11px; color: var(--muted); }
+    .rate.key { border-color: var(--accent); }
+
+    .lab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-top: 18px; align-items: start; }
+    .lab[data-mode=sender], .lab[data-mode=receiver] { grid-template-columns: minmax(0, 1fr); }
+    .lab[data-mode=humans] { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+    .panel { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+    .pill { font-size: 12px; font-weight: 650; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .pill.tick { border-color: var(--tx-clock); color: var(--tx-clock); }
+    .pill.busy { border-color: var(--accent); color: var(--accent); }
+    html.dark .pill.busy { color: #a5b4fc; border-color: #a5b4fc; }
+    .tx-grid, .rx-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+    .tx-grid > div, .rx-grid > div { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .lab[data-mode=sender] .tx-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+    .lab[data-mode=receiver] .rx-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+    .message-row { display: flex; align-items: flex-end; gap: 8px 10px; flex-wrap: wrap; }
+    .message-row .field { flex: 1 1 220px; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .check { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+
+    .signal-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); aspect-ratio: 16 / 10; }
+    .lab[data-mode=sim] .signal-wrap { aspect-ratio: 5 / 2; }
+    .lab[data-mode=sender] .signal-wrap { aspect-ratio: 16 / 9; }
+    .signal-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .signal-wrap:fullscreen { aspect-ratio: auto; border: 0; border-radius: 0; width: 100vw; height: 100vh; }
+    .signal-caption { font-size: 12px; color: var(--muted); }
+    .lane-labels { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: 4px; text-align: center; font-size: 12px; color: var(--muted); }
+    .lane-labels span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lane-labels strong { display: block; color: var(--ink); font-size: 13px; }
+    .lane-labels .clock strong { color: var(--clock-line); }
+    .progress { height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; }
+    .progress span { display: block; height: 100%; width: 0; background: var(--tx-clock); }
+    .status { font-size: 13px; color: var(--muted); min-height: 20px; }
+    .feedback { border: 1px solid currentColor; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+    .feedback.good { color: var(--good); background: var(--good-bg); }
+    .feedback.try { color: var(--warn); background: var(--warn-bg); }
+    .feedback.bad { color: var(--bad); background: var(--bad-bg); }
+    .flash-warning { margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 10px 18px; flex-wrap: wrap; padding: 12px 16px; border: 2px solid var(--warn); border-radius: 12px; background: var(--warn-bg); font-size: 14px; }
+    .flash-warning.accepted { border-width: 1px; padding: 8px 14px; font-size: 13px; }
+    .flash-warning > div:first-child { flex: 1 1 420px; min-width: 0; }
+    .flash-warning strong { color: var(--warn); }
+
+    .table-wrap { overflow: auto; max-height: 230px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { padding: 4px 9px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    th { position: sticky; top: 0; background: var(--soft); font-size: 12px; color: var(--muted); font-weight: 650; z-index: 1; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tr.bad td { color: var(--bad); }
+    tr.padding td { color: var(--muted); font-style: italic; }
+    .pbit { background: var(--warn-bg); color: var(--warn); border-radius: 3px; padding: 0 2px; font-weight: 700; }
+    .padbit { color: var(--muted); text-decoration: underline dotted; }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 150px; overflow: auto; padding: 2px; }
+    .chip { font: 12px/1.3 ui-monospace, "Cascadia Mono", Consolas, monospace; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; background: var(--soft); color: var(--ink); text-align: center; }
+    .chip small { display: block; font-size: 10px; color: var(--muted); }
+    .chip.start { border-color: var(--good); }
+    .chip.stop { border-color: var(--bad); }
+    .chip.gap-after { margin-right: 8px; }
+    .chip.current { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .chip.current small { color: #e0e7ff; }
+
+    .stage { position: relative; aspect-ratio: 4 / 3; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--soft); touch-action: none; }
+    .stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+    .stage.mirror video { transform: scaleX(-1); }
+    .stage-message { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--muted); font-size: 13px; }
+    .stage-cue { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: clamp(20px, 3vw, 34px); font-weight: 800; color: #fff; text-shadow: 0 2px 8px #000, 0 0 2px #000; padding: 0 12px; }
+    .badge { position: absolute; left: 8px; bottom: 8px; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 650; background: color-mix(in srgb, var(--card) 90%, transparent); color: var(--ink); border: 1px solid var(--line); }
+    .handle { position: absolute; width: 24px; height: 24px; margin: -12px 0 0 -12px; padding: 0; border-radius: 50%; border: 2px solid #fff; background: #4338ca; box-shadow: 0 1px 4px #0008; cursor: grab; touch-action: none; }
+    .handle:hover:not(:disabled) { background: #6366f1; }
+    .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+    .steps li { display: flex; gap: 8px; align-items: baseline; color: var(--muted); }
+    .steps li::before { content: attr(data-number); flex-shrink: 0; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--soft); color: var(--ink); font-size: 11px; font-weight: 700; }
+    .steps li.done { color: var(--ink); }
+    .steps li.done::before { content: "✓"; background: var(--good-bg); color: var(--good); }
+    .privacy { font-size: 12px; color: var(--muted); }
+    .trace-wrap { min-width: 0; }
+    .trace-wrap canvas { width: 100%; display: block; border: 1px solid var(--line); border-radius: 10px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+    .legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; background: var(--c); }
+    .decoded-text { font: 22px/1.35 ui-monospace, "Cascadia Mono", Consolas, monospace; min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .decoded-text .err { color: var(--bad); text-decoration: underline wavy var(--bad); }
+    .decoded-text:empty::before { content: "Nothing received yet"; color: var(--muted); font: 14px "Segoe UI", system-ui, sans-serif; }
+    .frames { display: flex; flex-wrap: wrap; gap: 6px; max-height: 190px; overflow: auto; padding: 2px; }
+    .frame-chip { border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; font-size: 12px; background: var(--card); text-align: center; }
+    .frame-chip strong { display: block; font: 18px ui-monospace, "Cascadia Mono", Consolas, monospace; }
+    .frame-chip code { display: block; }
+    .frame-chip.bad { border-color: var(--bad); background: var(--bad-bg); color: var(--bad); }
+    .frame-chip.padding { opacity: .7; border-style: dashed; }
+
+    details.impair { border: 1px solid var(--line); border-radius: 10px; }
+    details.impair summary { padding: 8px 12px; font-weight: 650; font-size: 14px; }
+    details.impair .impair-body { padding: 4px 12px 12px; display: grid; gap: 10px; }
+    input[type=range] { width: 100%; margin: 4px 0 0; accent-color: #4338ca; }
+    html.dark input[type=range] { accent-color: #818cf8; }
+
+    .explainers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; margin-top: 18px; }
+    details.explain summary { padding: 15px 18px; font-weight: 650; list-style: none; display: flex; align-items: center; gap: 10px; }
+    details.explain summary::-webkit-details-marker { display: none; }
+    details.explain summary::after { content: "+"; margin-left: auto; color: var(--muted); font-size: 22px; font-weight: 400; }
+    details.explain[open] > summary::after { content: "−"; }
+    .number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; background: var(--soft); color: var(--accent); font-size: 12px; }
+    html.dark .number { color: #a5b4fc; }
+    .explanation { padding: 2px 18px 18px; border-top: 1px solid var(--line); font-size: 14px; }
+    .explanation p, .explanation ul { margin: 12px 0 0; color: var(--muted); }
+    .explanation ul { padding-left: 20px; }
+    .explanation strong { color: var(--ink); }
+    .formula { margin-top: 10px; padding: 8px 12px; border-radius: 9px; background: var(--soft); font-family: "Cambria Math", Cambria, Georgia, serif; font-size: 16px; text-align: center; overflow-x: auto; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    @media (max-width: 1100px) {
+      .settings-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); }
+      .explainers { grid-template-columns: minmax(0, 1fr); }
+      .lab[data-mode=sender] .tx-grid, .lab[data-mode=receiver] .rx-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 900px) {
+      main { padding: 16px 16px 28px; }
+      .lab, .lab[data-mode] { grid-template-columns: minmax(0, 1fr); }
+      [data-interactive-header] { flex-wrap: wrap; }
+    }
+  </style>
+  <script src="scripts/site-shell.js"></script>
+</head>
+<body>
+  <header data-interactive-header>
+    <div><h1>Data Transmission Camera Lab</h1><p>Send bits by screen or by arm: serial and parallel, baud rate and bit rate, and clocks</p></div>
+    <div data-interactive-actions>
+      <select id="mode" aria-label="Mode">
+        <option value="sim">Single screen (simulated link)</option>
+        <option value="sender">Device → device: Sender</option>
+        <option value="receiver">Device → device: Receiver</option>
+        <option value="humans">Humans → device</option>
+      </select>
+    </div>
+  </header>
+  <main>
+    <section class="card settings" aria-labelledby="settings-title">
+      <div class="settings-head">
+        <div>
+          <h2 id="settings-title">Link settings</h2>
+          <p>Sender and receiver must agree all of these before anything is sent.</p>
+        </div>
+        <div class="code-box">
+          <label class="field" for="settings-code">Settings code
+            <input id="settings-code" type="text" spellcheck="false" autocomplete="off" aria-describedby="code-feedback">
+          </label>
+          <button id="apply-code" type="button">Use code</button>
+        </div>
+      </div>
+      <div class="settings-grid">
+        <label class="field">Transmission<select id="lines"></select></label>
+        <label class="field">Bits per signal<select id="bps">
+          <option value="1">1 bit (2 levels)</option>
+          <option value="2">2 bits (4 levels)</option>
+          <option value="3">3 bits (8 levels)</option>
+        </select></label>
+        <label class="field">Baud rate<select id="baud"></select></label>
+        <label class="field">Timing<select id="timing">
+          <option value="async">Asynchronous (start/stop bits)</option>
+          <option value="sync">Synchronous (clock line)</option>
+        </select></label>
+        <label class="field">Data<select id="payload">
+          <option value="ascii">7-bit ASCII + parity bit</option>
+          <option value="raw">Raw binary</option>
+        </select></label>
+        <label class="field" data-ascii>Parity<select id="parity">
+          <option value="even">Even</option>
+          <option value="odd">Odd</option>
+        </select></label>
+        <label class="field" data-ascii>Parity bit position<select id="parity-pos">
+          <option value="msb">MSB (bit 7)</option>
+          <option value="lsb">LSB (bit 0)</option>
+        </select></label>
+        <label class="field" data-ascii>Bit order on the line<select id="bit-order">
+          <option value="msb">MSB first</option>
+          <option value="lsb">LSB first (as a UART)</option>
+        </select></label>
+      </div>
+      <p class="note" id="code-feedback" role="status"></p>
+      <p class="note" id="timing-note"></p>
+      <div class="rates" id="rates" aria-live="polite"></div>
+    </section>
+
+    <div class="flash-warning" id="flash-warning" role="alert" hidden>
+      <div><strong id="flash-title">⚠ Photosensitivity warning</strong> <span id="flash-text"></span></div>
+      <div class="row" id="flash-actions">
+        <button id="flash-accept" type="button">Show the flashing signal</button>
+        <button id="flash-safe" class="primary" type="button">Use safe settings</button>
+      </div>
+    </div>
+
+    <div class="lab" id="lab" data-mode="sim">
+      <section class="card panel" id="sender-card" aria-labelledby="sender-title">
+        <div class="card-head">
+          <div><div class="eyebrow" id="sender-eyebrow">Sender</div><h2 id="sender-title">Transmit</h2></div>
+          <span class="pill" id="sender-clock">Sender clock: stopped</span>
+        </div>
+        <div class="tx-grid">
+          <div>
+            <div class="message-row">
+              <label class="field" for="message"><span id="message-label">Message (ASCII characters)</span>
+                <input id="message" type="text" value="Hi!" spellcheck="false" autocomplete="off" maxlength="40">
+              </label>
+              <label class="check"><input id="repeat" type="checkbox"> Repeat</label>
+              <button id="transmit" class="primary" type="button">Transmit</button>
+            </div>
+            <p class="feedback try" id="message-error" role="alert" hidden></p>
+            <div class="row" data-modes="humans">
+              <label class="check"><input id="show-script" type="checkbox" checked> Show the senders' script</label>
+              <label class="check"><input id="tick-sound" type="checkbox"> Tick sound on each sender clock tick</label>
+            </div>
+            <div id="signal-area">
+              <div class="signal-wrap" id="signal-wrap">
+                <canvas id="signal" role="img" aria-label="Signal panel: one bar per line, bar height shows the signal level"></canvas>
+              </div>
+              <div class="lane-labels" id="lane-labels" aria-live="off"></div>
+              <div class="progress" data-modes="humans" aria-hidden="true"><span id="symbol-progress"></span></div>
+            </div>
+            <p class="signal-caption" id="signal-caption"></p>
+            <div class="row" data-modes="sender">
+              <button id="lock-pattern" type="button" aria-pressed="false">Show lock-on pattern</button>
+              <button id="fullscreen" type="button">Full-screen signal</button>
+            </div>
+            <p class="status" id="sender-status" role="status"></p>
+          </div>
+          <div>
+            <h3>What will be sent</h3>
+            <div class="table-wrap"><table id="frame-table"></table></div>
+            <div>
+              <p class="small muted" id="stream-title">Symbols on the line (one per signal change)</p>
+              <div class="chips" id="symbol-stream"></div>
+            </div>
+            <details class="impair" id="impairments" data-modes="sim sender">
+              <summary>Channel impairments</summary>
+              <div class="impair-body">
+                <label class="field"><span class="field-head"><span>Skew: each extra line arrives later by</span><output id="skew-value" for="skew">0 ms</output></span>
+                  <input id="skew" type="range" min="0" max="300" step="10" value="0">
+                </label>
+                <label class="field"><span class="field-head"><span>Crosstalk from neighbouring lines</span><output id="crosstalk-value" for="crosstalk">0%</output></span>
+                  <input id="crosstalk" type="range" min="0" max="30" step="1" value="0">
+                </label>
+                <label class="field"><span class="field-head"><span>Noise</span><output id="noise-value" for="noise">0%</output></span>
+                  <input id="noise" type="range" min="0" max="25" step="1" value="0">
+                </label>
+                <label class="field">Channel bandwidth<select id="bandwidth">
+                  <option value="0">Unlimited</option>
+                  <option value="20">20 Hz</option>
+                  <option value="10">10 Hz</option>
+                  <option value="5">5 Hz</option>
+                  <option value="2">2 Hz</option>
+                  <option value="1">1 Hz</option>
+                  <option value="0.5">0.5 Hz</option>
+                </select></label>
+                <p class="small muted" id="impair-note"></p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="card panel" id="receiver-card" aria-labelledby="receiver-title">
+        <div class="card-head">
+          <div><div class="eyebrow">Receiver</div><h2 id="receiver-title">Receive and decode</h2></div>
+          <span class="pill" id="receiver-state">Listening</span>
+        </div>
+        <div class="rx-grid">
+          <div>
+            <div data-modes="receiver humans" id="camera-area">
+              <div class="stage" id="stage">
+                <video id="video" muted playsinline aria-hidden="true"></video>
+                <canvas id="overlay" aria-hidden="true"></canvas>
+                <div id="handles"></div>
+                <p class="stage-message" id="stage-message"></p>
+                <p class="stage-cue" id="stage-cue" aria-live="assertive" hidden></p>
+                <span class="badge" id="badge" hidden></span>
+              </div>
+              <div class="row" style="margin-top: 10px">
+                <button id="camera-toggle" type="button">Start camera</button>
+                <button id="lock" type="button" data-modes="receiver" disabled>Lock on</button>
+                <button id="calibrate" type="button" data-modes="humans" disabled>Calibrate arms</button>
+              </div>
+              <ol class="steps" id="steps" style="margin-top: 10px"></ol>
+              <p class="status" id="camera-status" role="status"></p>
+              <p class="privacy">Video is processed in this browser only. Nothing is recorded or uploaded.</p>
+            </div>
+            <div data-modes="sim">
+              <div class="signal-wrap"><canvas id="rx-signal" role="img" aria-label="Signal arriving at the receiver after the channel"></canvas></div>
+              <p class="signal-caption">Signal arriving at the receiver, after the channel. Dashed lines mark the levels it must tell apart (for 1 bit, the HIGH/LOW threshold).</p>
+            </div>
+          </div>
+          <div>
+            <div class="trace-wrap">
+              <h3 style="margin-bottom: 6px">Signal trace</h3>
+              <canvas id="trace" role="img" aria-label="Signal level against time for each line, with sampling points marked"></canvas>
+              <div class="legend" id="legend" style="margin-top: 6px"></div>
+            </div>
+            <div>
+              <h3 style="margin-bottom: 6px">Decoded message</h3>
+              <div class="decoded-text" id="decoded-text" aria-live="polite"></div>
+              <p class="status" id="compare" role="status" style="margin-top: 6px"></p>
+            </div>
+            <div class="frames" id="frames" aria-label="Decoded frames"></div>
+            <div>
+              <h3 style="margin-bottom: 6px">Received symbols</h3>
+              <div class="table-wrap" id="symbol-wrap">
+                <table>
+                  <thead><tr><th scope="col">#</th><th scope="col">Time (s)</th><th scope="col">Sampled as</th><th scope="col">Level(s)</th><th scope="col">Bits</th><th scope="col">Check</th></tr></thead>
+                  <tbody id="symbol-rows"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="row"><button id="rx-clear" type="button">Clear received</button></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="explainers">
+      <details class="explain"><summary><span class="number">01</span>Serial and parallel transmission</summary>
+        <div class="explanation">
+          <p><strong>Serial</strong> transmission sends bits one after another along a single line. <strong>Parallel</strong> transmission sends several bits at the same time, one on each of several lines.</p>
+          <p>Over short distances, parallel can move more bits per signal change. Over longer distances it suffers from:</p>
+          <ul>
+            <li><strong>Skew</strong>: bits sent together on different lines arrive at slightly different times, so the receiver may sample a line before its new value arrives.</li>
+            <li><strong>Crosstalk</strong>: the signal on one line interferes with the lines next to it.</li>
+          </ul>
+          <p>Serial avoids both problems and is cheaper to cable, so long-distance and modern high-speed links are usually serial. To see this, set parallel lines, then add skew or crosstalk under <em>Channel impairments</em>. Skew is a fixed delay, so it does more damage at higher baud rates.</p>
+        </div>
+      </details>
+      <details class="explain"><summary><span class="number">02</span>Baud rate and bit rate</summary>
+        <div class="explanation">
+          <p>The <strong>baud rate</strong> is the number of signal changes (symbols) per second. The <strong>bit rate</strong> is the number of bits sent per second.</p>
+          <div class="formula">bit rate = baud rate × bits per signal</div>
+          <p>Sending <i>n</i> bits per signal needs 2<sup><i>n</i></sup> distinguishable levels. With 4 levels (2 bits) at 5 baud, the bit rate is 10 bits per second. Parallel lines multiply the total again.</p>
+          <p>More levels packed into the same range are closer together, so noise causes more errors. Try 3 bits per signal with some noise.</p>
+          <p>Start bits, stop bits, parity bits and the clock line are all overheads. That is why the useful data rate is lower than the bit rate.</p>
+        </div>
+      </details>
+      <details class="explain"><summary><span class="number">03</span>Bandwidth and bit rate</summary>
+        <div class="explanation">
+          <p><strong>Bandwidth</strong> is the range of signal frequencies a channel can carry. A channel with a higher bandwidth lets the signal change level more quickly.</p>
+          <p>The bit rate is directly proportional to the bandwidth. Try a low bandwidth: at a low baud rate each level still settles before it is sampled. Raise the baud rate and the levels smear into each other until the receiver misreads them.</p>
+          <p>People have a very low bandwidth: you cannot move your arms many times a second. That is why the humans mode only offers slow baud rates.</p>
+        </div>
+      </details>
+      <details class="explain"><summary><span class="number">04</span>Synchronous and asynchronous</summary>
+        <div class="explanation">
+          <p>In <strong>synchronous</strong> transmission, data is sent at regular intervals timed by a clock signal shared by sender and receiver. Here that is the amber clock line. The data changes when the clock falls and is read when the clock rises. Synchronous transmission can be serial or parallel.</p>
+          <p>In <strong>asynchronous</strong> serial transmission there is no shared clock. Each end has its own clock, set to the agreed baud rate. Each frame is wrapped in:</p>
+          <ul>
+            <li>a <strong>start bit</strong> (here HIGH). Its edge starts the receiver's clock, so the clocks are synchronised for this frame.</li>
+            <li>a <strong>stop bit</strong> (here LOW). It must be the opposite of the start bit so the line always returns to idle and the next start bit is a detectable change. It can last any length of time.</li>
+          </ul>
+          <p>In the trace, the receiver's clock ticks in the middle of each bit, counted from the start-bit edge.</p>
+        </div>
+      </details>
+      <details class="explain"><summary><span class="number">05</span>ASCII and parity</summary>
+        <div class="explanation">
+          <p>Each character is sent as its 7-bit ASCII code plus one <strong>parity bit</strong>, which gives 8 bits.</p>
+          <p>With <strong>even parity</strong>, the parity bit is set so that the total number of 1s, including the parity bit, is even. With <strong>odd parity</strong>, the total is odd.</p>
+          <p>The receiver counts the 1s again. A mismatch shows an error. Parity detects any odd number of flipped bits, but it cannot detect two flipped bits, and it cannot tell which bit is wrong.</p>
+          <p>The parity bit can sit in the most or least significant position, and the bits can be sent MSB first or LSB first. Both ends must agree which.</p>
+        </div>
+      </details>
+      <details class="explain"><summary><span class="number">06</span>Setting up the cameras</summary>
+        <div class="explanation">
+          <ul>
+            <li><strong>Device → device:</strong> open this page on two computers. Choose <em>Sender</em> on one and <em>Receiver</em> on the other, and type the sender's settings code into the receiver.</li>
+            <li>Make the sender's signal full screen and point the receiver's camera at it, filling as much of the picture as you can. Turn the sender's screen brightness up and avoid reflections.</li>
+            <li>While the sender shows the flashing lock-on pattern, press <strong>Lock on</strong>. Keep both computers still afterwards.</li>
+            <li>A 30 frames per second camera needs about 3 frames per symbol, so about 10 baud is the useful limit.</li>
+            <li><strong>Humans:</strong> stand side by side about 2–3 m from the camera, facing it, with your hips and heads in view. Hold a forearm level across your body: at your hips for the lowest level, at your shoulders for the highest.</li>
+            <li><strong>Photosensitivity:</strong> the signal never flashes more than 3 times a second unless you accept a warning first. That happens with a synchronous clock above 3 baud, data above 6 baud, or noise switched on. Check that nobody watching has photosensitive epilepsy before you accept.</li>
+            <li>Humans mode loads a pose-detection model (about 6 MB) the first time. Video is still processed only in this browser.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+    <noscript>This activity needs JavaScript enabled.</noscript>
+  </main>
+
+  <script id="comms-codec">
+    // Pure link logic shared by the page and its regression check. Times are in
+    // seconds; schedule positions are in symbol periods (1 / baud). Line values
+    // are normalised so 0 is the lowest level and 1 the highest.
+    const LINE_IDLE = 0;
+
+    function normaliseSettings(raw) {
+      const lanes = [1, 2, 3, 4, 8].includes(Number(raw.lanes)) ? Number(raw.lanes) : 1;
+      const bps = Math.min(3, Math.max(1, Math.round(Number(raw.bps)) || 1));
+      const baud = Number(raw.baud) > 0 ? Number(raw.baud) : 1;
+      return {
+        lanes,
+        bps,
+        baud,
+        // Asynchronous framing only applies to a single serial line.
+        timing: lanes > 1 || raw.timing === 'sync' ? 'sync' : 'async',
+        payload: raw.payload === 'raw' ? 'raw' : 'ascii',
+        parity: raw.parity === 'odd' ? 'odd' : 'even',
+        parityPos: raw.parityPos === 'lsb' ? 'lsb' : 'msb',
+        bitOrder: raw.bitOrder === 'lsb' ? 'lsb' : 'msb',
+      };
+    }
+
+    function levelCount(settings) { return 2 ** settings.bps; }
+    function lineCount(settings) { return settings.lanes + (settings.timing === 'sync' ? 1 : 0); }
+
+    function toBits(value, width) {
+      const bits = [];
+      for (let i = width - 1; i >= 0; i -= 1) bits.push((value >> i) & 1);
+      return bits;
+    }
+    function fromBits(bits) { return bits.reduce((value, bit) => value * 2 + bit, 0); }
+
+    function parityBit(bits, parity) {
+      const ones = bits.reduce((count, bit) => count + bit, 0);
+      return parity === 'odd' ? 1 - (ones % 2) : ones % 2;
+    }
+
+    function quantiseLevel(value, levels) {
+      return Math.min(levels - 1, Math.max(0, Math.round(value * (levels - 1))));
+    }
+
+    function asciiWord(code, settings, padding = false) {
+      const data = toBits(code, 7);
+      const parity = parityBit(data, settings.parity);
+      const word = settings.parityPos === 'msb' ? [parity, ...data] : [...data, parity];
+      const bits = settings.bitOrder === 'lsb' ? word.slice().reverse() : word.slice();
+      return { char: String.fromCharCode(code), code, data, parity, word, bits, padding };
+    }
+
+    // Words are what one frame carries: an 8-bit ASCII + parity word, or raw bits.
+    function makeWords(input, settings) {
+      const words = [];
+      if (settings.payload === 'ascii') {
+        for (const character of input.text || '') words.push(asciiWord(character.charCodeAt(0), settings));
+        if (settings.timing === 'sync') {
+          // A continuous stream must fill its last symbol; whole spare words become NUL fill characters.
+          const perSymbol = settings.lanes * settings.bps;
+          while ((perSymbol - ((8 * words.length) % perSymbol)) % perSymbol >= 8) words.push(asciiWord(0, settings, true));
+        }
+      } else {
+        const bits = (input.bits || []).slice();
+        if (settings.timing === 'sync') {
+          words.push({ bits, word: bits, padBits: 0 });
+        } else {
+          for (let i = 0; i < bits.length; i += 8) {
+            const chunk = bits.slice(i, i + 8);
+            const padBits = 8 - chunk.length;
+            while (chunk.length < 8) chunk.push(0);
+            words.push({ bits: chunk, word: chunk, padBits });
+          }
+        }
+      }
+      return words;
+    }
+
+    // Lane 0 carries the first bits of each symbol; each lane's bits form its level, MSB first.
+    function bitsToSymbols(bits, lanes, bps) {
+      const perSymbol = lanes * bps;
+      const padding = (perSymbol - (bits.length % perSymbol)) % perSymbol;
+      const padded = bits.concat(new Array(padding).fill(0));
+      const symbols = [];
+      for (let i = 0; i < padded.length; i += perSymbol) {
+        const levels = [];
+        for (let lane = 0; lane < lanes; lane += 1) levels.push(fromBits(padded.slice(i + lane * bps, i + (lane + 1) * bps)));
+        symbols.push(levels);
+      }
+      return { symbols, padding };
+    }
+
+    function symbolsToBits(symbols, bps) {
+      return symbols.flatMap((levels) => levels.flatMap((level) => toBits(level, bps)));
+    }
+
+    function buildSchedule(input, settings, options = {}) {
+      const top = levelCount(settings) - 1;
+      const leadIn = options.leadIn ?? 2;
+      const tail = options.tail ?? 2;
+      const gap = options.gap || (() => Math.random() * 2);
+      const words = makeWords(input, settings);
+      const idle = new Array(settings.lanes).fill(LINE_IDLE);
+      const segments = [];
+      let at = 0;
+      const add = (length, levels, role, extra = {}) => {
+        segments.push({ start: at, end: at + length, levels, role, ...extra });
+        at += length;
+      };
+      add(leadIn, idle, 'idle');
+      let padding = 0;
+      if (settings.timing === 'sync') {
+        const out = bitsToSymbols(words.flatMap((word) => word.bits), settings.lanes, settings.bps);
+        const perSymbol = settings.lanes * settings.bps;
+        padding = out.padding;
+        out.symbols.forEach((levels, index) => add(1, levels, 'data', {
+          symbol: index,
+          word: Math.min(words.length - 1, Math.floor((index * perSymbol) / 8)),
+          padBits: index === out.symbols.length - 1 ? out.padding : 0,
+        }));
+      } else {
+        words.forEach((word, index) => {
+          add(1, [top], 'start', { word: index });
+          const out = bitsToSymbols(word.bits, 1, settings.bps);
+          padding += out.padding;
+          out.symbols.forEach((levels, symbol) => add(1, levels, 'data', {
+            word: index,
+            symbol,
+            padBits: symbol === out.symbols.length - 1 ? out.padding : 0,
+          }));
+          // The stop bit lasts at least one symbol; the idle gap after it can be any length.
+          add(1 + (index < words.length - 1 ? Math.max(0, gap()) : 0), [LINE_IDLE], 'stop', { word: index });
+        });
+      }
+      add(tail, idle, 'idle');
+      return { settings, segments, words, padding, length: at, duration: at / settings.baud };
+    }
+
+    function scheduleAt(schedule, t) {
+      const { settings, segments } = schedule;
+      const top = levelCount(settings) - 1;
+      const u = t * settings.baud;
+      let index = -1;
+      if (u >= 0 && u < schedule.length) {
+        let low = 0;
+        let high = segments.length - 1;
+        while (low <= high) {
+          const mid = (low + high) >> 1;
+          if (u < segments[mid].start) high = mid - 1;
+          else if (u >= segments[mid].end) low = mid + 1;
+          else { index = mid; break; }
+        }
+      }
+      const segment = index >= 0 ? segments[index] : null;
+      const levels = segment ? segment.levels : new Array(settings.lanes).fill(LINE_IDLE);
+      const clock = settings.timing === 'sync'
+        ? (segment && segment.role === 'data' && u - segment.start >= 0.5 ? 1 : 0)
+        : null;
+      return { lanes: levels.map((level) => level / top), clock, index, segment, phase: segment ? (u - segment.start) : 0 };
+    }
+
+    // The channel between sender and receiver: per-line skew, a first-order
+    // bandwidth limit, crosstalk between neighbouring lines and random noise.
+    class Channel {
+      constructor(settings, options = {}, random = Math.random) {
+        this.settings = settings;
+        this.options = { skew: 0, crosstalk: 0, noise: 0, bandwidth: 0, ...options };
+        this.random = random;
+        this.y = null;
+        this.t = null;
+      }
+
+      setOptions(options) { Object.assign(this.options, options); }
+
+      ideal(idealAt, t) {
+        const now = idealAt(t);
+        const values = [];
+        for (let lane = 0; lane < this.settings.lanes; lane += 1) {
+          values.push(lane === 0 || !this.options.skew ? now.lanes[lane] : idealAt(t - lane * this.options.skew).lanes[lane]);
+        }
+        if (this.settings.timing === 'sync') values.push(now.clock);
+        return values;
+      }
+
+      sampleAt(t, idealAt) {
+        const { bandwidth, crosstalk, noise } = this.options;
+        if (!bandwidth || this.y === null || t < this.t || t - this.t > 5) {
+          this.y = this.ideal(idealAt, t);
+          this.t = t;
+        } else {
+          const tau = 1 / (2 * Math.PI * bandwidth);
+          while (this.t < t) {
+            const dt = Math.min(1 / 240, t - this.t);
+            this.t += dt;
+            const target = this.ideal(idealAt, this.t);
+            const k = 1 - Math.exp(-dt / tau);
+            for (let i = 0; i < this.y.length; i += 1) this.y[i] += (target[i] - this.y[i]) * k;
+          }
+        }
+        const y = this.y;
+        const out = y.map((value, i) => {
+          let mixed = value;
+          if (crosstalk) {
+            const near = [y[i - 1], y[i + 1]].filter((neighbour) => neighbour !== undefined);
+            mixed = value * (1 - crosstalk * near.length) + crosstalk * near.reduce((sum, neighbour) => sum + neighbour, 0);
+          }
+          if (noise) mixed += noise * this.gaussian();
+          return Math.min(1, Math.max(0, mixed));
+        });
+        return { lanes: out.slice(0, this.settings.lanes), clock: this.settings.timing === 'sync' ? out[this.settings.lanes] : null };
+      }
+
+      gaussian() {
+        const u = 1 - this.random();
+        const v = this.random();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      }
+    }
+
+    function decodeWord(wire, settings) {
+      if (settings.payload === 'raw') return { bits: wire.slice() };
+      const word = settings.bitOrder === 'lsb' ? wire.slice().reverse() : wire.slice();
+      const parity = settings.parityPos === 'msb' ? word[0] : word[7];
+      const data = settings.parityPos === 'msb' ? word.slice(1) : word.slice(0, 7);
+      const code = fromBits(data);
+      return { word, data, parity, code, char: String.fromCharCode(code), parityOk: parityBit(data, settings.parity) === parity };
+    }
+
+    // Synchronous receiver: reads every data line on each rising edge of the clock line.
+    class SyncDecoder {
+      constructor(settings) {
+        this.settings = settings;
+        this.levels = levelCount(settings);
+        this.clockHigh = false;
+        this.bits = [];
+        this.lastEdge = -Infinity;
+        this.count = 0;
+      }
+
+      get state() { return this.bits.length || this.count ? 'clocked' : 'waiting'; }
+
+      feed(t, lanes, clock) {
+        const events = [];
+        const period = 1 / this.settings.baud;
+        if (this.bits.length && t - this.lastEdge > 2.5 * period) {
+          events.push({ type: 'padding', t, bits: this.bits });
+          this.bits = [];
+        }
+        if (!this.clockHigh && clock > 0.6) {
+          this.clockHigh = true;
+          this.lastEdge = t;
+          const levels = lanes.map((value) => quantiseLevel(value, this.levels));
+          const bits = levels.flatMap((level) => toBits(level, this.settings.bps));
+          this.count += 1;
+          events.push({ type: 'symbol', t, role: 'clocked', levels, values: lanes.slice(), bits, ok: true });
+          for (const bit of bits) {
+            this.bits.push(bit);
+            if (this.bits.length === 8) {
+              events.push(this.frame(t, this.bits));
+              this.bits = [];
+            }
+          }
+        } else if (this.clockHigh && clock < 0.4) {
+          this.clockHigh = false;
+        }
+        return events;
+      }
+
+      frame(t, wire) {
+        const decoded = decodeWord(wire, this.settings);
+        return { type: 'frame', t, wire: wire.slice(), framingOk: true, padding: this.settings.payload === 'ascii' && decoded.code === 0, ...decoded };
+      }
+    }
+
+    // Asynchronous receiver: a LOW→HIGH edge starts its own clock, which then
+    // samples the middle of the start bit, every data symbol and the stop bit.
+    class AsyncDecoder {
+      constructor(settings) {
+        this.settings = settings;
+        this.levels = levelCount(settings);
+        this.dataSymbols = Math.ceil(8 / settings.bps);
+        this.state = 'waitLow';
+        this.prev = null;
+        this.frameState = null;
+      }
+
+      feed(t, lanes) {
+        const events = [];
+        const value = lanes[0];
+        const prev = this.prev;
+        const period = 1 / this.settings.baud;
+        this.prev = { t, value };
+        if (this.state === 'waitLow') {
+          if (value < 0.25) this.state = 'armed';
+          return events;
+        }
+        if (this.state === 'armed') {
+          if (!prev || prev.value > 0.5 || value <= 0.5) return events;
+          const edge = prev.t + ((0.5 - prev.value) / (value - prev.value)) * (t - prev.t);
+          const times = [];
+          for (let k = 0; k < this.dataSymbols + 2; k += 1) times.push(edge + (k + 0.5) * period);
+          this.frameState = { edge, times, k: 0, bits: [] };
+          this.state = 'frame';
+          events.push({ type: 'edge', t: edge, times });
+        }
+        const frame = this.frameState;
+        while (this.state === 'frame' && frame.k < frame.times.length && t >= frame.times[frame.k]) {
+          const at = frame.times[frame.k];
+          const sample = prev && Math.abs(prev.t - at) < Math.abs(t - at) ? prev.value : value;
+          const level = quantiseLevel(sample, this.levels);
+          if (frame.k === 0) {
+            const ok = sample > 0.5;
+            events.push({ type: 'symbol', t: at, role: 'start', levels: [level], values: [sample], bits: [], ok });
+            if (!ok) {
+              events.push({ type: 'falseStart', t: at });
+              this.state = 'waitLow';
+              break;
+            }
+          } else if (frame.k <= this.dataSymbols) {
+            const bits = toBits(level, this.settings.bps);
+            frame.bits.push(...bits);
+            events.push({ type: 'symbol', t: at, role: 'data', levels: [level], values: [sample], bits, ok: true });
+          } else {
+            const ok = sample < 0.5;
+            events.push({ type: 'symbol', t: at, role: 'stop', levels: [level], values: [sample], bits: [], ok });
+            const decoded = decodeWord(frame.bits.slice(0, 8), this.settings);
+            events.push({ type: 'frame', t: at, wire: frame.bits.slice(0, 8), framingOk: ok, padding: false, ...decoded });
+            this.state = ok ? 'armed' : 'waitLow';
+          }
+          frame.k += 1;
+        }
+        return events;
+      }
+    }
+
+    function createDecoder(settings) {
+      return settings.timing === 'sync' ? new SyncDecoder(settings) : new AsyncDecoder(settings);
+    }
+
+    // Worst-case on/off flashes per second of a signal bar, for the WCAG 2.3.1
+    // limit of three flashes a second. A synchronous clock bar completes a full
+    // cycle every symbol; a data bar can at most switch on in one symbol and off in the next.
+    const FLASH_LIMIT = 3;
+    function flashesPerSecond(settings) {
+      return settings.timing === 'sync' ? settings.baud : settings.baud / 2;
+    }
+
+    function linkRates(settings) {
+      const bitsPerSymbol = settings.lanes * settings.bps;
+      const bitRate = settings.baud * bitsPerSymbol;
+      const usefulBits = settings.payload === 'ascii' ? 7 : 8;
+      const symbolsPerWord = settings.timing === 'async' ? 2 + Math.ceil(8 / bitsPerSymbol) : 8 / bitsPerSymbol;
+      return {
+        levels: levelCount(settings),
+        bitsPerSymbol,
+        bitRatePerLine: settings.baud * settings.bps,
+        bitRate,
+        linesUsed: lineCount(settings),
+        symbolsPerWord,
+        dataRate: (usefulBits * settings.baud) / symbolsPerWord,
+      };
+    }
+
+    function encodeSettings(settings) {
+      return [
+        settings.lanes,
+        settings.bps,
+        settings.baud,
+        settings.timing === 'sync' ? 'S' : 'A',
+        (settings.payload === 'ascii' ? 'A' : 'R') + (settings.parity === 'even' ? 'E' : 'O')
+          + (settings.parityPos === 'msb' ? 'M' : 'L') + (settings.bitOrder === 'msb' ? 'M' : 'L'),
+      ].join('-');
+    }
+
+    function decodeSettings(code) {
+      const match = /^([1-8])-([1-3])-(\d+(?:\.\d+)?)-([SA])-([AR])([EO])([ML])([ML])$/i.exec(String(code).trim());
+      if (!match || ![1, 2, 3, 4, 8].includes(Number(match[1]))) return null;
+      const upper = match.slice(4).map((part) => part.toUpperCase());
+      return normaliseSettings({
+        lanes: match[1],
+        bps: match[2],
+        baud: match[3],
+        timing: upper[0] === 'S' ? 'sync' : 'async',
+        payload: upper[1] === 'A' ? 'ascii' : 'raw',
+        parity: upper[2] === 'E' ? 'even' : 'odd',
+        parityPos: upper[3] === 'M' ? 'msb' : 'lsb',
+        bitOrder: upper[4] === 'M' ? 'msb' : 'lsb',
+      });
+    }
+
+    // Maps the unit square (u right, v down) onto a quadrilateral [tl, tr, br, bl].
+    function squareToQuad(corners) {
+      const [p0, p1, p2, p3] = corners;
+      const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+      const dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+      let g = 0;
+      let h = 0;
+      const det = dx1 * dy2 - dx2 * dy1;
+      if ((dx3 || dy3) && det) {
+        g = (dx3 * dy2 - dx2 * dy3) / det;
+        h = (dx1 * dy3 - dx3 * dy1) / det;
+      }
+      const a = p1.x - p0.x + g * p1.x, b = p3.x - p0.x + h * p3.x, c = p0.x;
+      const d = p1.y - p0.y + g * p1.y, e = p3.y - p0.y + h * p3.y, f = p0.y;
+      return (u, v) => {
+        const w = g * u + h * v + 1;
+        return { x: (a * u + b * v + c) / w, y: (d * u + e * v + f) / w };
+      };
+    }
+
+    // Corners of a labelled blob from the extremes of x + y and x − y.
+    function quadCorners(labels, label, width, height) {
+      let tl = null, tr = null, br = null, bl = null;
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (labels[y * width + x] !== label) continue;
+          const sum = x + y;
+          const diff = x - y;
+          if (!tl || sum < tl.x + tl.y) tl = { x, y };
+          if (!br || sum > br.x + br.y) br = { x, y };
+          if (!tr || diff > tr.x - tr.y) tr = { x, y };
+          if (!bl || diff < bl.x - bl.y) bl = { x, y };
+        }
+      }
+      return tl ? [tl, tr, br, bl] : null;
+    }
+
+    function largestBlob(mask, labels, stack, width, height) {
+      labels.fill(0);
+      let label = 0;
+      let best = null;
+      const size = width * height;
+      for (let p = 0; p < size; p += 1) {
+        if (!mask[p] || labels[p]) continue;
+        label += 1;
+        let top = 0;
+        stack[top++] = p;
+        labels[p] = label;
+        let count = 0, minX = width, maxX = 0, minY = height, maxY = 0;
+        while (top) {
+          const q = stack[--top];
+          const x = q % width;
+          const y = (q - x) / width;
+          count += 1;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          if (x > 0 && mask[q - 1] && !labels[q - 1]) { labels[q - 1] = label; stack[top++] = q - 1; }
+          if (x < width - 1 && mask[q + 1] && !labels[q + 1]) { labels[q + 1] = label; stack[top++] = q + 1; }
+          if (y > 0 && mask[q - width] && !labels[q - width]) { labels[q - width] = label; stack[top++] = q - width; }
+          if (y < height - 1 && mask[q + width] && !labels[q + width]) { labels[q + width] = label; stack[top++] = q + width; }
+        }
+        if (!best || count > best.count) best = { label, count, minX, maxX, minY, maxY };
+      }
+      return best;
+    }
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const $ = (id) => document.getElementById(id);
+      const PROCESS_WIDTH = 320;
+      const SIM_FPS = 30;
+      const LANE_SAMPLES = 24;
+      const LOCK_SECONDS = 3;
+      const MAX_SYMBOL_ROWS = 300;
+      const BAUDS = { device: [0.5, 1, 2, 4, 6, 8, 10], humans: [0.1, 0.2, 0.25, 0.5, 1] };
+      const LINES = { device: [1, 2, 4, 8], humans: [1, 2, 3, 4] };
+      const DEFAULT_BAUD = { device: 2, humans: 0.25 };
+      const POSE_LIBRARY = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+      const POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+      const SIGNAL = { background: '#05070b', guide: '#1a2333', data: '#4ade80', clock: '#fbbf24', lock: '#f1f5f9' };
+      const CONTROL_PICTURES = (code) => (code < 32 ? String.fromCharCode(0x2400 + code) : code === 127 ? '␡' : String.fromCharCode(code));
+
+      const state = {
+        mode: 'sim',
+        settings: null,
+        channel: null,
+        tx: null,
+        txLog: [],
+        lastSent: null,
+        lockPattern: false,
+        flashAccepted: false,
+        lastSegment: -1,
+        lastTickCount: 0,
+        audio: null,
+        rx: null,
+        simNext: null,
+        camera: {
+          stream: null,
+          loopToken: 0,
+          procCtx: document.createElement('canvas').getContext('2d', { willReadFrequently: true }),
+          overlayCtx: $('overlay').getContext('2d'),
+          procW: 0,
+          procH: 0,
+          lum: null,
+          locking: null,
+          lockMin: null,
+          lockMax: null,
+          corners: null,
+          points: null,
+          lastLevels: null,
+        },
+        pose: { landmarker: null, loading: null, people: [], calibration: null, calibrating: null, history: [] },
+      };
+
+      const group = () => (state.mode === 'humans' ? 'humans' : 'device');
+      const now = () => performance.now() / 1000;
+      const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+      const formatRate = (value) => (value >= 10 || Number.isInteger(value) ? String(Math.round(value * 100) / 100) : value.toFixed(2).replace(/0$/, ''));
+      const baudText = (baud) => `${baud} Bd`;
+
+      // ---------- Settings ----------
+      function fillSelect(select, options, value) {
+        select.innerHTML = '';
+        for (const option of options) select.append(new Option(option.label, option.value));
+        select.value = options.some((option) => String(option.value) === String(value)) ? String(value) : String(options[0].value);
+      }
+
+      function rebuildSettingOptions(preferred = {}) {
+        const g = group();
+        const lines = preferred.lanes ?? Number($('lines').value || 1);
+        const lineOptions = LINES[g].map((n) => ({
+          value: n,
+          label: n === 1 ? 'Serial: 1 data line' : `Parallel: ${n} data lines`,
+        }));
+        const allowedLines = LINES[g].includes(lines) ? lines : Math.min(4, LINES[g][LINES[g].length - 1]);
+        fillSelect($('lines'), lineOptions, allowedLines);
+        const baud = preferred.baud ?? Number($('baud').value || DEFAULT_BAUD[g]);
+        const baudOptions = BAUDS[g].map((b) => ({ value: b, label: `${b} baud` }));
+        fillSelect($('baud'), baudOptions, BAUDS[g].includes(baud) ? baud : DEFAULT_BAUD[g]);
+      }
+
+      function readSettings() {
+        return normaliseSettings({
+          lanes: $('lines').value,
+          bps: $('bps').value,
+          baud: $('baud').value,
+          timing: $('timing').value,
+          payload: $('payload').value,
+          parity: $('parity').value,
+          parityPos: $('parity-pos').value,
+          bitOrder: $('bit-order').value,
+        });
+      }
+
+      function writeSettings(settings) {
+        rebuildSettingOptions({ lanes: settings.lanes, baud: settings.baud });
+        $('bps').value = settings.bps;
+        $('timing').value = settings.timing;
+        $('payload').value = settings.payload;
+        $('parity').value = settings.parity;
+        $('parity-pos').value = settings.parityPos;
+        $('bit-order').value = settings.bitOrder;
+      }
+
+      function settingsChanged() {
+        const settings = readSettings();
+        $('timing').value = settings.timing;
+        $('timing').querySelector('[value=async]').disabled = settings.lanes > 1;
+        document.querySelectorAll('[data-ascii]').forEach((el) => { el.hidden = settings.payload !== 'ascii'; });
+        state.settings = settings;
+        $('settings-code').value = encodeSettings(settings);
+        state.channel = new Channel(settings, impairmentOptions());
+        stopTransmission(true);
+        renderRates();
+        renderTimingNote();
+        renderLaneLabels(null);
+        renderPreview();
+        resetReceiver();
+        updateImpairmentNote();
+        if (state.camera.corners) state.camera.points = laneSamplePoints();
+        renderSteps();
+      }
+
+      function renderTimingNote() {
+        const s = state.settings;
+        const people = s.lanes + (s.timing === 'sync' ? 1 : 0);
+        const parts = [];
+        if (s.lanes > 1) parts.push('<strong>Parallel links here are synchronous:</strong> asynchronous start and stop bits are used on a single serial line.');
+        if (s.timing === 'sync') parts.push('The amber clock line is shared. The sender changes the data when the clock falls, and the receiver reads it when the clock rises.');
+        else parts.push('There is no shared clock. The start bit (HIGH) starts the receiver’s own clock. The stop bit (LOW, any length) returns the line to idle, so the next start bit is a visible change.');
+        if (state.mode === 'humans') parts.push(`<strong>${people} ${people === 1 ? 'person' : 'people'} needed</strong>${s.timing === 'sync' ? ', including one clock person on the right' : ''}.`);
+        if (state.mode !== 'humans') parts.push('The camera link works up to about 10 baud: a 30 frames per second camera needs about 3 frames per symbol.');
+        $('timing-note').innerHTML = parts.join(' ');
+      }
+
+      function renderRates() {
+        const s = state.settings;
+        const r = linkRates(s);
+        const overhead = [];
+        if (s.timing === 'async') overhead.push('start + stop bits');
+        if (s.payload === 'ascii') overhead.push('parity');
+        const items = [
+          ['Baud rate', `${s.baud}`, 'signal changes per second'],
+          ['Bits per signal', `${s.bps}`, `${r.levels} levels to tell apart`],
+          ['Data lines', `${s.lanes}`, s.lanes === 1 ? 'serial' : 'parallel'],
+          ['Bit rate', `${formatRate(r.bitRate)} bit/s`, `${s.baud} × ${s.bps}${s.lanes > 1 ? ` × ${s.lanes} lines` : ''}`, true],
+          ['Useful data rate', `${formatRate(r.dataRate)} bit/s`, overhead.length ? `after ${overhead.join(', ')}` : 'no overhead'],
+          ['Lines used', `${r.linesUsed}`, s.timing === 'sync' ? `${s.lanes} data + 1 clock` : 'data only'],
+        ];
+        $('rates').innerHTML = items.map(([label, value, small, key]) => `<div class="rate${key ? ' key' : ''}"><span>${label}</span><strong>${value}</strong><small>${small}</small></div>`).join('');
+      }
+
+      // ---------- Input and preview ----------
+      function readInput() {
+        const s = state.settings;
+        const text = $('message').value;
+        if (s.payload === 'raw') {
+          const bits = text.replace(/\s+/g, '');
+          if (!bits) return { error: 'Type some binary digits to send.' };
+          if (/[^01]/.test(bits)) return { error: 'Raw binary may only contain 0s and 1s.' };
+          return { input: { bits: [...bits].map(Number) }, label: bits };
+        }
+        if (!text) return { error: 'Type a message to send.' };
+        const bad = [...text].find((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) > 126);
+        if (bad) return { error: `“${bad}” is not a printable 7-bit ASCII character. Use ASCII codes 32–126 only.` };
+        return { input: { text }, label: text };
+      }
+
+      function bitsHtml(bits, parityIndex = -1, padFrom = bits.length) {
+        return bits.map((bit, i) => (i === parityIndex ? `<span class="pbit" title="Parity bit">${bit}</span>`
+          : i >= padFrom ? `<span class="padbit" title="Padding">${bit}</span>` : bit)).join('');
+      }
+
+      function renderPreview(schedule) {
+        const s = state.settings;
+        const message = readInput();
+        $('message-error').hidden = !message.error;
+        $('message-error').textContent = message.error || '';
+        $('message-label').textContent = s.payload === 'raw' ? 'Bits to send (0s and 1s)' : 'Message (printable ASCII characters)';
+        if (!schedule) schedule = message.error ? null : buildSchedule(message.input, s, { gap: () => 0, leadIn: 0, tail: 0 });
+        const table = $('frame-table');
+        if (!schedule) {
+          table.innerHTML = '';
+          $('symbol-stream').innerHTML = '';
+          return;
+        }
+        const parityIndex = s.parityPos === 'msb' ? 0 : 7;
+        if (s.payload === 'ascii') {
+          const showWire = s.bitOrder === 'lsb';
+          table.innerHTML = `<thead><tr><th scope="col">Char</th><th scope="col">ASCII</th><th scope="col">7-bit code</th><th scope="col">Parity</th><th scope="col">8-bit word (MSB→LSB)</th>${showWire ? '<th scope="col">Order on the line</th>' : ''}</tr></thead><tbody>${schedule.words.map((w) => `
+            <tr${w.padding ? ' class="padding"' : ''}><td>${w.padding ? 'NUL fill' : w.char === ' ' ? '␠' : escapeHtml(w.char)}</td><td>${w.code}</td><td><code>${w.data.join('')}</code></td><td>${w.parity}</td><td><code>${bitsHtml(w.word, parityIndex)}</code></td>${showWire ? `<td><code>${bitsHtml(w.bits, 7 - parityIndex)}</code></td>` : ''}</tr>`).join('')}</tbody>`;
+        } else {
+          table.innerHTML = `<thead><tr><th scope="col">Frame</th><th scope="col">Bits</th></tr></thead><tbody>${schedule.words.map((w, i) => `
+            <tr><td>${s.timing === 'sync' ? 'Stream' : i + 1}</td><td><code>${bitsHtml(w.bits, -1, w.bits.length - (w.padBits || 0))}</code></td></tr>`).join('')}</tbody>`;
+        }
+        const padNote = schedule.padding ? ` · ${schedule.padding} padding bit${schedule.padding === 1 ? '' : 's'} (dotted) fill the last symbol${s.timing === 'async' ? 's' : ''}` : '';
+        $('stream-title').textContent = `Symbols on the line (one per signal change)${padNote}`;
+        const chips = [];
+        schedule.segments.forEach((seg, index) => {
+          if (seg.role === 'idle') return;
+          const next = schedule.segments[index + 1];
+          const gapAfter = s.timing === 'async' ? seg.role === 'stop' : next && next.word !== seg.word;
+          const cls = `chip ${seg.role}${gapAfter ? ' gap-after' : ''}`;
+          let text;
+          let small;
+          if (seg.role === 'start') { text = 'START'; small = 'HIGH'; }
+          else if (seg.role === 'stop') { text = 'STOP'; small = 'LOW ≥1'; }
+          else {
+            text = seg.levels.join(' ');
+            small = s.bps > 1 ? seg.levels.map((level) => toBits(level, s.bps).join('')).join(' ') : '&nbsp;';
+          }
+          chips.push(`<span class="${cls}" data-seg="${index}" title="${seg.role === 'data' ? `Level${seg.levels.length > 1 ? 's' : ''} ${seg.levels.join(', ')}` : seg.role}">${text}<small>${small}</small></span>`);
+        });
+        $('symbol-stream').innerHTML = chips.join('');
+      }
+
+      function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      function renderLaneLabels(levels, clock) {
+        const s = state.settings;
+        const humans = state.mode === 'humans';
+        const cols = lineCount(s);
+        const container = $('lane-labels');
+        container.style.setProperty('--cols', cols);
+        const describe = (level) => {
+          if (level === null || level === undefined) return '—';
+          if (s.bps === 1) return level ? 'HIGH' : 'LOW';
+          return `${level} · ${toBits(level, s.bps).join('')}`;
+        };
+        const html = [];
+        for (let lane = 0; lane < s.lanes; lane += 1) {
+          const level = levels ? levels[lane] : null;
+          const name = humans ? `Person ${lane + 1}` : s.lanes === 1 ? 'Data line' : `Line ${lane + 1}`;
+          html.push(`<span><strong>${describe(level)}</strong>${name}</span>`);
+        }
+        if (s.timing === 'sync') {
+          const text = clock === null || clock === undefined ? '—' : humans ? (clock ? 'UP' : 'DOWN') : clock ? 'HIGH' : 'LOW';
+          html.push(`<span class="clock"><strong>${text}</strong>${humans ? 'Clock person' : 'Clock'}</span>`);
+        }
+        const joined = html.join('');
+        if (container.dataset.html !== joined) {
+          container.innerHTML = joined;
+          container.dataset.html = joined;
+        }
+      }
+
+      // ---------- Photosensitivity gate ----------
+      function flashRisks() {
+        if (state.mode === 'humans') return [];
+        const s = state.settings;
+        const risks = [];
+        if (flashesPerSecond(s) > FLASH_LIMIT) {
+          risks.push(s.timing === 'sync'
+            ? `the clock bar flashes on and off ${s.baud} times a second`
+            : `a data bar can flash on and off up to ${formatRate(s.baud / 2)} times a second`);
+        }
+        if (state.mode !== 'receiver' && Number($('noise').value) > 0) risks.push('noise makes the tops of the bars flicker many times a second');
+        return risks;
+      }
+
+      // The receiver only films the sender's screen, so the warning there is informational.
+      function flashGated() {
+        return state.mode !== 'receiver' && !state.flashAccepted && flashRisks().length > 0;
+      }
+
+      function renderFlashWarning() {
+        const risks = flashRisks();
+        const gated = flashGated();
+        const box = $('flash-warning');
+        box.hidden = !risks.length;
+        box.classList.toggle('accepted', !gated);
+        $('flash-actions').hidden = !gated;
+        if (risks.length) {
+          const where = state.mode === 'receiver' ? 'The sender’s screen, and this camera view of it,' : 'The signal panel';
+          const rest = gated
+            ? ' Check that nobody watching is affected before you continue. Transmit is locked until you choose.'
+            : state.mode === 'receiver' ? '' : ' You chose to show it.';
+          $('flash-text').textContent = `${where} will flash more than ${FLASH_LIMIT} times a second: ${risks.join('; ')}. This can trigger seizures in people with photosensitive epilepsy.${rest}`;
+        }
+        $('transmit').disabled = state.lockPattern || gated;
+      }
+
+      function useSafeSettings() {
+        const s = state.settings;
+        if (flashesPerSecond(s) > FLASH_LIMIT) {
+          const safe = BAUDS.device.filter((baud) => flashesPerSecond({ ...s, baud }) <= FLASH_LIMIT).pop();
+          $('baud').value = String(safe);
+        }
+        $('noise').value = 0;
+        settingsChanged();
+        $('transmit').focus();
+      }
+
+      // ---------- Impairments ----------
+      function impairmentOptions() {
+        if (state.mode !== 'sim' && state.mode !== 'sender') return {};
+        return {
+          skew: Number($('skew').value) / 1000,
+          crosstalk: Number($('crosstalk').value) / 100,
+          // Noise flickers the bars, so it waits for the photosensitivity warning to be accepted.
+          noise: flashGated() ? 0 : Number($('noise').value) / 100,
+          bandwidth: Number($('bandwidth').value),
+        };
+      }
+
+      function updateImpairmentNote() {
+        $('skew-value').textContent = `${$('skew').value} ms`;
+        $('crosstalk-value').textContent = `${$('crosstalk').value}%`;
+        $('noise-value').textContent = `${$('noise').value}%`;
+        const s = state.settings;
+        const notes = [];
+        const skew = Number($('skew').value) / 1000;
+        if (skew && s.lanes === 1) notes.push('Skew only affects parallel lines.');
+        if (skew && s.lanes > 1) {
+          const worst = (s.lanes - 1) * skew;
+          notes.push(`The last line is ${Math.round(worst * 1000)} ms late. That is ${Math.round(worst * s.baud * 100)}% of a symbol${worst * s.baud > 0.5 ? ', which is past the clock edge, so expect errors' : ''}.`);
+        }
+        const bandwidth = Number($('bandwidth').value);
+        if (bandwidth) notes.push(`A ${bandwidth} Hz channel cannot change level quickly. As a rough guide, keep the baud rate below about ${formatRate(bandwidth * 2)}.`);
+        if (state.mode === 'sender') notes.push('Impairments are added to the bars on this screen, so the receiving camera sees them.');
+        if (Number($('noise').value) > 0 && flashGated()) notes.push('Noise is not added until the photosensitivity warning is accepted.');
+        $('impair-note').textContent = notes.join(' ');
+        renderFlashWarning();
+        if (state.channel) state.channel.setOptions(impairmentOptions());
+      }
+
+      // ---------- Transmission ----------
+      function transmit() {
+        if (state.tx) { stopTransmission(); return; }
+        if (flashGated()) { $('flash-safe').focus(); return; }
+        const message = readInput();
+        if (message.error) { renderPreview(); $('message').focus(); return; }
+        if (state.lockPattern) setLockPattern(false);
+        if ($('tick-sound').checked) ensureAudio();
+        const s = state.settings;
+        const humans = state.mode === 'humans';
+        const schedule = buildSchedule(message.input, s, {
+          leadIn: humans ? 1 : 2,
+          tail: humans ? 1 : 2,
+          gap: () => Math.random() * (humans ? 1 : 2),
+        });
+        state.tx = { schedule, t0: now() + 0.05, input: message };
+        state.txLog.push(state.tx);
+        if (state.txLog.length > 4) state.txLog.shift();
+        state.lastSent = { label: message.label, input: message.input, done: false };
+        state.lastSegment = -1;
+        state.lastTickCount = 0;
+        if (state.mode === 'sim' || humans) resetReceiver();
+        renderPreview(schedule);
+        $('transmit').textContent = 'Stop';
+        $('transmit').classList.add('stop');
+        $('compare').textContent = '';
+      }
+
+      function stopTransmission(silent = false) {
+        if (!state.tx) return;
+        state.tx = null;
+        $('transmit').textContent = 'Transmit';
+        $('transmit').classList.remove('stop');
+        $('sender-clock').textContent = 'Sender clock: stopped';
+        $('sender-clock').classList.remove('tick');
+        document.querySelectorAll('#symbol-stream .current').forEach((chip) => chip.classList.remove('current'));
+        if (!silent) $('sender-status').textContent = 'Transmission stopped.';
+      }
+
+      function idealAt(t) {
+        const tx = state.tx;
+        if (!tx) return scheduleAt({ settings: state.settings, segments: [], length: 0 }, -1);
+        return scheduleAt(tx.schedule, t - tx.t0);
+      }
+
+      function updateSender(t) {
+        const tx = state.tx;
+        if (!tx) return null;
+        const elapsed = t - tx.t0;
+        const sched = tx.schedule;
+        if (elapsed > sched.duration) {
+          if ($('repeat').checked) {
+            const next = buildSchedule(tx.input.input, state.settings, {
+              leadIn: state.mode === 'humans' ? 1 : 2,
+              tail: state.mode === 'humans' ? 1 : 2,
+              gap: () => Math.random() * (state.mode === 'humans' ? 1 : 2),
+            });
+            state.tx = { schedule: next, t0: tx.t0 + sched.duration, input: tx.input };
+            state.txLog.push(state.tx);
+            if (state.txLog.length > 4) state.txLog.shift();
+            state.lastSegment = -1;
+            renderPreview(next);
+            return updateSender(t);
+          }
+          state.lastSent.done = true;
+          stopTransmission(true);
+          $('sender-status').textContent = 'Transmission complete. The line is idle (LOW).';
+          renderCompare();
+          return null;
+        }
+        const ideal = scheduleAt(sched, elapsed);
+        const seg = ideal.segment;
+        if (ideal.index !== state.lastSegment) {
+          state.lastSegment = ideal.index;
+          document.querySelectorAll('#symbol-stream .current').forEach((chip) => chip.classList.remove('current'));
+          const chip = document.querySelector(`#symbol-stream [data-seg="${ideal.index}"]`);
+          if (chip) {
+            chip.classList.add('current');
+            const box = chip.parentElement;
+            if (chip.offsetTop < box.scrollTop || chip.offsetTop > box.scrollTop + box.clientHeight - chip.offsetHeight) box.scrollTop = chip.offsetTop - box.offsetTop - 4;
+          }
+          if (seg && seg.role !== 'idle') {
+            state.lastTickCount += 1;
+            $('sender-clock').textContent = `Sender clock: tick ${state.lastTickCount}`;
+            $('sender-clock').classList.add('tick');
+            setTimeout(() => $('sender-clock').classList.remove('tick'), 150);
+            if ($('tick-sound').checked && state.mode === 'humans') beep();
+          }
+          $('sender-status').textContent = senderStatus(sched, seg);
+        }
+        const progress = seg ? clamp(ideal.phase / (seg.end - seg.start), 0, 1) : 0;
+        $('symbol-progress').style.width = `${(seg && seg.role !== 'idle' ? progress : 0) * 100}%`;
+        return ideal;
+      }
+
+      function senderStatus(sched, seg) {
+        const s = state.settings;
+        if (!seg) return '';
+        if (seg.role === 'idle') return seg.start === 0 ? 'Get ready: the line is idle (LOW).' : 'Finishing: the line is idle (LOW).';
+        const word = sched.words[seg.word];
+        const what = s.payload === 'ascii' ? (word.padding ? 'NUL fill character' : `“${word.char}”`) : `frame ${seg.word + 1}`;
+        const total = sched.words.length;
+        if (seg.role === 'start') return `Frame ${seg.word + 1} of ${total} (${what}): start bit HIGH. This edge starts the receiver’s clock.`;
+        if (seg.role === 'stop') return `Frame ${seg.word + 1} of ${total} (${what}): stop bit LOW. It can last any length before the next start bit.`;
+        const dataCount = sched.segments.filter((other) => other.role === 'data').length;
+        if (s.timing === 'sync') return `Symbol ${seg.symbol + 1} of ${dataCount} (${what}): set the data while the clock is LOW; it is read when the clock rises.`;
+        return `Frame ${seg.word + 1} of ${total} (${what}): data symbol ${seg.symbol + 1} of ${Math.ceil(8 / s.bps)}.`;
+      }
+
+      function ensureAudio() {
+        try {
+          if (!state.audio) state.audio = new AudioContext();
+          if (state.audio.state === 'suspended') state.audio.resume();
+        } catch (e) { state.audio = null; }
+      }
+
+      function beep() {
+        if (!state.audio) return;
+        const osc = state.audio.createOscillator();
+        const gain = state.audio.createGain();
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.15, state.audio.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, state.audio.currentTime + 0.12);
+        osc.connect(gain).connect(state.audio.destination);
+        osc.start();
+        osc.stop(state.audio.currentTime + 0.13);
+      }
+
+      function setLockPattern(on) {
+        state.lockPattern = on;
+        $('lock-pattern').setAttribute('aria-pressed', String(on));
+        $('lock-pattern').textContent = on ? 'Hide lock-on pattern' : 'Show lock-on pattern';
+        $('transmit').disabled = on || flashGated();
+        $('sender-status').textContent = on ? 'Showing the flashing lock-on pattern. On the receiver, press Lock on now.' : '';
+      }
+
+      // ---------- Signal panel drawing ----------
+      function fitCanvas(canvas, cssHeight) {
+        const dpr = window.devicePixelRatio || 1;
+        if (cssHeight) canvas.style.height = `${cssHeight}px`;
+        const w = canvas.clientWidth;
+        const h = cssHeight || canvas.clientHeight;
+        const W = Math.max(1, Math.round(w * dpr));
+        const H = Math.max(1, Math.round(h * dpr));
+        if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { ctx, w, h };
+      }
+
+      function drawSignal(canvas, values, options = {}) {
+        if (!canvas.clientWidth) return;
+        const { ctx, w, h } = fitCanvas(canvas);
+        const s = state.settings;
+        if (options.lock !== undefined) {
+          ctx.fillStyle = options.lock ? SIGNAL.lock : SIGNAL.background;
+          ctx.fillRect(0, 0, w, h);
+          return;
+        }
+        ctx.fillStyle = SIGNAL.background;
+        ctx.fillRect(0, 0, w, h);
+        const levels = levelCount(s);
+        const cols = values.length;
+        const colW = w / cols;
+        // Faint lines at the in-between levels; the receiver's view adds the HIGH/LOW threshold for 1 bit.
+        const guides = [];
+        for (let k = 1; k < levels - 1; k += 1) guides.push(k / (levels - 1));
+        if (options.guides && levels === 2) guides.push(0.5);
+        ctx.strokeStyle = options.guides ? '#475569' : SIGNAL.guide;
+        ctx.lineWidth = 1;
+        ctx.setLineDash(options.guides ? [4, 4] : []);
+        for (const fraction of guides) {
+          const y = Math.round(h - fraction * h) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        values.forEach((value, i) => {
+          const isClock = s.timing === 'sync' && i === cols - 1;
+          const barH = clamp(value, 0, 1) * h;
+          ctx.fillStyle = isClock ? SIGNAL.clock : SIGNAL.data;
+          ctx.fillRect(i * colW + colW * 0.2, h - barH, colW * 0.6, barH);
+        });
+      }
+
+      // ---------- Receiver ----------
+      function resetReceiver() {
+        state.rx = {
+          decoder: createDecoder(state.settings),
+          history: [],
+          marks: [],
+          edges: [],
+          frames: [],
+          count: 0,
+          t0: null,
+          last: null,
+        };
+        $('symbol-rows').innerHTML = '';
+        $('frames').innerHTML = '';
+        $('decoded-text').innerHTML = '';
+        $('compare').textContent = '';
+        $('compare').className = 'status';
+        state.simNext = now();
+        renderLegend();
+      }
+
+      function feedReceiver(t, lanes, clock) {
+        const rx = state.rx;
+        rx.last = { t, lanes: lanes.slice(), clock };
+        rx.history.push(rx.last);
+        const keep = traceWindow() + 2;
+        while (rx.history.length && rx.history[0].t < t - keep) rx.history.shift();
+        for (const event of rx.decoder.feed(t, lanes, clock)) handleEvent(event);
+      }
+
+      function handleEvent(event) {
+        const rx = state.rx;
+        if (event.type === 'edge') {
+          rx.edges.push(event);
+          if (rx.edges.length > 60) rx.edges.shift();
+        } else if (event.type === 'symbol') {
+          rx.marks.push(event);
+          if (rx.marks.length > 600) rx.marks.shift();
+          addSymbolRow(event);
+        } else if (event.type === 'frame') {
+          rx.frames.push(event);
+          addFrame(event);
+        } else if (event.type === 'padding' && state.settings.payload === 'raw') {
+          addFrame({ type: 'frame', bits: event.bits, trailing: true, framingOk: true });
+        }
+      }
+
+      function addSymbolRow(event) {
+        const rx = state.rx;
+        if (rx.t0 === null) rx.t0 = event.t;
+        rx.count += 1;
+        const s = state.settings;
+        const roles = { start: 'Start bit', stop: 'Stop bit', data: 'Data symbol', clocked: 'Clock edge' };
+        let check = '';
+        if (event.role === 'start') check = event.ok ? '✓ HIGH' : '✗ not HIGH: false start';
+        else if (event.role === 'stop') check = event.ok ? '✓ LOW' : '✗ not LOW: framing error';
+        const tr = document.createElement('tr');
+        if (event.ok === false) tr.className = 'bad';
+        const bits = event.levels.map((level) => toBits(level, s.bps).join('')).join(' ');
+        tr.innerHTML = `<td>${rx.count}</td><td>${(event.t - rx.t0).toFixed(2)}</td><td>${roles[event.role]}</td><td>${event.levels.join(' ')}</td><td><code>${event.role === 'data' || event.role === 'clocked' ? bits : '—'}</code></td><td>${check}</td>`;
+        const body = $('symbol-rows');
+        body.append(tr);
+        while (body.children.length > MAX_SYMBOL_ROWS) body.firstElementChild.remove();
+        const wrap = $('symbol-wrap');
+        wrap.scrollTop = wrap.scrollHeight;
+      }
+
+      function addFrame(frame) {
+        const s = state.settings;
+        const chip = document.createElement('div');
+        if (s.payload === 'raw') {
+          chip.className = `frame-chip${frame.framingOk ? '' : ' bad'}`;
+          chip.innerHTML = `<strong>${frame.trailing ? 'tail' : 'bits'}</strong><code>${frame.bits.join('')}</code><span>${frame.trailing ? 'may include padding' : frame.framingOk ? '8 bits' : '✗ framing error'}</span>`;
+        } else {
+          const parityIndex = s.parityPos === 'msb' ? 0 : 7;
+          const ok = frame.parityOk && frame.framingOk;
+          chip.className = `frame-chip${ok ? '' : ' bad'}${frame.padding ? ' padding' : ''}`;
+          const shown = frame.padding ? 'NUL' : frame.code === 32 ? '␠' : escapeHtml(CONTROL_PICTURES(frame.code));
+          const notes = [frame.padding ? 'fill character' : frame.parityOk ? 'parity ✓' : 'parity ✗'];
+          if (!frame.framingOk) notes.push('framing ✗');
+          chip.innerHTML = `<strong>${shown}</strong><code>${bitsHtml(frame.word, parityIndex)}</code><span>${notes.join(' · ')}</span>`;
+          chip.title = `ASCII ${frame.code}`;
+        }
+        $('frames').append(chip);
+        $('frames').scrollTop = $('frames').scrollHeight;
+        renderDecodedText();
+      }
+
+      function receivedText() {
+        const s = state.settings;
+        if (s.payload === 'raw') return state.rx.frames.map((frame) => frame.bits.join('')).join(' ');
+        return state.rx.frames.filter((frame) => !frame.padding).map((frame) => CONTROL_PICTURES(frame.code)).join('');
+      }
+
+      function renderDecodedText() {
+        const s = state.settings;
+        const box = $('decoded-text');
+        if (s.payload === 'raw') {
+          box.textContent = receivedText();
+        } else {
+          box.innerHTML = state.rx.frames.filter((frame) => !frame.padding).map((frame) => {
+            const text = escapeHtml(CONTROL_PICTURES(frame.code));
+            if (frame.parityOk && frame.framingOk) return text;
+            return `<span class="err" title="${frame.parityOk ? 'Framing error' : 'Parity error'}">${text}</span>`;
+          }).join('');
+        }
+        renderCompare();
+      }
+
+      function renderCompare() {
+        const sent = state.lastSent;
+        if (!sent || !sent.done || (state.mode !== 'sim' && state.mode !== 'humans')) return;
+        const s = state.settings;
+        const errors = state.rx.frames.filter((frame) => s.payload === 'ascii' && !frame.padding && (!frame.parityOk || !frame.framingOk)).length;
+        let received;
+        let expected;
+        if (s.payload === 'raw') {
+          received = state.rx.frames.filter((frame) => !frame.trailing).flatMap((frame) => frame.bits).join('');
+          expected = sent.input.bits.join('');
+          const trailing = state.rx.frames.filter((frame) => frame.trailing).flatMap((frame) => frame.bits).join('');
+          received = (received + trailing).slice(0, expected.length);
+        } else {
+          received = state.rx.frames.filter((frame) => !frame.padding).map((frame) => CONTROL_PICTURES(frame.code)).join('');
+          expected = sent.input.text;
+        }
+        let differ = Math.abs(received.length - expected.length);
+        for (let i = 0; i < Math.min(received.length, expected.length); i += 1) if (received[i] !== expected[i]) differ += 1;
+        const unit = s.payload === 'raw' ? 'bit' : 'character';
+        const el = $('compare');
+        if (!differ) {
+          el.className = 'feedback good';
+          el.textContent = `✓ Received exactly what was sent: “${expected}”.`;
+        } else {
+          el.className = 'feedback bad';
+          el.textContent = `✗ ${differ} ${unit}${differ === 1 ? '' : 's'} differ from what was sent (“${expected}”).${errors ? ` Parity or framing caught ${errors} of the bad frames.` : s.payload === 'ascii' ? ' Parity did not flag them: an even number of bits may have flipped.' : ''}`;
+        }
+      }
+
+      function receiverStatus() {
+        const rx = state.rx;
+        const s = state.settings;
+        if (state.mode === 'receiver' && !state.camera.points) return ['Not locked on', ''];
+        if (state.mode === 'humans' && !state.pose.landmarker) return ['Camera needed', ''];
+        if (s.timing === 'sync') return rx.decoder.count ? [`Clocked in ${rx.decoder.count} symbols`, 'busy'] : ['Waiting for the clock', ''];
+        const map = { waitLow: ['Waiting for an idle (LOW) line', ''], armed: ['Waiting for a start bit', ''], frame: ['Receiving a frame', 'busy'] };
+        return map[rx.decoder.state];
+      }
+
+      // ---------- Trace ----------
+      function traceWindow() { return clamp(12 / state.settings.baud, 4, 80); }
+
+      function renderLegend() {
+        const s = state.settings;
+        const items = [['--data-line', s.lanes > 1 ? 'Data lines' : 'Data line'], ['--ink', 'Sample point (level)']];
+        if (s.timing === 'sync') items.push(['--clock-line', 'Shared clock (read on rising edge)']);
+        else {
+          if (state.mode === 'sim' || state.mode === 'humans') items.push(['--tx-clock', 'Sender’s clock']);
+          items.push(['--rx-clock', 'Receiver’s clock (starts at the start-bit edge)']);
+        }
+        $('legend').innerHTML = items.map(([colour, label]) => `<span style="--c: var(${colour})">${label}</span>`).join('');
+      }
+
+      function drawTrace(t) {
+        const canvas = $('trace');
+        if (!canvas.clientWidth) return;
+        const s = state.settings;
+        const css = getComputedStyle(document.documentElement);
+        const colour = (name) => css.getPropertyValue(name).trim();
+        const showSenderClock = s.timing === 'async' && (state.mode === 'sim' || state.mode === 'humans');
+        const dataRowH = s.lanes > 4 ? 40 : 58;
+        const clockRowH = 30;
+        const rows = [];
+        for (let lane = 0; lane < s.lanes; lane += 1) rows.push({ kind: 'data', lane, h: dataRowH, label: s.lanes === 1 ? 'Data' : `Line ${lane + 1}` });
+        if (s.timing === 'sync') rows.push({ kind: 'clock', h: clockRowH + 6, label: 'Clock' });
+        if (showSenderClock) rows.push({ kind: 'txclock', h: clockRowH, label: 'Sender clk' });
+        if (s.timing === 'async') rows.push({ kind: 'rxclock', h: clockRowH, label: 'Receiver clk' });
+        const height = rows.reduce((sum, row) => sum + row.h, 0) + 22;
+        const { ctx, w } = fitCanvas(canvas, height);
+        ctx.clearRect(0, 0, w, height);
+        const left = 78;
+        const right = 8;
+        const plotW = w - left - right;
+        const span = traceWindow();
+        const x = (time) => left + plotW - ((t - time) / span) * plotW;
+        const top = levelCount(s) - 1;
+        ctx.font = '11px "Segoe UI", system-ui, sans-serif';
+        ctx.textBaseline = 'middle';
+        let y0 = 4;
+        const rx = state.rx;
+        const sampleMarks = rx.marks.filter((mark) => mark.t >= t - span);
+        // Faint vertical lines at every sample instant link the data rows to the clock that timed them.
+        ctx.strokeStyle = colour('--grid');
+        ctx.lineWidth = 1;
+        for (const mark of sampleMarks) {
+          const mx = Math.round(x(mark.t)) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(mx, 4);
+          ctx.lineTo(mx, height - 18);
+          ctx.stroke();
+        }
+        for (const row of rows) {
+          const yTop = y0 + 4;
+          const yBottom = y0 + row.h - 6;
+          const yOf = (value) => yBottom - clamp(value, 0, 1) * (yBottom - yTop);
+          ctx.fillStyle = colour('--muted');
+          ctx.textAlign = 'left';
+          ctx.fillText(row.label, 4, (yTop + yBottom) / 2);
+          if (row.kind === 'data' || row.kind === 'clock') {
+            const levels = row.kind === 'clock' ? 1 : top;
+            ctx.strokeStyle = colour('--grid');
+            ctx.setLineDash([3, 3]);
+            for (let k = 0; k <= levels; k += 1) {
+              const gy = Math.round(yOf(k / levels)) + 0.5;
+              ctx.beginPath();
+              ctx.moveTo(left, gy);
+              ctx.lineTo(left + plotW, gy);
+              ctx.stroke();
+            }
+            ctx.setLineDash([]);
+            ctx.strokeStyle = colour(row.kind === 'clock' ? '--clock-line' : '--data-line');
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            let started = false;
+            for (const sample of rx.history) {
+              if (sample.t < t - span - 0.5) continue;
+              const value = row.kind === 'clock' ? sample.clock : sample.lanes[row.lane];
+              if (value === null || value === undefined) continue;
+              const px = x(sample.t);
+              const py = yOf(value);
+              if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            if (row.kind === 'data') {
+              for (const mark of sampleMarks) {
+                const laneIndex = s.timing === 'sync' ? row.lane : 0;
+                const level = mark.levels[laneIndex];
+                if (level === undefined) continue;
+                const px = x(mark.t);
+                const py = yOf(level / top);
+                const bad = mark.ok === false;
+                ctx.fillStyle = bad ? colour('--bad') : mark.role === 'start' || mark.role === 'stop' ? colour('--rx-clock') : colour('--ink');
+                ctx.beginPath();
+                if (mark.role === 'start') { ctx.moveTo(px, py - 6); ctx.lineTo(px - 5, py + 3); ctx.lineTo(px + 5, py + 3); }
+                else if (mark.role === 'stop') { ctx.moveTo(px, py + 6); ctx.lineTo(px - 5, py - 3); ctx.lineTo(px + 5, py - 3); }
+                else ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+                const label = mark.role === 'start' ? 'start' : mark.role === 'stop' ? (mark.ok ? 'stop' : 'stop ✗') : String(level);
+                ctx.textAlign = 'center';
+                ctx.fillText(label, px, py < yTop + 12 ? py + 12 : py - 11);
+              }
+            }
+          } else if (row.kind === 'txclock') {
+            ctx.strokeStyle = colour('--tx-clock');
+            ctx.lineWidth = 2;
+            const midY = (yTop + yBottom) / 2;
+            for (const tx of state.txLog) {
+              for (const seg of tx.schedule.segments) {
+                if (seg.role === 'idle') continue;
+                const at = tx.t0 + seg.start / s.baud;
+                if (at < t - span || at > t) continue;
+                const px = Math.round(x(at)) + 0.5;
+                ctx.beginPath();
+                ctx.moveTo(px, yTop + 2);
+                ctx.lineTo(px, yBottom - 2);
+                ctx.stroke();
+              }
+            }
+            ctx.strokeStyle = colour('--grid');
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(left, midY);
+            ctx.lineTo(left + plotW, midY);
+            ctx.stroke();
+          } else if (row.kind === 'rxclock') {
+            const midY = (yTop + yBottom) / 2;
+            ctx.strokeStyle = colour('--grid');
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(left, midY);
+            ctx.lineTo(left + plotW, midY);
+            ctx.stroke();
+            for (const edge of rx.edges) {
+              const ex = x(edge.t);
+              if (ex < left - 200) continue;
+              ctx.fillStyle = colour('--rx-clock');
+              ctx.textAlign = 'left';
+              if (ex >= left) ctx.fillText('▶ start edge', ex + 3, yTop + 2);
+              ctx.strokeStyle = colour('--rx-clock');
+              ctx.lineWidth = 2;
+              for (const at of edge.times) {
+                const px = Math.round(x(at)) + 0.5;
+                if (px < left || at > t) continue;
+                ctx.beginPath();
+                ctx.moveTo(px, midY - 7);
+                ctx.lineTo(px, yBottom);
+                ctx.stroke();
+              }
+            }
+          }
+          y0 += row.h;
+        }
+        ctx.fillStyle = colour('--muted');
+        ctx.textAlign = 'right';
+        ctx.fillText('now', left + plotW, height - 9);
+        ctx.textAlign = 'left';
+        ctx.fillText(`${Math.round(span)} s ago`, left, height - 9);
+      }
+
+      // ---------- Main loop ----------
+      function frameLoop(ms) {
+        const t = ms / 1000;
+        const s = state.settings;
+        if (state.mode === 'sim') {
+          // The simulated 30 fps receiver catches up before the sender can finish, so a throttled tab loses nothing.
+          if (state.simNext === null || t - state.simNext > 10) state.simNext = t;
+          while (state.simNext <= t) {
+            const out = state.channel.sampleAt(state.simNext, idealAt);
+            feedReceiver(state.simNext, out.lanes, out.clock);
+            state.simNext += 1 / SIM_FPS;
+          }
+        }
+        const ideal = updateSender(t);
+        if (state.mode === 'sender') {
+          if (state.lockPattern) {
+            drawSignal($('signal'), [], { lock: (t % 1) < 0.5 });
+          } else {
+            const out = state.channel.sampleAt(t, idealAt);
+            drawSignal($('signal'), s.timing === 'sync' ? [...out.lanes, out.clock] : out.lanes);
+          }
+        } else if (state.mode === 'sim' || state.mode === 'humans') {
+          const values = ideal ? (s.timing === 'sync' ? [...ideal.lanes, ideal.clock] : ideal.lanes) : new Array(lineCount(s)).fill(0);
+          drawSignal($('signal'), values);
+        }
+        if (ideal) {
+          const top = levelCount(s) - 1;
+          renderLaneLabels(ideal.lanes.map((v) => Math.round(v * top)), ideal.clock);
+        } else if (state.mode !== 'receiver') {
+          renderLaneLabels(new Array(s.lanes).fill(0), s.timing === 'sync' ? 0 : null);
+        }
+        if (state.mode === 'sim') {
+          const last = state.rx.last;
+          if (last) drawSignal($('rx-signal'), s.timing === 'sync' ? [...last.lanes, last.clock] : last.lanes, { guides: true });
+        }
+        const [text, cls] = receiverStatus();
+        const pill = $('receiver-state');
+        if (pill.textContent !== text) pill.textContent = text;
+        pill.className = `pill${cls ? ` ${cls}` : ''}`;
+        drawTrace(t);
+        requestAnimationFrame(frameLoop);
+      }
+
+      // ---------- Camera ----------
+      function setStageMessage(message) {
+        $('stage-message').hidden = !message;
+        $('stage-message').innerHTML = message ? `<span>${message}</span>` : '';
+      }
+      function setCameraStatus(message) {
+        if ($('camera-status').textContent !== message) $('camera-status').textContent = message;
+      }
+      function setCue(text) {
+        $('stage-cue').hidden = !text;
+        $('stage-cue').textContent = text || '';
+      }
+
+      async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStageMessage('This browser cannot use a camera here. Camera access needs a secure (https) page in a recent browser. Try the single-screen simulation instead.');
+          return;
+        }
+        $('camera-toggle').disabled = true;
+        setStageMessage('Waiting for camera permission…');
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: state.mode === 'humans' ? 'user' : 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+          });
+          const video = $('video');
+          state.camera.stream = stream;
+          video.srcObject = stream;
+          await video.play();
+          $('stage').style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+          setStageMessage('');
+          $('camera-toggle').textContent = 'Stop camera';
+          $('lock').disabled = false;
+          state.camera.loopToken += 1;
+          scheduleVideoFrame(state.camera.loopToken);
+          if (state.mode === 'humans') loadPoseModel();
+          else setCameraStatus('Camera on. Point it at the sender’s signal panel, then press Lock on while the sender shows the lock-on pattern.');
+        } catch (error) {
+          state.camera.stream = null;
+          const messages = {
+            NotAllowedError: 'Camera permission was blocked. Allow the camera from the browser’s address bar, then try again.',
+            NotFoundError: 'No camera was found. Connect one, or use the single-screen simulation.',
+            NotReadableError: 'The camera is in use by another app. Close that app and try again.',
+          };
+          setStageMessage(messages[error.name] || 'The camera could not start. Try again, or use the single-screen simulation.');
+        } finally {
+          $('camera-toggle').disabled = false;
+          renderSteps();
+        }
+      }
+
+      function stopCamera() {
+        const cam = state.camera;
+        if (cam.stream) cam.stream.getTracks().forEach((track) => track.stop());
+        cam.stream = null;
+        cam.loopToken += 1;
+        cam.locking = null;
+        state.pose.calibrating = null;
+        setCue('');
+        $('video').srcObject = null;
+        $('camera-toggle').textContent = 'Start camera';
+        $('lock').disabled = true;
+        $('calibrate').disabled = true;
+        $('badge').hidden = true;
+        cam.overlayCtx.clearRect(0, 0, cam.procW, cam.procH);
+        setStageMessage('Camera off. Press <strong>Start camera</strong>. The video stays on this device.');
+        renderSteps();
+      }
+
+      function scheduleVideoFrame(token) {
+        const video = $('video');
+        if (token !== state.camera.loopToken || !state.camera.stream) return;
+        if (video.requestVideoFrameCallback) {
+          video.requestVideoFrameCallback(() => {
+            if (token !== state.camera.loopToken) return;
+            processFrame();
+            scheduleVideoFrame(token);
+          });
+        } else {
+          requestAnimationFrame(() => {
+            if (token !== state.camera.loopToken) return;
+            if (video.currentTime !== state.camera.lastVideoTime) {
+              state.camera.lastVideoTime = video.currentTime;
+              processFrame();
+            }
+            scheduleVideoFrame(token);
+          });
+        }
+      }
+
+      function ensureProcessingSize(videoWidth, videoHeight) {
+        const cam = state.camera;
+        const width = Math.min(PROCESS_WIDTH, videoWidth);
+        const height = Math.round((width * videoHeight) / videoWidth);
+        if (width === cam.procW && height === cam.procH) return;
+        cam.procW = width;
+        cam.procH = height;
+        cam.procCtx.canvas.width = width;
+        cam.procCtx.canvas.height = height;
+        $('overlay').width = width;
+        $('overlay').height = height;
+        cam.lum = new Uint8Array(width * height);
+        cam.mask = new Uint8Array(width * height);
+        cam.labels = new Int32Array(width * height);
+        cam.stack = new Int32Array(width * height);
+        cam.corners = null;
+        cam.points = null;
+        renderHandles();
+      }
+
+      function processFrame() {
+        const video = $('video');
+        if (!video.videoWidth || video.readyState < 2) return;
+        ensureProcessingSize(video.videoWidth, video.videoHeight);
+        if (state.mode === 'humans') processPose(video);
+        else if (state.mode === 'receiver') processScreen(video);
+      }
+
+      // ---------- Device receiver: reading a screen ----------
+      function processScreen(video) {
+        const cam = state.camera;
+        cam.procCtx.drawImage(video, 0, 0, cam.procW, cam.procH);
+        const data = cam.procCtx.getImageData(0, 0, cam.procW, cam.procH).data;
+        const lum = cam.lum;
+        for (let p = 0, i = 0; p < lum.length; p += 1, i += 4) lum[p] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+        const t = now();
+        if (cam.locking) {
+          const { min, max } = cam.locking;
+          for (let p = 0; p < lum.length; p += 1) {
+            if (lum[p] < min[p]) min[p] = lum[p];
+            if (lum[p] > max[p]) max[p] = lum[p];
+          }
+          const left = Math.max(0, cam.locking.until - t);
+          $('badge').hidden = false;
+          $('badge').textContent = `Locking on… ${left.toFixed(1)} s`;
+          if (t >= cam.locking.until) finishLock();
+        }
+        const ctx = cam.overlayCtx;
+        ctx.clearRect(0, 0, cam.procW, cam.procH);
+        if (!cam.points) return;
+        const s = state.settings;
+        const values = cam.points.map((lane) => (lane.length ? lane.filter((point) => lum[point.i] > point.th).length / lane.length : 0));
+        const lanes = values.slice(0, s.lanes);
+        const clock = s.timing === 'sync' ? values[s.lanes] : null;
+        if (!cam.locking) {
+          feedReceiver(t, lanes, clock);
+          $('badge').hidden = false;
+          $('badge').textContent = `Locked on · reading ${lineCount(s)} line${lineCount(s) === 1 ? '' : 's'}`;
+        }
+        drawScreenOverlay(values);
+      }
+
+      function drawScreenOverlay(values) {
+        const cam = state.camera;
+        const ctx = cam.overlayCtx;
+        const s = state.settings;
+        const map = squareToQuad(cam.corners);
+        const cols = lineCount(s);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#818cf8';
+        ctx.beginPath();
+        cam.corners.forEach((corner, i) => (i ? ctx.lineTo(corner.x, corner.y) : ctx.moveTo(corner.x, corner.y)));
+        ctx.closePath();
+        ctx.stroke();
+        for (let c = 0; c < cols; c += 1) {
+          const u = (c + 0.5) / cols;
+          const bottom = map(u, 1);
+          const topPoint = map(u, 1 - values[c]);
+          const isClock = s.timing === 'sync' && c === cols - 1;
+          ctx.strokeStyle = isClock ? '#38bdf8' : '#f472b6';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(bottom.x, bottom.y);
+          ctx.lineTo(topPoint.x, topPoint.y);
+          ctx.stroke();
+          const label = map(u, 0);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 11px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(isClock ? 'CLK' : String(quantiseLevel(values[c], isClock ? 2 : levelCount(s))), label.x, label.y - 4);
+        }
+      }
+
+      function startLock() {
+        const cam = state.camera;
+        if (!cam.lum) return;
+        cam.locking = { until: now() + LOCK_SECONDS, min: new Uint8Array(cam.lum.length).fill(255), max: new Uint8Array(cam.lum.length) };
+        cam.points = null;
+        cam.corners = null;
+        renderHandles();
+        setCameraStatus('Locking on: keep the sender’s flashing lock-on pattern in view and hold both devices still.');
+      }
+
+      function finishLock() {
+        const cam = state.camera;
+        const { min, max } = cam.locking;
+        cam.locking = null;
+        for (let p = 0; p < cam.mask.length; p += 1) cam.mask[p] = max[p] - min[p] > 50 ? 1 : 0;
+        const blob = largestBlob(cam.mask, cam.labels, cam.stack, cam.procW, cam.procH);
+        if (!blob || blob.count < 400) {
+          $('badge').textContent = 'Lock-on failed';
+          setCameraStatus('No flashing panel found. Check the sender is showing the lock-on pattern, move the camera closer so the panel fills more of the picture, and try again.');
+          renderSteps();
+          return;
+        }
+        cam.lockMin = min;
+        cam.lockMax = max;
+        cam.corners = quadCorners(cam.labels, blob.label, cam.procW, cam.procH);
+        cam.points = laneSamplePoints();
+        renderHandles();
+        resetReceiver();
+        const contrast = cam.points.flat().reduce((sum, point) => sum + point.contrast, 0) / Math.max(1, cam.points.flat().length);
+        setCameraStatus(contrast < 60
+          ? 'Locked on, but with low contrast. Turn up the sender’s brightness, or dim the room, for more reliable reading.'
+          : 'Locked on. Check the outline sits on the panel’s corners (drag a corner to adjust). The sender can hide the pattern and press Transmit.');
+        renderSteps();
+      }
+
+      function laneSamplePoints() {
+        const cam = state.camera;
+        if (!cam.corners || !cam.lockMin) return null;
+        const map = squareToQuad(cam.corners);
+        const cols = lineCount(state.settings);
+        const lanes = [];
+        for (let c = 0; c < cols; c += 1) {
+          const points = [];
+          for (const offset of [-0.12, 0, 0.12]) {
+            const u = (c + 0.5 + offset) / cols;
+            for (let k = 0; k < LANE_SAMPLES; k += 1) {
+              const p = map(u, 0.03 + (0.94 * (k + 0.5)) / LANE_SAMPLES);
+              const x = Math.round(p.x);
+              const y = Math.round(p.y);
+              if (x < 0 || y < 0 || x >= cam.procW || y >= cam.procH) continue;
+              const i = y * cam.procW + x;
+              points.push({ i, th: (cam.lockMin[i] + cam.lockMax[i]) / 2, contrast: cam.lockMax[i] - cam.lockMin[i] });
+            }
+          }
+          lanes.push(points);
+        }
+        return lanes;
+      }
+
+      function renderHandles() {
+        const box = $('handles');
+        const cam = state.camera;
+        if (!cam.corners || state.mode !== 'receiver') { box.innerHTML = ''; return; }
+        const names = ['Top-left', 'Top-right', 'Bottom-right', 'Bottom-left'];
+        if (box.children.length !== 4) {
+          box.innerHTML = names.map((name, i) => `<button type="button" class="handle" data-corner="${i}" aria-label="${name} corner of the sender's panel: drag, or use the arrow keys"></button>`).join('');
+        }
+        [...box.children].forEach((handle, i) => {
+          handle.style.left = `${(cam.corners[i].x / cam.procW) * 100}%`;
+          handle.style.top = `${(cam.corners[i].y / cam.procH) * 100}%`;
+        });
+      }
+
+      function moveCorner(index, x, y) {
+        const cam = state.camera;
+        cam.corners[index] = { x: clamp(x, 0, cam.procW - 1), y: clamp(y, 0, cam.procH - 1) };
+        cam.points = laneSamplePoints();
+        renderHandles();
+      }
+
+      // ---------- Humans: pose detection ----------
+      async function loadPoseModel() {
+        const pose = state.pose;
+        if (pose.landmarker || pose.loading) return;
+        setCameraStatus('Loading the pose-detection model (about 6 MB, only the first time)…');
+        pose.loading = (async () => {
+          try {
+            const vision = await import(`${POSE_LIBRARY}/vision_bundle.mjs`);
+            const files = await vision.FilesetResolver.forVisionTasks(`${POSE_LIBRARY}/wasm`);
+            const options = (delegate) => ({ baseOptions: { modelAssetPath: POSE_MODEL, delegate }, runningMode: 'VIDEO', numPoses: 5 });
+            try {
+              pose.landmarker = await vision.PoseLandmarker.createFromOptions(files, options('GPU'));
+            } catch (e) {
+              pose.landmarker = await vision.PoseLandmarker.createFromOptions(files, options('CPU'));
+            }
+            $('calibrate').disabled = false;
+            setCameraStatus(`Pose model ready. ${peopleNeeded()} ${peopleNeeded() === 1 ? 'person' : 'people'}: stand side by side facing the camera, then press Calibrate arms.`);
+          } catch (error) {
+            setCameraStatus('The pose-detection model could not load. Check the internet connection, then turn the camera off and on to retry.');
+          } finally {
+            pose.loading = null;
+            renderSteps();
+          }
+        })();
+      }
+
+      function peopleNeeded() { return lineCount(state.settings); }
+
+      function processPose(video) {
+        const pose = state.pose;
+        const cam = state.camera;
+        const ctx = cam.overlayCtx;
+        ctx.clearRect(0, 0, cam.procW, cam.procH);
+        if (!pose.landmarker) return;
+        let result;
+        try {
+          result = pose.landmarker.detectForVideo(video, performance.now());
+        } catch (e) {
+          return;
+        }
+        const t = now();
+        const people = (result.landmarks || []).map((lm) => {
+          const shoulderY = (lm[11].y + lm[12].y) / 2;
+          const hipY = (lm[23].y + lm[24].y) / 2;
+          const wristY = (lm[15].y + lm[16].y) / 2;
+          return {
+            x: (lm[11].x + lm[12].x + lm[23].x + lm[24].x) / 4,
+            raw: (hipY - wristY) / Math.max(0.02, hipY - shoulderY),
+            lm,
+          };
+        }).filter((person) => Number.isFinite(person.raw))
+          // Raw camera x runs opposite to the mirrored view, so sort descending to read left to right as shown.
+          .sort((a, b) => b.x - a.x);
+        const needed = peopleNeeded();
+        const calibration = pose.calibration;
+        const values = people.map((person, i) => {
+          const c = calibration && calibration[i] ? calibration[i] : { low: 0.05, high: 1 };
+          return clamp((person.raw - c.low) / (c.high - c.low), 0, 1);
+        });
+        // A short median filter steadies jittery landmarks.
+        pose.history.push(values);
+        if (pose.history.length > 3) pose.history.shift();
+        const smooth = values.map((_, i) => {
+          const recent = pose.history.map((frame) => frame[i]).filter((v) => v !== undefined).sort((a, b) => a - b);
+          return recent[Math.floor(recent.length / 2)];
+        });
+        if (pose.calibrating) progressCalibration(t, people);
+        drawPoseOverlay(people, smooth, needed);
+        $('badge').hidden = false;
+        $('badge').textContent = people.length === needed ? `${needed} ${needed === 1 ? 'person' : 'people'} found` : `Found ${people.length} of ${needed} people needed`;
+        if (people.length !== needed || pose.calibrating) return;
+        const s = state.settings;
+        feedReceiver(t, smooth.slice(0, s.lanes), s.timing === 'sync' ? smooth[s.lanes] : null);
+      }
+
+      function drawPoseOverlay(people, values, needed) {
+        const cam = state.camera;
+        const ctx = cam.overlayCtx;
+        const s = state.settings;
+        const levels = levelCount(s);
+        const W = cam.procW;
+        const H = cam.procH;
+        const X = (nx) => (1 - nx) * W;
+        people.forEach((person, i) => {
+          const { lm } = person;
+          const isClock = s.timing === 'sync' && i === s.lanes;
+          const extra = i >= needed;
+          const colour = extra ? '#94a3b8' : isClock ? '#fbbf24' : '#4ade80';
+          ctx.strokeStyle = colour;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(X(lm[11].x), lm[11].y * H);
+          ctx.lineTo(X(lm[12].x), lm[12].y * H);
+          ctx.lineTo(X(lm[24].x), lm[24].y * H);
+          ctx.lineTo(X(lm[23].x), lm[23].y * H);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.fillStyle = colour;
+          for (const index of [15, 16]) {
+            ctx.beginPath();
+            ctx.arc(X(lm[index].x), lm[index].y * H, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          const value = values[i];
+          const level = isClock ? (value > 0.5 ? 1 : 0) : quantiseLevel(value, levels);
+          const spot = value * (isClock ? 1 : levels - 1);
+          const unsure = Math.abs(spot - Math.round(spot)) > 0.3;
+          const label = extra ? 'extra' : isClock ? `CLK ${level ? 'UP' : 'DOWN'}` : `P${i + 1}: ${level}${unsure ? '?' : ''}`;
+          const lx = X((lm[11].x + lm[12].x) / 2);
+          const ly = Math.min(lm[11].y, lm[12].y) * H - 26;
+          ctx.font = 'bold 12px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          const width = ctx.measureText(label).width + 10;
+          ctx.fillStyle = '#000a';
+          ctx.fillRect(lx - width / 2, ly - 9, width, 18);
+          ctx.fillStyle = unsure && !extra ? '#fbbf24' : '#fff';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, lx, ly);
+          // A meter beside each person shows the continuous arm level against the level boundaries.
+          const mx = lx + width / 2 + 6;
+          const mTop = ly - 9;
+          const mH = 40;
+          ctx.fillStyle = '#000a';
+          ctx.fillRect(mx, mTop, 8, mH);
+          ctx.fillStyle = colour;
+          ctx.fillRect(mx, mTop + mH * (1 - value), 8, mH * value);
+        });
+      }
+
+      function startCalibration() {
+        if (!state.pose.landmarker) return;
+        state.pose.calibrating = { phase: 0, phaseStart: now(), samples: [[], []] };
+        state.pose.calibration = null;
+        resetReceiver();
+      }
+
+      function progressCalibration(t, people) {
+        const cal = state.pose.calibrating;
+        const phases = ['LOW (at your hips)', 'HIGH (at your shoulders)'];
+        const elapsed = t - cal.phaseStart;
+        const needed = peopleNeeded();
+        if (elapsed < 3) {
+          setCue(`Everyone: arms ${phases[cal.phase]} in ${Math.ceil(3 - elapsed)}…`);
+          return;
+        }
+        setCue(`Hold arms ${phases[cal.phase]}…`);
+        if (people.length === needed) cal.samples[cal.phase].push(people.map((person) => person.raw));
+        if (elapsed < 4.5) return;
+        if (cal.samples[cal.phase].length < 5) {
+          state.pose.calibrating = null;
+          setCue('');
+          setCameraStatus(`Calibration needs exactly ${needed} ${needed === 1 ? 'person' : 'people'} in view. Check everyone’s hips and shoulders are visible, then try again.`);
+          return;
+        }
+        if (cal.phase === 0) {
+          cal.phase = 1;
+          cal.phaseStart = t;
+          return;
+        }
+        const median = (list) => list.slice().sort((a, b) => a - b)[Math.floor(list.length / 2)];
+        const calibration = [];
+        for (let i = 0; i < needed; i += 1) {
+          const low = median(cal.samples[0].map((frame) => frame[i]));
+          const high = median(cal.samples[1].map((frame) => frame[i]));
+          calibration.push({ low, high: high - low < 0.2 ? low + 0.2 : high });
+        }
+        state.pose.calibration = calibration;
+        state.pose.calibrating = null;
+        setCue('');
+        setCameraStatus('Calibrated. Keep the same order in the line. Press Transmit and follow the senders’ script.');
+        renderSteps();
+      }
+
+      // ---------- Mode handling ----------
+      function renderSteps() {
+        const cam = state.camera;
+        let steps = [];
+        if (state.mode === 'receiver') {
+          steps = [
+            ['Paste the sender’s settings code above, or match every setting', true],
+            ['Start the camera and point it at the sender’s signal panel', !!cam.stream],
+            ['Sender: Show lock-on pattern. Receiver: press Lock on and hold still for 3 s', !!cam.points],
+            ['Check the outline sits on the panel’s corners, then the sender presses Transmit', false],
+          ];
+        } else if (state.mode === 'humans') {
+          const n = peopleNeeded();
+          steps = [
+            [`Start the camera. ${n} ${n === 1 ? 'person stands' : 'people stand'} side by side facing it, hips to head in view`, !!cam.stream && !!state.pose.landmarker],
+            ['Calibrate: hold a forearm across your body low, then high, when told', !!state.pose.calibration],
+            ['Press Transmit and follow the senders’ script, changing on each tick', false],
+          ];
+        }
+        $('steps').innerHTML = steps.map(([text, done], i) => `<li data-number="${i + 1}"${done ? ' class="done"' : ''}>${text}</li>`).join('');
+      }
+
+      function setMode(mode) {
+        const previousGroup = group();
+        state.mode = mode;
+        $('lab').dataset.mode = mode;
+        document.querySelectorAll('[data-modes]').forEach((el) => { el.hidden = !el.dataset.modes.split(' ').includes(mode); });
+        $('sender-card').hidden = mode === 'receiver';
+        $('receiver-card').hidden = mode === 'sender';
+        $('stage').classList.toggle('mirror', mode === 'humans');
+        $('sender-eyebrow').textContent = mode === 'humans' ? 'Senders (the people)' : 'Sender';
+        $('sender-title').textContent = mode === 'humans' ? 'Senders’ script' : 'Transmit';
+        const captions = {
+          sim: 'Sender output: one bar per line, and bar height is the signal level.',
+          sender: 'Point the receiver’s camera at this panel. Full screen works best.',
+          humans: 'What each person should show right now: arm height = bar height. Change on each sender clock tick.',
+        };
+        $('signal-caption').textContent = captions[mode] || '';
+        if (state.lockPattern && mode !== 'sender') setLockPattern(false);
+        if (state.camera.stream) stopCamera();
+        state.camera.corners = null;
+        state.camera.points = null;
+        renderHandles();
+        if (previousGroup !== group()) rebuildSettingOptions();
+        if (!state.camera.stream) setStageMessage('Camera off. Press <strong>Start camera</strong>. The video stays on this device.');
+        setCameraStatus('');
+        settingsChanged();
+      }
+
+      // ---------- Events ----------
+      $('mode').addEventListener('change', () => setMode($('mode').value));
+      ['lines', 'bps', 'baud', 'timing', 'payload', 'parity', 'parity-pos', 'bit-order'].forEach((id) => $(id).addEventListener('change', () => {
+        $('code-feedback').textContent = '';
+        settingsChanged();
+      }));
+      $('flash-accept').addEventListener('click', () => {
+        state.flashAccepted = true;
+        updateImpairmentNote();
+        $('transmit').focus();
+      });
+      $('flash-safe').addEventListener('click', useSafeSettings);
+      $('apply-code').addEventListener('click', () => {
+        const decoded = decodeSettings($('settings-code').value);
+        if (!decoded || (group() === 'humans' ? !LINES.humans.includes(decoded.lanes) || !BAUDS.humans.includes(decoded.baud) : !LINES.device.includes(decoded.lanes) || !BAUDS.device.includes(decoded.baud))) {
+          $('code-feedback').textContent = 'That code is not valid for this mode. Codes look like 1-1-2-A-AEMM.';
+          return;
+        }
+        writeSettings(decoded);
+        settingsChanged();
+        $('code-feedback').textContent = '✓ Settings matched to the code.';
+      });
+      $('settings-code').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('apply-code').click(); });
+      $('message').addEventListener('input', () => { if (!state.tx) renderPreview(); });
+      $('message').addEventListener('keydown', (event) => { if (event.key === 'Enter') transmit(); });
+      $('transmit').addEventListener('click', transmit);
+      ['skew', 'crosstalk', 'noise', 'bandwidth'].forEach((id) => $(id).addEventListener('input', updateImpairmentNote));
+      $('lock-pattern').addEventListener('click', () => {
+        if (state.tx) stopTransmission();
+        setLockPattern(!state.lockPattern);
+      });
+      $('fullscreen').addEventListener('click', () => {
+        const wrap = $('signal-wrap');
+        if (document.fullscreenElement) document.exitFullscreen();
+        else if (wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
+      });
+      $('camera-toggle').addEventListener('click', () => (state.camera.stream ? stopCamera() : startCamera()));
+      $('lock').addEventListener('click', startLock);
+      $('calibrate').addEventListener('click', startCalibration);
+      $('rx-clear').addEventListener('click', resetReceiver);
+      $('show-script').addEventListener('change', () => { $('signal-area').hidden = !$('show-script').checked; });
+      $('tick-sound').addEventListener('change', () => { if ($('tick-sound').checked) ensureAudio(); });
+
+      let dragging = null;
+      $('handles').addEventListener('pointerdown', (event) => {
+        const handle = event.target.closest('.handle');
+        if (!handle) return;
+        dragging = Number(handle.dataset.corner);
+        handle.setPointerCapture(event.pointerId);
+      });
+      $('handles').addEventListener('pointermove', (event) => {
+        if (dragging === null) return;
+        const rect = $('stage').getBoundingClientRect();
+        const cam = state.camera;
+        moveCorner(dragging, ((event.clientX - rect.left) / rect.width) * cam.procW, ((event.clientY - rect.top) / rect.height) * cam.procH);
+      });
+      $('handles').addEventListener('pointerup', () => { dragging = null; });
+      $('handles').addEventListener('keydown', (event) => {
+        const handle = event.target.closest('.handle');
+        const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+        if (!handle || !moves[event.key]) return;
+        event.preventDefault();
+        const step = event.shiftKey ? 5 : 1;
+        const index = Number(handle.dataset.corner);
+        const corner = state.camera.corners[index];
+        moveCorner(index, corner.x + moves[event.key][0] * step, corner.y + moves[event.key][1] * step);
+      });
+
+      rebuildSettingOptions();
+      setMode('sim');
+      requestAnimationFrame(frameLoop);
+    });
+  </script>
+</body>
+</html>
