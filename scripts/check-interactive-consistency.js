@@ -692,6 +692,13 @@ if (fs.existsSync(subnetMaskingPath)) {
   if (!/now - last\.time < 400\)\s*\{\s*event\.preventDefault\(\);/.test(flowchartSource)) {
     failures.push('flowchart_designer.html: double-clicking a block must prevent the default focus so its editor keeps focus');
   }
+  // Side columns scroll; their cards must never shrink to fit (the trace
+  // table was once squashed to a sliver on short screens).
+  if (!/\.fc-scroll-pane > \*\s*\{\s*flex-shrink:\s*0;/.test(flowchartSource)
+    || (flowchartSource.match(/className="fc-scroll-pane /g) || []).length < 2
+    || /aria-labelledby="fc-trace-title" className=\{cardClass \+ " flex min-h-0/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: the palette and side panel must scroll without shrinking their cards');
+  }
   if (!/role="separator"/.test(flowchartSource) || !/ArrowLeft/.test(flowchartSource)) {
     failures.push('flowchart_designer.html: the side panel grip must be a keyboard-operable separator');
   }

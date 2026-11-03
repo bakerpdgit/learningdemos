@@ -52,9 +52,19 @@
         min-height: 100vh;
       }
       @media (min-width: 1024px) {
+        /* Below this height the panels would be too short to use, so the
+           page scrolls instead. */
         .flowchart-app {
           height: 100vh;
-          min-height: 0;
+          min-height: 500px;
+        }
+        /* Cards in the side columns keep their natural height; the column
+           scrolls rather than squashing them. */
+        .fc-scroll-pane > * {
+          flex-shrink: 0;
+        }
+        .fc-scroll-pane {
+          scrollbar-gutter: stable;
         }
         body[data-site-page="interactive"] .flowchart-app {
           height: calc(100vh - 58px);
@@ -2508,12 +2518,63 @@
         );
       }
 
+      /* ---------------------------------------------------------------
+         "More below" cue for a scrolling column. Some systems hide
+         scrollbars until you scroll, so a fade and a small button show
+         that the column has more content further down.
+         --------------------------------------------------------------- */
+      function MoreBelow({ paneRef, gap, fadeClass }) {
+        const [more, setMore] = useState(false);
+        useEffect(() => {
+          const pane = paneRef.current;
+          if (!pane) return undefined;
+          const update = () => {
+            const scrolls = getComputedStyle(pane).overflowY !== "visible";
+            setMore(scrolls && pane.scrollHeight - pane.clientHeight - pane.scrollTop > 6);
+          };
+          update();
+          pane.addEventListener("scroll", update, { passive: true });
+          pane.addEventListener("toggle", update, true);
+          const resize = new ResizeObserver(update);
+          resize.observe(pane);
+          const mutation = new MutationObserver(update);
+          mutation.observe(pane, { childList: true, subtree: true, characterData: true });
+          window.addEventListener("resize", update);
+          return () => {
+            pane.removeEventListener("scroll", update);
+            pane.removeEventListener("toggle", update, true);
+            resize.disconnect();
+            mutation.disconnect();
+            window.removeEventListener("resize", update);
+          };
+        }, [paneRef]);
+        if (!more) return null;
+        return (
+          <div
+            className={"pointer-events-none sticky bottom-0 z-10 flex h-10 items-end justify-center bg-gradient-to-b from-transparent " + fadeClass}
+            style={{ marginTop: `calc(-2.5rem - ${gap})` }}
+          >
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              onClick={() => paneRef.current.scrollBy({ top: paneRef.current.clientHeight * 0.75, behavior: "smooth" })}
+              className="pointer-events-auto mb-1 rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              More below ▾
+            </button>
+          </div>
+        );
+      }
+
       function Palette({ tabKind, disabled, onAdd, onDragStart }) {
+        const paneRef = useRef(null);
         const types = ["process", "input", "output", "decision", "call", tabKind === "sub" ? "return" : "end"];
         return (
           <aside
+            ref={paneRef}
             aria-label="Blocks"
-            className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-300 bg-white p-2 dark:border-slate-700 dark:bg-slate-900 lg:min-h-0 lg:overflow-y-auto"
+            className="fc-scroll-pane flex min-w-0 flex-col gap-2 rounded-lg border border-slate-300 bg-white p-2 dark:border-slate-700 dark:bg-slate-900 lg:min-h-0 lg:overflow-y-auto"
           >
             <h2 className="px-1 text-sm font-bold text-slate-700 dark:text-slate-200">Blocks</h2>
             <div className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap">
@@ -2539,6 +2600,7 @@
                 ? "Switch to Design to change the flowchart."
                 : "Drag a block onto the canvas, or select a block and click here to add the next one at its filled dot."}
             </p>
+            <MoreBelow paneRef={paneRef} gap="0.5rem" fadeClass="to-white dark:to-slate-900" />
           </aside>
         );
       }
@@ -3196,7 +3258,7 @@
         }
 
         return (
-          <div className="flex min-h-0 flex-col gap-3">
+          <div className="flex flex-col gap-3">
             <section aria-label="Run controls" className={cardClass + " flex flex-col gap-2"}>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" className={smallButton} onClick={onRestart}>
@@ -3367,7 +3429,7 @@
               </div>
             </section>
 
-            <section aria-labelledby="fc-trace-title" className={cardClass + " flex min-h-0 flex-col"}>
+            <section aria-labelledby="fc-trace-title" className={cardClass + " flex flex-col"}>
               <h2 id="fc-trace-title" className="mb-1 text-sm font-bold">
                 Trace table
               </h2>
@@ -4350,7 +4412,7 @@
 
               <SideResizer width={sideWidth} onResize={setSideWidth} containerRef={mainRef} asideRef={asideRef} />
 
-              <aside ref={asideRef} aria-label={design ? "Block editor and checks" : "Simulation"} className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+              <aside ref={asideRef} aria-label={design ? "Block editor and checks" : "Simulation"} className="fc-scroll-pane flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
                 {design ? (
                   <React.Fragment>
                     <Inspector
@@ -4397,6 +4459,7 @@
                     />
                   )
                 )}
+                <MoreBelow paneRef={asideRef} gap="0.75rem" fadeClass="to-slate-100 dark:to-slate-950" />
               </aside>
             </div>
 
