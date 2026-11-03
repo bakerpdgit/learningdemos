@@ -906,6 +906,152 @@ if (fs.existsSync(subnetMaskingPath)) {
   }
 }
 
+// The data transmission lab's framing and decoders must round-trip every
+// serial/parallel, sync/async and multi-level combination through a 30 fps
+// receiver, and its impairments must cause the errors the page describes.
+{
+  const commsSource = fs.readFileSync(path.join(root, 'data_transmission_camera_lab.html'), 'utf8');
+  const codecScript = commsSource.match(/<script id="comms-codec">([\s\S]*?)<\/script>/);
+  if (!codecScript) {
+    failures.push('data_transmission_camera_lab.html: missing comms codec');
+  } else {
+    const codec = require('vm').runInNewContext(
+      `${codecScript[1]}; ({ normaliseSettings, buildSchedule, scheduleAt, Channel, createDecoder, decodeWord, asciiWord, linkRates, encodeSettings, decodeSettings, squareToQuad, quadCorners, bitsToSymbols, symbolsToBits, flashesPerSecond, FLASH_LIMIT })`,
+      {},
+      { timeout: 5000 },
+    );
+    const seeded = (seed) => () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    const runLink = (settings, input, channelOptions = {}, gaps = [0.3, 1.7, 0, 2.4]) => {
+      let gapIndex = 0;
+      const schedule = codec.buildSchedule(input, settings, { gap: () => gaps[gapIndex++ % gaps.length] });
+      const channel = new codec.Channel(settings, channelOptions, seeded(7));
+      const decoder = codec.createDecoder(settings);
+      const frames = [];
+      const tails = [];
+      const ideal = (t) => codec.scheduleAt(schedule, t);
+      for (let t = 0.013; t <= schedule.duration + 1; t += 1 / 30) {
+        const out = channel.sampleAt(t, ideal);
+        for (const event of decoder.feed(t, out.lanes, out.clock)) {
+          if (event.type === 'frame') frames.push(event);
+          if (event.type === 'padding') tails.push(...event.bits);
+        }
+      }
+      return { schedule, frames, tails };
+    };
+    const textOf = (frames) => frames.filter((frame) => !frame.padding).map((frame) => frame.char).join('');
+    const message = 'Hi, AQA ~7';
+    for (const lanes of [1, 2, 4, 8]) {
+      for (const bps of [1, 2, 3]) {
+        for (const timing of lanes === 1 ? ['async', 'sync'] : ['sync']) {
+          for (const [parity, parityPos, bitOrder] of [['even', 'msb', 'msb'], ['odd', 'lsb', 'lsb'], ['even', 'lsb', 'msb'], ['odd', 'msb', 'lsb']]) {
+            const settings = codec.normaliseSettings({ lanes, bps, baud: 2, timing, payload: 'ascii', parity, parityPos, bitOrder });
+            const { frames } = runLink(settings, { text: message });
+            const label = `${lanes} line(s), ${bps} bit/signal, ${timing}, ${parity} parity ${parityPos}, ${bitOrder} first`;
+            if (textOf(frames) !== message || frames.some((frame) => !frame.parityOk || !frame.framingOk)) {
+              failures.push(`Data transmission lab (${label}): sent "${message}" but decoded "${textOf(frames)}"`);
+            }
+          }
+        }
+      }
+    }
+    const fast = codec.normaliseSettings({ lanes: 1, bps: 1, baud: 10, timing: 'async', payload: 'ascii' });
+    if (textOf(runLink(fast, { text: message }).frames) !== message) {
+      failures.push('Data transmission lab: 10 baud asynchronous serial must decode through a 30 fps camera');
+    }
+    for (const timing of ['async', 'sync']) {
+      const raw = codec.normaliseSettings({ lanes: 1, bps: 3, baud: 2, timing, payload: 'raw' });
+      const bits = [1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1];
+      const link = runLink(raw, { bits });
+      const received = link.frames.flatMap((frame) => frame.bits).concat(link.tails).join('');
+      if (!received.startsWith(bits.join(''))) failures.push(`Data transmission lab: raw ${timing} bits must arrive in order`);
+    }
+
+    const asyncSettings = codec.normaliseSettings({ lanes: 1, bps: 2, baud: 2, timing: 'async' });
+    const asyncSchedule = codec.buildSchedule({ text: 'AB' }, asyncSettings, { gap: () => 1.37 });
+    const starts = asyncSchedule.segments.filter((segment) => segment.role === 'start');
+    const stops = asyncSchedule.segments.filter((segment) => segment.role === 'stop');
+    if (starts.length !== 2 || starts.some((segment) => segment.levels[0] !== 3)
+      || stops.some((segment) => segment.levels[0] !== 0 || segment.end - segment.start < 1)
+      || stops[0].end - stops[0].start <= 1) {
+      failures.push('Data transmission lab: async start bits must be HIGH and stop bits LOW for at least one symbol, with idle gaps between frames');
+    }
+    if (codec.normaliseSettings({ lanes: 4, timing: 'async' }).timing !== 'sync') {
+      failures.push('Data transmission lab: parallel transmission must not be asynchronous');
+    }
+
+    const word = codec.asciiWord(72, codec.normaliseSettings({ parity: 'even', parityPos: 'lsb' }));
+    for (let flip = 0; flip < 8; flip += 1) {
+      const corrupted = word.bits.slice();
+      corrupted[flip] ^= 1;
+      if (codec.decodeWord(corrupted, codec.normaliseSettings({ parity: 'even', parityPos: 'lsb' })).parityOk) {
+        failures.push('Data transmission lab: a single flipped bit must give a parity error');
+        break;
+      }
+    }
+
+    const sample = codec.normaliseSettings({ lanes: 2, bps: 3, baud: 0.25, timing: 'sync', payload: 'ascii', parity: 'odd', parityPos: 'lsb', bitOrder: 'lsb' });
+    const roundTrip = codec.decodeSettings(codec.encodeSettings(sample).toLowerCase());
+    if (!roundTrip || JSON.stringify(roundTrip) !== JSON.stringify(sample)) failures.push('Data transmission lab: settings codes must round-trip');
+    const rates = codec.linkRates(codec.normaliseSettings({ lanes: 1, bps: 2, baud: 5, timing: 'async', payload: 'ascii' }));
+    const parallelRates = codec.linkRates(codec.normaliseSettings({ lanes: 4, bps: 3, baud: 2, timing: 'sync', payload: 'ascii' }));
+    if (rates.bitRate !== 10 || Math.abs(rates.dataRate - 35 / 6) > 1e-9 || parallelRates.bitRate !== 24 || parallelRates.linesUsed !== 5
+      || Math.abs(parallelRates.dataRate - 21) > 1e-9) {
+      failures.push('Data transmission lab: bit rate must be baud × bits per signal × lines, with overheads removed from the data rate');
+    }
+
+    const errorsWith = (settings, options) => {
+      const received = textOf(runLink(settings, { text: message }, options).frames);
+      let errors = Math.abs(received.length - message.length);
+      for (let i = 0; i < Math.min(received.length, message.length); i += 1) if (received[i] !== message[i]) errors += 1;
+      return errors;
+    };
+    const parallel = codec.normaliseSettings({ lanes: 4, bps: 1, baud: 4, timing: 'sync' });
+    // At 4 baud half a symbol is 125 ms; the last of 4 lines lags by 3 × skew.
+    if (errorsWith(parallel, { skew: 0.03 }) || !errorsWith(parallel, { skew: 0.06 })) {
+      failures.push('Data transmission lab: skew must be harmless below half a clock period and corrupt parallel data beyond it');
+    }
+    const binary = codec.normaliseSettings({ lanes: 1, bps: 1, baud: 2, timing: 'async' });
+    const eightLevel = codec.normaliseSettings({ lanes: 1, bps: 3, baud: 2, timing: 'async' });
+    if (errorsWith(binary, { noise: 0.08 }) || !errorsWith(eightLevel, { noise: 0.08 })) {
+      failures.push('Data transmission lab: the same noise must corrupt 8-level signals but not 2-level ones');
+    }
+    if (errorsWith(codec.normaliseSettings({ lanes: 1, bps: 1, baud: 0.5, timing: 'async' }), { bandwidth: 1 })
+      || !errorsWith(codec.normaliseSettings({ lanes: 1, bps: 1, baud: 10, timing: 'async' }), { bandwidth: 1 })) {
+      failures.push('Data transmission lab: a low bandwidth must only corrupt high baud rates');
+    }
+
+    // Signals flashing more than three times a second (WCAG 2.3.1) must stay
+    // locked behind the photosensitivity warning: a sync clock flashes once per
+    // symbol, a data bar at most once every two symbols.
+    const flashes = (options) => codec.flashesPerSecond(codec.normaliseSettings(options));
+    if (codec.FLASH_LIMIT !== 3 || flashes({ baud: 4, timing: 'sync' }) !== 4 || flashes({ baud: 2, timing: 'sync' }) !== 2
+      || flashes({ baud: 6, timing: 'async' }) !== 3 || flashes({ baud: 10, timing: 'async' }) !== 5) {
+      failures.push('Data transmission lab: flash rates must count a sync clock cycle per symbol and a data flash per two symbols');
+    }
+    if (!/function transmit\(\) \{[^}]*\}\s*if \(flashGated\(\)\)/.test(commsSource)
+      || !/noise: flashGated\(\) \? 0 :/.test(commsSource)
+      || !/\$\('transmit'\)\.disabled = state\.lockPattern \|\| gated/.test(commsSource)) {
+      failures.push('Data transmission lab: transmitting and noise must stay locked until the photosensitivity warning is accepted');
+    }
+
+    const map = codec.squareToQuad([{ x: 10, y: 12 }, { x: 90, y: 20 }, { x: 80, y: 70 }, { x: 15, y: 60 }]);
+    const mapped = [map(0, 0), map(1, 0), map(1, 1), map(0, 1)];
+    const expectedCorners = [[10, 12], [90, 20], [80, 70], [15, 60]];
+    if (mapped.some((point, i) => Math.abs(point.x - expectedCorners[i][0]) > 1e-9 || Math.abs(point.y - expectedCorners[i][1]) > 1e-9)) {
+      failures.push('Data transmission lab: the lock-on homography must map the unit square onto the panel corners');
+    }
+    const labels = new Int32Array(20 * 10);
+    for (let y = 2; y <= 7; y += 1) for (let x = 4; x <= 15; x += 1) labels[y * 20 + x] = 1;
+    const corners = codec.quadCorners(labels, 1, 20, 10);
+    if (JSON.stringify(corners) !== JSON.stringify([{ x: 4, y: 2 }, { x: 15, y: 2 }, { x: 15, y: 7 }, { x: 4, y: 7 }])) {
+      failures.push('Data transmission lab: lock-on must find the four corners of the flashing panel');
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));
