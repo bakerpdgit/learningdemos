@@ -1661,114 +1661,697 @@
       }
 
       /* ---------------------------------------------------------------
-         Connector routing. Connectors are orthogonal, leave from the
-         bottom (or a decision's side exit) and always enter the next
-         block from the top. A connector that has to climb back up runs
-         through the gap beside its target if there is one, otherwise
-         round the outside of the blocks it passes, then joins the
-         target's incoming line just above its top.
+         Connector routing. Connectors are orthogonal and run along a
+         sparse grid of lines that keep clear of every block. Each one is
+         found with a shortest-path search that charges for length, for
+         each bend, for crossing another connector and for running along
+         one, so connectors take the clearest path rather than a fixed
+         shape.
+
+         A decision is only ever entered from the top and its exits stay
+         on the sides the student chose. Any other block may be entered
+         from any side its exit isn't using, and its exit may leave from
+         any side no connector enters, although the usual top-in,
+         bottom-out arrangement is preferred whenever it is as clear.
+         After a first pass, each troubled block's connectors are
+         re-routed exits-first and the result is kept if the whole chart
+         is clearer. Where connectors join before entering a block, the
+         one that joins gets an arrowhead at the junction.
          --------------------------------------------------------------- */
-      const APPROACH = 20;
+      const CLEAR = 20; // routing lines run this far from a block
+      const LANE = 16; // spacing of the extra lanes used by nested loops
+      const PAD = 12; // no connector comes closer to a block than this
+      const BEND_COST = 22;
+      const CROSS_COST = 160;
+      const OVERLAP_COST = 5; // per unit of length shared with an unrelated connector
+      const EXIT_COST = { bottom: 0, left: 34, right: 34, top: 46 };
+      const ENTRY_COST = { top: 0, left: 22, right: 22, bottom: 40 };
+      const ROUTE_SIDES = ["bottom", "right", "left", "top"];
+      const SEARCH_LIMIT = 4000; // grid steps one search may explore
+      const SIDE_DIR = { top: 0, right: 1, bottom: 2, left: 3 }; // up, right, down, left
 
-      function routeEdges(tab, layouts) {
-        const routes = new Map();
-        const nodes = new Map(tab.nodes.map((node) => [node.id, node]));
-        const loops = [];
+      function stubLength(node, side) {
+        if (node.type !== "decision" || side === "top") return CLEAR;
+        // Room for the True/False label beside a decision's exit.
+        return side === "bottom" ? 34 : 54;
+      }
 
-        tab.edges.forEach((edge) => {
-          const from = nodes.get(edge.from);
-          const to = nodes.get(edge.to);
-          if (!from || !to || !layouts.get(from.id) || !layouts.get(to.id)) return;
-          const fromLayout = layouts.get(from.id);
-          const toLayout = layouts.get(to.id);
-          const side = portSide(from, edge.port);
-          const p = sidePoint(from, fromLayout, side);
-          const source = blockBox(from, fromLayout, false);
-          const target = blockBox(to, toLayout, false);
-          const top = { x: to.x, y: target.top };
-          const joinY = target.top - APPROACH;
-          let points = null;
+      // Where a connector leaving or entering this side meets the grid.
+      function stubPoint(node, layout, side) {
+        const p = sidePoint(node, layout, side);
+        const box = blockBox(node, layout, false);
+        const length = stubLength(node, side);
+        if (side === "top") return { x: p.x, y: box.top - length };
+        if (side === "bottom") return { x: p.x, y: box.bottom + length };
+        if (side === "left") return { x: box.left - length, y: p.y };
+        return { x: box.right + length, y: p.y };
+      }
 
-          if (target.top >= p.y + 20) {
-            // Forward: drop into the top of a block further down.
-            if (side === "bottom") {
-              if (Math.abs(to.x - p.x) < 1) {
-                points = [p, top];
-              } else {
-                const midY = Math.max(p.y + 16, joinY);
-                points = [p, { x: p.x, y: midY }, { x: to.x, y: midY }, top];
-              }
-            } else {
-              const direction = side === "right" ? 1 : -1;
-              if ((to.x - p.x) * direction >= 16) {
-                points = [p, { x: to.x, y: p.y }, top];
-              } else {
-                const outX = p.x + 24 * direction;
-                points = [p, { x: outX, y: p.y }, { x: outX, y: joinY }, { x: to.x, y: joinY }, top];
+      // The True/False labels beside a decision's exits; other connectors keep off them.
+      function labelBoxes(node, layout) {
+        if (node.type !== "decision") return [];
+        return FlowLang.OUTPUT_PORTS.decision.map((port) => {
+          const side = portSide(node, port);
+          const p = sidePoint(node, layout, side);
+          if (side === "bottom") return { left: p.x + 4, right: p.x + 46, top: p.y + 4, bottom: p.y + 24 };
+          if (side === "right") return { left: p.x + 4, right: p.x + 48, top: p.y - 20, bottom: p.y + 2 };
+          return { left: p.x - 48, right: p.x - 4, top: p.y - 20, bottom: p.y + 2 };
+        });
+      }
+
+      function segmentClear(obstacles, a, b, ownId) {
+        const low = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) };
+        const high = { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) };
+        return !obstacles.some((o) => {
+          if (o.id === ownId) return false;
+          if (a.x === b.x) return o.left < a.x && a.x < o.right && o.top < high.y && o.bottom > low.y;
+          return o.top < a.y && a.y < o.bottom && o.left < high.x && o.right > low.x;
+        });
+      }
+
+      function lowerBound(values, target) {
+        let low = 0;
+        let high = values.length;
+        while (low < high) {
+          const mid = (low + high) >> 1;
+          if (values[mid] < target) low = mid + 1;
+          else high = mid;
+        }
+        return low;
+      }
+
+      function buildRouteGrid(nodes, layouts) {
+        const xsSet = new Set();
+        const ysSet = new Set();
+        const obstacles = [];
+        let bounds = null;
+        nodes.forEach((node) => {
+          const layout = layouts.get(node.id);
+          const box = blockBox(node, layout, true);
+          obstacles.push({ id: node.id, left: box.left - PAD, right: box.right + PAD, top: box.top - PAD, bottom: box.bottom + PAD });
+          labelBoxes(node, layout).forEach((label) => obstacles.push({ id: node.id, ...label }));
+          xsSet.add(node.x);
+          ysSet.add(node.y);
+          [CLEAR, CLEAR + LANE].forEach((gap) => {
+            xsSet.add(box.left - gap);
+            xsSet.add(box.right + gap);
+            ysSet.add(box.top - gap);
+            ysSet.add(box.bottom + gap);
+          });
+          ROUTE_SIDES.forEach((side) => {
+            const stub = stubPoint(node, layout, side);
+            xsSet.add(stub.x);
+            ysSet.add(stub.y);
+          });
+          if (!bounds) bounds = { ...box };
+          else {
+            bounds.left = Math.min(bounds.left, box.left);
+            bounds.right = Math.max(bounds.right, box.right);
+            bounds.top = Math.min(bounds.top, box.top);
+            bounds.bottom = Math.max(bounds.bottom, box.bottom);
+          }
+        });
+        // Outer lanes for connectors that must go round everything.
+        for (let lane = 0; lane < 3; lane += 1) {
+          const gap = 70 + lane * LANE;
+          xsSet.add(bounds.left - gap);
+          xsSet.add(bounds.right + gap);
+          ysSet.add(bounds.top - gap);
+          ysSet.add(bounds.bottom + gap);
+        }
+        const xs = [...xsSet].sort((a, b) => a - b);
+        const ys = [...ysSet].sort((a, b) => a - b);
+        const NX = xs.length;
+        const NY = ys.length;
+        const nb = new Int32Array(NX * NY * 4).fill(-1);
+        for (let yi = 0; yi < NY; yi += 1) {
+          const y = ys[yi];
+          const row = obstacles.filter((o) => o.top < y && y < o.bottom);
+          for (let xi = 0; xi < NX - 1; xi += 1) {
+            const xa = xs[xi];
+            const xb = xs[xi + 1];
+            if (row.some((o) => o.left < xb && o.right > xa)) continue;
+            const a = yi * NX + xi;
+            nb[a * 4 + 1] = a + 1;
+            nb[(a + 1) * 4 + 3] = a;
+          }
+        }
+        for (let xi = 0; xi < NX; xi += 1) {
+          const x = xs[xi];
+          const column = obstacles.filter((o) => o.left < x && x < o.right);
+          for (let yi = 0; yi < NY - 1; yi += 1) {
+            const ya = ys[yi];
+            const yb = ys[yi + 1];
+            if (column.some((o) => o.top < yb && o.bottom > ya)) continue;
+            const a = yi * NX + xi;
+            nb[a * 4 + 2] = a + NX;
+            nb[(a + NX) * 4] = a;
+          }
+        }
+        const NP = NX * NY;
+        const px = new Float64Array(NP);
+        const py = new Float64Array(NP);
+        for (let pi = 0; pi < NP; pi += 1) {
+          px[pi] = xs[pi % NX];
+          py[pi] = ys[(pi / NX) | 0];
+        }
+        // Connected regions, so a connector with no possible path is
+        // spotted at once instead of after searching the whole grid.
+        const region = new Int32Array(NP).fill(-1);
+        const stack = [];
+        let regions = 0;
+        for (let start = 0; start < NP; start += 1) {
+          if (region[start] >= 0) continue;
+          region[start] = regions;
+          stack.push(start);
+          while (stack.length) {
+            const pi = stack.pop();
+            for (let dir = 0; dir < 4; dir += 1) {
+              const next = nb[pi * 4 + dir];
+              if (next >= 0 && region[next] < 0) {
+                region[next] = regions;
+                stack.push(next);
               }
             }
-          } else {
-            // The target is level with or above the exit. Use the gap
-            // beside the target, on the side facing this block, if any.
-            const out = side === "bottom" ? { x: p.x, y: p.y + 16 } : p;
-            const gapRight = side !== "left" && target.left - APPROACH >= source.right + 10;
-            const gapLeft = side !== "right" && target.right + APPROACH <= source.left - 10;
-            if (gapRight || gapLeft) {
-              const gapX = gapRight ? target.left - APPROACH : target.right + APPROACH;
-              points = [p];
-              if (out !== p) points.push(out);
-              points.push({ x: gapX, y: out.y }, { x: gapX, y: joinY }, { x: to.x, y: joinY }, top);
-            } else {
-              loops.push({ edge, from, to, fromLayout, toLayout, side, p, out, joinY, top });
+          }
+          regions += 1;
+        }
+        return {
+          xs, ys, NX, NY, nb, obstacles, px, py, region,
+          nodeIndex: new Map([...nodes.keys()].map((id, index) => [id, index])),
+          xIndex: new Map(xs.map((x, index) => [x, index])),
+          yIndex: new Map(ys.map((y, index) => [y, index])),
+          gScore: new Float64Array(NP * 4),
+          prev: new Int32Array(NP * 4),
+          seen: new Int32Array(NP * 4),
+          stamp: 0,
+        };
+      }
+
+      // Which grid points and grid segments the placed connectors use. Each
+      // entry holds the index of the block those connectors lead to, -1 for
+      // none, or -2 when connectors to different blocks share it.
+      function buildOccupancy(grid, routeList, into) {
+        const NP = grid.NX * grid.NY;
+        const occ = into || {
+          h: new Int32Array(NP).fill(-1),
+          v: new Int32Array(NP).fill(-1),
+          hp: new Int32Array(NP).fill(-1),
+          vp: new Int32Array(NP).fill(-1),
+        };
+        const add = (cells, pi, to) => {
+          const current = cells[pi];
+          if (current === -1) cells[pi] = to;
+          else if (current !== to) cells[pi] = -2;
+        };
+        routeList.forEach((routeItem) => {
+          const route = { points: routeItem.points, to: grid.nodeIndex.get(routeItem.to) };
+          const points = route.points;
+          for (let index = 0; index < points.length - 1; index += 1) {
+            const a = points[index];
+            const b = points[index + 1];
+            if (a.y === b.y) {
+              const yi = grid.yIndex.get(a.y);
+              if (yi === undefined) continue;
+              const high = Math.max(a.x, b.x);
+              for (let xi = lowerBound(grid.xs, Math.min(a.x, b.x)); xi < grid.NX && grid.xs[xi] <= high; xi += 1) {
+                const pi = yi * grid.NX + xi;
+                add(occ.hp, pi, route.to);
+                if (xi + 1 < grid.NX && grid.xs[xi + 1] <= high) add(occ.h, pi, route.to);
+              }
+            } else if (a.x === b.x) {
+              const xi = grid.xIndex.get(a.x);
+              if (xi === undefined) continue;
+              const high = Math.max(a.y, b.y);
+              for (let yi = lowerBound(grid.ys, Math.min(a.y, b.y)); yi < grid.NY && grid.ys[yi] <= high; yi += 1) {
+                const pi = yi * grid.NX + xi;
+                add(occ.vp, pi, route.to);
+                if (yi + 1 < grid.NY && grid.ys[yi + 1] <= high) add(occ.v, pi, route.to);
+              }
+            }
+          }
+        });
+        return occ;
+      }
+
+      // Connectors heading for the same block may share a line: they merge.
+      function conflicts(cells, pi, to) {
+        const current = cells[pi];
+        return current !== -1 && current !== to;
+      }
+
+      function simplifyPoints(points) {
+        const result = [];
+        points.forEach((point) => {
+          const last = result[result.length - 1];
+          if (last && Math.abs(last.x - point.x) < 0.01 && Math.abs(last.y - point.y) < 0.01) return;
+          if (result.length >= 2) {
+            const before = result[result.length - 2];
+            if ((before.x === last.x && last.x === point.x) || (before.y === last.y && last.y === point.y)) {
+              result[result.length - 1] = point;
               return;
             }
           }
-          routes.set(edge.id, { points, side, start: p });
+          result.push(point);
+        });
+        return result;
+      }
+
+      function routeLength(points) {
+        let total = 0;
+        for (let index = 1; index < points.length; index += 1) {
+          total += Math.abs(points[index].x - points[index - 1].x) + Math.abs(points[index].y - points[index - 1].y);
+        }
+        return total;
+      }
+
+      // Shortest path from any allowed exit of `from` to any allowed entry of `to`.
+      // With `ignoreOthers` the search skips the cost of crossing other
+      // connectors: a quick fallback for very tangled charts.
+      function searchRoute(grid, occ, from, fromLayout, to, toLayout, exitSides, entrySides, fixedExit, ignoreOthers) {
+        const { NX, nb, px, py, gScore, prev, seen, region } = grid;
+        const own = grid.nodeIndex.get(to.id);
+        grid.stamp += 1;
+        const stamp = grid.stamp;
+        const scoreOf = (state) => (seen[state] === stamp ? gScore[state] : Infinity);
+        const heapF = [];
+        const heapS = [];
+        const push = (f, state) => {
+          let index = heapF.length;
+          heapF.push(f);
+          heapS.push(state);
+          while (index > 0) {
+            const parent = (index - 1) >> 1;
+            if (heapF[parent] <= f) break;
+            heapF[index] = heapF[parent];
+            heapS[index] = heapS[parent];
+            index = parent;
+          }
+          heapF[index] = f;
+          heapS[index] = state;
+        };
+        const pop = () => {
+          const top = heapS[0];
+          const topF = heapF[0];
+          const lastF = heapF.pop();
+          const lastS = heapS.pop();
+          if (heapF.length) {
+            let index = 0;
+            const size = heapF.length;
+            while (true) {
+              let child = index * 2 + 1;
+              if (child >= size) break;
+              if (child + 1 < size && heapF[child + 1] < heapF[child]) child += 1;
+              if (heapF[child] >= lastF) break;
+              heapF[index] = heapF[child];
+              heapS[index] = heapS[child];
+              index = child;
+            }
+            heapF[index] = lastF;
+            heapS[index] = lastS;
+          }
+          return [topF, top];
+        };
+
+        const goals = new Map();
+        const goalList = [];
+        entrySides.forEach((side) => {
+          const q = sidePoint(to, toLayout, side);
+          const t = stubPoint(to, toLayout, side);
+          const xi = grid.xIndex.get(t.x);
+          const yi = grid.yIndex.get(t.y);
+          if (xi === undefined || yi === undefined || !segmentClear(grid.obstacles, t, q, to.id)) return;
+          const goal = { side, q, t, inward: (SIDE_DIR[side] + 2) % 4, extra: ENTRY_COST[side] + routeLength([t, q]) };
+          const pi = yi * NX + xi;
+          if (!goals.has(pi)) goals.set(pi, []);
+          goals.get(pi).push(goal);
+          goalList.push(goal);
+        });
+        if (!goalList.length) return null;
+        const goalX = goalList.map((goal) => goal.t.x);
+        const goalY = goalList.map((goal) => goal.t.y);
+        const goalRegions = new Set([...goals.keys()].map((pi) => region[pi]));
+        const heuristic = (pi) => {
+          const x = px[pi];
+          const y = py[pi];
+          let best = Infinity;
+          for (let index = 0; index < goalX.length; index += 1) {
+            const d = Math.abs(x - goalX[index]) + Math.abs(y - goalY[index]);
+            if (d < best) best = d;
+          }
+          return best;
+        };
+        const goalRowGap = (y) => {
+          let best = Infinity;
+          for (let index = 0; index < goalY.length; index += 1) {
+            const d = Math.abs(y - goalY[index]);
+            if (d < best) best = d;
+          }
+          return best;
+        };
+
+        const startSide = new Map();
+        exitSides.forEach((side) => {
+          const p = sidePoint(from, fromLayout, side);
+          const s = stubPoint(from, fromLayout, side);
+          const xi = grid.xIndex.get(s.x);
+          const yi = grid.yIndex.get(s.y);
+          if (xi === undefined || yi === undefined || !segmentClear(grid.obstacles, p, s, from.id)) return;
+          const pi = yi * NX + xi;
+          if (!goalRegions.has(region[pi])) return;
+          const state = pi * 4 + SIDE_DIR[side];
+          const g = (fixedExit ? 0 : EXIT_COST[side]) + routeLength([p, s]);
+          if (g < scoreOf(state)) {
+            seen[state] = stamp;
+            gScore[state] = g;
+            prev[state] = -1;
+            startSide.set(state, { side, p });
+            push(g + heuristic(pi), state);
+          }
+        });
+        if (!startSide.size) return null;
+
+        let bestCost = Infinity;
+        let best = null;
+        let expanded = 0;
+        while (heapF.length) {
+          expanded += 1;
+          if (expanded > SEARCH_LIMIT) {
+            if (best) break;
+            return ignoreOthers ? null : searchRoute(grid, occ, from, fromLayout, to, toLayout, exitSides, entrySides, fixedExit, true);
+          }
+          const [f, state] = pop();
+          if (f >= bestCost) break;
+          const g = gScore[state];
+          if (f - heuristic(state >> 2) > g + 1e-6) continue;
+          const pi = state >> 2;
+          const dir = state & 3;
+          const here = goals.get(pi);
+          if (here) {
+            here.forEach((goal) => {
+              if (dir === (goal.inward + 2) % 4) return;
+              const total = g + (dir === goal.inward ? 0 : BEND_COST) + goal.extra;
+              if (total < bestCost) {
+                bestCost = total;
+                best = { state, goal };
+              }
+            });
+          }
+          const ax = px[pi];
+          const ay = py[pi];
+          for (let nd = 0; nd < 4; nd += 1) {
+            if (nd === (dir + 2) % 4) continue;
+            const npi = nb[pi * 4 + nd];
+            if (npi < 0) continue;
+            const horizontal = nd === 1 || nd === 3;
+            const length = horizontal ? Math.abs(px[npi] - ax) : Math.abs(py[npi] - ay);
+            let cost = length + (nd === dir ? 0 : BEND_COST);
+            const segment = Math.min(pi, npi);
+            if (!ignoreOthers) {
+              if (conflicts(horizontal ? occ.h : occ.v, segment, own)) cost += OVERLAP_COST * length;
+              if (conflicts(horizontal ? occ.vp : occ.hp, npi, own)) cost += CROSS_COST;
+            }
+            // Run across at the target's level, so connectors join neatly.
+            if (horizontal) cost += length * goalRowGap(ay) * 0.0005;
+            const next = npi * 4 + nd;
+            if (g + cost < scoreOf(next) - 1e-9) {
+              seen[next] = stamp;
+              gScore[next] = g + cost;
+              prev[next] = state;
+              push(g + cost + heuristic(npi), next);
+            }
+          }
+        }
+        if (!best) return null;
+        const trail = [];
+        let state = best.state;
+        let first = state;
+        while (state >= 0) {
+          trail.push(state >> 2);
+          first = state;
+          state = prev[state];
+        }
+        trail.reverse();
+        const start = startSide.get(first);
+        const points = [start.p, ...trail.map((pi) => ({ x: px[pi], y: py[pi] })), best.goal.q];
+        return { points: simplifyPoints(points), exit: start.side, entry: best.goal.side, fixedExit };
+      }
+
+      // Blocks too close for the grid: a straight line between facing sides.
+      function directRoute(grid, from, fromLayout, to, toLayout, exitSides, entrySides, fixedExit) {
+        const facing = { bottom: "top", top: "bottom", left: "right", right: "left" };
+        let best = null;
+        exitSides.forEach((exit) => {
+          const entry = facing[exit];
+          if (!entrySides.includes(entry)) return;
+          const p = sidePoint(from, fromLayout, exit);
+          const q = sidePoint(to, toLayout, entry);
+          const vertical = exit === "top" || exit === "bottom";
+          if (vertical ? Math.abs(p.x - q.x) > 0.5 : Math.abs(p.y - q.y) > 0.5) return;
+          const ahead = { top: q.y < p.y, bottom: q.y > p.y, left: q.x < p.x, right: q.x > p.x }[exit];
+          if (!ahead) return;
+          const others = grid.obstacles.filter((o) => o.id !== from.id && o.id !== to.id);
+          if (!segmentClear(others, p, q, null)) return;
+          const cost = routeLength([p, q]) + (fixedExit ? 0 : EXIT_COST[exit]) + ENTRY_COST[entry];
+          if (!best || cost < best.cost) best = { points: [p, q], exit, entry, fixedExit, cost };
+        });
+        return best;
+      }
+
+      function segmentsOf(points) {
+        const list = [];
+        for (let index = 0; index < points.length - 1; index += 1) {
+          const a = points[index];
+          const b = points[index + 1];
+          if (a.y === b.y) list.push({ h: true, at: a.y, low: Math.min(a.x, b.x), high: Math.max(a.x, b.x) });
+          else if (a.x === b.x) list.push({ h: false, at: a.x, low: Math.min(a.y, b.y), high: Math.max(a.y, b.y) });
+        }
+        return list;
+      }
+
+      // How cluttered a set of connectors is, and which ones are troubled.
+      function routeLayoutCost(routeList) {
+        let cost = 0;
+        const trouble = new Set();
+        const segments = routeList.map((route) => segmentsOf(route.points));
+        routeList.forEach((route) => {
+          const sideCost = (route.fixedExit ? 0 : EXIT_COST[route.exit]) + ENTRY_COST[route.entry];
+          const bends = Math.max(0, route.points.length - 2);
+          cost += routeLength(route.points) + BEND_COST * bends + sideCost;
+          if (route.fallback) cost += 1000;
+          if (route.fallback) trouble.add(route);
+        });
+        for (let i = 0; i < routeList.length; i += 1) {
+          for (let j = i + 1; j < routeList.length; j += 1) {
+            if (routeList[i].to === routeList[j].to) continue;
+            let clash = 0;
+            segments[i].forEach((a) => {
+              segments[j].forEach((b) => {
+                if (a.h !== b.h) {
+                  if (b.at > a.low + 0.5 && b.at < a.high - 0.5 && a.at > b.low + 0.5 && a.at < b.high - 0.5) clash += CROSS_COST;
+                } else if (Math.abs(a.at - b.at) < 0.5) {
+                  const shared = Math.min(a.high, b.high) - Math.max(a.low, b.low);
+                  if (shared > 0.5) clash += OVERLAP_COST * shared;
+                }
+              });
+            });
+            if (clash) {
+              cost += clash;
+              trouble.add(routeList[i]);
+              trouble.add(routeList[j]);
+            }
+          }
+        }
+        return { cost, trouble };
+      }
+
+      function onPolyline(points, point) {
+        for (let index = 0; index < points.length - 1; index += 1) {
+          const a = points[index];
+          const b = points[index + 1];
+          if (a.x === b.x && Math.abs(point.x - a.x) < 0.5 && point.y >= Math.min(a.y, b.y) - 0.5 && point.y <= Math.max(a.y, b.y) + 0.5) return true;
+          if (a.y === b.y && Math.abs(point.y - a.y) < 0.5 && point.x >= Math.min(a.x, b.x) - 0.5 && point.x <= Math.max(a.x, b.x) + 0.5) return true;
+        }
+        return false;
+      }
+
+      function routeEdges(tab, layouts) {
+        const routes = new Map();
+        routes.portSides = new Map();
+        const nodes = new Map();
+        tab.nodes.forEach((node) => {
+          if (layouts.get(node.id)) nodes.set(node.id, node);
+        });
+        const edges = tab.edges.filter((edge) => edge.from !== edge.to && nodes.has(edge.from) && nodes.has(edge.to));
+        if (!edges.length) return routes;
+        const grid = buildRouteGrid(nodes, layouts);
+
+        // Sides that are always taken: a decision's exits, and the bottom
+        // of a block whose exit isn't connected yet (its dot sits there).
+        const connected = new Set(edges.map((edge) => edge.from + "|" + edge.port));
+        const reserved = new Map();
+        nodes.forEach((node) => {
+          const sides = {};
+          (FlowLang.OUTPUT_PORTS[node.type] || []).forEach((port) => {
+            if (node.type === "decision") sides[portSide(node, port)] = "out";
+            else if (!connected.has(node.id + "|" + port)) sides.bottom = "out";
+          });
+          reserved.set(node.id, sides);
         });
 
-        // Loops: run up a lane outside every block between the two ends.
-        // Nested loops use successively wider lanes.
-        loops.forEach((loop) => {
-          const { side, p, to } = loop;
-          loop.loopSide = side === "bottom" ? (to.x > p.x + 40 ? "right" : "left") : side;
-          loop.low = loop.joinY;
-          loop.high = loop.out.y;
-        });
-        loops.sort((a, b) => (a.high - a.low) - (b.high - b.low));
-        const placed = [];
-        loops.forEach((loop) => {
-          const { edge, from, to, fromLayout, toLayout, side, p, out, loopSide, joinY, top } = loop;
-          const fromBox = blockBox(from, fromLayout, false);
-          const toBox = blockBox(to, toLayout, false);
-          const columnLeft = Math.min(fromBox.left, toBox.left);
-          const columnRight = Math.max(fromBox.right, toBox.right);
-          let extreme = loopSide === "left" ? columnLeft : columnRight;
-          tab.nodes.forEach((node) => {
-            const layout = layouts.get(node.id);
-            if (!layout) return;
-            const box = blockBox(node, layout, true);
-            const overlapsRows = box.bottom >= loop.low - 4 && box.top <= loop.high + 4;
-            const overlapsColumn = box.right >= columnLeft - 4 && box.left <= columnRight + 4;
-            if (!overlapsRows || !overlapsColumn) return;
-            extreme = loopSide === "left" ? Math.min(extreme, box.left) : Math.max(extreme, box.right);
+        const placed = new Map();
+        const forced = new Map(); // block id -> exit side being tried
+        // A fixed allowance of searches keeps very tangled charts quick,
+        // and (unlike a time limit) always gives the same layout.
+        let searches = Math.max(40, edges.length * 4);
+        const sidesInUse = () => {
+          const use = new Map();
+          reserved.forEach((sides, id) => use.set(id, { ...sides }));
+          forced.forEach((side, id) => {
+            use.get(id)[side] = "out";
           });
-          let lane = 0;
-          placed.forEach((other) => {
-            if (other.loopSide === loopSide && other.high >= loop.low && other.low <= loop.high) {
-              lane = Math.max(lane, other.lane + 1);
+          placed.forEach((route) => {
+            use.get(route.from)[route.exit] = "out";
+            const target = use.get(route.to);
+            if (!target[route.entry]) target[route.entry] = "in";
+          });
+          return use;
+        };
+
+        function routeOne(edge, use, occ) {
+          const from = nodes.get(edge.from);
+          const to = nodes.get(edge.to);
+          const fromLayout = layouts.get(from.id);
+          const toLayout = layouts.get(to.id);
+          const fixedExit = from.type === "decision";
+          const exitSides = fixedExit
+            ? [portSide(from, edge.port)]
+            : forced.has(from.id)
+              ? [forced.get(from.id)]
+              : ROUTE_SIDES.filter((side) => use.get(from.id)[side] !== "in" && !(from.type === "start" && side === "top"));
+          const entrySides = to.type === "decision" ? ["top"] : ROUTE_SIDES.filter((side) => use.get(to.id)[side] !== "out");
+          let route = null;
+          if (exitSides.length && entrySides.length) {
+            searches -= 1;
+            route = searchRoute(grid, occ, from, fromLayout, to, toLayout, exitSides, entrySides, fixedExit);
+            const direct = directRoute(grid, from, fromLayout, to, toLayout, exitSides, entrySides, fixedExit);
+            if (direct && (!route || direct.cost <= routeLayoutCost([route]).cost)) route = direct;
+          }
+          if (!route) {
+            const side = fixedExit ? exitSides[0] : "bottom";
+            const p = sidePoint(from, fromLayout, side);
+            const q = sidePoint(to, toLayout, "top");
+            const midY = (p.y + q.y) / 2;
+            const points = side === "bottom" ? [p, { x: p.x, y: midY }, { x: q.x, y: midY }, q] : [p, { x: q.x, y: p.y }, q];
+            route = { points: simplifyPoints(points), exit: side, entry: "top", fixedExit, fallback: true };
+          }
+          route.id = edge.id;
+          route.port = edge.port;
+          route.from = from.id;
+          route.to = to.id;
+          return route;
+        }
+
+        function placeInOrder(list) {
+          const use = sidesInUse();
+          const occ = buildOccupancy(grid, [...placed.values()]);
+          list.forEach((edge) => {
+            const route = routeOne(edge, use, occ);
+            placed.set(edge.id, route);
+            use.get(route.from)[route.exit] = "out";
+            const target = use.get(route.to);
+            if (!target[route.entry]) target[route.entry] = "in";
+            buildOccupancy(grid, [route], occ);
+          });
+        }
+
+        // First pass: downward connectors in flow order from START, then
+        // the ones that climb back up, innermost loops first.
+        const rank = new Map();
+        const queue = [...nodes.values()].filter((node) => node.type === "start");
+        queue.forEach((node) => rank.set(node.id, 0));
+        for (let index = 0; index < queue.length; index += 1) {
+          const node = queue[index];
+          edges.forEach((edge) => {
+            if (edge.from !== node.id || rank.has(edge.to)) return;
+            rank.set(edge.to, rank.get(node.id) + 1);
+            queue.push(nodes.get(edge.to));
+          });
+        }
+        const portOrder = (edge) => (edge.port === "false" ? 1 : 0);
+        const span = (edge) => Math.abs(nodes.get(edge.from).y - nodes.get(edge.to).y);
+        const isForward = (edge) => nodes.get(edge.to).y > nodes.get(edge.from).y + 1;
+        const byFlow = (a, b) => (rank.has(a.from) ? rank.get(a.from) : 1e6) - (rank.has(b.from) ? rank.get(b.from) : 1e6)
+          || nodes.get(a.from).y - nodes.get(b.from).y || portOrder(a) - portOrder(b);
+        const bySpan = (a, b) => span(a) - span(b) || nodes.get(a.from).y - nodes.get(b.from).y;
+        placeInOrder([...edges.filter(isForward).sort(byFlow), ...edges.filter((edge) => !isForward(edge)).sort(bySpan)]);
+
+        // Improvement: re-route a troubled block's connectors, either
+        // exits first or with its exit tried on each side in turn.
+        let current = routeLayoutCost([...placed.values()]);
+        const tried = new Set();
+        for (let pass = 0; pass < 3 && current.trouble.size; pass += 1) {
+          let improved = false;
+          const blocks = new Set();
+          current.trouble.forEach((route) => {
+            blocks.add(route.from);
+            blocks.add(route.to);
+          });
+          [...blocks].sort((a, b) => nodes.get(a).y - nodes.get(b).y).forEach((id) => {
+            if (searches <= 0) return;
+            const outs = edges.filter((edge) => edge.from === id);
+            const ins = edges.filter((edge) => edge.to === id).sort(bySpan);
+            const signature = id + "|" + [...outs, ...ins].map((edge) => placed.get(edge.id).points.map((p) => p.x + "," + p.y).join(" ")).join("|");
+            if (tried.has(signature)) return;
+            tried.add(signature);
+            const incident = [...outs, ...ins];
+            const saved = new Map(incident.map((edge) => [edge.id, placed.get(edge.id)]));
+            const node = nodes.get(id);
+            const attempts = [{ order: incident }];
+            if (node.type !== "decision" && outs.length) {
+              ROUTE_SIDES.forEach((side) => {
+                if (!(node.type === "start" && side === "top")) attempts.push({ order: [...ins, ...outs], exit: side });
+              });
+            }
+            let best = null;
+            attempts.forEach((attempt) => {
+              incident.forEach((edge) => placed.delete(edge.id));
+              if (attempt.exit) forced.set(id, attempt.exit);
+              placeInOrder(attempt.order);
+              forced.delete(id);
+              const result = routeLayoutCost([...placed.values()]);
+              if (result.cost < (best ? best.result.cost : current.cost - 0.5)) {
+                best = { result, routes: new Map(incident.map((edge) => [edge.id, placed.get(edge.id)])) };
+              }
+            });
+            const keep = best ? best.routes : saved;
+            keep.forEach((route, edgeId) => placed.set(edgeId, route));
+            if (best) {
+              current = best.result;
+              improved = true;
             }
           });
-          loop.lane = lane;
-          placed.push(loop);
-          // A loop leaving a side of a decision starts further out, so its
-          // True/False label sits clear of the vertical run.
-          const gap = side === "bottom" ? 28 : 66;
-          const laneX = loopSide === "left" ? extreme - gap - lane * 16 : extreme + gap + lane * 16;
-          const points = [p];
-          const outY = out.y + (side === "bottom" ? lane * 6 : 0);
-          if (side === "bottom") points.push({ x: p.x, y: outY });
-          points.push({ x: laneX, y: outY }, { x: laneX, y: joinY }, { x: to.x, y: joinY }, top);
-          routes.set(edge.id, { points, side, start: p });
+          if (!improved || searches <= 0) break;
+          current = routeLayoutCost([...placed.values()]);
+        }
+
+        const finalRoutes = [...placed.values()];
+        finalRoutes.forEach((route) => {
+          // A connector that joins another on its way into the same side
+          // of a block gets its own arrowhead where it joins.
+          const partners = finalRoutes.filter((other) => other !== route && other.to === route.to && other.entry === route.entry);
+          let junction = null;
+          if (partners.length) {
+            for (let index = 1; index < route.points.length - 1; index += 1) {
+              if (partners.some((other) => onPolyline(other.points, route.points[index]))) {
+                junction = { from: route.points[index - 1], at: route.points[index] };
+                break;
+              }
+            }
+          }
+          routes.set(route.id, { points: route.points, side: route.exit, entry: route.entry, start: route.points[0], junction });
+          if (!routes.portSides.has(route.from)) routes.portSides.set(route.from, {});
+          routes.portSides.get(route.from)[route.port] = route.exit;
         });
         return routes;
       }
@@ -1794,12 +2377,10 @@
         return layouts;
       }
 
-      function contentBounds(tab, layouts) {
+      // Blocks plus any connector that runs round the outside of them.
+      function contentBounds(tab, layouts, routes) {
         let box = null;
-        tab.nodes.forEach((node) => {
-          const layout = layouts.get(node.id);
-          if (!layout) return;
-          const b = blockBox(node, layout, true);
+        const include = (b) => {
           if (!box) box = { ...b };
           else {
             box.left = Math.min(box.left, b.left);
@@ -1807,12 +2388,19 @@
             box.top = Math.min(box.top, b.top);
             box.bottom = Math.max(box.bottom, b.bottom);
           }
+        };
+        tab.nodes.forEach((node) => {
+          const layout = layouts.get(node.id);
+          if (layout) include(blockBox(node, layout, true));
         });
+        if (routes) {
+          routes.forEach((route) => route.points.forEach((p) => include({ left: p.x - 4, right: p.x + 4, top: p.y - 4, bottom: p.y + 4 })));
+        }
         return box || { left: 0, right: 400, top: 0, bottom: 300 };
       }
 
-      function fitView(tab, layouts, size) {
-        const bounds = contentBounds(tab, layouts);
+      function fitView(tab, layouts, size, routes) {
+        const bounds = contentBounds(tab, layouts, routes);
         const pad = 36;
         const width = bounds.right - bounds.left + pad * 2;
         const height = bounds.bottom - bounds.top + pad * 2;
@@ -1836,6 +2424,65 @@
           node.calleeId = "";
           node.args = [];
           node.target = "";
+        }
+        return node;
+      }
+
+      const TEXT_BLOCKS = new Set(["process", "input", "output", "decision", "return"]);
+
+      // Split call arguments at the commas that aren't inside brackets or quotes.
+      function splitArgs(text) {
+        const parts = [];
+        let depth = 0;
+        let quote = null;
+        let current = "";
+        for (const ch of String(text)) {
+          if (quote) {
+            current += ch;
+            if (ch === quote) quote = null;
+            continue;
+          }
+          if (ch === '"' || ch === "'") quote = ch;
+          else if (ch === "(") depth += 1;
+          else if (ch === ")") depth -= 1;
+          else if (ch === "," && depth === 0) {
+            parts.push(current.trim());
+            current = "";
+            continue;
+          }
+          current += ch;
+        }
+        if (current.trim() || parts.length) parts.push(current.trim());
+        return parts;
+      }
+
+      // A block of another kind in the same place, with the same id so its
+      // connectors stay. Its expression carries over when the new kind has
+      // one, even if it isn't valid there; otherwise it is dropped.
+      function convertNode(old, type, doc) {
+        const node = makeNode(type, old.x, old.y);
+        node.id = old.id;
+        node.x = old.x;
+        node.y = old.y;
+        let text = "";
+        if (TEXT_BLOCKS.has(old.type)) text = String(old.text || "");
+        else if (old.type === "call") {
+          const sub = doc.tabs.find((item) => item.id === old.calleeId);
+          if (sub) {
+            const args = (old.args || []).map((arg) => String(arg || "").trim());
+            const target = String(old.target || "").trim();
+            text = (target ? target + " = " : "") + sub.name + "(" + args.join(", ") + ")";
+          }
+        }
+        if (TEXT_BLOCKS.has(type)) node.text = text;
+        else if (type === "call") {
+          const match = text.trim().match(/^(?:([A-Za-z_]\w*)\s*(?:=|←|<-)\s*)?([A-Za-z_]\w*)\s*\((.*)\)$/);
+          const sub = match && doc.tabs.find((item) => item.kind === "sub" && item.name === match[2]);
+          if (sub) {
+            node.calleeId = sub.id;
+            node.args = splitArgs(match[3]);
+            node.target = match[1] || "";
+          }
         }
         return node;
       }
@@ -2050,7 +2697,7 @@
         });
       }
 
-      function BlockGraphic({ node, layout, state, problem, design, connected, summary, insertPort, caret }) {
+      function BlockGraphic({ node, layout, state, problem, design, connected, exitSides, summary, insertPort, caret }) {
         const { shape, w, h, lines, header } = layout;
         const cx = node.x;
         const cy = node.y;
@@ -2143,7 +2790,7 @@
             )}
             {design &&
               ports.map((port) => {
-                const p = sidePoint(node, layout, portSide(node, port));
+                const p = sidePoint(node, layout, (exitSides && exitSides[port]) || portSide(node, port));
                 const isConnected = connected.has(port);
                 const isInsert = insertPort === port;
                 const pathName = port === "true" ? "True" : "False";
@@ -2201,7 +2848,7 @@
         }, []);
 
         useEffect(() => {
-          if (!view && size.w > 0 && size.h > 0) onViewChange(fitView(tab, layouts, size));
+          if (!view && size.w > 0 && size.h > 0) onViewChange(fitView(tab, layouts, size, routes));
         }, [view, size.w, size.h, tab.id]);
 
         const v = view || { x: 0, y: 0, z: 1 };
@@ -2230,7 +2877,7 @@
             return { x: (size.w / 2 - v.x) / v.z, y: (size.h / 3 - v.y) / v.z };
           },
           fit() {
-            onViewChange(fitView(tab, layouts, size));
+            onViewChange(fitView(tab, layouts, size, routes));
           },
           zoom(factor) {
             zoomAt(factor);
@@ -2238,7 +2885,7 @@
           svg() {
             return svgRef.current;
           },
-        }), [clientToWorld, zoomAt, size, v.x, v.y, v.z, tab, layouts, onViewChange]);
+        }), [clientToWorld, zoomAt, size, v.x, v.y, v.z, tab, layouts, routes, onViewChange]);
 
         // Wheel: pinch or Ctrl+wheel zooms; otherwise the wheel pans.
         useEffect(() => {
@@ -2292,7 +2939,8 @@
           if (design && portElement && nodeElement) {
             const node = tab.nodes.find((item) => item.id === nodeElement.dataset.nodeId);
             const port = portElement.dataset.port;
-            const start = sidePoint(node, layouts.get(node.id), portSide(node, port));
+            const sides = routes.portSides && routes.portSides.get(node.id);
+            const start = sidePoint(node, layouts.get(node.id), (sides && sides[port]) || portSide(node, port));
             dragRef.current = { kind: "connect", clientX: event.clientX, clientY: event.clientY };
             setConnect({ fromId: node.id, port, start, pointer: world, hoverId: null });
             onSelect({ kind: "node", id: node.id });
@@ -2429,6 +3077,9 @@
                       <path className="fc-edge-hit" d={d} fill="none" stroke="transparent" strokeWidth={14} data-export-skip="" />
                       <path d={d} style={{ fill: "none", stroke: colour }} strokeWidth={selected || active ? 3 : 2} strokeLinejoin="round" pointerEvents="none" />
                       <path d={arrowHead(route.points)} style={{ fill: colour, stroke: colour }} strokeWidth={1} strokeLinejoin="round" pointerEvents="none" />
+                      {route.junction && (
+                        <path d={arrowHead([route.junction.from, route.junction.at])} style={{ fill: colour, stroke: colour }} strokeWidth={1} strokeLinejoin="round" pointerEvents="none" />
+                      )}
                     </g>
                   );
                 })}
@@ -2467,6 +3118,7 @@
                         problem={design ? problemNodes.get(node.id) : null}
                         design={design}
                         connected={connectedPorts.get(node.id) || empty}
+                        exitSides={routes.portSides && routes.portSides.get(node.id)}
                         summary={summary}
                         insertPort={selected ? insertPortFor(node, insertPort) : null}
                         caret={editing && editing.nodeId === node.id ? editing.caret : null}
@@ -2567,9 +3219,11 @@
         );
       }
 
+      const blockTypesFor = (tabKind) => ["process", "input", "output", "decision", "call", tabKind === "sub" ? "return" : "end"];
+
       function Palette({ tabKind, disabled, onAdd, onDragStart }) {
         const paneRef = useRef(null);
-        const types = ["process", "input", "output", "decision", "call", tabKind === "sub" ? "return" : "end"];
+        const types = blockTypesFor(tabKind);
         return (
           <aside
             ref={paneRef}
@@ -2779,11 +3433,94 @@
         );
       }
 
+      // "Replace…" beside Delete: a click-opened menu of the other blocks.
+      function ReplaceMenu({ node, tabKind, onReplace }) {
+        const [open, setOpen] = useState(false);
+        const wrapRef = useRef(null);
+        const buttonRef = useRef(null);
+        const menuRef = useRef(null);
+        const types = blockTypesFor(tabKind).filter((type) => type !== node.type);
+        useEffect(() => setOpen(false), [node.id]);
+        useEffect(() => {
+          if (!open) return undefined;
+          const first = menuRef.current && menuRef.current.querySelector("[role=menuitem]");
+          if (first) first.focus();
+          const onPointerDown = (event) => {
+            if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+          };
+          document.addEventListener("pointerdown", onPointerDown);
+          return () => document.removeEventListener("pointerdown", onPointerDown);
+        }, [open]);
+        const onMenuKey = (event) => {
+          const items = [...menuRef.current.querySelectorAll("[role=menuitem]")];
+          const index = items.indexOf(document.activeElement);
+          const moves = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: items.length - 1 };
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            if (buttonRef.current) buttonRef.current.focus();
+          } else if (event.key in moves) {
+            event.preventDefault();
+            event.stopPropagation();
+            items[(moves[event.key] + items.length) % items.length].focus();
+          } else if (event.key === "Tab") {
+            setOpen(false);
+          } else if (event.key === "Delete" || event.key === "Backspace") {
+            event.stopPropagation();
+          }
+        };
+        return (
+          <div ref={wrapRef} className="relative">
+            <button
+              ref={buttonRef}
+              type="button"
+              className={smallButton + " inline-flex items-center gap-1"}
+              aria-haspopup="menu"
+              aria-expanded={open ? "true" : "false"}
+              onClick={() => setOpen((value) => !value)}
+            >
+              Replace…
+              <span aria-hidden="true" className="text-[0.65rem]">▼</span>
+            </button>
+            {open && (
+              <div
+                ref={menuRef}
+                role="menu"
+                aria-label={`Replace this ${BLOCKS[node.type].label.toLowerCase()} block with`}
+                onKeyDown={onMenuKey}
+                className="absolute right-0 top-full z-30 mt-1 flex w-52 flex-col gap-1 rounded-lg border border-slate-300 bg-white p-1.5 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+              >
+                <p className="px-1 text-xs font-semibold text-slate-600 dark:text-slate-300" aria-hidden="true">
+                  Replace with
+                </p>
+                {types.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="menuitem"
+                    title={BLOCKS[type].help}
+                    onClick={() => {
+                      setOpen(false);
+                      onReplace(type);
+                    }}
+                    className="flex items-center gap-2 rounded-md border border-transparent px-2 py-1 text-left text-sm font-semibold text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-100 dark:hover:border-indigo-400 dark:hover:bg-slate-700"
+                  >
+                    <PaletteIcon type={type} />
+                    <span className="leading-tight">{BLOCKS[type].label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
       function Inspector(props) {
         const {
           doc, tab, selection, problems, fieldApi, editKey, variables,
           onUpdateNode, onUpdateTab, onDeleteTab, onDeleteSelection, onCreateSub, onShowTab,
-          chosenPort, onChoosePort, onSwapLabels,
+          chosenPort, onChoosePort, onSwapLabels, onReplace,
         } = props;
         const node = selection && selection.kind === "node" ? tab.nodes.find((item) => item.id === selection.id) : null;
         const edge = selection && selection.kind === "edge" ? tab.edges.find((item) => item.id === selection.id) : null;
@@ -3086,14 +3823,17 @@
         const deletable = node && node.type !== "start";
         return (
           <section aria-labelledby="fc-inspector-title" className={cardClass}>
-            <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 id="fc-inspector-title" className="text-base font-bold">
                 {title}
               </h2>
               {deletable && (
-                <button type="button" className={dangerButton} onClick={onDeleteSelection}>
-                  Delete block
-                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <ReplaceMenu node={node} tabKind={tab.kind} onReplace={(type) => onReplace(node.id, type)} />
+                  <button type="button" className={dangerButton} onClick={onDeleteSelection}>
+                    Delete
+                  </button>
+                </div>
               )}
             </div>
             <div className="flex flex-col gap-3">
@@ -3602,8 +4342,8 @@
       /* ---------------------------------------------------------------
          Image export: the current tab as a PNG with light colours.
          --------------------------------------------------------------- */
-      async function exportPng(svgElement, tab, layouts, filename) {
-        const bounds = contentBounds(tab, layouts);
+      async function exportPng(svgElement, tab, layouts, routes, filename) {
+        const bounds = contentBounds(tab, layouts, routes);
         const pad = 50;
         const width = Math.ceil(bounds.right - bounds.left + pad * 2);
         const height = Math.ceil(bounds.bottom - bounds.top + pad * 2);
@@ -3737,8 +4477,15 @@
 
         function restore(target) {
           setDoc(target);
-          if (!target.tabs.some((item) => item.id === activeTabId)) setActiveTabId(target.tabs[0].id);
-          setSelection(null);
+          const kept = target.tabs.find((item) => item.id === activeTabId);
+          if (!kept) setActiveTabId(target.tabs[0].id);
+          // Keep the selection while its block or connector still exists,
+          // so undoing typing leaves that block's editor open.
+          setSelection((current) => {
+            if (!current || !kept) return null;
+            const list = current.kind === "edge" ? kept.edges : kept.nodes;
+            return list.some((item) => item.id === current.id) ? current : null;
+          });
           setHistoryVersion((value) => value + 1);
         }
 
@@ -3866,6 +4613,45 @@
             setNotice({ tone: "info", text: "Create a subprogram for this block to call." });
           }
           requestEdit(node.id);
+        }
+
+        // Swap a block for another kind in place. Its connectors stay, except
+        // any exit the new kind doesn't have (a decision's second path, or
+        // every exit for END/RETURN).
+        function replaceBlock(nodeId, type) {
+          if (mode !== "design") return;
+          const current = docRef.current;
+          const currentTab = current.tabs.find((item) => item.id === tab.id);
+          const old = currentTab && currentTab.nodes.find((item) => item.id === nodeId);
+          if (!old || old.type === "start" || old.type === type) return;
+          const node = convertNode(old, type, current);
+          const ports = FlowLang.OUTPUT_PORTS[type] || [];
+          const outs = currentTab.edges.filter((edge) => edge.from === nodeId);
+          let kept = null;
+          if (ports.length && outs.length) {
+            kept = old.type === "decision"
+              ? outs.find((edge) => portSide(old, edge.port) === "bottom") || outs.find((edge) => edge.port === "true") || outs[0]
+              : outs[0];
+          }
+          const port = type === "decision" ? ports.find((item) => portSide(node, item) === "bottom") || "true" : "next";
+          const edges = currentTab.edges.filter((edge) => edge.from !== nodeId);
+          if (kept) edges.push({ ...kept, port });
+          commit((value) => mapTab(value, tab.id, (item) => ({
+            ...item,
+            nodes: item.nodes.map((other) => (other.id === nodeId ? node : other)),
+            edges,
+          })));
+          setChosenPort(null);
+          const dropped = outs.length - (kept ? 1 : 0);
+          if (dropped) {
+            setNotice({
+              tone: "info",
+              text: `${BLOCKS[type].label} has ${ports.length ? "only one exit" : "no exit"}, so ${dropped === 1 ? "a connector" : dropped + " connectors"} leaving the old block ${dropped === 1 ? "was" : "were"} removed. Undo brings ${dropped === 1 ? "it" : "them"} back.`,
+            });
+          } else if (type === "call" && !current.tabs.some((item) => item.kind === "sub")) {
+            setNotice({ tone: "info", text: "Create a subprogram for this block to call." });
+          }
+          requestEdit(nodeId);
         }
 
         function deleteSelection() {
@@ -3997,7 +4783,7 @@
           const svg = canvasRef.current && canvasRef.current.svg();
           if (!svg) return;
           try {
-            await exportPng(svg, tab, layouts, `flowchart-${(tab.kind === "main" ? "main" : tab.name).toLowerCase()}.png`);
+            await exportPng(svg, tab, layouts, routes, `flowchart-${(tab.kind === "main" ? "main" : tab.name).toLowerCase()}.png`);
           } catch (error) {
             setNotice({ tone: "error", text: "The image could not be created in this browser." });
           }
@@ -4152,18 +4938,24 @@
             const target = event.target;
             const typing = target && (target.matches("input, textarea, select") || target.isContentEditable);
             const modifier = event.ctrlKey || event.metaKey;
-            if (typing) return;
-            if (modifier && event.key.toLowerCase() === "z") {
+            const letter = event.key.toLowerCase();
+            if (modifier && !event.altKey && (letter === "z" || letter === "y")) {
+              // Undo and redo work while editing a block too. Other text
+              // boxes, such as the program's input box, keep their own undo.
+              const blockField = target === fieldRef.current.element;
+              if (typing && !blockField && target.matches("textarea, input:not([type=checkbox]):not([type=radio])")) return;
               event.preventDefault();
-              if (event.shiftKey) redo();
+              if (blockField) {
+                // The typing so far in this field becomes its own undo step.
+                const { snapshot } = fieldRef.current;
+                if (snapshot && snapshot !== docRef.current) remember(snapshot);
+              }
+              if (letter === "y" || event.shiftKey) redo();
               else undo();
+              if (blockField) fieldRef.current = { ...fieldRef.current, snapshot: docRef.current };
               return;
             }
-            if (modifier && event.key.toLowerCase() === "y") {
-              event.preventDefault();
-              redo();
-              return;
-            }
+            if (typing) return;
             if (mode !== "design" || !selection) return;
             if (event.key === "Delete" || event.key === "Backspace") {
               event.preventDefault();
@@ -4432,6 +5224,7 @@
                       chosenPort={chosenPort}
                       onChoosePort={(nodeId, port) => setChosenPort({ nodeId, port })}
                       onSwapLabels={swapDecisionLabels}
+                      onReplace={replaceBlock}
                     />
                     <ProblemsPanel doc={doc} validation={validation} onShowProblem={showProblem} highlightKey={problemsFlash} />
                     <ReferenceCard />
