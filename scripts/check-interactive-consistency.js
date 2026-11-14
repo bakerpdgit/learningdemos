@@ -705,6 +705,21 @@ if (fs.existsSync(subnetMaskingPath)) {
   if (/\b(?:alert|confirm|prompt)\s*\(/.test(flowchartSource)) {
     failures.push('flowchart_designer.html: input and feedback must be inline, not alert/confirm/prompt dialogs');
   }
+  // Adding a block focuses its editor, so Ctrl+Z must still undo there
+  // rather than being ignored as typing.
+  if (!/const blockField = target === fieldRef\.current\.element;/.test(flowchartSource)
+    || flowchartSource.indexOf('const blockField') > flowchartSource.indexOf('if (typing) return;', flowchartSource.indexOf('/* ----- keyboard ----- */'))) {
+    failures.push('flowchart_designer.html: Ctrl+Z/Ctrl+Y must undo and redo while a block editor field has focus');
+  }
+  if (!/function ReplaceMenu\(/.test(flowchartSource) || !/aria-haspopup="menu"/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: a selected block needs a Replace… menu beside Delete');
+  }
+  // Connectors may enter most blocks from any free side, but a decision only
+  // ever from the top; connectors that join get their own arrowhead.
+  if (!/const entrySides = to\.type === "decision" \? \["top"\]/.test(flowchartSource)
+    || !/route\.junction && \(/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: decisions must only be entered from the top, and joining connectors need a junction arrowhead');
+  }
   const languageScript = flowchartSource.match(/<script id="flowchart-language">([\s\S]*?)<\/script>/);
   if (!languageScript) {
     failures.push('flowchart_designer.html: missing the flowchart-language script');
