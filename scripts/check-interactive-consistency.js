@@ -1074,6 +1074,63 @@ if (fs.existsSync(subnetMaskingPath)) {
   }
 }
 
+// A synthetic wave fitted to pi(x), a lost prime-power correction, or a wrong
+// Ei branch can look plausible. Check independent values and limiting behaviour.
+{
+  const zetaSource = fs.readFileSync(path.join(root, 'zeta_primes.html'), 'utf8');
+  const themeScript = zetaSource.match(/<script id="initial-theme">([\s\S]*?)<\/script>/);
+  if (!themeScript) {
+    failures.push('Zeta & the Primes: missing stored/system theme initialization');
+  } else {
+    for (const [preference, systemDark, expectedDark] of [['dark', false, true], ['light', true, false], [null, true, true], [null, false, false], ['unavailable', true, true]]) {
+      let actualDark;
+      require('vm').runInNewContext(themeScript[1], {
+        localStorage: { getItem: () => { if (preference === 'unavailable') throw new Error('Storage unavailable'); return preference; } },
+        window: { matchMedia: () => ({ matches: systemDark }) },
+        document: { documentElement: { classList: { toggle: (_name, dark) => { actualDark = dark; } } } },
+      }, { timeout: 1000 });
+      if (actualDark !== expectedDark) failures.push('Zeta & the Primes: saved theme must survive reload and fall back to the system preference');
+    }
+  }
+  const mathScript = zetaSource.match(/<script id="zeta-math">([\s\S]*?)<\/script>/);
+  if (!mathScript) {
+    failures.push('Zeta & the Primes: missing numerical core');
+  } else {
+    const math = require('vm').runInNewContext(`${mathScript[1]}; ZetaMath`, {}, { timeout: 2000 });
+    const close = (a, b, tolerance = 1e-8) => Number.isFinite(a) && Math.abs(a - b) < tolerance;
+    const knownValues = [[2, Math.PI ** 2 / 6], [0, -0.5], [-1, -1 / 12], [-3, 1 / 120], [-10, 0]];
+    if (knownValues.some(([s, value]) => !close(math.zeta(s)[0], value) || !close(math.zeta(s)[1], 0))
+      || math.zeta(1)[0] !== Infinity) {
+      failures.push('Zeta & the Primes: analytic continuation, trivial zeros or pole is incorrect');
+    }
+    const heights = math.ZERO_HEIGHTS.filter((t) => t <= 100);
+    if (math.ZERO_HEIGHTS.length !== 100 || heights.some((t) => Math.hypot(...math.zeta(0.5, t)) > 1e-7)) {
+      failures.push('Zeta & the Primes: published zero heights must agree with the calculated map');
+    }
+    const upper = math.zeta(-2.3, 7.4), lower = math.zeta(-2.3, -7.4);
+    if (!close(upper[0], lower[0]) || !close(upper[1], -lower[1])) {
+      failures.push('Zeta & the Primes: the map must preserve complex conjugate symmetry');
+    }
+    if (!close(math.li(2), 1.0451637801174928) || !close(math.li(100), 30.12614158407963)
+      || !close(math.riemannR(2), 1.5410090161871319) || !close(math.riemannR(100), 25.661633266924184)) {
+      failures.push('Zeta & the Primes: li must use the Ei(log x) convention and R must include prime-power adjustments');
+    }
+    const exact = math.primeSieve(1000).counts;
+    if (exact[2] !== 1 || exact[28] !== 9 || exact[29] !== 10 || exact[30] !== 10 || exact[1000] !== 168) {
+      failures.push('Zeta & the Primes: the exact staircase must count primes at and below x');
+    }
+    const samples = [10.5, 20.5, 24.5, 30, 35.5, 50.5, 99.5, 120.5, 199.5];
+    const error = (n) => samples.reduce((total, x) => total + Math.abs(math.reconstruct(x, n) - exact[Math.floor(x)]), 0);
+    if (error(100) >= error(0) * 0.35 || samples.some((x) => Math.abs(math.reconstruct(x, 100) - exact[Math.floor(x)]) > 0.25)
+      || !close(math.reconstruct(29, 100), 9.5, 0.08) || !close(math.reconstruct(31, 100), 10.5, 0.08)) {
+      failures.push('Zeta & the Primes: real zero waves must approach prime counts and the midpoint at prime jumps');
+    }
+    if (!close(math.reconstruct(30, 1) - math.reconstruct(30, 0), math.pairWave(30, 0))) {
+      failures.push('Zeta & the Primes: one zero pair must contribute its complete wave exactly once');
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Interactive consistency validation failed:');
   failures.forEach((failure) => console.error(`- ${failure}`));

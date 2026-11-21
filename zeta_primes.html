@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zeta &amp; the Primes</title>
+  <meta name="description" content="Explore the Riemann zeta function, count primes, and build the prime staircase from the waves of zeta zeros. A visual introduction for Year 13.">
+  <script id="initial-theme">
+    (() => {
+      let preference;
+      try { preference=localStorage.getItem('uimode'); } catch (_) { /* Use the system theme when storage is unavailable. */ }
+      document.documentElement.classList.toggle('dark', preference==='dark' || (preference!=='light' && window.matchMedia('(prefers-color-scheme: dark)').matches));
+    })();
+  </script>
+  <style>
+    :root { color-scheme: light; --bg:#f1f5f9; --surface:#fff; --soft:#f8fafc; --ink:#17223b; --muted:#52617a; --border:#dbe3ef; --grid:#e2e8f0; --accent:#4338ca; --teal:#087e80; --purple:#7545c5; --orange:#b45309; --shadow:0 3px 16px #16264a0a; }
+    html.dark { color-scheme:dark; --bg:#0d1526; --surface:#152036; --soft:#101b2e; --ink:#e8eef9; --muted:#a7b6ce; --border:#2d3b54; --grid:#2b3a52; --accent:#a5b4fc; --teal:#39d2cb; --purple:#c4a0ff; --orange:#fbbf66; --shadow:0 3px 16px #0002; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 "Segoe UI",system-ui,sans-serif; }
+    button,input,select { font:inherit; }
+    button,select,input[type=number] { border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); }
+    button { padding:.48rem .85rem; cursor:pointer; font-weight:600; white-space:nowrap; }
+    button:hover { border-color:var(--accent); background:var(--soft); }
+    button:disabled { opacity:.45; cursor:default; }
+    :focus-visible { outline:3px solid var(--teal); outline-offset:3px; }
+    button.primary { background:#4338ca; color:white; border-color:#4338ca; }
+    select { padding:.48rem 2rem .48rem .7rem; max-width:100%; }
+    input[type=range] { accent-color:var(--teal); width:100%; min-width:0; cursor:pointer; }
+    input[type=checkbox] { accent-color:var(--teal); width:17px; height:17px; }
+    input[type=number] { padding:.4rem .6rem; width:6rem; }
+    a { color:var(--accent); }
+    header[data-interactive-header] { background:#4338ca; color:white; padding:1rem 3%; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    h1 { font-size:1.35rem; margin:0; letter-spacing:-.02em; }
+    header p { margin:.1rem 0 0; font-size:.9rem; opacity:.85; }
+    [data-interactive-actions] { display:flex; align-items:center; gap:.5rem; }
+    [role=tablist] { display:flex; flex-wrap:wrap; gap:.35rem; }
+    [role=tab] { color:#fff; background:#ffffff12; border-color:#ffffff40; font-size:.9rem; }
+    [role=tab]:hover { color:white; background:#ffffff25; border-color:#fff9; }
+    [role=tab][aria-selected=true] { background:white; color:#3730a3; border-color:white; }
+    .tab-short { display:none; }
+    main { max-width:1480px; margin:0 auto; padding:1.25rem clamp(1rem,3vw,3rem) 2rem; }
+    [hidden] { display:none !important; }
+    h2 { font-size:1.35rem; line-height:1.3; margin:0 0 .4rem; letter-spacing:-.02em; }
+    h3 { font-size:1rem; margin:0 0 .55rem; }
+    p { margin:.5rem 0 .85rem; }
+    .eyebrow { color:var(--teal); text-transform:uppercase; font-size:.75rem; font-weight:750; letter-spacing:.12em; margin:0 0 .35rem; }
+    .intro { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+    .intro p { max-width:850px; color:var(--muted); margin:.35rem 0 0; }
+    .tag { display:inline-block; border:1px solid var(--border); color:var(--muted); padding:.3rem .6rem; border-radius:6px; font-size:.8rem; white-space:nowrap; }
+    .layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:1rem; align-items:start; }
+    .card { min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; }
+    .pad { padding:1rem 1.1rem; }
+    .card-top { padding:.8rem 1rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; }
+    .card-top h3 { margin:0; }
+    .tools { display:flex; align-items:center; flex-wrap:wrap; gap:.4rem; }
+    .tools button { font-size:.86rem; padding:.35rem .65rem; }
+    .plot-host { position:relative; width:100%; height:405px; }
+    canvas { display:block; width:100%; height:100%; }
+    #zeta-canvas { touch-action:none; cursor:crosshair; }
+    .legend { display:flex; align-items:center; flex-wrap:wrap; gap:.5rem 1.2rem; font-size:.85rem; color:var(--muted); padding:.65rem 1rem; }
+    .key { display:inline-flex; gap:.45rem; align-items:center; }
+    .line { display:inline-block; width:22px; height:0; border-top:3px solid var(--ink); }
+    .line.teal { border-color:var(--teal); }
+    .line.purple { border-color:var(--purple); border-top-style:dashed; }
+    .line.orange { border-color:var(--orange); }
+    .dot { width:10px; height:10px; border:2px solid var(--teal); border-radius:50%; display:inline-block; }
+    .gradient { width:110px; height:10px; background:linear-gradient(90deg,#111b39,#2858a7,#48c3bb,#fff1b2); border-radius:8px; }
+    .caption { color:var(--muted); font-size:.85rem; padding:0 1rem .8rem; margin:0; }
+    aside { display:grid; gap:1rem; min-width:0; }
+    .hint { background:var(--soft); border-left:3px solid var(--teal); border-radius:0 7px 7px 0; padding:.7rem .8rem; font-size:.91rem; }
+    .hint p:last-child { margin-bottom:0; }
+    .small { font-size:.87rem; color:var(--muted); }
+    .math { font-family:"Cambria Math",Cambria,Georgia,serif; font-size:1.08em; }
+    .equation { background:var(--soft); padding:.7rem; border-radius:8px; text-align:center; font-size:1.1rem; overflow-x:auto; margin:.7rem 0; }
+    .field { display:block; font-size:.88rem; font-weight:650; margin:.8rem 0 .3rem; }
+    .field:first-child { margin-top:0; }
+    .full { width:100%; }
+    .readout { font-variant-numeric:tabular-nums; font-family:Consolas,monospace; font-size:.86rem; min-height:2.6em; padding:.6rem 1rem; background:var(--soft); border-top:1px solid var(--border); }
+    .check { display:flex; align-items:center; gap:.55rem; font-size:.9rem; margin:.55rem 0; }
+    .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid var(--border); }
+    .stat { padding:.7rem 1rem; border-right:1px solid var(--border); min-width:0; }
+    .stat:last-child { border-right:0; }
+    .stat span { font-size:.8rem; color:var(--muted); display:block; }
+    .stat strong { font-size:1.3rem; font-variant-numeric:tabular-nums; }
+    .primes { display:flex; gap:.35rem; flex-wrap:wrap; margin:.6rem 0; }
+    .prime { display:inline-block; border:1px solid var(--border); background:var(--soft); padding:.1rem .45rem; border-radius:5px; font-size:.83rem; }
+    .bottom-note { margin-top:1rem; }
+    .bottom-note summary { cursor:pointer; font-weight:650; padding:.8rem 1rem; }
+    .bottom-note .pad { border-top:1px solid var(--border); }
+    .bottom-note p { max-width:1000px; }
+    .wave-panel { border-top:1px solid var(--border); }
+    .wave-panel .plot-host { height:155px; }
+    .wave-title { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.65rem 1rem 0; font-size:.88rem; }
+    .wave-title select { max-width:210px; padding-top:.25rem; padding-bottom:.25rem; }
+    .wave-count { display:flex; justify-content:space-between; align-items:center; margin:.7rem 0 .25rem; font-size:.9rem; }
+    .wave-count output { color:var(--teal); font-size:1.5rem; font-weight:750; }
+    #waves-panel .plot-host.main-plot { height:325px; }
+    .error-status { min-height:1.5em; color:var(--muted); font-size:.85rem; }
+    .no-script { margin:2rem; padding:1rem; background:var(--surface); border:1px solid var(--border); }
+    @media(max-width:1050px) { .layout { grid-template-columns:minmax(0,1fr) 270px; } main { padding:1rem; } .plot-host { height:360px; } .tag { display:none; } }
+    @media(max-width:800px) { .layout { grid-template-columns:minmax(0,1fr); } aside { grid-template-columns:repeat(2,minmax(0,1fr)); } .intro { margin-top:.2rem; } }
+    @media(max-width:640px) {
+      .tab-long { display:none; } .tab-short { display:inline; }
+      header[data-interactive-header] [data-interactive-actions] { flex-wrap:nowrap !important; }
+      [role=tablist] { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); flex:1; min-width:0; }
+      [role=tab] { padding:.45rem .4rem; font-size:.875rem; }
+    }
+    @media(max-width:540px) { main { padding:.85rem; } aside { grid-template-columns:minmax(0,1fr); } h2 { font-size:1.2rem; } .plot-host { height:340px; } .card-top { align-items:flex-start; } .stat { padding:.6rem .65rem; } .stat strong { font-size:1.15rem; } .wave-title { flex-wrap:wrap; gap:.3rem; } }
+  </style>
+  <script src="scripts/site-shell.js"></script>
+</head>
+<body>
+  <header data-interactive-header>
+    <div><h1>Zeta &amp; the Primes</h1><p>From complex zeros to the prime staircase</p></div>
+    <div data-interactive-actions>
+      <div role="tablist" aria-label="Exploration mode">
+        <button id="tab-zeta" role="tab" aria-controls="zeta-panel" aria-selected="true" tabindex="0"><span class="tab-long">1. Explore zeta</span><span class="tab-short">Zeta</span></button>
+        <button id="tab-count" role="tab" aria-controls="count-panel" aria-selected="false" tabindex="-1"><span class="tab-long">2. Count primes</span><span class="tab-short">Primes</span></button>
+        <button id="tab-waves" role="tab" aria-controls="waves-panel" aria-selected="false" tabindex="-1"><span class="tab-long">3. Build with waves</span><span class="tab-short">Waves</span></button>
+      </div>
+    </div>
+  </header>
+  <noscript><p class="no-script">Enable JavaScript to explore the graphs and controls.</p></noscript>
+  <main>
+    <section id="zeta-panel" role="tabpanel" aria-labelledby="tab-zeta">
+      <div class="intro"><div><p class="eyebrow">The hidden landscape</p><h2>Where does the zeta function equal zero?</h2><p>A complex input has two coordinates: <span class="math">s = σ + it</span>, where <span class="math">i² = −1</span>. This map colours the size of the output, <span class="math">|ζ(s)|</span>. Dark valleys lead to zeros.</p></div><span class="tag">Year 13 · visual exploration</span></div>
+      <div class="layout">
+        <div class="card">
+          <div class="card-top"><h3>The complex input plane</h3><div class="tools"><button id="zoom-in" aria-label="Zoom in on the zeta map">Zoom in</button><button id="zoom-out" aria-label="Zoom out of the zeta map">Zoom out</button><button id="reset-map">Reset view</button></div></div>
+          <div class="plot-host"><canvas id="zeta-canvas" tabindex="0" role="img" aria-label="Zoomable magnitude map of the Riemann zeta function. Circle markers locate zeros; a cross marks the pole at 1. Use arrow keys to pan and plus or minus to zoom." aria-describedby="map-help zeta-readout">Your browser needs canvas support to display this map.</canvas></div>
+          <div class="legend"><span class="key"><span class="gradient" aria-hidden="true"></span>Small magnitude to large</span><span class="key"><span class="dot" aria-hidden="true"></span>Zero</span><span class="key">× Pole at s = 1</span></div>
+          <p id="map-help" class="caption">Drag to pan · scroll over the map to zoom · tap to inspect. Keyboard: arrows pan, + / − zoom. The axes use different scales.</p>
+          <div id="zeta-readout" class="readout" aria-live="polite">Choose a zero below, or inspect a point on the map.</div>
+        </div>
+        <aside>
+          <div class="card pad">
+            <label class="field" for="map-preset">Jump to a view</label>
+            <select id="map-preset" class="full"><option value="overview">Overview</option><option value="trivial">Trivial zeros</option><option value="first">First non-trivial zero</option><option value="critical">Along the critical line</option></select>
+            <label class="field" for="zero-select">Inspect a known zero</label><select id="zero-select" class="full"><option value="t-2">s = −2</option><option value="t-4">s = −4</option><option value="t-6">s = −6</option><option value="n0">½ + 14.1347i</option><option value="n1">½ + 21.0220i</option><option value="n2">½ + 25.0109i</option><option value="n3">½ + 30.4249i</option><option value="n4">½ + 32.9351i</option></select>
+            <button id="visit-zero" class="full" style="margin-top:.6rem">Centre on this zero</button>
+            <label class="check"><input id="show-zeros" type="checkbox" checked> Show zero markers</label>
+            <div class="hint"><strong>Try this</strong><p>Visit −2, then the first non-trivial zero. Both have output zero, even though their inputs look very different.</p></div>
+          </div>
+          <div class="card pad"><h3>Two families of zeros</h3><p class="small"><strong>Trivial:</strong> −2, −4, −6, … on the real axis.</p><p class="small"><strong>Non-trivial:</strong> inside the strip 0 &lt; σ &lt; 1. All the examples here lie on σ = ½, the <strong>critical line</strong>, with matching zeros below the real axis.</p><p class="small">The <strong>Riemann hypothesis</strong> says every non-trivial zero lies on that line. Seeing these examples is not a proof.</p></div>
+        </aside>
+      </div>
+      <details class="card bottom-note"><summary>What is ζ(s), and why isn’t this an ordinary graph?</summary><div class="pad"><p>For real inputs greater than 1, the zeta function begins as <span class="math">ζ(s) = 1 + 1/2<sup>s</sup> + 1/3<sup>s</sup> + 1/4<sup>s</sup> + …</span>. At s = 2, for example, its value is about 1.645.</p><p>Mathematicians extend this function to complex inputs, except for a <strong>pole</strong> at s = 1, where its size grows without bound. The series above only converges when σ &gt; 1; this map uses the extended function elsewhere.</p><p>A complex input and a complex output would need four real coordinates. We show the two input coordinates as a map and use colour for the <strong>magnitude</strong> (distance of the output from zero). We do not show the output’s angle. Circle markers pinpoint known zeros that may be smaller than a pixel.</p><p class="small">The map is calculated numerically, with exploration bounded to −12 ≤ σ ≤ 6 and −100 ≤ t ≤ 100. <a href="https://dlmf.nist.gov/25.10" target="_blank" rel="noopener">More about zeta zeros (NIST)</a>.</p></div></details>
+    </section>
+
+    <section id="count-panel" role="tabpanel" aria-labelledby="tab-count" hidden>
+      <div class="intro"><div><p class="eyebrow">A staircase and a smooth guess</p><h2>How many primes are there up to x?</h2><p>The exact count, <span class="math">π(x)</span>, jumps by one at each prime. The logarithmic integral, <span class="math">li(x)</span>, follows its overall trend. Riemann’s <span class="math">R(x)</span> refines that smooth estimate.</p></div><span class="tag">π(x) is a count, not 3.14159…</span></div>
+      <div class="layout">
+        <div class="card">
+          <div class="card-top"><h3 id="count-chart-title">Counting primes</h3><label class="check" style="margin:0"><input id="count-error" type="checkbox"> Show difference from π(x)</label></div>
+          <div class="plot-host"><canvas id="count-canvas" role="img" aria-label="Prime-counting staircase compared with the logarithmic integral and Riemann R. Exact values for the selected x are below."></canvas></div>
+          <div class="legend"><span class="key"><span class="line" aria-hidden="true"></span><span id="count-exact-legend">π(x): exact count</span></span><label class="key"><input id="show-li" type="checkbox" checked><span class="line orange" aria-hidden="true"></span><span id="count-li-legend">li(x)</span></label><label class="key"><input id="show-r" type="checkbox" checked><span class="line purple" aria-hidden="true"></span><span id="count-r-legend">R(x)</span></label></div>
+          <div class="stats"><div class="stat"><span id="pi-label">π(50)</span><strong id="pi-value">15</strong></div><div class="stat"><span id="li-label">li(50)</span><strong id="li-value">18.469</strong></div><div class="stat"><span id="r-label">R(50)</span><strong id="r-value">14.976</strong></div></div>
+        </div>
+        <aside>
+          <div class="card pad"><label class="field" for="count-range">Graph range</label><select id="count-range" class="full"><option value="50">2 to 50</option><option value="100" selected>2 to 100</option><option value="200">2 to 200</option><option value="1000">2 to 1,000</option></select><label class="field" for="inspect-x">Inspect x: <output id="inspect-x-output">50</output></label><input id="inspect-x" type="range" min="2" max="100" step="1" value="50"><label class="field" for="inspect-number">Or enter x</label><input id="inspect-number" type="number" min="2" max="100" step="1" value="50"><p id="count-description" class="small" aria-live="polite"></p><div id="prime-list" class="primes" aria-label="Recent primes up to the selected x"></div><div class="hint"><strong>Try this</strong><p>Move x from 28 to 29 to 30. Which curve jumps? Then show the differences to see the smaller errors.</p></div></div>
+          <div class="card pad"><h3>Why li(x)?</h3><p class="small">Near a large number x, primes have an average density of about <span class="math">1 / ln x</span>. Adding up that changing density gives a smooth estimate.</p><div class="equation math">li′(x) = 1 / ln x</div><p class="small">We use the standard starting value li(2) ≈ 1.045, then add the area under <span class="math">1 / ln x</span> from 2 onwards. Starting the count at zero instead would shift the curve down.</p><p class="small">R(x) adjusts for prime powers such as 4, 8 and 9. It is still an estimate: being close does not mean it is exact, or always closer at every x.</p></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="waves-panel" role="tabpanel" aria-labelledby="tab-waves" hidden>
+      <div class="intro"><div><p class="eyebrow">Build the staircase</p><h2>The zeros supply the missing oscillations</h2><p>Start with a smooth estimate, then add waves from successive pairs of non-trivial zeros. Watch the bends gather around the prime jumps. More zeros reveal finer detail.</p></div><span class="tag">Real zeros · calculated waves</span></div>
+      <div class="layout">
+        <div class="card">
+          <div class="card-top"><h3 id="wave-chart-title">Reconstruction with 0 zero pairs</h3><label class="check" style="margin:0"><input id="wave-error" type="checkbox"> Show correction only</label></div>
+          <div class="plot-host main-plot"><canvas id="wave-canvas" role="img" aria-label="Exact prime staircase, smooth Riemann R, and a reconstruction using the selected number of zeta zero pairs."></canvas></div>
+          <div class="legend"><span class="key"><span class="line" aria-hidden="true"></span><span id="wave-target-legend">π(x): exact count</span></span><span class="key"><span class="line purple" aria-hidden="true"></span><span id="wave-r-legend">R(x): smooth estimate</span></span><span class="key"><span class="line teal" aria-hidden="true"></span><span id="reconstruction-legend">Fixed corrections only</span></span></div>
+          <div class="wave-panel"><div class="wave-title"><label for="solo-zero">One pair’s contribution</label><select id="solo-zero"></select></div><div class="plot-host"><canvas id="solo-canvas" role="img" aria-label="The oscillating contribution of one selected zero pair, shown against x on the same horizontal scale as the graph above."></canvas></div></div>
+          <p id="solo-description" class="caption"></p>
+        </div>
+        <aside>
+          <div class="card pad">
+            <label class="field" for="wave-range">Graph range</label><select id="wave-range" class="full"><option value="2,50" selected>2 to 50 · start here</option><option value="20,40">20 to 40 · inspect the steps</option><option value="2,100">2 to 100</option><option value="100,200">100 to 200</option></select>
+            <div class="wave-count"><label for="zero-count">Zero pairs to add</label><output id="zero-count-output">0</output></div><input id="zero-count" type="range" min="0" max="100" step="1" value="0">
+            <div class="tools"><button id="reset-waves">Reset</button><button id="add-zero">Add one pair</button><button id="play-waves" class="primary" aria-pressed="false">Play</button></div>
+            <p id="wave-status" class="error-status" aria-live="polite">Smooth starting curve, including fixed corrections.</p>
+            <div class="hint"><strong>Try this</strong><p>Compare 0, 10 and 100 pairs. Then zoom to 20–40. Near 29 and 31, can you see two separate jumps emerging?</p></div>
+          </div>
+          <div class="card pad"><h3>Why are they waves?</h3><p class="small">A zero <span class="math">½ + iγ</span> gives a term involving:</p><div class="equation math">cos(γ ln x)</div><p class="small">The height γ sets how quickly it oscillates in <strong>ln x</strong>. Higher zeros add finer detail. Each pair also includes the matching zero <span class="math">½ − iγ</span>, so its combined contribution is real.</p><p class="small"><strong>A finite sum is approximate.</strong> Ripples near a jump are expected. Extra waves need not improve every single point.</p></div>
+        </aside>
+      </div>
+      <div class="card pad bottom-note"><h3>Does it ever become exact?</h3><p>With all the zero pairs, in order of increasing height, and the fixed corrections included, the explicit formula recovers the prime count <strong>between the primes</strong>. At a prime p it gives the midpoint of the jump: <span class="math">π(p) − ½</span>. Taking the value immediately to the right gives the usual <span class="math">π(p)</span>.</p><p class="small">This display uses the first 100 pairs. Their positions are known; the full prime-counting formula does not depend on proving the Riemann hypothesis.</p></div>
+      <details class="card bottom-note"><summary>A little more maths: what is being added?</summary><div class="pad"><p>R(x) is a smooth estimate obtained by removing the extra counts from prime squares, cubes and higher powers. To keep the reconstruction faithful, we calculate through a weighted counter J: a prime counts 1, a prime square adds ½, a prime cube adds ⅓, and so on. Removing these extra counts gives π.</p><p>The exact starting point, with midpoint values at jumps, is:</p><div class="equation math">J₀(x) = li(x) − 2 ∑<sub>γ &gt; 0</sub> Re Ei((½ + iγ) ln x) − ln 2 + ∫<sub>x</sub><sup>∞</sup> dt / [t(t² − 1) ln t]</div><p>We then combine <span class="math">J₀(x) − ½J₀(√x) − ⅓J₀(∛x) − ⅕J₀(x<sup>1/5</sup>) + ⅙J₀(x<sup>1/6</sup>) − ⅐J₀(x<sup>1/7</sup>)</span>. These are all the nonzero terms needed up to x = 200. Terms whose argument is below 2 tend to zero in the full formula; retaining the same terms across the graph keeps each finite reconstruction continuous.</p><p>The teal curve includes the constant and integral terms, as well as the prime-power adjustments to every wave. Its smooth starting part is close to, but not identical to, the dashed R(x) curve. Equivalently, we plot <strong>R(x) + fixed corrections + the first N zero-pair waves</strong>. The lower graph shows one complete pair contribution, rather than a simple cosine fitted to the primes.</p><p class="small">Sources: <a href="https://www.maths.tcd.ie/pub/HistMath/People/Riemann/Zeta/EZeta.pdf" target="_blank" rel="noopener">Riemann’s 1859 paper (English translation)</a>; <a href="https://www-users.cse.umn.edu/~odlyzko/zeta_tables/zeros1" target="_blank" rel="noopener">Odlyzko’s zero heights</a>; <a href="https://dlmf.nist.gov/25.10" target="_blank" rel="noopener">NIST: zeta zeros</a>.</p></div></details>
+    </section>
+  </main>
+
+  <script id="zeta-math">
+  /* Numerical core kept separate from the UI so known values can be checked in Node.
+     Zeta: Euler–Maclaurin on Re(s)>=1/2 and the functional equation on the left.
+     Reconstruction: J's explicit formula followed by a fixed, finite Möbius inversion.
+     No prime data is used to construct the approximation. */
+  const ZetaMath = (() => {
+    const ZERO_HEIGHTS = [
+      14.134725142,21.022039639,25.010857580,30.424876126,32.935061588,
+      37.586178159,40.918719012,43.327073281,48.005150881,49.773832478,
+      52.970321478,56.446247697,59.347044003,60.831778525,65.112544048,
+      67.079810529,69.546401711,72.067157674,75.704690699,77.144840069,
+      79.337375020,82.910380854,84.735492981,87.425274613,88.809111208,
+      92.491899271,94.651344041,95.870634228,98.831194218,101.317851006,
+      103.725538040,105.446623052,107.168611184,111.029535543,111.874659177,
+      114.320220915,116.226680321,118.790782866,121.370125002,122.946829294,
+      124.256818554,127.516683880,129.578704200,131.087688531,133.497737203,
+      134.756509753,138.116042055,139.736208952,141.123707404,143.111845808,
+      146.000982487,147.422765343,150.053520421,150.925257612,153.024693811,
+      156.112909294,157.597591818,158.849988171,161.188964138,163.030709687,
+      165.537069188,167.184439978,169.094515416,169.911976479,173.411536520,
+      174.754191523,176.441434298,178.377407776,179.916484020,182.207078484,
+      184.874467848,185.598783678,187.228922584,189.416158656,192.026656361,
+      193.079726604,195.265396680,196.876481841,198.015309676,201.264751944,
+      202.493594514,204.189671803,205.394697202,207.906258888,209.576509717,
+      211.690862595,213.347919360,214.547044783,216.169538508,219.067596349,
+      220.714918839,221.430705555,224.007000255,224.983324670,227.421444280,
+      229.337413306,231.250188700,231.987235253,233.693404179,236.524229666
+    ];
+    const EULER = 0.5772156649015329;
+    const multiply = (a,b) => [a[0]*b[0]-a[1]*b[1], a[0]*b[1]+a[1]*b[0]];
+    const divide = (a,b) => { const d=b[0]*b[0]+b[1]*b[1]; return [(a[0]*b[0]+a[1]*b[1])/d,(a[1]*b[0]-a[0]*b[1])/d]; };
+    const exp = (a) => { const r=Math.exp(a[0]); return [r*Math.cos(a[1]),r*Math.sin(a[1])]; };
+    const log = (a) => [Math.log(Math.hypot(...a)),Math.atan2(a[1],a[0])];
+    function logGamma(a) {
+      const coefficients=[676.5203681218851,-1259.1392167224028,771.3234287776531,-176.6150291621406,12.507343278686905,-0.13857109526572012,9.984369578019572e-6,1.5056327351493116e-7];
+      const z=[a[0]-1,a[1]]; let sum=[0.9999999999998099,0];
+      coefficients.forEach((c,i)=> { const d=divide([c,0],[z[0]+i+1,z[1]]); sum=[sum[0]+d[0],sum[1]+d[1]]; });
+      const t=[z[0]+7.5,z[1]], v=multiply([z[0]+.5,z[1]],log(t)), l=log(sum);
+      return [.9189385332046727+v[0]-t[0]+l[0],v[1]-t[1]+l[1]];
+    }
+    const logs=Array.from({length:100},(_,n)=>Math.log(n||1));
+    function zeta(sigma,t=0) {
+      if (sigma===1 && t===0) return [Infinity,0];
+      if (sigma===0 && t===0) return [-.5,0];
+      if (sigma<.5) {
+        const a=Math.PI*sigma/2, b=Math.PI*t/2;
+        const sin=[Math.sin(a)*Math.cosh(b),Math.cos(a)*Math.sinh(b)];
+        const g=logGamma([1-sigma,-t]);
+        const factor=exp([sigma*Math.log(2)+(sigma-1)*Math.log(Math.PI)+g[0],t*Math.log(2*Math.PI)+g[1]]);
+        return multiply(multiply(factor,sin),zeta(1-sigma,-t));
+      }
+      const n=32+Math.ceil(Math.abs(t)/2), ln=Math.log(n);
+      let re=0,im=0;
+      for(let k=1;k<n;k++) { const l=logs[k] || Math.log(k), r=Math.exp(-sigma*l); re+=r*Math.cos(t*l); im-=r*Math.sin(t*l); }
+      const power=exp([-sigma*ln,-t*ln]);
+      const tail=divide([n*power[0],n*power[1]],[sigma-1,t]);
+      re+=tail[0]+.5*power[0]; im+=tail[1]+.5*power[1];
+      const bernoulli=[1/12,-1/720,1/30240,-1/1209600,1/47900160,-691/1307674368000,7/523069747200];
+      let rising=[sigma,t];
+      for(let k=1;k<=bernoulli.length;k++) {
+        if(k>1) { rising=multiply(rising,[sigma+2*k-3,t]); rising=multiply(rising,[sigma+2*k-2,t]); }
+        const term=multiply(rising,power), scale=bernoulli[k-1]*Math.pow(n,1-2*k);
+        re+=term[0]*scale; im+=term[1]*scale;
+      }
+      return [re,im];
+    }
+    // Only Re(Ei) is needed: conjugate zero pairs cancel the branch's imaginary constant.
+    function eiReal(a,b=0) {
+      const radius=Math.hypot(a,b);
+      if(radius<=18 || b===0) {
+        let tr=1,ti=0,sum=EULER+Math.log(radius);
+        for(let k=1;k<180;k++) { const nr=(tr*a-ti*b)/k; ti=(tr*b+ti*a)/k; tr=nr; sum+=tr/k; if(Math.hypot(tr,ti)/k<1e-15 && k>radius+5) break; }
+        return sum;
+      }
+      const inv=divide([1,0],[a,b]); let term=[1,0],sum=[1,0],previous=Infinity;
+      for(let k=1;k<180;k++) { const v=multiply(term,inv); term=[k*v[0],k*v[1]]; const size=Math.hypot(...term); if(size>previous) break; sum=[sum[0]+term[0],sum[1]+term[1]]; previous=size; if(size<1e-15) break; }
+      return multiply(multiply(exp([a,b]),inv),sum)[0];
+    }
+    const li = (x) => eiReal(Math.log(x));
+    const integerZeta=Array.from({length:65},(_,k)=>k>0 ? zeta(k+1)[0] : Infinity);
+    function riemannR(x) {
+      const l=Math.log(x); let term=1, sum=1;
+      for(let k=1;k<65;k++) { term*=l/k; const add=term/(k*integerZeta[k]); sum+=add; if(Math.abs(add)<1e-14) break; }
+      return sum;
+    }
+    function integralCorrection(lower) {
+      // u=ln(t), then v=ln(u): a smooth finite quadrature, even near t=1.
+      const f=(v)=>1/Math.expm1(2*Math.exp(v));
+      const a=Math.log(lower), b=Math.log(35), mid=(a+b)/2;
+      const fa=f(a),fb=f(b),fm=f(mid), whole=(b-a)*(fa+4*fm+fb)/6;
+      function adapt(a,b,fa,fm,fb,whole,eps,depth) {
+        const c=(a+b)/2, fl=f((a+c)/2),fr=f((c+b)/2), left=(c-a)*(fa+4*fl+fm)/6,right=(b-c)*(fm+4*fr+fb)/6,delta=left+right-whole;
+        if(depth===0 || Math.abs(delta)<15*eps) return left+right+delta/15;
+        return adapt(a,c,fa,fl,fm,left,eps/2,depth-1)+adapt(c,b,fm,fr,fb,right,eps/2,depth-1);
+      }
+      return adapt(a,b,fa,fm,fb,whole,1e-9,16);
+    }
+    // m<=8 suffices on [2,200]; mu(4)=mu(8)=0. Fixed across x to avoid artificial switches.
+    const MOBIUS=[[1,1],[2,-1],[3,-1],[5,-1],[6,1],[7,-1]];
+    function smoothBase(x) {
+      const l=Math.log(x);
+      return MOBIUS.reduce((sum,[m,mu])=>sum+mu/m*(eiReal(l/m)-Math.LN2+integralCorrection(l/m)),0);
+    }
+    function pairWave(x,index) {
+      const l=Math.log(x),height=ZERO_HEIGHTS[index];
+      return MOBIUS.reduce((sum,[m,mu])=>sum-2*mu/m*eiReal(.5*l/m,height*l/m),0);
+    }
+    function reconstruct(x,count) {
+      let result=smoothBase(x);
+      for(let i=0;i<count;i++) result+=pairWave(x,i);
+      return result;
+    }
+    function primeSieve(limit) {
+      const composite=new Uint8Array(limit+1),primes=[],counts=new Uint16Array(limit+1);
+      for(let i=2;i<=limit;i++) { if(!composite[i]) { primes.push(i); for(let j=i*i;j<=limit;j+=i) composite[j]=1; } counts[i]=primes.length; }
+      return {primes,counts};
+    }
+    return {ZERO_HEIGHTS,zeta,eiReal,li,riemannR,integralCorrection,smoothBase,pairWave,reconstruct,primeSieve};
+  })();
+  </script>
+  <script>
+  (() => {
+    'use strict';
+    const $=(id)=>document.getElementById(id), M=ZetaMath;
+    const {primes,counts}=M.primeSieve(1000);
+    const state={mode:'zeta',view:{x0:-9,x1:3,y0:-5,y1:40},inspect:{x:50},pairs:0,solo:0,waveRange:[2,50],playing:false};
+    const presets={overview:{x0:-9,x1:3,y0:-5,y1:40},trivial:{x0:-10.5,x1:2,y0:-3,y1:3},first:{x0:-1,x1:2,y0:11,y1:17},critical:{x0:-1.5,x1:2.5,y0:0,y1:50}};
+    const fmt=(x,n=3)=>Number.isFinite(x)?x.toLocaleString('en-GB',{maximumFractionDigits:n,minimumFractionDigits:n}):'∞';
+    const pi=(x)=>counts[Math.max(0,Math.min(1000,Math.floor(x+1e-10)))];
+    const theme=()=>{ const s=getComputedStyle(document.documentElement); return Object.fromEntries(['ink','muted','grid','surface','teal','purple','orange','border'].map(k=>[k,s.getPropertyValue('--'+k).trim()])); };
+    let mapFrame=0, chartFrame=0,heatCache=null,waveCache=null,playTimer=null;
+    const sampleCache=new Map();
+    function setup(canvas) {
+      const box=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(200,box.width),h=Math.max(140,box.height);
+      if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)) {canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
+      const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      return {ctx,w,h,colors:theme()};
+    }
+    function ticks(min,max,target=7) {
+      const rough=(max-min)/target,base=Math.pow(10,Math.floor(Math.log10(rough))),q=rough/base,step=(q<1.5?1:q<3?2:q<7?5:10)*base,result=[];
+      for(let n=Math.ceil(min/step)*step;n<=max+step*1e-8;n+=step) result.push(Math.abs(n)<step*1e-8?0:n);
+      return result;
+    }
+    function axes(canvas,xmin,xmax,ymin,ymax,ylabel='count',xLabel='x') {
+      const plot=setup(canvas),{ctx,w,h,colors:c}=plot;
+      const left=w<420?48:58,right=20,top=22,bottom=42,pw=w-left-right,ph=h-top-bottom;
+      const X=x=>left+(x-xmin)/(xmax-xmin)*pw,Y=y=>top+(ymax-y)/(ymax-ymin)*ph;
+      ctx.fillStyle=c.surface;ctx.fillRect(0,0,w,h);ctx.font='12px Segoe UI';ctx.lineWidth=1;
+      for(const x of ticks(xmin,xmax,w<420?4:7)) {ctx.strokeStyle=c.grid;ctx.beginPath();ctx.moveTo(X(x),top);ctx.lineTo(X(x),top+ph);ctx.stroke();ctx.fillStyle=c.muted;ctx.textAlign='center';ctx.fillText(String(+x.toFixed(2)),X(x),h-21);}
+      for(const y of ticks(ymin,ymax,5)) {ctx.strokeStyle=c.grid;ctx.beginPath();ctx.moveTo(left,Y(y));ctx.lineTo(left+pw,Y(y));ctx.stroke();ctx.fillStyle=c.muted;ctx.textAlign='right';ctx.fillText(String(+y.toFixed(2)),left-9,Y(y)+4);}
+      ctx.fillStyle=c.muted;ctx.textAlign='left';ctx.fillText(ylabel,left,13);ctx.textAlign='right';ctx.fillText(xLabel,w-right,h-6);
+      ctx.strokeStyle=c.border;ctx.strokeRect(left,top,pw,ph);
+      return {...plot,left,top,pw,ph,X,Y,xmin,xmax,ymin,ymax};
+    }
+    function curve(p,points,color,dashed=false,width=2) {
+      const {ctx,X,Y,left,top,pw,ph}=p;ctx.save();ctx.beginPath();ctx.rect(left,top,pw,ph);ctx.clip();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dashed?[6,4]:[]);ctx.beginPath();
+      points.forEach(([x,y],i)=>{if(i===0)ctx.moveTo(X(x),Y(y));else ctx.lineTo(X(x),Y(y));});ctx.stroke();ctx.restore();
+    }
+    function staircase(x0,x1,offset=()=>0) {
+      const pts=[[x0,pi(x0)-offset(x0)]];
+      for(const prime of primes) if(prime>x0&&prime<=x1) { pts.push([prime,pi(prime)-1-offset(prime)],[prime,pi(prime)-offset(prime)]); }
+      pts.push([x1,pi(x1)-offset(x1)]);return pts;
+    }
+    function inspectLine(p,x) {
+      p.ctx.save();p.ctx.setLineDash([3,4]);p.ctx.strokeStyle=p.colors.muted;p.ctx.beginPath();p.ctx.moveTo(p.X(x),p.top);p.ctx.lineTo(p.X(x),p.top+p.ph);p.ctx.stroke();p.ctx.restore();
+    }
+    function sampleValues(max) {
+      if(sampleCache.has(max))return sampleCache.get(max);
+      // Include either side of every integer so differences preserve their jumps.
+      const xs=new Set([2,max]);for(let i=0;i<=700;i++)xs.add(2+(max-2)*i/700);for(const prime of primes)if(prime>2&&prime<=max){xs.add(prime-1e-6);xs.add(prime);}
+      const data=[...xs].sort((a,b)=>a-b).map(x=>({x,li:M.li(x),r:M.riemannR(x)})); sampleCache.set(max,data);return data;
+    }
+    function drawCount() {
+      const max=+$('count-range').value,error=$('count-error').checked,data=sampleValues(max),c=theme();
+      const liOn=$('show-li').checked,rOn=$('show-r').checked;
+      const diffs=data.flatMap(d=>[0,...(liOn?[d.li-pi(d.x)]:[]),...(rOn?[d.r-pi(d.x)]:[])]);
+      const low=error?Math.min(-1,...diffs)-.4:0,high=error?Math.max(1,...diffs)+.6:M.li(max)*1.06;
+      const p=axes($('count-canvas'),2,max,low,high,error?'estimate − exact count':'number of primes');
+      curve(p,error?[[2,0],[max,0]]:staircase(2,max),c.ink,false,2.5);
+      if(liOn)curve(p,data.map(d=>[d.x,d.li-(error?pi(d.x):0)]),c.orange);
+      if(rOn)curve(p,data.map(d=>[d.x,d.r-(error?pi(d.x):0)]),c.purple,true);
+      inspectLine(p,state.inspect.x);
+      $('count-chart-title').textContent=error?'How far is each estimate from the count?':'Counting primes';
+      $('count-exact-legend').textContent=error?'Exact count: zero reference':'π(x): exact count';
+      $('count-li-legend').textContent=error?'li(x) − π(x)':'li(x)';
+      $('count-r-legend').textContent=error?'R(x) − π(x)':'R(x)';
+    }
+    function updateCount(x) {
+      const max=+$('count-range').value;x=Math.max(2,Math.min(max,Math.round(Number(x)||2)));state.inspect.x=x;
+      $('inspect-x').value=x;$('inspect-number').value=x;$('inspect-x-output').value=x;
+      ['pi','li','r'].forEach(key=>$(`${key}-label`).textContent=`${key==='r'?'R':key==='pi'?'π':key}(${x})`);
+      $('pi-value').textContent=pi(x);$('li-value').textContent=fmt(M.li(x));$('r-value').textContent=fmt(M.riemannR(x));
+      const isPrime=primes.includes(x);$('count-description').textContent=`${x} is ${isPrime?'prime, so the staircase jumps here':'not prime'}. There are ${pi(x)} primes ≤ ${x}. Recent primes:`;
+      $('prime-list').replaceChildren(...primes.filter(p=>p<=x).slice(-10).map(p=>{const e=document.createElement('span');e.className='prime';e.textContent=p;return e;}));
+      scheduleCharts();
+    }
+    function prepareWaves() {
+      const [a,b]=state.waveRange,key=`${a},${b}`;if(waveCache?.key===key)return waveCache;
+      const xs=Array.from({length:1001},(_,i)=>a+(b-a)*i/1000);
+      const r=xs.map(M.riemannR),base=xs.map(M.smoothBase);
+      // Cache each cumulative sum once. Moving the slider then only redraws paths.
+      const sums=[base],waves=[];
+      for(let j=0;j<M.ZERO_HEIGHTS.length;j++) {const wave=xs.map(x=>M.pairWave(x,j));waves.push(wave);sums.push(wave.map((w,i)=>w+sums[j][i]));}
+      waveCache={key,xs,r,base,sums,waves};return waveCache;
+    }
+    function drawWaves() {
+      const data=prepareWaves(),[a,b]=state.waveRange,error=$('wave-error').checked,c=theme(),values=data.sums[state.pairs];
+      const target=staircase(a,b),deltas=values.map((v,i)=>v-data.r[i]);
+      // For the correction staircase, sample R along the flat runs as well as at jumps.
+      const needed=data.xs.map((x,i)=>[x,pi(x)-data.r[i]]);
+      for(const prime of primes)if(prime>a&&prime<=b)needed.push([prime-1e-7,pi(prime)-1-M.riemannR(prime)],[prime,pi(prime)-M.riemannR(prime)]);
+      needed.sort((p,q)=>p[0]-q[0]);
+      const all=[...deltas,...needed.map(v=>v[1])],low=error?Math.min(-1,...all)-.3:Math.max(0,pi(a)-2),high=error?Math.max(1,...all)+.3:Math.max(M.riemannR(b),...values,pi(b))+2;
+      const p=axes($('wave-canvas'),a,b,low,high,error?'correction relative to R(x)':'number of primes');
+      curve(p,error?needed:target,c.ink,false,2.5);
+      curve(p,data.xs.map((x,i)=>[x,error?0:data.r[i]]),c.purple,true);
+      curve(p,data.xs.map((x,i)=>[x,error?deltas[i]:values[i]]),c.teal,false,2.2);
+      const single=data.waves[state.solo],amp=Math.max(.08,...single.map(Math.abs))*1.18;
+      const solo=axes($('solo-canvas'),a,b,-amp,amp,'pair contribution');
+      curve(solo,[[a,0],[b,0]],c.muted,true,1);curve(solo,data.xs.map((x,i)=>[x,single[i]]),c.teal);
+      $('wave-chart-title').textContent=`${error?'Correction':'Reconstruction'} with ${state.pairs} zero ${state.pairs===1?'pair':'pairs'}`;
+      $('wave-target-legend').textContent=error?'π(x) − R(x): needed correction':'π(x): exact count';
+      $('wave-r-legend').textContent=error?'Zero reference':'R(x): smooth estimate';
+      $('reconstruction-legend').textContent=state.pairs===0?'Fixed corrections only':`Fixed corrections + ${state.pairs} ${state.pairs===1?'pair':'pairs'}`;
+      $('solo-description').textContent=`Pair ${state.solo+1}: ½ ± ${fmt(M.ZERO_HEIGHTS[state.solo],4)}i. ${state.solo<state.pairs?'Included in the sum above.':'Not yet included in the sum above.'} This is a wave in ln x, so its spacing grows as x grows.`;
+    }
+    function scheduleCharts() {
+      cancelAnimationFrame(chartFrame);chartFrame=requestAnimationFrame(()=>{if(state.mode==='count')drawCount();if(state.mode==='waves')drawWaves();});
+    }
+    function clampView() {
+      const v=state.view,w=Math.min(18,Math.max(.15,v.x1-v.x0)),h=Math.min(200,Math.max(.15,v.y1-v.y0));
+      const cx=Math.min(6-w/2,Math.max(-12+w/2,(v.x0+v.x1)/2)),cy=Math.min(100-h/2,Math.max(-100+h/2,(v.y0+v.y1)/2));
+      state.view={x0:cx-w/2,x1:cx+w/2,y0:cy-h/2,y1:cy+h/2};
+    }
+    function mapGeometry() {
+      const r=$('zeta-canvas').getBoundingClientRect();return {left:52,top:20,pw:r.width-72,ph:r.height-64};
+    }
+    function drawMap() {
+      const {ctx,w,h,colors:c}=setup($('zeta-canvas')),v=state.view,{left,top,pw,ph}=mapGeometry();
+      const X=x=>left+(x-v.x0)/(v.x1-v.x0)*pw,Y=y=>top+(v.y1-y)/(v.y1-v.y0)*ph;
+      const key=JSON.stringify(v)+Math.round(pw)+','+Math.round(ph);
+      if(heatCache?.key!==key) {
+        const image=document.createElement('canvas');image.width=Math.max(1,Math.ceil(pw/2.5));image.height=Math.max(1,Math.ceil(ph/2.5));
+        const ic=image.getContext('2d'),pixels=ic.createImageData(image.width,image.height);
+        const stops=[[17,27,57],[40,88,167],[72,195,187],[255,241,178]];
+        for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++) {
+          const s=v.x0+(x+.5)/image.width*(v.x1-v.x0),t=v.y1-(y+.5)/image.height*(v.y1-v.y0),z=M.zeta(s,t),mag=Math.hypot(...z);
+          const level=Math.max(0,Math.min(2.999,1.25+.75*Math.log10(Math.max(1e-8,mag)))),k=Math.floor(level),f=level-k,index=(y*image.width+x)*4;
+          for(let ch=0;ch<3;ch++)pixels.data[index+ch]=stops[k][ch]*(1-f)+stops[k+1][ch]*f;
+          pixels.data[index+3]=255;
+        }
+        ic.putImageData(pixels,0,0);heatCache={key,image};
+      }
+      ctx.fillStyle=c.surface;ctx.fillRect(0,0,w,h);ctx.drawImage(heatCache.image,left,top,pw,ph);
+      ctx.save();ctx.beginPath();ctx.rect(left,top,pw,ph);ctx.clip();
+      for(const x of [0,1])if(x>=v.x0&&x<=v.x1){ctx.fillStyle='#ffffff08';const end=Math.min(v.x1,1);if(x===0)ctx.fillRect(X(0),top,X(end)-X(0),ph);ctx.strokeStyle='#ffffff45';ctx.setLineDash([3,5]);ctx.beginPath();ctx.moveTo(X(x),top);ctx.lineTo(X(x),top+ph);ctx.stroke();}
+      ctx.strokeStyle='#fff9';ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(X(.5),top);ctx.lineTo(X(.5),top+ph);ctx.stroke();
+      if(v.y0<=0&&v.y1>=0){ctx.setLineDash([]);ctx.strokeStyle='#ffffff60';ctx.beginPath();ctx.moveTo(left,Y(0));ctx.lineTo(left+pw,Y(0));ctx.stroke();}
+      if($('show-zeros').checked) {
+        const zeros=[];for(let n=-2;n>=-12;n-=2)zeros.push({x:n,y:0,label:String(n)});
+        M.ZERO_HEIGHTS.filter(t=>t<=100).forEach(t=>{zeros.push({x:.5,y:t,label:fmt(t,2)},{x:.5,y:-t,label:'−'+fmt(t,2)});});
+        ctx.setLineDash([]);ctx.font='12px Segoe UI';
+        for(const z of zeros)if(z.x>=v.x0&&z.x<=v.x1&&z.y>=v.y0&&z.y<=v.y1) {
+          const x=X(z.x),y=Y(z.y);ctx.beginPath();ctx.arc(x,y,5,0,2*Math.PI);ctx.fillStyle='#09182c';ctx.fill();ctx.strokeStyle='#73ffeb';ctx.lineWidth=2;ctx.stroke();
+          if(pw>380){ctx.fillStyle='#09182cdd';const tw=ctx.measureText(z.label).width;const labelX=x+10+tw<left+pw?x+10:x-10-tw;ctx.fillRect(labelX-3,y-12,tw+6,18);ctx.fillStyle='#ecfffd';ctx.textAlign='left';ctx.fillText(z.label,labelX,y+1);}
+        }
+      }
+      if(v.x0<=1&&v.x1>=1&&v.y0<=0&&v.y1>=0){ctx.strokeStyle='#ffdb96';ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(X(1)-5,Y(0)-5);ctx.lineTo(X(1)+5,Y(0)+5);ctx.moveTo(X(1)+5,Y(0)-5);ctx.lineTo(X(1)-5,Y(0)+5);ctx.stroke();}
+      ctx.restore();ctx.font='12px Segoe UI';ctx.fillStyle=c.muted;
+      for(const x of ticks(v.x0,v.x1,w<420?4:7)){ctx.textAlign='center';ctx.fillText(String(+x.toFixed(3)),X(x),h-23);}
+      for(const y of ticks(v.y0,v.y1,6)){ctx.textAlign='right';ctx.fillText(String(+y.toFixed(2)),left-9,Y(y)+4);}
+      ctx.textAlign='left';ctx.fillText('t (imaginary part)',left,13);ctx.textAlign='right';ctx.fillText('σ (real part)',w-20,h-6);
+      ctx.strokeStyle=c.border;ctx.lineWidth=1;ctx.strokeRect(left,top,pw,ph);
+    }
+    function scheduleMap() {cancelAnimationFrame(mapFrame);mapFrame=requestAnimationFrame(drawMap);}
+    function zoom(factor,x=null,y=null) {
+      const v=state.view;const cx=x??(v.x0+v.x1)/2,cy=y??(v.y0+v.y1)/2;
+      state.view={x0:cx+(v.x0-cx)*factor,x1:cx+(v.x1-cx)*factor,y0:cy+(v.y0-cy)*factor,y1:cy+(v.y1-cy)*factor};clampView();scheduleMap();
+    }
+    function showPoint(x,y) {
+      const z=M.zeta(x,y);$('zeta-readout').textContent=`s = ${fmt(x,4)} ${y<0?'−':'+'} ${fmt(Math.abs(y),4)}i    |ζ(s)| ≈ ${fmt(Math.hypot(...z),6)}${x===1&&y===0?' · pole':''}`;
+    }
+    function stopPlay() {clearInterval(playTimer);playTimer=null;state.playing=false;$('play-waves').textContent='Play';$('play-waves').setAttribute('aria-pressed','false');}
+    function setPairs(n,follow=false) {
+      state.pairs=Math.min(100,Math.max(0,Math.round(n)));$('zero-count').value=state.pairs;$('zero-count-output').value=state.pairs;
+      if(follow&&state.pairs>0){state.solo=state.pairs-1;$('solo-zero').value=state.solo;}
+      $('add-zero').disabled=state.pairs===100;
+      $('wave-status').textContent=state.pairs===0?'Smooth starting curve, including fixed corrections.':`${state.pairs} ${state.pairs===1?'pair':'pairs'} included; highest γ = ${fmt(M.ZERO_HEIGHTS[state.pairs-1],4)}. Still a finite approximation.`;
+      if(state.pairs===100)stopPlay();scheduleCharts();
+    }
+    function switchMode(mode) {
+      if(mode!=='waves')stopPlay();state.mode=mode;
+      for(const name of ['zeta','count','waves']) {const selected=name===mode;$(`tab-${name}`).setAttribute('aria-selected',String(selected));$(`tab-${name}`).tabIndex=selected?0:-1;$(`${name}-panel`).hidden=!selected;}
+      if(mode==='zeta')scheduleMap();else scheduleCharts();
+    }
+    ['zeta','count','waves'].forEach((name,index)=>{
+      $(`tab-${name}`).addEventListener('click',()=>switchMode(name));
+      $(`tab-${name}`).addEventListener('keydown',e=>{let next;if(e.key==='ArrowRight')next=(index+1)%3;if(e.key==='ArrowLeft')next=(index+2)%3;if(e.key==='Home')next=0;if(e.key==='End')next=2;if(next!==undefined){e.preventDefault();const mode=['zeta','count','waves'][next];switchMode(mode);$(`tab-${mode}`).focus();}});
+    });
+    $('map-preset').addEventListener('change',e=>{state.view={...presets[e.target.value]};scheduleMap();});
+    $('zoom-in').addEventListener('click',()=>zoom(.65));$('zoom-out').addEventListener('click',()=>zoom(1.5));
+    $('reset-map').addEventListener('click',()=>{state.view={...presets.overview};$('map-preset').value='overview';scheduleMap();});
+    $('show-zeros').addEventListener('change',scheduleMap);
+    $('visit-zero').addEventListener('click',()=>{const value=$('zero-select').value,x=value[0]==='t'?+value.slice(1):.5,y=value[0]==='t'?0:M.ZERO_HEIGHTS[+value.slice(1)];state.view={x0:x-1.5,x1:x+1.5,y0:y-3,y1:y+3};clampView();showPoint(x,y);scheduleMap();});
+    const canvas=$('zeta-canvas');let drag=null;
+    const mapPoint=e=>{const r=canvas.getBoundingClientRect(),g=mapGeometry(),v=state.view;return {px:e.clientX-r.left,py:e.clientY-r.top,x:v.x0+(e.clientX-r.left-g.left)/g.pw*(v.x1-v.x0),y:v.y1-(e.clientY-r.top-g.top)/g.ph*(v.y1-v.y0)};};
+    canvas.addEventListener('wheel',e=>{const p=mapPoint(e),g=mapGeometry();if(p.px<g.left||p.px>g.left+g.pw||p.py<g.top||p.py>g.top+g.ph)return;e.preventDefault();zoom(e.deltaY>0?1.16:.86,p.x,p.y);},{passive:false});
+    canvas.addEventListener('pointerdown',e=>{const p=mapPoint(e);drag={id:e.pointerId,px:p.px,py:p.py,view:{...state.view},moved:false};canvas.setPointerCapture(e.pointerId);canvas.focus({preventScroll:true});});
+    canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const p=mapPoint(e),g=mapGeometry(),dx=(p.px-drag.px)/g.pw*(drag.view.x1-drag.view.x0),dy=(p.py-drag.py)/g.ph*(drag.view.y1-drag.view.y0);if(Math.abs(p.px-drag.px)+Math.abs(p.py-drag.py)>4)drag.moved=true;state.view={x0:drag.view.x0-dx,x1:drag.view.x1-dx,y0:drag.view.y0+dy,y1:drag.view.y1+dy};clampView();scheduleMap();});
+    canvas.addEventListener('pointerup',e=>{if(drag?.id===e.pointerId){if(!drag.moved){const p=mapPoint(e),g=mapGeometry();if(p.px>=g.left&&p.px<=g.left+g.pw&&p.py>=g.top&&p.py<=g.top+g.ph)showPoint(p.x,p.y);}drag=null;}});
+    canvas.addEventListener('pointercancel',()=>{drag=null;});
+    canvas.addEventListener('keydown',e=>{if(e.key==='+'||e.key==='='){e.preventDefault();zoom(.75);}else if(e.key==='-'){e.preventDefault();zoom(1.3);}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();const v=state.view,dx=(v.x1-v.x0)*.15,dy=(v.y1-v.y0)*.15;const x=e.key==='ArrowLeft'?-dx:e.key==='ArrowRight'?dx:0,y=e.key==='ArrowDown'?-dy:e.key==='ArrowUp'?dy:0;state.view={x0:v.x0+x,x1:v.x1+x,y0:v.y0+y,y1:v.y1+y};clampView();scheduleMap();}});
+    $('count-range').addEventListener('change',()=>{const max=+$('count-range').value;$('inspect-x').max=max;$('inspect-number').max=max;updateCount(state.inspect.x);});
+    $('inspect-x').addEventListener('input',e=>updateCount(e.target.value));
+    $('inspect-number').addEventListener('input',e=>{if(e.target.value!==''&&Number.isFinite(e.target.valueAsNumber)&&e.target.valueAsNumber>=2)updateCount(e.target.value);});
+    $('inspect-number').addEventListener('change',e=>updateCount(e.target.value));
+    ['count-error','show-li','show-r','wave-error'].forEach(id=>$(id).addEventListener('change',scheduleCharts));
+    $('wave-range').addEventListener('change',e=>{stopPlay();state.waveRange=e.target.value.split(',').map(Number);scheduleCharts();});
+    $('zero-count').addEventListener('input',e=>{stopPlay();setPairs(+e.target.value,true);});
+    $('add-zero').addEventListener('click',()=>{stopPlay();setPairs(state.pairs+1,true);});$('reset-waves').addEventListener('click',()=>{stopPlay();setPairs(0);});
+    $('play-waves').addEventListener('click',()=>{if(state.playing){stopPlay();return;}if(state.pairs===100)setPairs(0);state.playing=true;$('play-waves').textContent='Pause';$('play-waves').setAttribute('aria-pressed','true');playTimer=setInterval(()=>setPairs(state.pairs+1,true),650);});
+    M.ZERO_HEIGHTS.forEach((height,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`Pair ${i+1} · γ = ${fmt(height,4)}`;$('solo-zero').append(o);});
+    $('solo-zero').addEventListener('change',e=>{state.solo=+e.target.value;scheduleCharts();});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)stopPlay();});
+    new ResizeObserver(()=>{if(state.mode==='zeta')scheduleMap();else scheduleCharts();}).observe(document.querySelector('main'));
+    new MutationObserver(()=>{if(state.mode==='zeta')scheduleMap();else scheduleCharts();}).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+    updateCount(50);scheduleMap();
+  })();
+  </script>
+</body>
+</html>
