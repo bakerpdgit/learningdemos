@@ -853,6 +853,16 @@ if (fs.existsSync(subnetMaskingPath)) {
     if (!paletteCodes.length || paletteCodes.some((entry) => /[A-Z]/.test(entry.replace('True', '')))) {
       failures.push('flowchart_designer.html: the Code palette must show lower-case Python keywords');
     }
+    // Renaming a variable passes through an empty name; the = must not
+    // end up in the value (it once became "= x * 3").
+    for (const [line, target, expr] of [['= x * 3', '', 'x * 3'], ['y = x <= 3', 'y', 'x <= 3'], ['total ← 0', 'total', '0']]) {
+      const parts = FlowCode.splitAssignment(line);
+      if (parts.target !== target || parts.expr !== expr) {
+        failures.push(`flowchart_designer.html: the line ${line} split into ${JSON.stringify(parts)}`);
+      }
+    }
+    const renamed = FlowCode.splitAssignment(FlowCode.joinAssignment('', 'x * 3'));
+    if (FlowCode.joinAssignment('y', renamed.expr) !== 'y = x * 3') failures.push('flowchart_designer.html: renaming an assignment target must keep a single =');
     // A call only shows "result =" when the subprogram returns a value.
     if (!/const isFunction = !!sub && sub\.nodes\.some\(\(node\) => node\.type === "return" && String\(node\.text \|\| ""\)\.trim\(\)\);/.test(flowchartSource)) {
       failures.push('flowchart_designer.html: Code view calls must store a result only for subprograms that return a value');
