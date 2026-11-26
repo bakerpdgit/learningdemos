@@ -869,6 +869,28 @@ if (fs.existsSync(subnetMaskingPath)) {
       || !/row = rows\.find\(\(item\) => rowKey\(item\) === rowKey\(codeSel\.row\)\) \|\| null;/.test(flowchartSource)) {
       failures.push('flowchart_designer.html: New must clear the Code view selection, and inserts must ignore a stale selection');
     }
+    // Indentation moves only where Python allows them.
+    {
+      const nested = FlowCode.parsePython('def F(n):\n    i = 0\n    while i < n:\n        i = i + 1\n        print(i)\n    return\n\n\nx = 1\nif x > 0:\n    y = 1\nelse:\n    y = 2\nz = 3\nF(2)\n');
+      const [mainTab, subTab] = nested.doc.tabs;
+      const subRoot = { body: FlowCode.structureTab(subTab).body };
+      const mainRoot = { body: FlowCode.structureTab(mainTab).body };
+      const out = FlowCode.outdentStatement(subRoot, [['body', 1], ['body', 1]]);
+      const outText = out && FlowCode.toPython({ tabs: [mainTab, FlowCode.buildTab(out.root.body, subTab)] }).text;
+      if (!out || !/    while i < n:\n        i = i \+ 1\n    print\(i\)/.test(outText)) failures.push('flowchart_designer.html: ← must move the last line of a loop out to just after it');
+      if (FlowCode.outdentStatement(subRoot, [['body', 0]])) failures.push('flowchart_designer.html: ← must not move a line out of a def');
+      if (FlowCode.outdentStatement(mainRoot, [['body', 1], ['then', 0]])) failures.push('flowchart_designer.html: ← must not move a line out of a then that has an else after it');
+      const inward = FlowCode.indentStatement(mainRoot, [['body', 2]]);
+      const inText = inward && FlowCode.toPython({ tabs: [FlowCode.buildTab(inward.root.body, mainTab), subTab] }).text;
+      if (!inward || !/else:\n    y = 2\n    z = 3/.test(inText)) failures.push('flowchart_designer.html: → after an if must move a line into its else');
+      if (FlowCode.indentStatement(mainRoot, [['body', 1]])) failures.push('flowchart_designer.html: → must need an if or loop on the line above');
+      const rows = FlowCode.rowsFor(subRoot.body, 1, { showFinalReturn: true });
+      if (rows[rows.length - 1].stmt.k !== 'return' || /\n    return\n/.test(FlowCode.toPython(nested.doc).text)) {
+        failures.push('flowchart_designer.html: the code view must show a def\'s closing return, but the saved .py must not');
+      }
+      const chained = FlowCode.parsePython('x = 1\nif x > 1:\n    y = 1\nelse:\n    if x > 0:\n        y = 2\n    else:\n        y = 3\n');
+      if (!chained.ok || !/\nelif x > 0:\n/.test(FlowCode.toPython(chained.doc).text)) failures.push('flowchart_designer.html: an else holding only an if must be shown as elif');
+    }
     // A call only shows "result =" when the subprogram returns a value.
     if (!/const isFunction = !!sub && sub\.nodes\.some\(\(node\) => node\.type === "return" && String\(node\.text \|\| ""\)\.trim\(\)\);/.test(flowchartSource)) {
       failures.push('flowchart_designer.html: Code view calls must store a result only for subprograms that return a value');

@@ -2778,15 +2778,20 @@
         }
 
         // Each code line for one tab as rows the code view draws. A row has
-        // kind, depth, the statement and its path in the tree.
-        function rowsFor(tree, depth) {
+        // kind, depth, the statement and its path in the tree. A bare return
+        // or END at the very end is left out, as Python doesn't need it;
+        // options.showFinalReturn keeps a subprogram's closing return so its
+        // value can be typed in.
+        function rowsFor(tree, depth, options) {
           var rows = [];
+          var showFinal = !!(options && options.showFinalReturn);
           function block(list, path, key, level, tail) {
             var start = rows.length;
             list.forEach(function (stmt, index) {
               var at = path.concat([[key, index]]);
               var isTail = tail && index === list.length - 1;
-              if ((stmt.k === "end" || (stmt.k === "return" && !stmt.text)) && isTail) return;
+              var closing = showFinal && !path.length && stmt.k === "return";
+              if ((stmt.k === "end" || (stmt.k === "return" && !stmt.text)) && isTail && !closing) return;
               statement(stmt, at, level, isTail);
             });
             if (rows.length === start) rows.push({ kind: "pass", depth: level, path: path, key: key });
@@ -2878,6 +2883,8 @@
                   }
                   var params = L.parseParams(sub.paramsText).params;
                   var args = params.map(function (param, index) { return expr((stmt.args || [])[index], "The value for " + param); });
+                  var returnsValue = sub.nodes.some(function (node) { return node.type === "return" && String(node.text || "").trim(); });
+                  if (returnsValue && !stmt.target) problems.push(sub.name + " returns a value: store it in a variable, e.g. result = " + sub.name + "(…)");
                   text = (stmt.target ? name(stmt.target, "The result variable") + " = " : "") + sub.name + "(" + args.join(", ") + ")";
                   break;
                 }
@@ -3408,8 +3415,61 @@
           return { root: copy, path: path };
         }
 
+        function lastClause(stmt) {
+          var current = stmt;
+          while (current["else"].length === 1 && current["else"][0].k === "if") current = current["else"][0];
+          return current;
+        }
+
+        // Moves the last line of a block out one level, to just after the
+        // statement that owns the block. Python only allows this for the last
+        // block of that statement (not a then followed by elif / else), and
+        // never out of the top level of Main or a def.
+        function outdentStatement(root, path) {
+          if (path.length < 2) return null;
+          var copy = cloneTree(root);
+          var parentPath = path.slice(0, -1);
+          var step = path[path.length - 1];
+          var list = listAt(copy, parentPath, step[0]);
+          if (step[1] !== list.length - 1) return null;
+          var parent = stmtAt(copy, parentPath);
+          if (parent.k === "if" && step[0] === "then" && parent["else"].length) return null;
+          var ownerPath = parent.k === "if" ? clauseOf(copy, parentPath).headPath : parentPath;
+          var stmt = list.splice(step[1], 1)[0];
+          var outerPath = ownerPath.slice(0, -1);
+          var ownerStep = ownerPath[ownerPath.length - 1];
+          var outer = listAt(copy, outerPath, ownerStep[0]);
+          outer.splice(ownerStep[1] + 1, 0, stmt);
+          return { root: copy, path: outerPath.concat([[ownerStep[0], ownerStep[1] + 1]]) };
+        }
+
+        // Moves a line in one level, into the end of the if or loop directly
+        // above it (an if's last part: its else, or its last clause).
+        function indentStatement(root, path) {
+          if (!path.length) return null;
+          var copy = cloneTree(root);
+          var parentPath = path.slice(0, -1);
+          var step = path[path.length - 1];
+          var list = listAt(copy, parentPath, step[0]);
+          var above = list[step[1] - 1];
+          if (!above || ["if", "while", "repeat"].indexOf(above.k) < 0) return null;
+          var abovePath = parentPath.concat([[step[0], step[1] - 1]]);
+          var key = "body";
+          var owner = above;
+          if (above.k === "if") {
+            owner = lastClause(above);
+            for (var walk = above; walk !== owner; walk = walk["else"][0]) abovePath = abovePath.concat([["else", 0]]);
+            key = owner["else"].length ? "else" : "then";
+          }
+          var stmt = list.splice(step[1], 1)[0];
+          owner[key].push(stmt);
+          return { root: copy, path: abovePath.concat([[key, owner[key].length - 1]]) };
+        }
+
         return {
           CodeError: CodeError,
+          outdentStatement: outdentStatement,
+          indentStatement: indentStatement,
           clauseOf: clauseOf,
           clauseCount: clauseCount,
           moveClause: moveClause,
@@ -6346,6 +6406,7 @@
         { type: "output", label: "Output", code: "print()" },
         { type: "if", label: "If", code: "if" },
         { type: "ifelse", label: "If / else", code: "if … else" },
+        { type: "ifelif", label: "If / elif / else", code: "if … elif … else" },
         { type: "while", label: "While loop", code: "while" },
         { type: "repeat", label: "Repeat loop", code: "while True … break" },
         { type: "call", label: "Subprogram call", code: "name()" },
@@ -6355,12 +6416,20 @@
 
       const holeStatement = () => ({ k: "assign", id: null, text: "" });
 
+      // The rows the code view shows for a tab: a subprogram keeps its
+      // closing return line so a value can be typed into it.
+      const codeRows = (body, tab) => FlowCode.rowsFor(body, tab.kind === "sub" ? 1 : 0, { showFinalReturn: tab.kind === "sub" });
+
       function newStatement(type, doc) {
         switch (type) {
           case "input": return { k: "input", id: null, text: "", inputType: "auto" };
           case "output": return { k: "output", id: null, text: "" };
           case "if": return { k: "if", id: null, text: "", negated: false, then: [holeStatement()], else: [] };
           case "ifelse": return { k: "if", id: null, text: "", negated: false, then: [holeStatement()], else: [holeStatement()] };
+          case "ifelif": return {
+            k: "if", id: null, text: "", negated: false, then: [holeStatement()],
+            else: [{ k: "if", id: null, text: "", negated: false, then: [holeStatement()], else: [holeStatement()] }],
+          };
           case "while": return { k: "while", id: null, text: "", negated: false, body: [holeStatement()] };
           case "repeat": return { k: "repeat", id: null, text: "", negated: false, body: [holeStatement()] };
           case "call": {
@@ -6507,7 +6576,7 @@
       const fnClass = "font-semibold text-sky-800 dark:text-sky-300";
       const punctClass = "text-slate-500 dark:text-slate-400";
 
-      function CodeRow({ tab, doc, row, env, types, subNames, selected, onSelect, slotApi, edit, commitEdit, onTree }) {
+      function CodeRow({ tab, doc, tree, row, env, types, subNames, selected, onSelect, slotApi, edit, commitEdit, onTree }) {
         const stmt = row.stmt;
         const expr = (text, negated) => FlowCode.exprToPython(text, env, negated);
         const checkExpr = codeCheck("expr", subNames);
@@ -6731,9 +6800,37 @@
             }
         }
 
+        // Indentation: only Python-valid moves are offered.
+        // A subprogram's closing return always stays last.
+        const closing = row.kind === "simple" && row.stmt.k === "return" && row.path.length === 1 && row.path[0][1] === tree.length - 1;
+        const indentable = (row.kind === "simple" || row.kind === "if" || row.kind === "while" || row.kind === "repeat") && !closing;
+        let canOutdent = false;
+        let canIndent = false;
+        let above = null;
+        let outdentReason = "";
+        if (selected && indentable) {
+          canOutdent = !!FlowCode.outdentStatement({ body: tree }, row.path);
+          canIndent = !!FlowCode.indentStatement({ body: tree }, row.path);
+          const last = row.path[row.path.length - 1];
+          above = FlowCode.listAt({ body: tree }, row.path.slice(0, -1), last[0])[last[1] - 1] || null;
+          if (!canOutdent) {
+            const siblings = FlowCode.listAt({ body: tree }, row.path.slice(0, -1), last[0]);
+            outdentReason = row.path.length < 2
+              ? "Can't move out: this line is already at the " + (tab.kind === "sub" ? "top level of the def" : "left margin")
+              : last[1] !== siblings.length - 1
+                ? "Can't move out: only the last line of a block can move out"
+                : "Can't move out: an elif or else follows, so this line must stay inside";
+          }
+        }
+        const shift = (direction) => {
+          if (!indentable) return;
+          const path = row.path;
+          onTree(tab.id, (root) => (direction < 0 ? FlowCode.outdentStatement(root, path) : FlowCode.indentStatement(root, path)));
+        };
+
         const actions = [];
         if (selected) {
-          const movable = row.kind === "simple" || row.kind === "if" || row.kind === "while" || row.kind === "repeat";
+          const movable = (row.kind === "simple" || row.kind === "if" || row.kind === "while" || row.kind === "repeat") && !closing;
           if (row.kind === "if" || row.kind === "elif") {
             // Within an if / elif chain, a clause swaps with its neighbour;
             // past either end, the whole if statement moves.
@@ -6749,6 +6846,20 @@
           } else if (movable) {
             actions.push({ label: "↑", name: "Move up", run: () => onTree(tab.id, (root) => FlowCode.moveStatement(root, row.path, -1)) });
             actions.push({ label: "↓", name: "Move down", run: () => onTree(tab.id, (root) => FlowCode.moveStatement(root, row.path, 1)) });
+          }
+          if (indentable) {
+            actions.push({
+              label: "←",
+              name: canOutdent ? "Move out one level" : outdentReason,
+              disabled: !canOutdent,
+              run: () => onTree(tab.id, (root) => FlowCode.outdentStatement(root, row.path)),
+            });
+            actions.push({
+              label: "→",
+              name: canIndent ? "Move in, under the " + (above && above.k === "if" ? "if" : "loop") + " above" : "Can't move in: → needs an if or loop on the line directly above, at the same level",
+              disabled: !canIndent,
+              run: () => onTree(tab.id, (root) => FlowCode.indentStatement(root, row.path)),
+            });
           }
           if (row.kind === "if" || row.kind === "elif") {
             actions.push({
@@ -6784,6 +6895,15 @@
             });
           } else if (row.kind === "else") {
             actions.push({
+              label: "+ elif",
+              name: "Add an elif before else",
+              run: () => onTree(tab.id, (root) => {
+                const last = FlowCode.stmtAt(root, row.path);
+                last.else = [{ k: "if", id: null, text: "", negated: false, then: [holeStatement()], else: last.else }];
+                return { root, path: null };
+              }),
+            });
+            actions.push({
               label: "Remove else",
               name: "Remove else and the lines inside it",
               danger: true,
@@ -6817,6 +6937,13 @@
               if (event.target === event.currentTarget) event.currentTarget.scrollIntoView({ block: "nearest" });
             }}
             onClick={() => !selected && onSelect(row)}
+            onKeyDown={(event) => {
+              // Alt+← / Alt+→ change indentation (and must not go Back in the browser).
+              if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight") && indentable) {
+                event.preventDefault();
+                shift(event.key === "ArrowLeft" ? -1 : 1);
+              }
+            }}
             className={
               "fc-code-row flex min-h-[2.25rem] flex-wrap items-center gap-x-2 gap-y-1 rounded-md py-0.5 pr-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
               (selected ? "bg-indigo-100 ring-2 ring-indigo-500 dark:bg-indigo-950 dark:ring-indigo-400" : "hover:bg-slate-50 dark:hover:bg-slate-800/50")
@@ -6832,6 +6959,7 @@
                     type="button"
                     aria-label={action.name}
                     title={action.name}
+                    disabled={action.disabled}
                     onClick={(event) => {
                       event.stopPropagation();
                       action.run();
@@ -6851,7 +6979,7 @@
         const subs = doc.tabs.filter((item) => item.kind === "sub");
         const subNames = subs.map((item) => item.name);
         const env = types.envs[tab.id] || {};
-        const rows = useMemo(() => (structure.ok ? FlowCode.rowsFor(structure.body, tab.kind === "sub" ? 1 : 0) : []), [structure, tab.kind]);
+        const rows = useMemo(() => (structure.ok ? codeRows(structure.body, tab) : []), [structure, tab.kind]);
         const checkSubName = (text) => {
           const value = text.trim();
           if (!value) return { ok: true, value: "" };
@@ -6876,6 +7004,7 @@
               <CodeRow
                 tab={tab}
                 doc={doc}
+                tree={structure.body}
                 row={row}
                 env={env}
                 types={types}
@@ -6979,7 +7108,10 @@
           if (!section) return;
           const line = Array.from(section.querySelectorAll("[data-code-node]")).find((element) => element.getAttribute("data-code-node") === focusNode.nodeId);
           (line || section).scrollIntoView({ block: "center" });
-          if (line) line.focus({ preventScroll: true });
+          if (line) {
+            const input = focusNode.slot && line.querySelector("input");
+            (input || line).focus({ preventScroll: true });
+          }
         }, [focusNode]);
 
         return (
@@ -7008,7 +7140,7 @@
         );
       }
 
-      function CodePalette({ tabKind, onAdd, where }) {
+      function CodePalette({ canReturn, onAdd, where }) {
         const paneRef = useRef(null);
         return (
           <aside
@@ -7021,7 +7153,7 @@
               {where}
             </p>
             <div className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap">
-              {CODE_STATEMENTS.filter((item) => !item.subOnly || tabKind === "sub").map((item) => (
+              {CODE_STATEMENTS.filter((item) => !item.subOnly || canReturn).map((item) => (
                 <button
                   key={item.type}
                   type="button"
@@ -7038,7 +7170,7 @@
               ))}
             </div>
             <p className="px-1 text-xs leading-snug text-slate-600 dark:text-slate-400">
-              Click a line to choose where new statements go: they are added after the highlighted line, or inside it if it is an if, else, loop or def. def adds a subprogram after the others.
+              Click a line to choose where new statements go: after the highlighted line, or inside it if it is an if, else, loop or def. ← / → change a line's indentation where Python allows it (also Alt+← / Alt+→). return is offered inside a def. def adds a subprogram after the others.
             </p>
             <MoreBelow paneRef={paneRef} gap="0.5rem" fadeClass="to-white dark:to-slate-900" />
           </aside>
@@ -7837,7 +7969,7 @@
           }
           const selectedTab = codeSel && doc.tabs.some((item) => item.id === codeSel.tabId) ? codeSel.tabId : tab.id;
           const target = doc.tabs.find((item) => item.id === selectedTab);
-          if (type === "return" && target.kind !== "sub") return;
+          if (type === "return" && (target.kind !== "sub" || !codeSel || codeSel.tabId !== selectedTab)) return;
           if (type === "call" && !doc.tabs.some((item) => item.kind === "sub")) {
             setNotice({ tone: "info", text: "Create a subprogram first with + New subprogram, then call it." });
             return;
@@ -7852,8 +7984,20 @@
           if (codeSel && codeSel.tabId === selectedTab) {
             if (codeSel.row.kind === "def") row = codeSel.row;
             else {
-              const rows = FlowCode.rowsFor(structures.get(selectedTab).body, target.kind === "sub" ? 1 : 0);
+              const rows = codeRows(structures.get(selectedTab).body, target);
               row = rows.find((item) => rowKey(item) === rowKey(codeSel.row)) || null;
+            }
+          }
+          if (type === "return") {
+            // A bare return at the very end of a def is the closing return
+            // the code already shows: select it so its value can be typed.
+            const trial = insertStatement({ body: FlowCode.cloneTree(structures.get(selectedTab).body) }, row, newStatement("return", docRef.current));
+            const body = trial.root.body;
+            const closing = body[body.length - 1];
+            if (trial.path.length === 1 && trial.path[0][1] === body.length - 2 && closing && closing.k === "return") {
+              setCodeSel({ tabId: selectedTab, row: { kind: "simple", path: [["body", body.length - 2]] } });
+              setCodeFocus({ tabId: selectedTab, nodeId: closing.id, slot: true, n: Date.now() });
+              return;
             }
           }
           editCodeTree(selectedTab, (root) => insertStatement(root, row, newStatement(type, docRef.current)));
@@ -7866,7 +8010,7 @@
           const structured = structures.get(codeSel.tabId);
           if (!target || !structured || !structured.ok) return "Adds at the end of the main program.";
           if (codeSel.row.kind === "def") return `Adds inside def ${target.name}(…), at the top.`;
-          const rows = FlowCode.rowsFor(structured.body, target.kind === "sub" ? 1 : 0);
+          const rows = codeRows(structured.body, target);
           const row = rows.find((item) => rowKey(item) === rowKey(codeSel.row));
           if (!row) return "Adds at the end of the main program.";
           const text = row.kind === "pass" ? "" : FlowCode.rowText(row, target, doc, types).text.replace(/\s+/g, " ");
@@ -8064,7 +8208,11 @@
               style={sideWidth ? { "--fc-side-width": sideWidth + "px" } : undefined}
             >
               {coding ? (
-                <CodePalette tabKind={(codeSel && doc.tabs.find((item) => item.id === codeSel.tabId) || tab).kind} onAdd={addCodeStatement} where={insertionDescription()} />
+                <CodePalette
+                  canReturn={!!codeSel && (doc.tabs.find((item) => item.id === codeSel.tabId) || {}).kind === "sub"}
+                  onAdd={addCodeStatement}
+                  where={insertionDescription()}
+                />
               ) : (
                 <Palette tabKind={tab.kind} disabled={!design} onAdd={placeNewBlock} onDragStart={startPaletteDrag} />
               )}
