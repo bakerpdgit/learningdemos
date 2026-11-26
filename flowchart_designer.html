@@ -6404,28 +6404,6 @@
         return { root, path: path.concat([[key, index]]) };
       }
 
-      // Where the "new statements go here" marker is drawn among a tab's
-      // rows: before row index `at`, at `depth`. Mirrors insertStatement.
-      function insertionPoint(rows, row, kind) {
-        const baseDepth = kind === "sub" ? 1 : 0;
-        if (!row) return { at: rows.length, depth: baseDepth };
-        if (row.kind === "def") return { at: 0, depth: 1 };
-        const index = rows.findIndex((item) => rowKey(item) === rowKey(row));
-        if (index < 0) return null;
-        const found = rows[index];
-        switch (found.kind) {
-          case "pass": return { at: index, depth: found.depth, replaces: true };
-          case "until": return { at: index, depth: found.depth };
-          case "simple": return isTerminalStatement(found.stmt) ? { at: index, depth: found.depth } : { at: index + 1, depth: found.depth };
-          default: {
-            // A header: inside it, in place of its pass if it is empty.
-            const next = rows[index + 1];
-            if (next && next.kind === "pass" && next.depth === found.depth + 1) return { at: index + 1, depth: found.depth + 1, replaces: true };
-            return { at: index + 1, depth: found.depth + 1 };
-          }
-        }
-      }
-
       function chainEnd(stmt) {
         let current = stmt;
         while (current.else.length === 1 && current.else[0].k === "if") current = current.else[0];
@@ -6675,10 +6653,25 @@
                 const sub = doc.tabs.find((item) => item.id === stmt.calleeId && item.kind === "sub");
                 const params = sub ? FlowLang.parseParams(sub.paramsText).params : [];
                 const subs = doc.tabs.filter((item) => item.kind === "sub");
+                // A subprogram that RETURNs a value is a function, so its call
+                // stores the result; a procedure's call stands on its own.
+                const isFunction = !!sub && sub.nodes.some((node) => node.type === "return" && String(node.text || "").trim());
+                const showTarget = isFunction || !!stmt.target;
                 content = (
                   <React.Fragment>
-                    {slot({ value: stmt.target, label: "Variable to store the result in (optional)", placeholder: "result", faint: true, check: checkName, onValid: (text) => patch(stmt.id, { target: text }) })}
-                    <span className={punctClass + (stmt.target ? "" : " opacity-50")}>{" = "}</span>
+                    {showTarget && (
+                      <React.Fragment>
+                        {slot({
+                          value: stmt.target,
+                          invalid: !isFunction,
+                          label: isFunction ? "Variable to store the result in" : "Result variable: remove it, because " + (sub ? sub.name : "this subprogram") + " doesn't return a value",
+                          placeholder: "result",
+                          check: checkName,
+                          onValid: (text) => patch(stmt.id, { target: text }),
+                        })}
+                        <span className={punctClass}>{" = "}</span>
+                      </React.Fragment>
+                    )}
                     <select
                       aria-label="Subprogram to call"
                       value={sub ? sub.id : ""}
@@ -6854,19 +6847,7 @@
         );
       }
 
-      function InsertMarker({ depth }) {
-        return (
-          <div
-            aria-hidden="true"
-            className="my-0.5 flex items-center gap-2 rounded-md border-2 border-dashed border-indigo-400 bg-indigo-50/70 px-2 py-0.5 font-sans text-xs font-bold text-indigo-800 dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-200"
-            style={{ marginLeft: `calc(${depth * 2}rem + 0.25rem)` }}
-          >
-            ▸ new statements go here
-          </div>
-        );
-      }
-
-      function CodeSection({ tab, doc, structure, types, selectedKey, insertRow, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart, onMoveSub, onDeleteSub }) {
+      function CodeSection({ tab, doc, structure, types, selectedKey, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart, onMoveSub, onDeleteSub }) {
         const subs = doc.tabs.filter((item) => item.kind === "sub");
         const subNames = subs.map((item) => item.name);
         const env = types.envs[tab.id] || {};
@@ -6887,11 +6868,8 @@
         };
         const defSelected = selectedKey === tab.id + "|" + rowKey({ kind: "def", path: [] });
         const subIndex = subs.findIndex((item) => item.id === tab.id);
-        const marker = insertRow === undefined || !structure.ok ? null : insertionPoint(rows, insertRow, tab.kind);
         const lines = [];
         rows.forEach((row, index) => {
-          if (marker && marker.at === index) lines.push(<InsertMarker key="marker" depth={marker.depth} />);
-          if (marker && marker.replaces && marker.at === index) return;
           const key = rowKey(row);
           lines.push(
             <div role="listitem" key={key}>
@@ -6912,7 +6890,7 @@
             </div>,
           );
         });
-        if (marker && marker.at >= rows.length) lines.push(<InsertMarker key="marker" depth={marker.depth} />);
+
         return (
           <section data-code-tab={tab.id} aria-label={tab.kind === "main" ? "Main program" : "Subprogram " + tab.name} className="scroll-mt-2">
             {tab.kind === "sub" ? (
@@ -7015,7 +6993,6 @@
                   structure={structures.get(tab.id)}
                   types={types}
                   selectedKey={selectedKey}
-                  insertRow={codeSel ? (codeSel.tabId === tab.id ? codeSel.row : undefined) : tab.kind === "main" ? null : undefined}
                   onSelect={onSelect}
                   slotApi={slotApi}
                   edit={edit}
@@ -7061,7 +7038,7 @@
               ))}
             </div>
             <p className="px-1 text-xs leading-snug text-slate-600 dark:text-slate-400">
-              Click a line to choose where new statements go (shown by the dashed marker). def adds a subprogram after the others.
+              Click a line to choose where new statements go: they are added after the highlighted line, or inside it if it is an if, else, loop or def. def adds a subprogram after the others.
             </p>
             <MoreBelow paneRef={paneRef} gap="0.5rem" fadeClass="to-white dark:to-slate-900" />
           </aside>

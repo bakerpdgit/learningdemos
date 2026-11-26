@@ -853,7 +853,10 @@ if (fs.existsSync(subnetMaskingPath)) {
     if (!paletteCodes.length || paletteCodes.some((entry) => /[A-Z]/.test(entry.replace('True', '')))) {
       failures.push('flowchart_designer.html: the Code palette must show lower-case Python keywords');
     }
-    if (!/function InsertMarker\(/.test(flowchartSource)) failures.push('flowchart_designer.html: the Code view must mark where new statements go');
+    // A call only shows "result =" when the subprogram returns a value.
+    if (!/const isFunction = !!sub && sub\.nodes\.some\(\(node\) => node\.type === "return" && String\(node\.text \|\| ""\)\.trim\(\)\);/.test(flowchartSource)) {
+      failures.push('flowchart_designer.html: Code view calls must store a result only for subprograms that return a value');
+    }
     // An Integer input refuses text, as int(input()) does in Python.
     const typed = FlowCode.parsePython('n = int(input())\nprint(n * 2)\n');
     const typedRun = runFlowchart(typed.doc, ['abc']);
