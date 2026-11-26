@@ -863,6 +863,12 @@ if (fs.existsSync(subnetMaskingPath)) {
     }
     const renamed = FlowCode.splitAssignment(FlowCode.joinAssignment('', 'x * 3'));
     if (FlowCode.joinAssignment('y', renamed.expr) !== 'y = x * 3') failures.push('flowchart_designer.html: renaming an assignment target must keep a single =');
+    // A line selected in the Code view must not outlive its flowchart: an
+    // insert after New once crashed on a selected line that no longer existed.
+    if (!/commit\(\(\) => FlowExamples\.blank\(\)\);\s*setCodeSel\(null\);/.test(flowchartSource)
+      || !/row = rows\.find\(\(item\) => rowKey\(item\) === rowKey\(codeSel\.row\)\) \|\| null;/.test(flowchartSource)) {
+      failures.push('flowchart_designer.html: New must clear the Code view selection, and inserts must ignore a stale selection');
+    }
     // A call only shows "result =" when the subprogram returns a value.
     if (!/const isFunction = !!sub && sub\.nodes\.some\(\(node\) => node\.type === "return" && String\(node\.text \|\| ""\)\.trim\(\)\);/.test(flowchartSource)) {
       failures.push('flowchart_designer.html: Code view calls must store a result only for subprograms that return a value');

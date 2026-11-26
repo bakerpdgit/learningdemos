@@ -7321,6 +7321,7 @@
 
         function restore(target) {
           setDoc(target);
+          setCodeSel(null);
           const kept = target.tabs.find((item) => item.id === activeTabId);
           if (!kept) setActiveTabId(target.tabs[0].id);
           // Keep the selection while its block or connector still exists,
@@ -7575,6 +7576,7 @@
           if (!example) return;
           stopRun();
           commit(() => normaliseDoc(clone(example.doc)));
+          setCodeSel(null);
           setViews({});
           setActiveTabId("main");
           setSelection(null);
@@ -7584,6 +7586,7 @@
         function newFlowchart() {
           stopRun();
           commit(() => FlowExamples.blank());
+          setCodeSel(null);
           setViews({});
           setActiveTabId("main");
           setSelection({ kind: "node", id: "start" });
@@ -7625,6 +7628,7 @@
             }
             stopRun();
             commit(() => next);
+            setCodeSel(null);
             setViews({});
             setActiveTabId(next.tabs[0].id);
             setSelection(null);
@@ -7842,7 +7846,16 @@
             setNotice({ tone: "error", text: "Fix the message shown in the code first, or edit this part in Design." });
             return;
           }
-          const row = codeSel && codeSel.tabId === selectedTab ? codeSel.row : null;
+          // Only a selection that is still a line of this tab's code counts;
+          // otherwise the statement goes at the end.
+          let row = null;
+          if (codeSel && codeSel.tabId === selectedTab) {
+            if (codeSel.row.kind === "def") row = codeSel.row;
+            else {
+              const rows = FlowCode.rowsFor(structures.get(selectedTab).body, target.kind === "sub" ? 1 : 0);
+              row = rows.find((item) => rowKey(item) === rowKey(codeSel.row)) || null;
+            }
+          }
           editCodeTree(selectedTab, (root) => insertStatement(root, row, newStatement(type, docRef.current)));
         }
 
