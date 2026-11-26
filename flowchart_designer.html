@@ -3342,8 +3342,77 @@
           return { root: copy, path: outerPath.concat([[outerKey, insertAt]]) };
         }
 
+        // The path of the first if in the if / elif chain that path is part of,
+        // and which clause of that chain path is (0 for the if itself).
+        function clauseOf(root, path) {
+          var head = path.slice();
+          var index = 0;
+          while (head.length) {
+            var last = head[head.length - 1];
+            if (last[0] !== "else" || last[1] !== 0) break;
+            var parent = stmtAt(root, head.slice(0, -1));
+            if (!parent || parent.k !== "if" || parent["else"].length !== 1) break;
+            head = head.slice(0, -1);
+            index += 1;
+          }
+          return { headPath: head, index: index };
+        }
+
+        function clauseCount(root, headPath) {
+          var count = 1;
+          var current = stmtAt(root, headPath);
+          while (current["else"].length === 1 && current["else"][0].k === "if") {
+            current = current["else"][0];
+            count += 1;
+          }
+          return count;
+        }
+
+        // Swaps one condition clause of an if / elif chain with its
+        // neighbour, keeping each condition with its own lines. The else part
+        // always stays last. Returns null when the clause can't move that way.
+        function moveClause(root, headPath, index, direction) {
+          var copy = cloneTree(root);
+          var current = stmtAt(copy, headPath);
+          var clauses = [];
+          for (;;) {
+            var clause = { id: current.id, text: current.text, negated: current.negated, then: current.then };
+            if (clause.negated) {
+              // Store the condition the code shows, so it still reads the same
+              // once it has an else after it.
+              var ast = tryParse(clause.text);
+              if (ast) {
+                clause.text = printPseudo(negate(ast));
+                clause.negated = false;
+              }
+            }
+            clauses.push(clause);
+            if (current["else"].length === 1 && current["else"][0].k === "if") current = current["else"][0];
+            else break;
+          }
+          var elseBody = current["else"];
+          var target = index + direction;
+          if (target < 0 || target >= clauses.length) return null;
+          var moved = clauses[index];
+          clauses[index] = clauses[target];
+          clauses[target] = moved;
+          var tail = elseBody;
+          for (var i = clauses.length - 1; i >= 0; i -= 1) {
+            tail = [{ k: "if", id: clauses[i].id, text: clauses[i].text, negated: clauses[i].negated, then: clauses[i].then, "else": tail }];
+          }
+          var parentPath = headPath.slice(0, -1);
+          var step = headPath[headPath.length - 1];
+          listAt(copy, parentPath, step[0])[step[1]] = tail[0];
+          var path = headPath.slice();
+          for (var j = 0; j < target; j += 1) path.push(["else", 0]);
+          return { root: copy, path: path };
+        }
+
         return {
           CodeError: CodeError,
+          clauseOf: clauseOf,
+          clauseCount: clauseCount,
+          moveClause: moveClause,
           printPseudo: printPseudo,
           printPython: printPython,
           negate: negate,
@@ -6273,14 +6342,15 @@
          --------------------------------------------------------------- */
       const CODE_STATEMENTS = [
         { type: "assign", label: "Assignment", code: "x = …" },
-        { type: "input", label: "Input", code: "x = input()" },
-        { type: "output", label: "Print", code: "print(…)" },
-        { type: "if", label: "If", code: "if …:" },
-        { type: "ifelse", label: "If / else", code: "if … else:" },
-        { type: "while", label: "While loop", code: "while …:" },
-        { type: "repeat", label: "Repeat loop", code: "while True: … break" },
-        { type: "call", label: "Subprogram call", code: "Name(…)" },
-        { type: "return", label: "Return", code: "return …", subOnly: true },
+        { type: "input", label: "Input", code: "input()" },
+        { type: "output", label: "Output", code: "print()" },
+        { type: "if", label: "If", code: "if" },
+        { type: "ifelse", label: "If / else", code: "if … else" },
+        { type: "while", label: "While loop", code: "while" },
+        { type: "repeat", label: "Repeat loop", code: "while True … break" },
+        { type: "call", label: "Subprogram call", code: "name()" },
+        { type: "return", label: "Return", code: "return", subOnly: true },
+        { type: "def", label: "New subprogram", code: "def" },
       ];
 
       const holeStatement = () => ({ k: "assign", id: null, text: "" });
@@ -6314,6 +6384,7 @@
           const at = row.path;
           switch (row.kind) {
             case "pass": path = at; key = row.key; index = 0; break;
+            case "def": path = []; key = "body"; index = 0; break;
             case "if": case "elif": path = at; key = "then"; index = 0; break;
             case "else": path = at; key = "else"; index = 0; break;
             case "while": case "repeat": path = at; key = "body"; index = 0; break;
@@ -6331,6 +6402,28 @@
         if (index === null) index = list.length && isTerminalStatement(list[list.length - 1]) ? list.length - 1 : list.length;
         list.splice(index, 0, stmt);
         return { root, path: path.concat([[key, index]]) };
+      }
+
+      // Where the "new statements go here" marker is drawn among a tab's
+      // rows: before row index `at`, at `depth`. Mirrors insertStatement.
+      function insertionPoint(rows, row, kind) {
+        const baseDepth = kind === "sub" ? 1 : 0;
+        if (!row) return { at: rows.length, depth: baseDepth };
+        if (row.kind === "def") return { at: 0, depth: 1 };
+        const index = rows.findIndex((item) => rowKey(item) === rowKey(row));
+        if (index < 0) return null;
+        const found = rows[index];
+        switch (found.kind) {
+          case "pass": return { at: index, depth: found.depth, replaces: true };
+          case "until": return { at: index, depth: found.depth };
+          case "simple": return isTerminalStatement(found.stmt) ? { at: index, depth: found.depth } : { at: index + 1, depth: found.depth };
+          default: {
+            // A header: inside it, in place of its pass if it is empty.
+            const next = rows[index + 1];
+            if (next && next.kind === "pass" && next.depth === found.depth + 1) return { at: index + 1, depth: found.depth + 1, replaces: true };
+            return { at: index + 1, depth: found.depth + 1 };
+          }
+        }
       }
 
       function chainEnd(stmt) {
@@ -6648,7 +6741,19 @@
         const actions = [];
         if (selected) {
           const movable = row.kind === "simple" || row.kind === "if" || row.kind === "while" || row.kind === "repeat";
-          if (movable) {
+          if (row.kind === "if" || row.kind === "elif") {
+            // Within an if / elif chain, a clause swaps with its neighbour;
+            // past either end, the whole if statement moves.
+            const move = (direction) => onTree(tab.id, (root) => {
+              const where = FlowCode.clauseOf(root, row.path);
+              const count = FlowCode.clauseCount(root, where.headPath);
+              const target = where.index + direction;
+              if (target >= 0 && target < count) return FlowCode.moveClause(root, where.headPath, where.index, direction);
+              return FlowCode.moveStatement(root, where.headPath, direction);
+            });
+            actions.push({ label: "↑", name: row.kind === "elif" ? "Move this clause up" : "Move up", run: () => move(-1) });
+            actions.push({ label: "↓", name: "Move this clause down", run: () => move(1) });
+          } else if (movable) {
             actions.push({ label: "↑", name: "Move up", run: () => onTree(tab.id, (root) => FlowCode.moveStatement(root, row.path, -1)) });
             actions.push({ label: "↓", name: "Move down", run: () => onTree(tab.id, (root) => FlowCode.moveStatement(root, row.path, 1)) });
           }
@@ -6721,7 +6826,7 @@
             onClick={() => !selected && onSelect(row)}
             className={
               "fc-code-row flex min-h-[2.25rem] flex-wrap items-center gap-x-2 gap-y-1 rounded-md py-0.5 pr-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
-              (selected ? "bg-indigo-50 ring-1 ring-indigo-300 dark:bg-indigo-950/60 dark:ring-indigo-700" : "hover:bg-slate-50 dark:hover:bg-slate-800/50")
+              (selected ? "bg-indigo-100 ring-2 ring-indigo-500 dark:bg-indigo-950 dark:ring-indigo-400" : "hover:bg-slate-50 dark:hover:bg-slate-800/50")
             }
             style={{ paddingLeft: `calc(${row.depth * 2}rem + 0.5rem)`, "--fc-depth": row.depth }}
           >
@@ -6749,7 +6854,19 @@
         );
       }
 
-      function CodeSection({ tab, doc, structure, types, selectedKey, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart }) {
+      function InsertMarker({ depth }) {
+        return (
+          <div
+            aria-hidden="true"
+            className="my-0.5 flex items-center gap-2 rounded-md border-2 border-dashed border-indigo-400 bg-indigo-50/70 px-2 py-0.5 font-sans text-xs font-bold text-indigo-800 dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-200"
+            style={{ marginLeft: `calc(${depth * 2}rem + 0.25rem)` }}
+          >
+            ▸ new statements go here
+          </div>
+        );
+      }
+
+      function CodeSection({ tab, doc, structure, types, selectedKey, insertRow, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart, onMoveSub, onDeleteSub }) {
         const subs = doc.tabs.filter((item) => item.kind === "sub");
         const subNames = subs.map((item) => item.name);
         const env = types.envs[tab.id] || {};
@@ -6768,10 +6885,49 @@
           const parsed = FlowLang.parseParams(text);
           return parsed.error ? { ok: false, error: parsed.error.message } : { ok: true, value: parsed.params.join(", ") };
         };
+        const defSelected = selectedKey === tab.id + "|" + rowKey({ kind: "def", path: [] });
+        const subIndex = subs.findIndex((item) => item.id === tab.id);
+        const marker = insertRow === undefined || !structure.ok ? null : insertionPoint(rows, insertRow, tab.kind);
+        const lines = [];
+        rows.forEach((row, index) => {
+          if (marker && marker.at === index) lines.push(<InsertMarker key="marker" depth={marker.depth} />);
+          if (marker && marker.replaces && marker.at === index) return;
+          const key = rowKey(row);
+          lines.push(
+            <div role="listitem" key={key}>
+              <CodeRow
+                tab={tab}
+                doc={doc}
+                row={row}
+                env={env}
+                types={types}
+                subNames={subNames}
+                selected={selectedKey === tab.id + "|" + key}
+                onSelect={(chosen) => onSelect(tab.id, chosen)}
+                slotApi={slotApi}
+                edit={edit}
+                commitEdit={commitEdit}
+                onTree={onTree}
+              />
+            </div>,
+          );
+        });
+        if (marker && marker.at >= rows.length) lines.push(<InsertMarker key="marker" depth={marker.depth} />);
         return (
           <section data-code-tab={tab.id} aria-label={tab.kind === "main" ? "Main program" : "Subprogram " + tab.name} className="scroll-mt-2">
             {tab.kind === "sub" ? (
-              <div className="fc-mono whitespace-pre-wrap px-2 py-0.5 text-[15px] leading-8">
+              <div
+                tabIndex={0}
+                data-code-def={tab.id}
+                aria-current={defSelected ? "true" : undefined}
+                onFocus={() => !defSelected && onSelect(tab.id, { kind: "def", path: [] })}
+                onClick={() => !defSelected && onSelect(tab.id, { kind: "def", path: [] })}
+                className={
+                  "flex min-h-[2.25rem] flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-2 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
+                  (defSelected ? "bg-indigo-100 ring-2 ring-indigo-500 dark:bg-indigo-950 dark:ring-indigo-400" : "hover:bg-slate-50 dark:hover:bg-slate-800/50")
+                }
+              >
+              <span className="fc-mono whitespace-pre-wrap text-[15px] leading-8">
                 <span className={kwClass}>def</span>{" "}
                 <CodeSlot
                   value={tab.name}
@@ -6796,33 +6952,21 @@
                   onValid={(text) => edit((value) => mapTab(value, tab.id, (item) => ({ ...item, paramsText: text })))}
                 />
                 <span className={punctClass}>):</span>
+              </span>
+              {defSelected && (
+                <span className="ml-auto flex flex-wrap gap-1 pl-2 font-sans">
+                  <button type="button" aria-label="Move this subprogram up" title="Move this subprogram up" disabled={subIndex === 0} onClick={(event) => { event.stopPropagation(); onMoveSub(tab.id, -1); }} className={smallButton + " !px-2 !py-0.5 text-xs"}>↑</button>
+                  <button type="button" aria-label="Move this subprogram down" title="Move this subprogram down" disabled={subIndex === subs.length - 1} onClick={(event) => { event.stopPropagation(); onMoveSub(tab.id, 1); }} className={smallButton + " !px-2 !py-0.5 text-xs"}>↓</button>
+                  <button type="button" aria-label="Delete this subprogram" title="Delete this subprogram" onClick={(event) => { event.stopPropagation(); onDeleteSub(tab.id); }} className={dangerButton + " !px-2 !py-0.5 text-xs"}>Delete</button>
+                </span>
+              )}
               </div>
             ) : (
               <p className="fc-mono px-2 py-1 text-[15px] italic text-emerald-800 dark:text-emerald-300"># Main program</p>
             )}
             {structure.ok ? (
               <div role="list" aria-label={(tab.kind === "main" ? "Main program" : tab.name) + " code lines"}>
-                {rows.map((row) => {
-                  const key = rowKey(row);
-                  return (
-                    <div role="listitem" key={key}>
-                      <CodeRow
-                        tab={tab}
-                        doc={doc}
-                        row={row}
-                        env={env}
-                        types={types}
-                        subNames={subNames}
-                        selected={selectedKey === tab.id + "|" + key}
-                        onSelect={(chosen) => onSelect(tab.id, chosen)}
-                        slotApi={slotApi}
-                        edit={edit}
-                        commitEdit={commitEdit}
-                        onTree={onTree}
-                      />
-                    </div>
-                  );
-                })}
+                {lines}
               </div>
             ) : (
               <div className="m-2 rounded-md border border-amber-300 bg-amber-50 p-3 font-sans text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100" style={{ marginLeft: tab.kind === "sub" ? "2.5rem" : undefined }}>
@@ -6837,7 +6981,7 @@
         );
       }
 
-      function CodeEditor({ doc, types, structures, codeSel, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart, scrollTo, focusNode }) {
+      function CodeEditor({ doc, types, structures, codeSel, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart, scrollTo, focusNode, onMoveSub, onDeleteSub }) {
         const paneRef = useRef(null);
         const subs = doc.tabs.filter((item) => item.kind === "sub");
         const ordered = subs.concat(doc.tabs.filter((item) => item.kind === "main"));
@@ -6847,7 +6991,7 @@
           const pane = paneRef.current;
           if (!scrollTo || !pane) return;
           const section = Array.from(pane.querySelectorAll("[data-code-tab]")).find((element) => element.getAttribute("data-code-tab") === scrollTo.tabId);
-          if (section) section.scrollIntoView({ block: "start" });
+          if (section) section.scrollIntoView({ block: "nearest" });
         }, [scrollTo]);
 
         useEffect(() => {
@@ -6871,12 +7015,15 @@
                   structure={structures.get(tab.id)}
                   types={types}
                   selectedKey={selectedKey}
+                  insertRow={codeSel ? (codeSel.tabId === tab.id ? codeSel.row : undefined) : tab.kind === "main" ? null : undefined}
                   onSelect={onSelect}
                   slotApi={slotApi}
                   edit={edit}
                   commitEdit={commitEdit}
                   onTree={onTree}
                   onShowInFlowchart={onShowInFlowchart}
+                  onMoveSub={onMoveSub}
+                  onDeleteSub={onDeleteSub}
                 />
               ))}
             </div>
@@ -6884,7 +7031,7 @@
         );
       }
 
-      function CodePalette({ tabKind, onAdd }) {
+      function CodePalette({ tabKind, onAdd, where }) {
         const paneRef = useRef(null);
         return (
           <aside
@@ -6893,21 +7040,28 @@
             className="fc-scroll-pane flex min-w-0 flex-col gap-2 rounded-lg border border-slate-300 bg-white p-2 dark:border-slate-700 dark:bg-slate-900 lg:min-h-0 lg:overflow-y-auto"
           >
             <h2 className="px-1 text-sm font-bold text-slate-700 dark:text-slate-200">Statements</h2>
+            <p aria-live="polite" className="rounded-md bg-indigo-50 px-2 py-1.5 text-xs font-semibold leading-snug text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-100">
+              {where}
+            </p>
             <div className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap">
               {CODE_STATEMENTS.filter((item) => !item.subOnly || tabKind === "sub").map((item) => (
                 <button
                   key={item.type}
                   type="button"
                   onClick={() => onAdd(item.type)}
-                  className="flex min-w-[8.5rem] flex-col items-start rounded-md border border-slate-300 bg-white px-2 py-1.5 text-left text-sm font-semibold text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-indigo-400 dark:hover:bg-slate-700 lg:min-w-0"
+                  aria-label={item.label + ": " + item.code}
+                  className={
+                    "flex min-w-[8.5rem] flex-col items-start rounded-md border bg-white px-2 py-1.5 text-left hover:border-indigo-400 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-slate-800 dark:hover:border-indigo-400 dark:hover:bg-slate-700 lg:min-w-0 " +
+                    (item.type === "def" ? "border-purple-300 dark:border-purple-700" : "border-slate-300 dark:border-slate-600")
+                  }
                 >
-                  <span className="leading-tight">{item.label}</span>
-                  <span className="fc-mono text-xs font-medium text-slate-600 dark:text-slate-300">{item.code}</span>
+                  <span className={"fc-mono text-[15px] font-bold leading-tight " + (["output", "input", "call"].includes(item.type) ? "text-sky-800 dark:text-sky-300" : item.type === "assign" ? "text-slate-900 dark:text-slate-100" : "text-purple-700 dark:text-purple-300")}>{item.code}</span>
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{item.label}</span>
                 </button>
               ))}
             </div>
             <p className="px-1 text-xs leading-snug text-slate-600 dark:text-slate-400">
-              Select a line, then click a statement to add it after that line (or inside a selected if, else or loop). Return is offered inside a subprogram.
+              Click a line to choose where new statements go (shown by the dashed marker). def adds a subprogram after the others.
             </p>
             <MoreBelow paneRef={paneRef} gap="0.5rem" fadeClass="to-white dark:to-slate-900" />
           </aside>
@@ -7436,12 +7590,7 @@
         }
 
         function deleteSubprogram() {
-          const id = tab.id;
-          if (tab.kind !== "sub") return;
-          commit((value) => ({ ...value, tabs: value.tabs.filter((item) => item.id !== id) }));
-          setActiveTabId(docRef.current.tabs[0].id);
-          setSelection(null);
-          setNotice({ tone: "info", text: "Subprogram deleted. Undo brings it back." });
+          deleteSubprogramById(tab.id);
         }
 
         function loadExample(id) {
@@ -7653,14 +7802,58 @@
           }
           const rebuilt = FlowCode.buildTab(result.root.body, target, { newId, measure: (node) => measureBlock(node, target, current) });
           commit((value) => mapTab(value, tabId, () => rebuilt));
-          setCodeSel(result.path ? { tabId, row: { kind: "simple", path: result.path } } : null);
+          if (result.path) {
+            const added = FlowCode.stmtAt(result.root, result.path);
+            let kind = added && ["if", "while", "repeat"].includes(added.k) ? added.k : "simple";
+            if (kind === "if" && FlowCode.clauseOf(result.root, result.path).index > 0) kind = "elif";
+            setCodeSel({ tabId, row: { kind, path: result.path } });
+          } else {
+            setCodeSel(null);
+          }
           if (!tidyNoticeRef.current) {
             tidyNoticeRef.current = true;
             setNotice({ tone: "info", text: `The ${target.kind === "main" ? "Main" : target.name} flowchart was re-arranged to match the code. Undo puts it back.` });
           }
         }
 
+        function addCodeSubprogram() {
+          const sub = newSubTab(docRef.current);
+          commit((value) => ({ ...value, tabs: [...value.tabs, sub] }));
+          setActiveTabId(sub.id);
+          setCodeSel({ tabId: sub.id, row: { kind: "def", path: [] } });
+          setCodeScroll({ tabId: sub.id, n: Date.now() });
+        }
+
+        // Subprograms are listed in tab order, so moving a def reorders the tabs.
+        function moveSubprogram(tabId, direction) {
+          commit((value) => {
+            const subs = value.tabs.filter((item) => item.kind === "sub");
+            const index = subs.findIndex((item) => item.id === tabId);
+            const target = index + direction;
+            if (index < 0 || target < 0 || target >= subs.length) return value;
+            const reordered = subs.slice();
+            reordered.splice(index, 1);
+            reordered.splice(target, 0, subs[index]);
+            return { ...value, tabs: [...value.tabs.filter((item) => item.kind === "main"), ...reordered] };
+          });
+          setCodeScroll({ tabId, n: Date.now() });
+        }
+
+        function deleteSubprogramById(tabId) {
+          const target = docRef.current.tabs.find((item) => item.id === tabId);
+          if (!target || target.kind !== "sub") return;
+          commit((value) => ({ ...value, tabs: value.tabs.filter((item) => item.id !== tabId) }));
+          if (activeTabId === tabId) setActiveTabId(docRef.current.tabs[0].id);
+          setCodeSel(null);
+          setSelection(null);
+          setNotice({ tone: "info", text: `${target.name || "Subprogram"} deleted. Undo brings it back.` });
+        }
+
         function addCodeStatement(type) {
+          if (type === "def") {
+            addCodeSubprogram();
+            return;
+          }
           const selectedTab = codeSel && doc.tabs.some((item) => item.id === codeSel.tabId) ? codeSel.tabId : tab.id;
           const target = doc.tabs.find((item) => item.id === selectedTab);
           if (type === "return" && target.kind !== "sub") return;
@@ -7674,6 +7867,26 @@
           }
           const row = codeSel && codeSel.tabId === selectedTab ? codeSel.row : null;
           editCodeTree(selectedTab, (root) => insertStatement(root, row, newStatement(type, docRef.current)));
+        }
+
+        // Says where the palette will add a statement, for the palette card.
+        function insertionDescription() {
+          if (!codeSel) return "Adds at the end of the main program.";
+          const target = doc.tabs.find((item) => item.id === codeSel.tabId);
+          const structured = structures.get(codeSel.tabId);
+          if (!target || !structured || !structured.ok) return "Adds at the end of the main program.";
+          if (codeSel.row.kind === "def") return `Adds inside def ${target.name}(…), at the top.`;
+          const rows = FlowCode.rowsFor(structured.body, target.kind === "sub" ? 1 : 0);
+          const row = rows.find((item) => rowKey(item) === rowKey(codeSel.row));
+          if (!row) return "Adds at the end of the main program.";
+          const text = row.kind === "pass" ? "" : FlowCode.rowText(row, target, doc, types).text.replace(/\s+/g, " ");
+          const short = text.length > 34 ? text.slice(0, 32) + "…" : text;
+          switch (row.kind) {
+            case "pass": return "Adds into the empty block (in place of pass).";
+            case "until": return "Adds at the end of the loop, before its break test.";
+            case "if": case "elif": case "else": case "while": case "repeat": return `Adds inside ${short}`;
+            default: return isTerminalStatement(row.stmt) ? `Adds before ${short}` : `Adds after ${short}`;
+          }
         }
 
         function switchMode(next) {
@@ -7861,7 +8074,7 @@
               style={sideWidth ? { "--fc-side-width": sideWidth + "px" } : undefined}
             >
               {coding ? (
-                <CodePalette tabKind={(codeSel && doc.tabs.find((item) => item.id === codeSel.tabId) || tab).kind} onAdd={addCodeStatement} />
+                <CodePalette tabKind={(codeSel && doc.tabs.find((item) => item.id === codeSel.tabId) || tab).kind} onAdd={addCodeStatement} where={insertionDescription()} />
               ) : (
                 <Palette tabKind={tab.kind} disabled={!design} onAdd={placeNewBlock} onDragStart={startPaletteDrag} />
               )}
@@ -7929,6 +8142,7 @@
                   </div>
                 </div>
 
+                {!coding && (
                 <div role="tablist" aria-label="Flowcharts" className="flex items-end gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-2 pt-1.5 dark:border-slate-700 dark:bg-slate-950">
                   {doc.tabs.map((item) => {
                     const active = item.id === tab.id;
@@ -7939,10 +8153,7 @@
                         type="button"
                         role="tab"
                         aria-selected={active}
-                        onClick={() => {
-                          showTab(item.id);
-                          if (coding) setCodeScroll({ tabId: item.id, n: Date.now() });
-                        }}
+                        onClick={() => showTab(item.id)}
                         className={
                           "fc-mono -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border px-3 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
                           (active
@@ -7959,19 +8170,17 @@
                       </button>
                     );
                   })}
-                  {editable && (
+                  {design && (
                     <button
                       type="button"
-                      onClick={() => {
-                        createSubprogram();
-                        if (coding) setCodeScroll({ tabId: docRef.current.tabs[docRef.current.tabs.length - 1].id, n: Date.now() });
-                      }}
+                      onClick={createSubprogram}
                       className="mb-1 ml-1 shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-slate-800"
                     >
                       + New subprogram
                     </button>
                   )}
                 </div>
+                )}
 
                 <div className={"relative flex-1 " + (coding ? "min-h-[24rem] lg:min-h-0" : "min-h-0")}>
                   {coding ? (
@@ -7996,6 +8205,8 @@
                       }}
                       scrollTo={codeScroll}
                       focusNode={codeFocus}
+                      onMoveSub={moveSubprogram}
+                      onDeleteSub={deleteSubprogramById}
                     />
                   ) : (
                   <FlowCanvas
