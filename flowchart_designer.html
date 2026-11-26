@@ -249,6 +249,14 @@
         ["AND", "OR", "NOT", "DIV", "MOD", "TRUE", "FALSE", "INPUT", "OUTPUT", "RETURN", "START", "END"]
           .concat(Object.keys(BUILTINS))
           .forEach(function (word) { RESERVED[word] = 1; });
+        // Names that would break the program when it is shown as Python.
+        var PYTHON_WORDS = {};
+        ["and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else",
+          "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+          "or", "pass", "raise", "return", "try", "while", "with", "yield", "None", "True", "False",
+          "print", "input", "int", "float", "str", "len", "round", "random", "exit", "quit", "sys", "bool", "list", "range"]
+          .forEach(function (word) { PYTHON_WORDS[word] = 1; });
+        var PYTHON_BUILTINS = { len: "LEN", "int": "INT", "float": "REAL", str: "STR", round: "ROUND" };
         var COMPARISONS = { "==": 1, "!=": 1, "<": 1, "<=": 1, ">": 1, ">=": 1 };
         var BINDING = {
           OR: 10, AND: 20,
@@ -291,6 +299,9 @@
           if (isReserved(name)) {
             return new FlowError(name + " is a reserved word, so it can't be used as a name.");
           }
+          if (Object.prototype.hasOwnProperty.call(PYTHON_WORDS, name)) {
+            return new FlowError(name + " has a special meaning in Python, so it can't be used as a name.", "Choose another name, e.g. my_" + name);
+          }
           return null;
         }
 
@@ -298,7 +309,8 @@
 
         var OPEN_QUOTES = { "\"": "\"", "“": "\"", "”": "\"", "'": "'", "‘": "'", "’": "'" };
 
-        function tokenize(source) {
+        function tokenize(source, options) {
+          var python = !!(options && options.dialect === "python");
           var tokens = [];
           var i = 0;
           var text = String(source);
@@ -342,6 +354,31 @@
             if (/[A-Za-z_]/.test(ch)) {
               var name = text.slice(i).match(/^[A-Za-z_][A-Za-z0-9_]*/)[0];
               var upper = name.toUpperCase();
+              if (python) {
+                if (name === "random" && /^\.\s*randint\b/.test(text.slice(i + 6))) {
+                  var dotted = text.slice(i).match(/^random\.\s*randint/)[0];
+                  tokens.push({ t: "id", v: "RANDOM_INT", pos: start, text: "random.randint", py: true });
+                  i += dotted.length;
+                  continue;
+                }
+                if (name === "True" || name === "False") {
+                  tokens.push({ t: "bool", v: name === "True", pos: start, text: name });
+                } else if (upper === "TRUE" || upper === "FALSE") {
+                  fail("Python writes " + (upper === "TRUE" ? "True" : "False") + " with a capital letter first.");
+                } else if (name === "and" || name === "or" || name === "not") {
+                  tokens.push({ t: "op", v: upper, pos: start, text: name });
+                } else if (upper === "DIV" || upper === "MOD") {
+                  fail(upper + " is pseudocode, not Python.", upper === "DIV" ? "Use // for whole-number division, e.g. 7 // 2" : "Use % for the remainder, e.g. 7 % 2");
+                } else if (WORD_OPERATORS[upper]) {
+                  fail("Python writes " + upper.toLowerCase() + " in lower case.");
+                } else if (PYTHON_BUILTINS[name] && /^\s*\(/.test(text.slice(i + name.length))) {
+                  tokens.push({ t: "id", v: PYTHON_BUILTINS[name], pos: start, text: name, py: true });
+                } else {
+                  tokens.push({ t: "id", v: name, pos: start, text: name });
+                }
+                i += name.length;
+                continue;
+              }
               if (upper === "TRUE" || upper === "FALSE") {
                 tokens.push({ t: "bool", v: upper === "TRUE", pos: start, text: name });
               } else if (WORD_OPERATORS[upper]) {
@@ -354,6 +391,17 @@
             }
 
             var two = text.slice(i, i + 2);
+            if (python) {
+              if (two === "**") { tokens.push({ t: "op", v: "^", pos: start, text: two }); i += 2; continue; }
+              if (two === "//") { tokens.push({ t: "op", v: "DIV", pos: start, text: two }); i += 2; continue; }
+              if (ch === "%") { tokens.push({ t: "op", v: "MOD", pos: start, text: ch }); i += 1; continue; }
+              if (ch === "^") fail("^ doesn't mean power in Python.", "Use ** for powers, e.g. x ** 2");
+              if (two === "<>") fail("<> is not Python.", "Use != for “not equal to”");
+              if (ch === "←" || ch === "≠" || ch === "≤" || ch === "≥") fail(ch + " is not Python.", "Use =, !=, <= or >=");
+              if (two === "&&") fail("&& is not Python.", "Use and, e.g. x > 1 and x < 10");
+              if (two === "||") fail("|| is not Python.", "Use or, e.g. x < 1 or x > 10");
+              if (ch === "!" && two !== "!=") fail("! on its own is not Python.", "Use not, or != for “not equal to”");
+            }
             if (two === "+=" || two === "-=" || two === "*=" || two === "/=") {
               fail(two + " is not used in this pseudocode.", "Write the full assignment, e.g. total = total + 1");
             }
@@ -467,6 +515,19 @@
 
         Parser.prototype.call = function (nameToken) {
           var upper = nameToken.v.toUpperCase();
+          if (this.options.dialect === "python" && !nameToken.py) {
+            var subNames = this.options.subprogramNames || [];
+            if (subNames.indexOf(nameToken.v) >= 0) {
+              fail(nameToken.v + " is a subprogram, so it is called on its own line.", "e.g. result = " + nameToken.v + "(…)");
+            }
+            if (nameToken.v === "input") fail("input() can only be used in an input line.", "e.g. name = input()");
+            if (nameToken.v === "print") fail("print() is a statement of its own, not a value.");
+            if (BUILTINS[upper]) {
+              var pyName = Object.keys(PYTHON_BUILTINS).filter(function (key) { return PYTHON_BUILTINS[key] === upper; })[0];
+              fail("Python writes " + (pyName || (upper === "RANDOM_INT" ? "random.randint" : upper.toLowerCase())) + "(…) in lower case.");
+            }
+            fail("There is no built-in function called " + nameToken.v + " here.", "Python functions you can use: len, int, float, str, round, random.randint");
+          }
           if (!BUILTINS[upper]) {
             var subs = this.options.subprogramNames || [];
             if (subs.indexOf(nameToken.v) >= 0) {
@@ -503,7 +564,7 @@
         }
 
         function parseExpression(source, options) {
-          return parseTokens(tokenize(source), options);
+          return parseTokens(tokenize(source, options), options);
         }
 
         function collectVariables(ast, into) {
@@ -549,6 +610,29 @@
         function makeNumber(number, real) {
           if (!isFinite(number)) fail("That calculation gave a number that is too large or undefined.");
           return { type: real ? "REAL" : "INT", v: number };
+        }
+
+        var INPUT_TYPES = {
+          auto: { label: "Auto", python: "" },
+          "int": { label: "Integer", python: "int" },
+          real: { label: "Real", python: "float" },
+          string: { label: "String", python: "str" },
+        };
+
+        // An INPUT block with a data type converts what is typed, as Python's
+        // int(input()) and float(input()) do, and stops if it can't.
+        function typedInputValue(raw, inputType, name) {
+          var trimmed = String(raw).trim();
+          if (inputType === "int") {
+            if (/^[+-]?\d+$/.test(trimmed)) return { type: "INT", v: parseInt(trimmed, 10) };
+            fail(name + " expects an Integer (a whole number), but \"" + raw + "\" was typed.", "Type a whole number such as 7, or change the Input block's data type.");
+          }
+          if (inputType === "real") {
+            if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(trimmed)) return { type: "REAL", v: parseFloat(trimmed) };
+            fail(name + " expects a Real number, but \"" + raw + "\" was typed.", "Type a number such as 2.5, or change the Input block's data type.");
+          }
+          if (inputType === "string") return { type: "STRING", v: String(raw) };
+          return inputValue(raw);
         }
 
         // INPUT stores whole numbers as INT, decimals as REAL and anything else as STRING.
@@ -761,7 +845,7 @@
               if (/^input\b/i.test(name)) fail("INPUT is already shown on the block.", "Just type the variable name, e.g. guess");
               var problem = nameProblem(name);
               if (problem) throw problem;
-              return { target: name };
+              return { target: name, inputType: INPUT_TYPES[node.inputType] ? node.inputType : "auto" };
             }
             case "output": {
               var text = String(node.text || "").trim();
@@ -839,7 +923,7 @@
             case "start": return "START";
             case "end": return "END";
             case "process": return String(node.text || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean).join("; ") || "(empty process)";
-            case "input": return "INPUT " + (String(node.text || "").trim() || "?");
+            case "input": return "INPUT " + (String(node.text || "").trim() || "?") + (INPUT_TYPES[node.inputType] && node.inputType !== "auto" ? " (" + INPUT_TYPES[node.inputType].label + ")" : "");
             case "output": return "OUTPUT " + (String(node.text || "").trim() || "?");
             case "decision": return (cleanCondition(node.text) || "(empty condition)") + "?";
             case "return": {
@@ -1205,7 +1289,7 @@
                 case "input":
                   state.steps -= 1;
                   state.status = "input";
-                  state.pendingInput = { name: compiled.target };
+                  state.pendingInput = { name: compiled.target, inputType: compiled.inputType };
                   state.lastEvent = "Waiting for INPUT " + compiled.target;
                   break;
                 case "output": {
@@ -1276,9 +1360,17 @@
           function provideInput(raw) {
             if (state.status !== "input") return state;
             var frame = top();
-            var value = inputValue(raw);
-            frame.vars.set(state.pendingInput.name, value);
             state.output.push({ kind: "input", text: String(raw) });
+            var value;
+            try {
+              value = typedInputValue(raw, state.pendingInput.inputType, state.pendingInput.name);
+            } catch (error) {
+              if (!(error instanceof FlowError)) throw error;
+              state.pendingInput = null;
+              stop(error, frame);
+              return state;
+            }
+            frame.vars.set(state.pendingInput.name, value);
             state.steps += 1;
             state.lastEvent = state.pendingInput.name + " ← " + formatValue(value) + " (" + value.type + ")";
             record(frame, "INPUT " + state.pendingInput.name, [{ name: state.pendingInput.name, value: value }]);
@@ -1298,7 +1390,13 @@
 
         return {
           BUILTINS: BUILTINS,
+          BINDING: BINDING,
+          COMPARISONS: COMPARISONS,
+          INPUT_TYPES: INPUT_TYPES,
           OUTPUT_PORTS: OUTPUT_PORTS,
+          formatReal: formatReal,
+          parseAssignment: parseAssignment,
+          compileNode: compileNode,
           FlowError: FlowError,
           tokenize: tokenize,
           parseExpression: parseExpression,
@@ -1362,7 +1460,7 @@
                   node("s", "start", 300, 60),
                   node("p1", "process", 300, 140, "answer = \"yellow\""),
                   node("o1", "output", 300, 230, "\"What colour is a ripe banana?\""),
-                  node("i1", "input", 300, 330, "guess"),
+                  node("i1", "input", 300, 330, "guess", { inputType: "string" }),
                   decision("d1", 300, 450, "answer != guess", "left", "bottom"),
                   node("o2", "output", 300, 570, "\"Correct, well done!\""),
                   node("e", "end", 300, 660),
@@ -1383,7 +1481,7 @@
               tabs: [
                 main([
                   node("s", "start", 300, 60),
-                  node("i1", "input", 300, 140, "n"),
+                  node("i1", "input", 300, 140, "n", { inputType: "int" }),
                   node("p1", "process", 300, 230, "i = 1"),
                   decision("d1", 300, 340, "i <= 12", "bottom", "right"),
                   node("o1", "output", 300, 460, "n + \" x \" + i + \" = \" + n * i"),
@@ -1397,6 +1495,32 @@
             },
           },
           {
+            id: "grade",
+            label: "Grade boundaries (if / elif / else)",
+            inputs: ["65"],
+            expectedOutput: ["Grade B"],
+            doc: {
+              tabs: [
+                main([
+                  node("s", "start", 300, 60),
+                  node("i1", "input", 300, 150, "mark", { inputType: "int" }),
+                  decision("d1", 300, 270, "mark >= 70", "left", "right"),
+                  node("o1", "output", 180, 390, "\"Grade A\""),
+                  decision("d2", 500, 400, "mark >= 50", "left", "right"),
+                  node("o2", "output", 380, 520, "\"Grade B\""),
+                  decision("d3", 700, 530, "mark >= 40", "left", "right"),
+                  node("o3", "output", 580, 650, "\"Grade C\""),
+                  node("o4", "output", 820, 650, "\"Grade U\""),
+                  node("e", "end", 300, 760),
+                ], [
+                  link("s", "i1"), link("i1", "d1"), link("d1", "o1", "true"), link("d1", "d2", "false"),
+                  link("d2", "o2", "true"), link("d2", "d3", "false"), link("d3", "o3", "true"), link("d3", "o4", "false"),
+                  link("o1", "e"), link("o2", "e"), link("o3", "e"), link("o4", "e"),
+                ]),
+              ],
+            },
+          },
+          {
             id: "count",
             label: "Count up or down (procedures)",
             inputs: ["4", "3"],
@@ -1405,8 +1529,8 @@
               tabs: [
                 main([
                   node("s", "start", 300, 60),
-                  node("i1", "input", 300, 140, "num1"),
-                  node("i2", "input", 300, 230, "num2"),
+                  node("i1", "input", 300, 140, "num1", { inputType: "int" }),
+                  node("i2", "input", 300, 230, "num2", { inputType: "int" }),
                   node("p1", "process", 300, 320, "total = num1 + num2"),
                   decision("d1", 300, 430, "total > 10", "left", "right"),
                   call("c1", 140, 550, "countdown", ["total"]),
@@ -1449,8 +1573,8 @@
               tabs: [
                 main([
                   node("s", "start", 300, 60),
-                  node("i1", "input", 300, 140, "a"),
-                  node("i2", "input", 300, 230, "b"),
+                  node("i1", "input", 300, 140, "a", { inputType: "int" }),
+                  node("i2", "input", 300, 230, "b", { inputType: "int" }),
                   call("c1", 300, 320, "max", ["a", "b"], "biggest"),
                   node("o1", "output", 300, 410, "\"Largest: \" + biggest"),
                   node("e", "end", 300, 490),
@@ -1477,7 +1601,7 @@
               tabs: [
                 main([
                   node("s", "start", 300, 60),
-                  node("i1", "input", 300, 140, "n"),
+                  node("i1", "input", 300, 140, "n", { inputType: "int" }),
                   call("c1", 300, 230, "factorial", ["n"], "result"),
                   node("o1", "output", 300, 320, "n + \"! = \" + result"),
                   node("e", "end", 300, 400),
@@ -1508,6 +1632,1740 @@
         }
 
         return { list: list, blank: blank };
+      })();
+    </script>
+
+    <script id="flowchart-code">
+      /* ---------------------------------------------------------------
+         Flowchart <-> Python. Plain JavaScript like FlowLang, so the build
+         checks can test it.
+
+         structureTab turns one tab's connector graph into a statement tree
+         (if / while / repeat loops). buildTab turns a tree back into blocks
+         and connectors with a tidy layout. toPython and parsePython convert
+         between whole documents and Python source text.
+
+         A statement keeps the id of the block it came from:
+           { k: "assign", id, line, text }          one line of a process block
+           { k: "input", id, text, inputType }
+           { k: "output", id, text }
+           { k: "call", id, calleeId, args, target }
+           { k: "return", id, text }   { k: "end", id }
+           { k: "if", id, text, negated, then: [], else: [] }
+           { k: "while", id, text, negated, body: [] }
+           { k: "repeat", id, text, negated, body: [] }   while True … break
+         negated means the code shows the opposite of the block's condition,
+         because the decision's False exit is the one that enters the branch
+         (if/while) or leaves the loop (repeat).
+         --------------------------------------------------------------- */
+      var FlowCode = (function () {
+        "use strict";
+
+        var L = FlowLang;
+        var BINDING = L.BINDING;
+        var COMPARISONS = L.COMPARISONS;
+        var SINK = "#sink";
+        var PY_NAMES = { LEN: "len", INT: "int", REAL: "float", STR: "str", ROUND: "round", RANDOM_INT: "random.randint" };
+        var PY_OPS = { AND: "and", OR: "or", DIV: "//", MOD: "%", "^": "**" };
+        var NEGATED = { "==": "!=", "!=": "==", "<": ">=", ">=": "<", ">": "<=", "<=": ">" };
+        var CASTS = { "int": "int", real: "float", string: "" };
+        var counter = 0;
+
+        function CodeError(message, hint, nodeIds) {
+          this.message = message;
+          this.hint = hint || "";
+          this.nodeIds = nodeIds || [];
+        }
+        CodeError.prototype = Object.create(Error.prototype);
+        CodeError.prototype.name = "CodeError";
+
+        function unstructured(message, hint, nodeIds) {
+          throw new CodeError(message, hint, nodeIds);
+        }
+
+        function defaultId(prefix) {
+          counter += 1;
+          return prefix + "c" + Date.now().toString(36) + counter.toString(36);
+        }
+
+        /* ---------- Expressions ---------- */
+
+        function quote(text) {
+          return text.indexOf("\"") >= 0 && text.indexOf("'") < 0 ? "'" + text + "'" : "\"" + text + "\"";
+        }
+
+        function isNumeric(type) {
+          return type === "INT" || type === "REAL";
+        }
+
+        // The static type of an expression, or null when it can't be known.
+        function typeOf(ast, env) {
+          switch (ast.k) {
+            case "lit": return ast.value.type;
+            case "var": return (env && env[ast.name]) || null;
+            case "neg": {
+              var inner = typeOf(ast.e, env);
+              return isNumeric(inner) ? inner : null;
+            }
+            case "not": return "BOOL";
+            case "call":
+              if (ast.name === "REAL") return "REAL";
+              if (ast.name === "STR") return "STRING";
+              if (ast.name === "ROUND") return ast.args.length > 1 ? "REAL" : "INT";
+              return "INT";
+            case "bin": {
+              if (COMPARISONS[ast.op] || ast.op === "AND" || ast.op === "OR") return "BOOL";
+              var l = typeOf(ast.l, env);
+              var r = typeOf(ast.r, env);
+              if (ast.op === "+" && (l === "STRING" || r === "STRING")) return "STRING";
+              if (ast.op === "/") return "REAL";
+              if (ast.op === "DIV" || ast.op === "MOD") return "INT";
+              if (isNumeric(l) && isNumeric(r)) return l === "REAL" || r === "REAL" ? "REAL" : "INT";
+              return null;
+            }
+          }
+          return null;
+        }
+
+        function bindingOf(ast) {
+          if (ast.k === "bin") return BINDING[ast.op];
+          if (ast.k === "neg") return 60;
+          if (ast.k === "not") return 25;
+          return 100;
+        }
+
+        // Prints an expression tree as pseudocode or as Python, with only the
+        // brackets the precedence rules need. For Python, a value joined to
+        // text with + is wrapped in str() unless it is already text.
+        function printExpr(ast, python, env) {
+          function go(node) {
+            switch (node.k) {
+              case "lit": {
+                var value = node.value;
+                if (value.type === "STRING") return quote(value.v);
+                if (value.type === "BOOL") return value.v ? "True" : "False";
+                if (value.type === "REAL") return L.formatReal(value.v);
+                return String(value.v);
+              }
+              case "var": return node.name;
+              case "call": return (python ? PY_NAMES[node.name] : node.name) + "(" + node.args.map(go).join(", ") + ")";
+              case "neg": {
+                var inner = go(node.e);
+                var needs = (node.e.k === "bin" && BINDING[node.e.op] <= 60) || node.e.k === "neg" || node.e.k === "not";
+                return "-" + (needs ? "(" + inner + ")" : inner);
+              }
+              case "not": {
+                var operand = go(node.e);
+                return (python ? "not " : "NOT ") + (bindingOf(node.e) <= 25 ? "(" + operand + ")" : operand);
+              }
+              case "bin": {
+                var op = node.op;
+                var b = BINDING[op];
+                var lb = bindingOf(node.l);
+                var rb = bindingOf(node.r);
+                var left = go(node.l);
+                var right = go(node.r);
+                var leftNeeds = lb < b || (op === "^" && lb === b) || (COMPARISONS[op] && node.l.k === "bin" && COMPARISONS[node.l.op]);
+                var rightNeeds = rb < b || (rb === b && op !== "^");
+                if (leftNeeds) left = "(" + left + ")";
+                if (rightNeeds) right = "(" + right + ")";
+                if (python && op === "+") {
+                  var lt = typeOf(node.l, env);
+                  var rt = typeOf(node.r, env);
+                  if (lt === "STRING" && rt !== "STRING") right = "str(" + go(node.r) + ")";
+                  else if (rt === "STRING" && lt !== "STRING") left = "str(" + go(node.l) + ")";
+                }
+                return left + " " + (python ? PY_OPS[op] || op : op) + " " + right;
+              }
+            }
+            return "";
+          }
+          return go(ast);
+        }
+
+        function printPseudo(ast) {
+          return printExpr(ast, false, null);
+        }
+
+        function printPython(ast, env) {
+          return printExpr(ast, true, env || {});
+        }
+
+        function negate(ast) {
+          if (ast.k === "bin" && NEGATED[ast.op]) return { k: "bin", op: NEGATED[ast.op], l: ast.l, r: ast.r };
+          if (ast.k === "not") return ast.e;
+          return { k: "not", e: ast };
+        }
+
+        function parsePseudo(text) {
+          return L.parseExpression(text, {});
+        }
+
+        // Pseudocode text from a block -> Python text for the code view.
+        // ok is false for an empty slot (a hole) or text that doesn't parse.
+        function exprToPython(text, env, negated) {
+          var source = String(text || "").trim();
+          if (!source) return { ok: false, hole: true, text: "" };
+          try {
+            var ast = parsePseudo(source);
+            return { ok: true, text: printPython(negated ? negate(ast) : ast, env) };
+          } catch (error) {
+            if (!(error instanceof L.FlowError)) throw error;
+            return { ok: false, text: negated ? "not (" + source + ")" : source, error: error.message };
+          }
+        }
+
+        // Python text typed by the student -> pseudocode for the block.
+        // Throws a FlowError when it isn't valid.
+        function pythonToPseudo(text, subprogramNames) {
+          var ast = L.parseExpression(text, { dialect: "python", subprogramNames: subprogramNames || [] });
+          return printPseudo(ast);
+        }
+
+        function usesRandom(ast) {
+          if (!ast) return false;
+          if (ast.k === "call") return ast.name === "RANDOM_INT" || ast.args.some(usesRandom);
+          if (ast.k === "bin") return usesRandom(ast.l) || usesRandom(ast.r);
+          if (ast.k === "neg" || ast.k === "not") return usesRandom(ast.e);
+          return false;
+        }
+
+        // Splits one line of a process block into its target and value
+        // without insisting that either is valid.
+        function splitAssignment(line) {
+          var text = String(line || "");
+          for (var i = 0; i < text.length; i += 1) {
+            var ch = text[i];
+            if (ch === "\"" || ch === "'") {
+              var close = text.indexOf(ch, i + 1);
+              if (close < 0) break;
+              i = close;
+              continue;
+            }
+            if (ch === "←") return { target: text.slice(0, i).trim(), expr: text.slice(i + 1).trim() };
+            if (ch === "=" && text[i + 1] !== "=" && "=!<>".indexOf(text[i - 1] || "") < 0) {
+              return { target: text.slice(0, i).trim(), expr: text.slice(i + 1).trim() };
+            }
+          }
+          return { target: "", expr: text.trim() };
+        }
+
+        function joinAssignment(target, expr) {
+          target = String(target || "").trim();
+          expr = String(expr || "").trim();
+          if (!target && !expr) return "";
+          return target + " = " + expr;
+        }
+
+        function processLines(text) {
+          return String(text || "").split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+        }
+
+        /* ---------- Data types ---------- */
+
+        function mergeType(a, b) {
+          if (!a) return b;
+          if (!b || a === b) return a;
+          if (isNumeric(a) && isNumeric(b)) return "REAL";
+          return "MIXED";
+        }
+
+        function mergeWant(a, b) {
+          if (!a) return b;
+          if (!b || a === b) return a;
+          if ((a === "NUM" && b === "REAL") || (a === "REAL" && b === "NUM")) return "REAL";
+          return a;
+        }
+
+        function wantOfType(type) {
+          if (type === "INT") return "NUM";
+          if (type === "REAL") return "REAL";
+          if (type === "STRING") return "STRING";
+          return null;
+        }
+
+        function tryParse(text) {
+          try {
+            return parsePseudo(text);
+          } catch (error) {
+            if (!(error instanceof L.FlowError)) throw error;
+            return null;
+          }
+        }
+
+        function tryAssignment(line) {
+          try {
+            return L.parseAssignment(line, {});
+          } catch (error) {
+            if (!(error instanceof L.FlowError)) throw error;
+            return null;
+          }
+        }
+
+        // Works out each variable's type, flow-insensitively. An Input block
+        // set to Auto gets the type its uses need: a number when it is used
+        // in arithmetic or compared with a number, otherwise text.
+        function inferTypes(doc) {
+          var tabs = doc.tabs;
+          var envs = {};
+          var wants = {};
+          var params = {};
+          var inputTypes = {};
+          tabs.forEach(function (tab) {
+            envs[tab.id] = {};
+            wants[tab.id] = {};
+            params[tab.id] = tab.kind === "sub" ? L.parseParams(tab.paramsText).params : [];
+          });
+
+          function setType(env, name, type, typed) {
+            if (!name || !type) return;
+            var merged = mergeType(typed[name], type);
+            typed[name] = merged;
+          }
+
+          function addWant(tabId, name, want) {
+            if (!want) return false;
+            var before = wants[tabId][name];
+            var after = mergeWant(before, want);
+            if (after !== before) {
+              wants[tabId][name] = after;
+              return true;
+            }
+            return false;
+          }
+
+          for (var round = 0; round < 12; round += 1) {
+            var changed = false;
+            var next = {};
+            var paramTypes = {};
+            var returnTypes = {};
+
+            tabs.forEach(function (tab) {
+              var env = envs[tab.id];
+              var typed = {};
+              tab.nodes.forEach(function (node) {
+                if (node.type === "input") {
+                  var name = String(node.text || "").trim();
+                  var type = null;
+                  if (node.inputType === "int") type = "INT";
+                  else if (node.inputType === "real") type = "REAL";
+                  else if (node.inputType === "string") type = "STRING";
+                  else {
+                    var want = wants[tab.id][name];
+                    // Undecided until a use needs a number; text by default.
+                    type = want === "REAL" ? "REAL" : want === "NUM" ? "INT" : want === "STRING" ? "STRING" : null;
+                  }
+                  inputTypes[node.id] = type === "INT" ? "int" : type === "REAL" ? "real" : "string";
+                  setType(env, name, type, typed);
+                }
+                if (node.type === "process") {
+                  processLines(node.text).forEach(function (line) {
+                    var assignment = tryAssignment(line);
+                    if (assignment) setType(env, assignment.target, typeOf(assignment.expr, env), typed);
+                  });
+                }
+                if (node.type === "call") {
+                  var target = String(node.target || "").trim();
+                  if (target) setType(env, target, envs.__returns && envs.__returns[node.calleeId], typed);
+                  (node.args || []).forEach(function (arg, index) {
+                    var ast = tryParse(arg);
+                    if (!ast) return;
+                    var key = node.calleeId + "#" + index;
+                    paramTypes[key] = paramTypes[key] === undefined ? typeOf(ast, env) : mergeType(paramTypes[key], typeOf(ast, env));
+                  });
+                }
+                if (node.type === "return" && String(node.text || "").trim()) {
+                  var value = tryParse(node.text);
+                  if (value) returnTypes[tab.id] = mergeType(returnTypes[tab.id], typeOf(value, env) || "MIXED");
+                }
+              });
+              next[tab.id] = typed;
+            });
+
+            tabs.forEach(function (tab) {
+              params[tab.id].forEach(function (param, index) {
+                var type = paramTypes[tab.id + "#" + index];
+                if (type) next[tab.id][param] = mergeType(next[tab.id][param], type);
+              });
+            });
+
+            var returns = {};
+            Object.keys(returnTypes).forEach(function (id) {
+              returns[id] = returnTypes[id] === "MIXED" ? null : returnTypes[id];
+            });
+
+            tabs.forEach(function (tab) {
+              var clean = {};
+              Object.keys(next[tab.id]).forEach(function (name) {
+                var type = next[tab.id][name];
+                clean[name] = type === "MIXED" ? null : type;
+              });
+              if (JSON.stringify(clean) !== JSON.stringify(envs[tab.id])) changed = true;
+              envs[tab.id] = clean;
+            });
+            if (JSON.stringify(returns) !== JSON.stringify(envs.__returns || {})) changed = true;
+            envs.__returns = returns;
+
+            // What each variable needs to be, from how it is used.
+            tabs.forEach(function (tab) {
+              var env = envs[tab.id];
+              function want(ast, expected) {
+                if (!ast) return;
+                switch (ast.k) {
+                  case "var":
+                    if (addWant(tab.id, ast.name, expected)) changed = true;
+                    return;
+                  case "neg":
+                    want(ast.e, "NUM");
+                    return;
+                  case "not":
+                    want(ast.e, null);
+                    return;
+                  case "call":
+                    ast.args.forEach(function (arg) {
+                      if (ast.name === "LEN") want(arg, "STRING");
+                      else if (ast.name === "ROUND" || ast.name === "RANDOM_INT") want(arg, "NUM");
+                      else want(arg, null);
+                    });
+                    return;
+                  case "bin": {
+                    var lt = typeOf(ast.l, env);
+                    var rt = typeOf(ast.r, env);
+                    if (ast.op === "AND" || ast.op === "OR") {
+                      want(ast.l, null);
+                      want(ast.r, null);
+                    } else if (COMPARISONS[ast.op]) {
+                      want(ast.l, wantOfType(rt) || wants[tab.id][varName(ast.r)] || null);
+                      want(ast.r, wantOfType(lt) || wants[tab.id][varName(ast.l)] || null);
+                    } else if (ast.op === "+") {
+                      if (lt === "STRING" || rt === "STRING" || expected === "STRING") {
+                        want(ast.l, null);
+                        want(ast.r, null);
+                      } else if (expected || isNumeric(lt) || isNumeric(rt)) {
+                        var kind = expected === "REAL" || lt === "REAL" || rt === "REAL" ? "REAL" : "NUM";
+                        want(ast.l, kind);
+                        want(ast.r, kind);
+                      }
+                    } else {
+                      var numeric = lt === "REAL" || rt === "REAL" ? "REAL" : "NUM";
+                      want(ast.l, numeric);
+                      want(ast.r, numeric);
+                    }
+                    return;
+                  }
+                }
+              }
+              tab.nodes.forEach(function (node) {
+                if (node.type === "process") {
+                  processLines(node.text).forEach(function (line) {
+                    var assignment = tryAssignment(line);
+                    if (assignment) want(assignment.expr, wants[tab.id][assignment.target] || null);
+                  });
+                } else if (node.type === "output" || node.type === "decision" || node.type === "return") {
+                  want(tryParse(L.cleanCondition(node.text)), null);
+                } else if (node.type === "call") {
+                  (node.args || []).forEach(function (arg, index) {
+                    var callee = params[node.calleeId];
+                    var param = callee && callee[index];
+                    want(tryParse(arg), param ? wants[node.calleeId][param] || null : null);
+                  });
+                }
+              });
+              // A parameter that must be a number makes the value passed in one.
+              params[tab.id].forEach(function (param) {
+                if (wants[tab.id][param]) {
+                  // handled from the caller's side above
+                }
+              });
+            });
+
+            if (!changed) break;
+          }
+          // An Auto input that nothing needed as a number is text.
+          tabs.forEach(function (tab) {
+            tab.nodes.forEach(function (node) {
+              var name = String(node.text || "").trim();
+              if (node.type === "input" && inputTypes[node.id] === "string" && !envs[tab.id][name]) envs[tab.id][name] = "STRING";
+            });
+          });
+          var result = { envs: {}, inputTypes: inputTypes, returns: envs.__returns || {} };
+          tabs.forEach(function (tab) { result.envs[tab.id] = envs[tab.id]; });
+          return result;
+        }
+
+        function varName(ast) {
+          return ast && ast.k === "var" ? ast.name : "";
+        }
+
+        /* ---------- Flowchart -> statement tree ---------- */
+
+        function graphOf(tab) {
+          var nodes = new Map();
+          var succ = new Map();
+          var preds = new Map();
+          tab.nodes.forEach(function (node) {
+            nodes.set(node.id, node);
+            succ.set(node.id, {});
+            preds.set(node.id, []);
+          });
+          tab.edges.forEach(function (edge) {
+            if (nodes.has(edge.from) && nodes.has(edge.to)) {
+              succ.get(edge.from)[edge.port] = edge.to;
+              preds.get(edge.to).push(edge.from);
+            }
+          });
+          return { nodes: nodes, succ: succ, preds: preds };
+        }
+
+        function portsOf(node) {
+          return L.OUTPUT_PORTS[node.type] || [];
+        }
+
+        function isTerminal(node) {
+          return node.type === "end" || node.type === "return";
+        }
+
+        function terminalStatement(node) {
+          if (node.type === "end") return { k: "end", id: node.id };
+          return { k: "return", id: node.id, text: L.stripKeyword(node.text, "RETURN").trim() };
+        }
+
+        function simpleStatements(node) {
+          switch (node.type) {
+            case "process": {
+              var lines = processLines(node.text);
+              if (!lines.length) return [{ k: "assign", id: node.id, line: 0, text: "" }];
+              return lines.map(function (line, index) { return { k: "assign", id: node.id, line: index, text: line }; });
+            }
+            case "input":
+              return [{ k: "input", id: node.id, text: String(node.text || "").trim(), inputType: node.inputType || "auto" }];
+            case "output":
+              return [{ k: "output", id: node.id, text: String(node.text || "").trim() }];
+            case "call":
+              return [{ k: "call", id: node.id, calleeId: node.calleeId || "", args: (node.args || []).slice(), target: String(node.target || "").trim() }];
+          }
+          return [];
+        }
+
+        // True when every path through these statements ends at END or RETURN.
+        function terminates(list) {
+          var last = list[list.length - 1];
+          if (!last) return false;
+          if (last.k === "end" || last.k === "return") return true;
+          if (last.k === "if") return terminates(last.then) && last.else.length > 0 && terminates(last.else);
+          return false;
+        }
+
+        function endsWithBareExit(list) {
+          var last = list[list.length - 1];
+          return !!last && (last.k === "end" || (last.k === "return" && !last.text));
+        }
+
+        function structureTab(tab) {
+          try {
+            return { ok: true, body: structureOrThrow(tab) };
+          } catch (error) {
+            if (!(error instanceof CodeError)) throw error;
+            return { ok: false, message: error.message, hint: error.hint, nodeIds: error.nodeIds };
+          }
+        }
+
+        function structureOrThrow(tab) {
+          var g = graphOf(tab);
+          var start = tab.nodes.filter(function (node) { return node.type === "start"; })[0];
+          if (!start) unstructured(tab.kind === "main" ? "Main has no START block." : "This subprogram has no START block.");
+
+          // Everything reachable from START, with every exit connected.
+          var reachable = [];
+          var seen = new Set([start.id]);
+          var queue = [start.id];
+          while (queue.length) {
+            var id = queue.shift();
+            reachable.push(id);
+            var node = g.nodes.get(id);
+            portsOf(node).forEach(function (port) {
+              var to = g.succ.get(id)[port];
+              if (!to) {
+                unstructured("Finish connecting the flowchart to see its code.", "Every exit of every block needs a connector.", [id]);
+              }
+              if (!seen.has(to)) {
+                seen.add(to);
+                queue.push(to);
+              }
+            });
+          }
+          var inGraph = new Set(reachable);
+
+          // Every block must be able to reach END or RETURN.
+          var finishes = new Set();
+          var grew = true;
+          while (grew) {
+            grew = false;
+            reachable.forEach(function (rid) {
+              if (finishes.has(rid)) return;
+              var rnode = g.nodes.get(rid);
+              if (isTerminal(rnode) || portsOf(rnode).some(function (port) { return finishes.has(g.succ.get(rid)[port]); })) {
+                finishes.add(rid);
+                grew = true;
+              }
+            });
+          }
+          var stuck = reachable.filter(function (rid) { return !finishes.has(rid); });
+          if (stuck.length) unstructured("These blocks loop forever, so they can't be written as code.", "Add a decision so that one path leaves the loop.", stuck);
+
+          function outs(nid) {
+            var n = g.nodes.get(nid);
+            return portsOf(n).map(function (port) { return g.succ.get(nid)[port]; });
+          }
+
+          // Dominators, to find loops and check they are only entered at the top.
+          var dom = new Map();
+          reachable.forEach(function (rid) { dom.set(rid, rid === start.id ? new Set([rid]) : new Set(reachable)); });
+          var changed = true;
+          while (changed) {
+            changed = false;
+            reachable.forEach(function (rid) {
+              if (rid === start.id) return;
+              var predecessors = g.preds.get(rid).filter(function (p) { return inGraph.has(p); });
+              var meet = null;
+              predecessors.forEach(function (p) {
+                var set = dom.get(p);
+                if (!meet) meet = new Set(set);
+                else meet.forEach(function (x) { if (!set.has(x)) meet.delete(x); });
+              });
+              meet = meet || new Set();
+              meet.add(rid);
+              if (meet.size !== dom.get(rid).size) {
+                dom.set(rid, meet);
+                changed = true;
+              }
+            });
+          }
+
+          var headers = new Map();
+          var loopCache = new Map();
+          var onStack = new Set();
+          var visited = new Set();
+          (function dfs(nid) {
+            visited.add(nid);
+            onStack.add(nid);
+            outs(nid).forEach(function (to) {
+              if (onStack.has(to)) {
+                if (!dom.get(nid).has(to)) {
+                  unstructured("A connector jumps into the middle of a loop, which Python can't do.", "Loops must be entered through the decision or block at their top.", [nid, to]);
+                }
+                if (!headers.has(to)) headers.set(to, []);
+                if (headers.get(to).indexOf(nid) < 0) headers.get(to).push(nid);
+              } else if (!visited.has(to)) {
+                dfs(to);
+              }
+            });
+            onStack.delete(nid);
+          })(start.id);
+
+          // An edge into the middle of a loop from outside it.
+          headers.forEach(function (_, header) {
+            naturalLoop(header).forEach(function (member) {
+              if (member === header) return;
+              g.preds.get(member).forEach(function (p) {
+                if (inGraph.has(p) && !naturalLoop(header).has(p)) {
+                  unstructured("A connector jumps into the middle of a loop, which Python can't do.", "Loops must be entered through the decision or block at their top.", [p, member]);
+                }
+              });
+            });
+          });
+
+          function naturalLoop(header) {
+            if (loopCache.has(header)) return loopCache.get(header);
+            var body = new Set([header]);
+            var stack = (headers.get(header) || []).slice();
+            while (stack.length) {
+              var x = stack.pop();
+              if (body.has(x)) continue;
+              body.add(x);
+              g.preds.get(x).forEach(function (p) { if (inGraph.has(p)) stack.push(p); });
+            }
+            loopCache.set(header, body);
+            return body;
+          }
+
+          function reach(from, avoid) {
+            var found = new Set();
+            var list = [from];
+            while (list.length) {
+              var x = list.pop();
+              if (found.has(x) || (avoid && avoid.has(x))) continue;
+              found.add(x);
+              outs(x).forEach(function (to) { list.push(to); });
+            }
+            return found;
+          }
+
+          var emitted = new Map();
+          function emit(nid) {
+            var node = g.nodes.get(nid);
+            if (isTerminal(node)) return;
+            if (emitted.has(nid)) {
+              unstructured("Some blocks would have to appear twice in the code.", "Make each branch rejoin at one place, or use separate blocks.", [nid]);
+            }
+            emitted.set(nid, true);
+          }
+
+          function postdoms(region) {
+            if (region.pd) return region.pd;
+            var ids = Array.from(region.nodes);
+            var succIn = new Map();
+            ids.forEach(function (rid) {
+              var node = g.nodes.get(rid);
+              if (isTerminal(node)) {
+                succIn.set(rid, [SINK]);
+                return;
+              }
+              succIn.set(rid, outs(rid).map(function (to) { return region.nodes.has(to) ? to : SINK; }));
+            });
+            var all = ids.concat([SINK]);
+            var pd = new Map();
+            ids.forEach(function (rid) { pd.set(rid, new Set(all)); });
+            pd.set(SINK, new Set([SINK]));
+            var again = true;
+            while (again) {
+              again = false;
+              ids.forEach(function (rid) {
+                var meet = null;
+                succIn.get(rid).forEach(function (s) {
+                  var set = pd.get(s);
+                  if (!meet) meet = new Set(set);
+                  else meet.forEach(function (x) { if (!set.has(x)) meet.delete(x); });
+                });
+                meet = meet || new Set([SINK]);
+                meet.add(rid);
+                if (meet.size !== pd.get(rid).size) {
+                  pd.set(rid, meet);
+                  again = true;
+                }
+              });
+            }
+            region.pd = pd;
+            return pd;
+          }
+
+          function ipdom(region, nid) {
+            var pd = postdoms(region);
+            var strict = Array.from(pd.get(nid)).filter(function (x) { return x !== nid; });
+            for (var i = 0; i < strict.length; i += 1) {
+              if (pd.get(strict[i]).size === strict.length) return strict[i];
+            }
+            return SINK;
+          }
+
+          function seq(entry, stop, region, depth) {
+            var out = [];
+            var current = entry;
+            for (var guard = 0; ; guard += 1) {
+              if (guard > 5000 || depth > 300) unstructured("This flowchart is too complicated to turn into code.");
+              if (current === stop) return out;
+              if (!region.nodes.has(current)) {
+                if (current === region.header || current === region.latch) return out;
+                var outside = g.nodes.get(current);
+                if (outside && isTerminal(outside)) {
+                  out.push(terminalStatement(outside));
+                  return out;
+                }
+                unstructured("A path leaves this loop part-way through, which Python's while can't express.", "Make the loop's decision the only way out.", [current]);
+              }
+              var node = g.nodes.get(current);
+              if (isTerminal(node)) {
+                out.push(terminalStatement(node));
+                return out;
+              }
+              if (headers.has(current) && current !== region.skip) {
+                var loop = buildLoop(current, depth);
+                out.push(loop.stmt);
+                current = loop.exit;
+                continue;
+              }
+              emit(current);
+              if (node.type === "decision") {
+                var merge = ipdom(region, current);
+                var mergeStop = merge === SINK ? null : merge;
+                var whenTrue = seq(g.succ.get(current)["true"], mergeStop, region, depth + 1);
+                var whenFalse = seq(g.succ.get(current)["false"], mergeStop, region, depth + 1);
+                var stmt = { k: "if", id: current, text: L.cleanCondition(node.text), negated: false, then: whenTrue, "else": whenFalse };
+                if (!whenTrue.length && whenFalse.length) {
+                  stmt.negated = true;
+                  stmt.then = whenFalse;
+                  stmt["else"] = [];
+                }
+                if (merge === SINK && terminates(stmt.then) && stmt["else"].length
+                  && (!terminates(stmt["else"]) || endsWithBareExit(stmt.then))) {
+                  // if … : return  — the rest carries on at the same level.
+                  var rest = stmt["else"];
+                  stmt["else"] = [];
+                  out.push(stmt);
+                  rest.forEach(function (item) { out.push(item); });
+                  return out;
+                }
+                out.push(stmt);
+                if (merge === SINK) return out;
+                current = merge;
+                continue;
+              }
+              simpleStatements(node).forEach(function (item) { out.push(item); });
+              current = g.succ.get(current).next;
+            }
+          }
+
+          function buildLoop(header, depth) {
+            var body = naturalLoop(header);
+            var latches = headers.get(header);
+            var exits = [];
+            body.forEach(function (member) {
+              var mnode = g.nodes.get(member);
+              portsOf(mnode).forEach(function (port) {
+                var to = g.succ.get(member)[port];
+                if (!body.has(to)) exits.push({ from: member, port: port, to: to });
+              });
+            });
+            var headNode = g.nodes.get(header);
+            var whileExit = null;
+            if (headNode.type === "decision") {
+              var fromHead = exits.filter(function (edge) { return edge.from === header; });
+              if (fromHead.length === 1) whileExit = fromHead[0];
+            }
+            var repeatExit = null;
+            var latch = latches.length === 1 ? latches[0] : null;
+            if (latch && latch !== header && g.nodes.get(latch).type === "decision") {
+              var latchOuts = g.succ.get(latch);
+              var back = latchOuts["true"] === header ? "true" : latchOuts["false"] === header ? "false" : null;
+              var leave = back === "true" ? "false" : "true";
+              if (back && !body.has(latchOuts[leave])) repeatExit = { from: latch, port: leave, to: latchOuts[leave] };
+            }
+            var members = Array.from(body);
+            if (whileExit && repeatExit) {
+              unstructured("This loop has two ways out, which Python's while can't express.", "Join the exits so the loop leaves from one decision.", [whileExit.from, repeatExit.from]);
+            }
+            var main = whileExit || repeatExit;
+            if (!main) {
+              unstructured("This loop doesn't leave from a decision at its top or bottom, so it can't be written as a while loop.", "Put the decision that ends the loop first or last in the loop.", members);
+            }
+            var mainReach = reach(main.to, null);
+            var extras = new Set();
+            exits.forEach(function (edge) {
+              if (edge === main || (edge.from === main.from && edge.port === main.port)) return;
+              var found = reach(edge.to, null);
+              var ok = true;
+              found.forEach(function (x) {
+                if (body.has(x)) ok = false;
+                if (mainReach.has(x) && !isTerminal(g.nodes.get(x))) ok = false;
+              });
+              if (!ok) {
+                unstructured("This loop has more than one way out, which Python's while can't express.", "Join the exits so the loop leaves from one decision.", [edge.from, main.from]);
+              }
+              found.forEach(function (x) { extras.add(x); });
+            });
+            var nodes = new Set();
+            if (whileExit) {
+              body.forEach(function (x) { if (x !== header) nodes.add(x); });
+              extras.forEach(function (x) { nodes.add(x); });
+              var contPort = whileExit.port === "true" ? "false" : "true";
+              emit(header);
+              var inner = seq(g.succ.get(header)[contPort], null, { nodes: nodes, header: header }, depth + 1);
+              return {
+                stmt: { k: "while", id: header, text: L.cleanCondition(headNode.text), negated: contPort === "false", body: inner },
+                exit: whileExit.to,
+              };
+            }
+            body.forEach(function (x) { if (x !== latch) nodes.add(x); });
+            extras.forEach(function (x) { nodes.add(x); });
+            emit(latch);
+            var repeated = seq(header, latch, { nodes: nodes, latch: latch, skip: header }, depth + 1);
+            return {
+              stmt: { k: "repeat", id: latch, text: L.cleanCondition(g.nodes.get(latch).text), negated: repeatExit.port === "false", body: repeated },
+              exit: repeatExit.to,
+            };
+          }
+
+          return seq(g.succ.get(start.id).next, null, { nodes: inGraph }, 0);
+        }
+
+        /* ---------- Statement tree -> flowchart ---------- */
+
+        var GAP = 40;
+
+        function estimateSize(node) {
+          var text = String(node.text || "");
+          var longest = function (lines) { return lines.reduce(function (max, line) { return Math.max(max, line.length); }, 0); };
+          switch (node.type) {
+            case "start": case "end": return { w: 110, h: 42 };
+            case "return": return { w: Math.max(120, text.length * 8.5 + 52), h: text.trim() ? 58 : 42 };
+            case "process": {
+              var lines = processLines(text);
+              return { w: Math.max(140, longest(lines) * 8.5 + 40), h: Math.max(46, lines.length * 20 + 24) };
+            }
+            case "input": case "output": return { w: Math.max(150, text.length * 8.5 + 60), h: 58 };
+            case "decision": return { w: Math.max(170, Math.round(text.length * 8.5 * 1.45) + 44), h: 96 };
+            case "call": return { w: Math.max(160, 20 * 8.5 + 60), h: 48 };
+          }
+          return { w: 140, h: 46 };
+        }
+
+        // Rebuilds a tab's blocks and connectors from a statement tree.
+        // Block ids are reused where possible so the rest of the editor still
+        // recognises them. options.measure(node) gives each block's size.
+        function buildTab(tree, tab, options) {
+          options = options || {};
+          var newId = options.newId || defaultId;
+          var measure = options.measure || estimateSize;
+          var used = new Set();
+          var edges = [];
+          var finalCandidate = null;
+
+          function take(id, prefix) {
+            if (id && !used.has(id)) {
+              used.add(id);
+              return id;
+            }
+            var made = newId(prefix);
+            used.add(made);
+            return made;
+          }
+
+          function block(type, id, fields) {
+            var node = { id: take(id, "n"), type: type, x: 0, y: 0, text: "" };
+            Object.keys(fields || {}).forEach(function (key) { node[key] = fields[key]; });
+            return node;
+          }
+
+          function connect(open, to) {
+            open.forEach(function (port) {
+              edges.push({ id: newId("e"), from: port.from, port: port.port, to: to });
+            });
+          }
+
+          function single(node, open) {
+            var size = measure(node);
+            return { items: [{ node: node, dx: 0, dy: size.h / 2 }], h: size.h, left: -size.w / 2, right: size.w / 2, entry: node.id, open: open };
+          }
+
+          function empty() {
+            return { items: [], h: 0, left: 0, right: 0, entry: null, open: [] };
+          }
+
+          function place(frag, dx, dy, into) {
+            frag.items.forEach(function (item) {
+              into.items.push({ node: item.node, dx: item.dx + dx, dy: item.dy + dy });
+            });
+            into.left = Math.min(into.left, frag.left + dx);
+            into.right = Math.max(into.right, frag.right + dx);
+          }
+
+          function sequence(list, tail) {
+            var parts = [];
+            for (var i = 0; i < list.length; i += 1) {
+              var stmt = list[i];
+              if (stmt.k === "assign") {
+                var group = [stmt];
+                while (stmt.id && i + 1 < list.length && list[i + 1].k === "assign" && list[i + 1].id === stmt.id) {
+                  i += 1;
+                  group.push(list[i]);
+                }
+                var text = group.map(function (item) { return String(item.text || "").trim(); }).filter(Boolean).join("\n");
+                var processNode = block("process", stmt.id, { text: text });
+                parts.push(single(processNode, [{ from: processNode.id, port: "next" }]));
+                continue;
+              }
+              parts.push(statement(stmt, tail && i === list.length - 1));
+            }
+            var result = empty();
+            var y = 0;
+            var previous = null;
+            parts.forEach(function (part) {
+              if (previous) connect(previous.open, part.entry);
+              else result.entry = part.entry;
+              if (part.items.length) {
+                if (previous && previous.items.length) y += GAP;
+                place(part, 0, y, result);
+                y += part.h;
+              }
+              previous = part;
+            });
+            result.h = y;
+            result.open = previous ? previous.open : [];
+            return result;
+          }
+
+          function statement(stmt, tail) {
+            switch (stmt.k) {
+              case "input": {
+                var input = block("input", stmt.id, { text: stmt.text || "", inputType: stmt.inputType || "auto" });
+                return single(input, [{ from: input.id, port: "next" }]);
+              }
+              case "output": {
+                var output = block("output", stmt.id, { text: stmt.text || "" });
+                return single(output, [{ from: output.id, port: "next" }]);
+              }
+              case "call": {
+                var call = block("call", stmt.id, { calleeId: stmt.calleeId || "", args: (stmt.args || []).slice(), target: stmt.target || "" });
+                return single(call, [{ from: call.id, port: "next" }]);
+              }
+              case "end":
+              case "return": {
+                var bare = stmt.k === "end" || !String(stmt.text || "").trim();
+                if (bare && tail) {
+                  if (!finalCandidate && stmt.id) finalCandidate = stmt.id;
+                  var shared = empty();
+                  shared.entry = "@final";
+                  return shared;
+                }
+                if (stmt.k === "end") return single(block("end", stmt.id, {}), []);
+                return single(block("return", stmt.id, { text: stmt.text || "" }), []);
+              }
+              case "if": return ifFragment(stmt, tail);
+              case "while": return whileFragment(stmt);
+              case "repeat": return repeatFragment(stmt);
+            }
+            return empty();
+          }
+
+          function decisionNode(stmt) {
+            return block("decision", stmt.id, { text: stmt.text || "", trueSide: "bottom", falseSide: "right" });
+          }
+
+          function setSide(node, port, side) {
+            node[port === "true" ? "trueSide" : "falseSide"] = side;
+          }
+
+          function ifFragment(stmt, tail) {
+            var decision = decisionNode(stmt);
+            var size = measure(decision);
+            var thenPort = stmt.negated ? "false" : "true";
+            var elsePort = stmt.negated ? "true" : "false";
+            var whenThen = sequence(stmt.then || [], tail);
+            var whenElse = sequence(stmt["else"] || [], tail);
+            var result = { items: [{ node: decision, dx: 0, dy: size.h / 2 }], h: size.h, left: -size.w / 2, right: size.w / 2, entry: decision.id, open: [] };
+            var below = size.h + GAP;
+            if (!whenElse.entry) {
+              setSide(decision, thenPort, "bottom");
+              setSide(decision, elsePort, "right");
+              if (whenThen.entry) {
+                connect([{ from: decision.id, port: thenPort }], whenThen.entry);
+                place(whenThen, 0, below, result);
+                if (whenThen.items.length) result.h = below + whenThen.h;
+                result.open = whenThen.open.slice();
+              } else {
+                result.open.push({ from: decision.id, port: thenPort });
+              }
+              result.open.push({ from: decision.id, port: elsePort });
+              result.right = Math.max(result.right, size.w / 2 + 30) + 20;
+              return result;
+            }
+            setSide(decision, thenPort, "left");
+            setSide(decision, elsePort, "right");
+            var thenX = -Math.max(size.w / 2, whenThen.right + 30);
+            var elseX = Math.max(size.w / 2, -whenElse.left + 30);
+            if (whenThen.entry) {
+              connect([{ from: decision.id, port: thenPort }], whenThen.entry);
+              place(whenThen, thenX, below, result);
+              result.open = result.open.concat(whenThen.open);
+            } else {
+              result.open.push({ from: decision.id, port: thenPort });
+            }
+            connect([{ from: decision.id, port: elsePort }], whenElse.entry);
+            place(whenElse, elseX, below, result);
+            result.open = result.open.concat(whenElse.open);
+            result.h = below + Math.max(whenThen.h, whenElse.h);
+            return result;
+          }
+
+          function whileFragment(stmt) {
+            var decision = decisionNode(stmt);
+            var size = measure(decision);
+            var contPort = stmt.negated ? "false" : "true";
+            var exitPort = stmt.negated ? "true" : "false";
+            setSide(decision, contPort, "bottom");
+            setSide(decision, exitPort, "right");
+            var inner = sequence(stmt.body || [], false);
+            var result = { items: [{ node: decision, dx: 0, dy: size.h / 2 }], h: size.h, left: -size.w / 2, right: size.w / 2, entry: decision.id, open: [{ from: decision.id, port: exitPort }] };
+            var below = size.h + GAP;
+            if (inner.entry) {
+              connect([{ from: decision.id, port: contPort }], inner.entry);
+              place(inner, 0, below, result);
+              connect(inner.open, decision.id);
+              result.h = below + inner.h + 20;
+            } else {
+              connect([{ from: decision.id, port: contPort }], decision.id);
+            }
+            result.left -= 40;
+            result.right += 40;
+            return result;
+          }
+
+          function repeatFragment(stmt) {
+            var decision = decisionNode(stmt);
+            var size = measure(decision);
+            var exitPort = stmt.negated ? "false" : "true";
+            var contPort = stmt.negated ? "true" : "false";
+            setSide(decision, contPort, "left");
+            setSide(decision, exitPort, "bottom");
+            var inner = sequence(stmt.body || [], false);
+            var result = empty();
+            place(inner, 0, 0, result);
+            var top = inner.items.length ? inner.h + GAP : 0;
+            result.items.push({ node: decision, dx: 0, dy: top + size.h / 2 });
+            result.left = Math.min(result.left, -size.w / 2) - 40;
+            result.right = Math.max(result.right, size.w / 2);
+            result.h = top + size.h;
+            if (inner.entry) {
+              connect(inner.open, decision.id);
+              connect([{ from: decision.id, port: contPort }], inner.entry);
+              result.entry = inner.entry;
+            } else {
+              connect([{ from: decision.id, port: contPort }], decision.id);
+              result.entry = decision.id;
+            }
+            result.open = [{ from: decision.id, port: exitPort }];
+            return result;
+          }
+
+          var oldStart = (tab.nodes || []).filter(function (node) { return node.type === "start"; })[0];
+          var start = { id: take(oldStart ? oldStart.id : null, "n"), type: "start", x: 300, y: tab.kind === "sub" ? 110 : 60, text: "" };
+          var startSize = measure(start);
+          var body = sequence(tree, true);
+          var top = start.y + startSize.h / 2 + GAP;
+          var finalType = tab.kind === "sub" ? "return" : "end";
+          var needsFinal = !body.entry || body.open.length > 0 || edges.some(function (edge) { return edge.to === "@final"; }) || body.entry === "@final";
+          if (tab.kind === "main") needsFinal = true;
+          connect([{ from: start.id, port: "next" }], body.entry || "@final");
+          var nodes = [start];
+          var minLeft = body.left;
+          var offset = 300;
+          if (offset + minLeft < 60) offset = Math.ceil((60 - minLeft) / 10) * 10;
+          start.x = offset;
+          body.items.forEach(function (item) {
+            item.node.x = Math.round((offset + item.dx) / 10) * 10;
+            item.node.y = Math.round((top + item.dy) / 10) * 10;
+            nodes.push(item.node);
+          });
+          if (needsFinal) {
+            var oldFinal = (tab.nodes || []).filter(function (node) { return node.type === finalType && !String(node.text || "").trim(); })[0];
+            var finalNode = { id: take(finalCandidate || (oldFinal && oldFinal.id), "n"), type: finalType, x: offset, y: 0, text: "" };
+            var finalSize = measure(finalNode);
+            finalNode.y = Math.round((top + body.h + (body.items.length ? GAP : 0) + finalSize.h / 2) / 10) * 10;
+            nodes.push(finalNode);
+            connect(body.open, finalNode.id);
+            edges.forEach(function (edge) { if (edge.to === "@final") edge.to = finalNode.id; });
+          }
+          edges = edges.filter(function (edge) { return edge.to !== "@final"; });
+          var copy = {};
+          Object.keys(tab).forEach(function (key) { copy[key] = tab[key]; });
+          copy.nodes = nodes;
+          copy.edges = edges;
+          return copy;
+        }
+
+        /* ---------- Python text ---------- */
+
+        function subprogramMap(doc) {
+          var map = {};
+          doc.tabs.forEach(function (tab) { if (tab.kind === "sub") map[tab.id] = tab; });
+          return map;
+        }
+
+        // The cast written around input(): "int", "float" or "" for text.
+        function inputCast(stmt, types) {
+          var chosen = stmt.inputType && stmt.inputType !== "auto" ? stmt.inputType : (types && types.inputTypes[stmt.id]) || "string";
+          return CASTS[chosen] || "";
+        }
+
+        // Each code line for one tab as rows the code view draws. A row has
+        // kind, depth, the statement and its path in the tree.
+        function rowsFor(tree, depth) {
+          var rows = [];
+          function block(list, path, key, level, tail) {
+            var start = rows.length;
+            list.forEach(function (stmt, index) {
+              var at = path.concat([[key, index]]);
+              var isTail = tail && index === list.length - 1;
+              if ((stmt.k === "end" || (stmt.k === "return" && !stmt.text)) && isTail) return;
+              statement(stmt, at, level, isTail);
+            });
+            if (rows.length === start) rows.push({ kind: "pass", depth: level, path: path, key: key });
+          }
+          function statement(stmt, at, level, tail) {
+            if (stmt.k === "if") {
+              rows.push({ kind: "if", depth: level, stmt: stmt, path: at });
+              block(stmt.then, at, "then", level + 1, tail);
+              var current = stmt;
+              var currentPath = at;
+              while (current["else"].length === 1 && current["else"][0].k === "if") {
+                var nextPath = currentPath.concat([["else", 0]]);
+                current = current["else"][0];
+                currentPath = nextPath;
+                rows.push({ kind: "elif", depth: level, stmt: current, path: currentPath });
+                block(current.then, currentPath, "then", level + 1, tail);
+              }
+              if (current["else"].length) {
+                rows.push({ kind: "else", depth: level, stmt: current, path: currentPath });
+                block(current["else"], currentPath, "else", level + 1, tail);
+              }
+              return;
+            }
+            if (stmt.k === "while") {
+              rows.push({ kind: "while", depth: level, stmt: stmt, path: at });
+              block(stmt.body, at, "body", level + 1, false);
+              return;
+            }
+            if (stmt.k === "repeat") {
+              rows.push({ kind: "repeat", depth: level, stmt: stmt, path: at });
+              block(stmt.body, at, "body", level + 1, false);
+              rows.push({ kind: "until", depth: level + 1, stmt: stmt, path: at });
+              return;
+            }
+            rows.push({ kind: "simple", depth: level, stmt: stmt, path: at, tail: tail });
+          }
+          block(tree, [], "body", depth || 0, true);
+          return rows;
+        }
+
+        // Python text for one row, plus any problem that stops it being saved.
+        function rowText(row, tab, doc, types) {
+          var env = (types && types.envs[tab.id]) || {};
+          var problems = [];
+          function expr(text, what, negated) {
+            var result = exprToPython(text, env, negated);
+            if (!result.ok) problems.push(result.hole ? what + " is empty." : what + ": " + result.error);
+            return result.ok ? result.text : result.hole ? "…" : result.text;
+          }
+          function name(text, what) {
+            var value = String(text || "").trim();
+            if (!value) {
+              problems.push(what + " is empty.");
+              return "…";
+            }
+            var problem = L.nameProblem(value);
+            if (problem) problems.push(problem.message);
+            return value;
+          }
+          var stmt = row.stmt;
+          var text = "";
+          switch (row.kind) {
+            case "pass": text = "pass"; break;
+            case "if": text = "if " + expr(stmt.text, "The condition", stmt.negated) + ":"; break;
+            case "elif": text = "elif " + expr(stmt.text, "The condition", stmt.negated) + ":"; break;
+            case "else": text = "else:"; break;
+            case "while": text = "while " + expr(stmt.text, "The condition", stmt.negated) + ":"; break;
+            case "repeat": text = "while True:"; break;
+            case "until": text = "if " + expr(stmt.text, "The condition", stmt.negated) + ": break"; break;
+            case "simple":
+              switch (stmt.k) {
+                case "assign": {
+                  var parts = splitAssignment(stmt.text);
+                  text = name(parts.target, "The variable name") + " = " + expr(parts.expr, "The value");
+                  break;
+                }
+                case "input": {
+                  var cast = inputCast(stmt, types);
+                  text = name(stmt.text, "The input variable") + " = " + (cast ? cast + "(input())" : "input()");
+                  break;
+                }
+                case "output": text = "print(" + expr(stmt.text, "The value to print") + ")"; break;
+                case "call": {
+                  var sub = subprogramMap(doc)[stmt.calleeId];
+                  if (!sub) {
+                    problems.push("Choose which subprogram to call.");
+                    text = "…()";
+                    break;
+                  }
+                  var params = L.parseParams(sub.paramsText).params;
+                  var args = params.map(function (param, index) { return expr((stmt.args || [])[index], "The value for " + param); });
+                  text = (stmt.target ? name(stmt.target, "The result variable") + " = " : "") + sub.name + "(" + args.join(", ") + ")";
+                  break;
+                }
+                case "return": {
+                  var value = String(stmt.text || "").trim();
+                  text = value ? "return " + expr(value, "The return value") : "return";
+                  break;
+                }
+                case "end": text = "exit()"; break;
+              }
+              break;
+          }
+          return { text: text, problems: problems };
+        }
+
+        function treeUsesRandom(doc) {
+          return doc.tabs.some(function (tab) {
+            return tab.nodes.some(function (node) {
+              var sources = [];
+              if (node.type === "process") processLines(node.text).forEach(function (line) { sources.push(splitAssignment(line).expr); });
+              else if (node.type === "call") sources = (node.args || []).slice();
+              else sources.push(L.cleanCondition(node.text));
+              return sources.some(function (source) { return usesRandom(tryParse(source)); });
+            });
+          });
+        }
+
+        function orderedTabs(doc) {
+          var subs = doc.tabs.filter(function (tab) { return tab.kind === "sub"; });
+          var main = doc.tabs.filter(function (tab) { return tab.kind === "main"; });
+          return subs.concat(main);
+        }
+
+        // The whole document as a Python program. ok is false while any tab
+        // can't be structured or any slot is empty or invalid.
+        function toPython(doc) {
+          var types = inferTypes(doc);
+          var out = [];
+          var problems = [];
+          if (treeUsesRandom(doc)) out.push("import random");
+          orderedTabs(doc).forEach(function (tab) {
+            var structured = structureTab(tab);
+            var label = tab.kind === "main" ? "Main" : tab.name;
+            if (out.length) out.push("", "");
+            if (tab.kind === "sub") {
+              var nameProblem = L.nameProblem(String(tab.name || "").trim(), "The subprogram name");
+              if (nameProblem) problems.push({ tabId: tab.id, nodeId: null, message: label + ": " + nameProblem.message });
+              var paramsError = L.parseParams(tab.paramsText).error;
+              if (paramsError) problems.push({ tabId: tab.id, nodeId: null, message: label + ": " + paramsError.message });
+              out.push("def " + tab.name + "(" + L.parseParams(tab.paramsText).params.join(", ") + "):");
+            }
+            var depth = tab.kind === "sub" ? 1 : 0;
+            if (!structured.ok) {
+              problems.push({ tabId: tab.id, nodeId: structured.nodeIds[0] || null, message: label + ": " + structured.message });
+              out.push(indent(depth) + "# " + structured.message);
+              out.push(indent(depth) + "pass");
+              return;
+            }
+            rowsFor(structured.body, depth).forEach(function (row) {
+              var line = rowText(row, tab, doc, types);
+              line.problems.forEach(function (message) {
+                problems.push({ tabId: tab.id, nodeId: row.stmt ? row.stmt.id : null, message: label + ": " + message });
+              });
+              out.push(indent(row.depth) + line.text);
+            });
+          });
+          return { ok: problems.length === 0, text: out.join("\n") + "\n", problems: problems };
+        }
+
+        function indent(depth) {
+          return new Array(depth + 1).join("    ");
+        }
+
+        /* ---------- Python text -> flowchart ---------- */
+
+        function PyError(line, message) {
+          this.line = line;
+          this.message = message;
+        }
+
+        // Removes a # comment that isn't inside a string.
+        function stripComment(text) {
+          var quoteChar = null;
+          for (var i = 0; i < text.length; i += 1) {
+            var ch = text[i];
+            if (quoteChar) {
+              if (ch === quoteChar) quoteChar = null;
+            } else if (ch === "\"" || ch === "'") {
+              quoteChar = ch;
+            } else if (ch === "#") {
+              return text.slice(0, i);
+            }
+          }
+          return text;
+        }
+
+        // Finds the colon that ends an if/while/def header.
+        function headerColon(text) {
+          var quoteChar = null;
+          var depth = 0;
+          for (var i = 0; i < text.length; i += 1) {
+            var ch = text[i];
+            if (quoteChar) {
+              if (ch === quoteChar) quoteChar = null;
+            } else if (ch === "\"" || ch === "'") quoteChar = ch;
+            else if (ch === "(" || ch === "[") depth += 1;
+            else if (ch === ")" || ch === "]") depth -= 1;
+            else if (ch === ":" && depth === 0) return i;
+          }
+          return -1;
+        }
+
+        function splitTopLevel(text) {
+          var parts = [];
+          var quoteChar = null;
+          var depth = 0;
+          var current = "";
+          for (var i = 0; i < text.length; i += 1) {
+            var ch = text[i];
+            if (quoteChar) {
+              if (ch === quoteChar) quoteChar = null;
+            } else if (ch === "\"" || ch === "'") quoteChar = ch;
+            else if (ch === "(") depth += 1;
+            else if (ch === ")") depth -= 1;
+            else if (ch === "," && depth === 0) {
+              parts.push(current.trim());
+              current = "";
+              continue;
+            }
+            current += ch;
+          }
+          if (current.trim() || parts.length) parts.push(current.trim());
+          return parts;
+        }
+
+        // Reads Python written in the subset the flowchart supports.
+        // Returns { ok: true, doc } or { ok: false, line, message }.
+        function parsePython(source, options) {
+          options = options || {};
+          var newId = options.newId || defaultId;
+          try {
+            return { ok: true, doc: parsePythonOrThrow(String(source || ""), options, newId) };
+          } catch (error) {
+            if (error instanceof PyError) return { ok: false, line: error.line, message: "Line " + error.line + ": " + error.message };
+            throw error;
+          }
+        }
+
+        function parsePythonOrThrow(source, options, newId) {
+          var lines = [];
+          source.replace(/\t/g, "    ").split(/\r?\n/).forEach(function (raw, index) {
+            var text = stripComment(raw).replace(/\s+$/, "");
+            if (!text.trim()) return;
+            var indentWidth = text.match(/^ */)[0].length;
+            lines.push({ number: index + 1, indent: indentWidth, text: text.trim() });
+          });
+
+          var defs = [];
+          lines.forEach(function (line) {
+            var match = line.indent === 0 && line.text.match(/^def\s+([A-Za-z_]\w*)\s*\(/);
+            if (match) defs.push(match[1]);
+          });
+          var subs = {};
+          defs.forEach(function (name) {
+            if (subs[name]) throw new PyError(0, "There are two subprograms called " + name + ".");
+            subs[name] = { id: newId("sub"), name: name, params: [], body: [] };
+          });
+
+          var position = 0;
+
+          function expression(text, number) {
+            try {
+              return pythonToPseudo(text, defs);
+            } catch (error) {
+              if (error instanceof L.FlowError) throw new PyError(number, error.message + (error.hint ? " " + error.hint : ""));
+              throw error;
+            }
+          }
+
+          function checkName(name, number, what) {
+            var problem = L.nameProblem(name, what);
+            if (problem) throw new PyError(number, problem.message);
+          }
+
+          function block(level, context) {
+            var out = [];
+            while (position < lines.length) {
+              var line = lines[position];
+              if (line.indent < level) break;
+              if (line.indent > level) throw new PyError(line.number, "This line is indented more than the line above it.");
+              position += 1;
+              statement(line, level, context, out);
+            }
+            return out;
+          }
+
+          function body(header, level, context, inline) {
+            if (inline) {
+              var out = [];
+              statement({ number: header.number, indent: level + 1, text: inline }, level + 1, context, out);
+              return out;
+            }
+            var next = lines[position];
+            if (!next || next.indent <= level) throw new PyError(header.number, "The lines after this : need to be indented.");
+            return block(next.indent, context);
+          }
+
+          function ifStatement(line, level, context, condText, inline) {
+            var stmt = { k: "if", id: null, text: expression(condText, line.number), negated: false, then: body(line, level, context, inline), "else": [] };
+            var next = lines[position];
+            if (next && next.indent === level) {
+              var elif = next.text.match(/^elif\s+(.*)$/);
+              if (elif) {
+                position += 1;
+                var colon = headerColon(elif[1]);
+                if (colon < 0) throw new PyError(next.number, "elif needs a : at the end.");
+                stmt["else"] = [ifStatement(next, level, context, elif[1].slice(0, colon).trim(), elif[1].slice(colon + 1).trim())];
+              } else if (/^else\s*:/.test(next.text)) {
+                position += 1;
+                stmt["else"] = body(next, level, context, next.text.replace(/^else\s*:/, "").trim());
+              }
+            }
+            return stmt;
+          }
+
+          function statement(line, level, context, out) {
+            var text = line.text;
+            var number = line.number;
+            var match;
+            if (/^(import\s+(random|sys)|from\s+random\s+import\s+randint)$/.test(text)) {
+              if (level !== 0 || context.sub) throw new PyError(number, "Put import lines at the top of the file.");
+              return;
+            }
+            if (/^(import|from)\b/.test(text)) throw new PyError(number, "Only import random can be used.");
+            if ((match = text.match(/^def\s+([A-Za-z_]\w*)\s*\((.*)\)\s*:\s*(.*)$/))) {
+              if (level !== 0 || context.sub) throw new PyError(number, "def can only be used at the left margin, not inside other code.");
+              var sub = subs[match[1]];
+              checkName(match[1], number, "The subprogram name");
+              var parsed = L.parseParams(match[2]);
+              if (parsed.error) throw new PyError(number, parsed.error.message);
+              sub.params = parsed.params;
+              sub.body = body(line, level, { sub: sub }, match[3].trim());
+              return;
+            }
+            if (/^for\b/.test(text)) throw new PyError(number, "for loops aren't supported yet. Use a while loop with a counter instead.");
+            if (/^(elif|else)\b/.test(text)) throw new PyError(number, text.split(/\s|:/)[0] + " must follow an if.");
+            if ((match = text.match(/^if\s+(.*)$/))) {
+              var colon = headerColon(match[1]);
+              if (colon < 0) throw new PyError(number, "if needs a : at the end.");
+              var cond = match[1].slice(0, colon).trim();
+              var rest = match[1].slice(colon + 1).trim();
+              if (rest === "break" || (!rest && lines[position] && lines[position].indent > level && lines[position].text === "break" && !(lines[position + 1] && lines[position + 1].indent > level))) {
+                if (!context.repeat) throw new PyError(number, "break can only be used as the last line of a while True: loop.");
+                if (!rest) position += 1;
+                var next = lines[position];
+                if (next && next.indent === level && /^(elif|else)\b/.test(next.text)) throw new PyError(next.number, "An if … break line can't have elif or else.");
+                if (next && next.indent >= level) throw new PyError(next.number, "if … break must be the last line of its while True: loop.");
+                out.push({ k: "break", text: expression(cond, number), number: number });
+                return;
+              }
+              out.push(ifStatement(line, level, context, cond, rest));
+              return;
+            }
+            if ((match = text.match(/^while\s+(.*)$/))) {
+              var whileColon = headerColon(match[1]);
+              if (whileColon < 0) throw new PyError(number, "while needs a : at the end.");
+              var condition = match[1].slice(0, whileColon).trim();
+              var inline = match[1].slice(whileColon + 1).trim();
+              if (condition === "True") {
+                var inner = body(line, level, { sub: context.sub, repeat: true }, inline);
+                var last = inner[inner.length - 1];
+                if (!last || last.k !== "break") throw new PyError(number, "A while True: loop must end with an if …: break line.");
+                inner.pop();
+                if (!inner.length) throw new PyError(number, "This loop needs at least one statement before the break.");
+                out.push({ k: "repeat", id: null, text: last.text, negated: false, body: inner });
+                return;
+              }
+              var loopBody = body(line, level, { sub: context.sub }, inline);
+              if (!loopBody.length) throw new PyError(number, "A while loop needs at least one statement inside it.");
+              if (loopBody.some(function (item) { return item.k === "break"; })) throw new PyError(number, "break can only be used as the last line of a while True: loop.");
+              out.push({ k: "while", id: null, text: expression(condition, number), negated: false, body: loopBody });
+              return;
+            }
+            if (text === "pass") return;
+            if (text === "break") throw new PyError(number, "break can only be used as if …: break at the end of a while True: loop.");
+            if (text === "continue") throw new PyError(number, "continue isn't supported.");
+            if ((match = text.match(/^return\b\s*(.*)$/))) {
+              if (!context.sub) throw new PyError(number, "return can only be used inside a def.");
+              out.push({ k: "return", id: null, text: match[1].trim() ? expression(match[1].trim(), number) : "" });
+              return;
+            }
+            if (/^(exit|quit|sys\.exit)\(\s*\)$/.test(text)) {
+              if (context.sub) throw new PyError(number, "Use return to leave a subprogram.");
+              out.push({ k: "end", id: null });
+              return;
+            }
+            if ((match = text.match(/^print\s*\((.*)\)$/))) {
+              var args = splitTopLevel(match[1]);
+              if (args.some(function (arg) { return /^\w+\s*=[^=]/.test(arg); })) throw new PyError(number, "print can't use sep= or end= here.");
+              if (!args.length || (args.length === 1 && !args[0])) {
+                out.push({ k: "output", id: null, text: "\"\"" });
+                return;
+              }
+              // print(a, b) puts a space between the values; adjacent text is
+              // joined so print("Total:", t) becomes "Total: " + t.
+              var pieces = [];
+              args.forEach(function (arg, index) {
+                var ast;
+                try {
+                  ast = L.parseExpression(arg, { dialect: "python", subprogramNames: defs });
+                } catch (error) {
+                  if (error instanceof L.FlowError) throw new PyError(number, error.message + (error.hint ? " " + error.hint : ""));
+                  throw error;
+                }
+                if (index > 0) pieces.push({ k: "lit", value: { type: "STRING", v: " " } });
+                pieces.push(ast);
+              });
+              var folded = [];
+              pieces.forEach(function (piece) {
+                var last = folded[folded.length - 1];
+                var isText = piece.k === "lit" && piece.value.type === "STRING";
+                if (isText && last && last.k === "lit" && last.value.type === "STRING") {
+                  folded[folded.length - 1] = { k: "lit", value: { type: "STRING", v: last.value.v + piece.value.v } };
+                } else {
+                  folded.push(piece);
+                }
+              });
+              var printed = folded.reduce(function (left, right) { return left ? { k: "bin", op: "+", l: left, r: right } : right; }, null);
+              out.push({ k: "output", id: null, text: printPseudo(printed) });
+              return;
+            }
+            if (/^[A-Za-z_]\w*\s*(\+|-|\*|\/|\/\/|%|\*\*)=/.test(text)) {
+              var target = text.match(/^\w+/)[0];
+              throw new PyError(number, "Write the assignment in full, e.g. " + target + " = " + target + " + 1");
+            }
+            if ((match = text.match(/^([A-Za-z_]\w*)\s*=(?!=)\s*(.*)$/))) {
+              var name = match[1];
+              var value = match[2].trim();
+              checkName(name, number, "The variable name");
+              var input = value.match(/^(?:(int|float|str)\s*\(\s*)?input\s*\((.*)\)\s*$/);
+              if (input) {
+                var promptText = input[2];
+                if (input[1]) {
+                  if (!/\)\s*$/.test(promptText)) throw new PyError(number, input[1] + "(input()) is missing a ).");
+                  promptText = promptText.replace(/\)\s*$/, "");
+                }
+                if (promptText.trim()) out.push({ k: "output", id: null, text: expression(promptText.trim(), number) });
+                var kind = input[1] === "int" ? "int" : input[1] === "float" ? "real" : "string";
+                out.push({ k: "input", id: null, text: name, inputType: kind });
+                return;
+              }
+              var callMatch = value.match(/^([A-Za-z_]\w*)\s*\((.*)\)$/);
+              if (callMatch && subs[callMatch[1]] && splitTopLevel("(" + callMatch[2] + ")").length === 1) {
+                out.push(callStatement(callMatch[1], callMatch[2], name, number));
+                return;
+              }
+              out.push({ k: "assign", id: null, text: name + " = " + expression(value, number) });
+              return;
+            }
+            if ((match = text.match(/^([A-Za-z_]\w*)\s*\((.*)\)$/))) {
+              if (subs[match[1]]) {
+                out.push(callStatement(match[1], match[2], "", number));
+                return;
+              }
+              if (match[1] === "input") throw new PyError(number, "Store the input in a variable, e.g. name = input()");
+              throw new PyError(number, match[1] + "() can't be used on its own line here.");
+            }
+            throw new PyError(number, "This line isn't supported in the flowchart: " + text);
+          }
+
+          function callStatement(name, argText, target, number) {
+            var args = argText.trim() ? splitTopLevel(argText).map(function (arg) { return expression(arg, number); }) : [];
+            return { k: "call", id: null, calleeId: subs[name].id, args: args, target: target, calleeName: name, number: number };
+          }
+
+          var main = block(0, {});
+          if (position < lines.length) throw new PyError(lines[position].number, "This line is indented more than the line above it.");
+
+          // Calls must give each parameter a value.
+          function checkCalls(list) {
+            list.forEach(function (stmt) {
+              if (stmt.k === "call") {
+                var callee = subs[stmt.calleeName];
+                if (stmt.args.length !== callee.params.length) {
+                  throw new PyError(stmt.number, stmt.calleeName + " takes " + callee.params.length + " value" + (callee.params.length === 1 ? "" : "s") + " but was given " + stmt.args.length + ".");
+                }
+                delete stmt.calleeName;
+                delete stmt.number;
+              }
+              ["then", "else", "body"].forEach(function (key) { if (stmt[key]) checkCalls(stmt[key]); });
+            });
+          }
+          checkCalls(main);
+          defs.forEach(function (name) { checkCalls(subs[name].body); });
+
+          var tabs = [{ id: "main", kind: "main", name: "Main", paramsText: "", nodes: [], edges: [] }];
+          defs.forEach(function (name) {
+            tabs.push({ id: subs[name].id, kind: "sub", name: name, paramsText: subs[name].params.join(", "), nodes: [], edges: [] });
+          });
+          var shell = { tabs: tabs };
+          var buildOptions = { newId: newId };
+          var built = tabs.map(function (tab, index) {
+            var tree = index === 0 ? main : subs[defs[index - 1]].body;
+            buildOptions.measure = options.measure ? function (node) { return options.measure(node, tab, shell); } : null;
+            return buildTab(tree, tab, buildOptions);
+          });
+          return { tabs: built };
+        }
+
+        /* ---------- Editing statement trees ---------- */
+
+        function cloneTree(value) {
+          return JSON.parse(JSON.stringify(value));
+        }
+
+        function listAt(root, path, key) {
+          var node = root;
+          path.forEach(function (step) { node = node[step[0]][step[1]]; });
+          return node[key];
+        }
+
+        function stmtAt(root, path) {
+          var node = root;
+          path.forEach(function (step) { node = node[step[0]][step[1]]; });
+          return node;
+        }
+
+        // Loops need at least one statement, otherwise their decision would
+        // point at itself.
+        function emptyLoop(list) {
+          for (var i = 0; i < list.length; i += 1) {
+            var stmt = list[i];
+            if ((stmt.k === "while" || stmt.k === "repeat") && !stmt.body.length) return true;
+            if (["then", "else", "body"].some(function (key) { return stmt[key] && emptyLoop(stmt[key]); })) return true;
+          }
+          return false;
+        }
+
+        // Moves the statement at path up or down one place. At the start or
+        // end of a block it steps out to just before or after that block.
+        function moveStatement(root, path, direction) {
+          var copy = cloneTree(root);
+          var parentPath = path.slice(0, -1);
+          var key = path[path.length - 1][0];
+          var index = path[path.length - 1][1];
+          var list = listAt(copy, parentPath, key);
+          var stmt = list[index];
+          var target = index + direction;
+          if (target >= 0 && target < list.length) {
+            list.splice(index, 1);
+            list.splice(target, 0, stmt);
+            return { root: copy, path: parentPath.concat([[key, target]]) };
+          }
+          if (!parentPath.length) return null;
+          list.splice(index, 1);
+          var outerPath = parentPath.slice(0, -1);
+          var outerKey = parentPath[parentPath.length - 1][0];
+          var outerIndex = parentPath[parentPath.length - 1][1];
+          var outer = listAt(copy, outerPath, outerKey);
+          var insertAt = direction < 0 ? outerIndex : outerIndex + 1;
+          outer.splice(insertAt, 0, stmt);
+          return { root: copy, path: outerPath.concat([[outerKey, insertAt]]) };
+        }
+
+        return {
+          CodeError: CodeError,
+          printPseudo: printPseudo,
+          printPython: printPython,
+          negate: negate,
+          exprToPython: exprToPython,
+          pythonToPseudo: pythonToPseudo,
+          splitAssignment: splitAssignment,
+          joinAssignment: joinAssignment,
+          processLines: processLines,
+          inferTypes: inferTypes,
+          inputCast: inputCast,
+          structureTab: structureTab,
+          buildTab: buildTab,
+          rowsFor: rowsFor,
+          rowText: rowText,
+          toPython: toPython,
+          parsePython: parsePython,
+          cloneTree: cloneTree,
+          listAt: listAt,
+          stmtAt: stmtAt,
+          emptyLoop: emptyLoop,
+          moveStatement: moveStatement,
+        };
       })();
     </script>
 
@@ -1603,8 +3461,9 @@
           }
           case "input":
           case "output": {
+            const typed = node.type === "input" && node.inputType && node.inputType !== "auto";
             const lines = [
-              { text: node.type.toUpperCase(), kind: "key" },
+              { text: typed ? "INPUT (" + FlowLang.INPUT_TYPES[node.inputType].label + ")" : node.type.toUpperCase(), kind: "key" },
               text.trim() ? { text: text.trim(), kind: "code" } : { text: node.type === "input" ? "variable" : "value", kind: "hint" },
             ];
             return { shape: "io", lines, w: Math.max(150, widest(lines) + 44 + SKEW), h: 58 };
@@ -2371,6 +4230,11 @@
         return `M${end.x} ${end.y} L${a.x} ${a.y} L${b.x} ${b.y} Z`;
       }
 
+      function measureBlock(node, tab, doc) {
+        const layout = blockLayout(node, tab, doc);
+        return { w: layout.w, h: layout.h };
+      }
+
       function computeLayouts(tab, doc, editingId) {
         const layouts = new Map();
         tab.nodes.forEach((node) => layouts.set(node.id, blockLayout(node, tab, doc, node.id === editingId)));
@@ -2425,6 +4289,7 @@
           node.args = [];
           node.target = "";
         }
+        if (type === "input") node.inputType = "auto";
         return node;
       }
 
@@ -2544,6 +4409,9 @@
                 clean.trueSide = SIDES.has(node.trueSide) ? node.trueSide : "bottom";
                 clean.falseSide = SIDES.has(node.falseSide) && node.falseSide !== clean.trueSide ? node.falseSide : clean.trueSide === "right" ? "bottom" : "right";
               }
+              if (node.type === "input") {
+                clean.inputType = FlowLang.INPUT_TYPES[node.inputType] ? node.inputType : "auto";
+              }
               if (node.type === "call") {
                 clean.calleeId = typeof node.calleeId === "string" ? node.calleeId : "";
                 clean.args = Array.isArray(node.args) ? node.args.map((arg) => String(arg ?? "")) : [];
@@ -2593,7 +4461,7 @@
       function logicKey(doc) {
         return JSON.stringify(doc.tabs.map((tab) => [
           tab.id, tab.kind, tab.name, tab.paramsText,
-          tab.nodes.map((node) => [node.id, node.type, node.text, node.calleeId, node.args, node.target]),
+          tab.nodes.map((node) => [node.id, node.type, node.text, node.calleeId, node.args, node.target, node.inputType]),
           tab.edges.map((edge) => [edge.from, edge.port, edge.to]),
         ]));
       }
@@ -3519,7 +5387,7 @@
       function Inspector(props) {
         const {
           doc, tab, selection, problems, fieldApi, editKey, variables,
-          onUpdateNode, onUpdateTab, onDeleteTab, onDeleteSelection, onCreateSub, onShowTab,
+          onUpdateNode, onCommitNode, onUpdateTab, onDeleteTab, onDeleteSelection, onCreateSub, onShowTab,
           chosenPort, onChoosePort, onSwapLabels, onReplace,
         } = props;
         const node = selection && selection.kind === "node" ? tab.nodes.find((item) => item.id === selection.id) : null;
@@ -3647,10 +5515,25 @@
                     onChange={(text) => update({ text })}
                     onNormalise={(text) => FlowLang.stripKeyword(text, "INPUT").trim()}
                     placeholder="guess"
-                    help="Whole numbers are stored as INT, decimals as REAL and anything else as STRING."
+                    help={node.inputType && node.inputType !== "auto" ? "What is typed is converted to this data type; anything else stops the program with an error, as in Python." : "Auto: whole numbers are stored as INT, decimals as REAL and anything else as STRING."}
                     fieldApi={fieldApi}
                     focusKey={editFocus}
                   />
+                  <label className="flex flex-col gap-1 text-sm font-semibold">
+                    Data type
+                    <select
+                      value={node.inputType || "auto"}
+                      onChange={(event) => onCommitNode(node.id, { inputType: event.target.value })}
+                      className={fieldClass + " font-sans"}
+                    >
+                      {Object.keys(FlowLang.INPUT_TYPES).map((key) => (
+                        <option key={key} value={key}>
+                          {FlowLang.INPUT_TYPES[key].label}
+                          {FlowLang.INPUT_TYPES[key].python ? " — " + FlowLang.INPUT_TYPES[key].python + "(input()) in Python" : " — decided by how it is used"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <Chips label="Variables" items={variableChips} onInsert={fieldApi.insert} mono />
                 </div>
               );
@@ -3965,7 +5848,7 @@
       /* ---------------------------------------------------------------
          Run panel
          --------------------------------------------------------------- */
-      function RunPanel({ runner, doc, autoRun, speed, onSpeed, onStep, onRun, onPause, onRestart, onStop, onInput, onEditError, limitNotice }) {
+      function RunPanel({ runner, doc, autoRun, speed, onSpeed, onStep, onRun, onPause, onRestart, onStop, onInput, onEditError, limitNotice, backLabel }) {
         const state = runner.state;
         const [inputValue, setInputValue] = useState("");
         const inputRef = useRef(null);
@@ -4033,7 +5916,7 @@
                   </select>
                 </label>
                 <button type="button" className={smallButton} onClick={onStop}>
-                  ✎ Back to Design
+                  {backLabel || "✎ Back to Design"}
                 </button>
               </div>
             </section>
@@ -4381,6 +6264,826 @@
       /* ---------------------------------------------------------------
          App
          --------------------------------------------------------------- */
+      /* ---------------------------------------------------------------
+         Code view: the whole program as Python. Keywords are fixed and
+         each value is an editable slot that only accepts valid Python, so
+         the code can never hold a syntax error. Typing in a slot updates
+         that block's text; adding, deleting or moving a statement rebuilds
+         the tab's flowchart with a tidy layout.
+         --------------------------------------------------------------- */
+      const CODE_STATEMENTS = [
+        { type: "assign", label: "Assignment", code: "x = …" },
+        { type: "input", label: "Input", code: "x = input()" },
+        { type: "output", label: "Print", code: "print(…)" },
+        { type: "if", label: "If", code: "if …:" },
+        { type: "ifelse", label: "If / else", code: "if … else:" },
+        { type: "while", label: "While loop", code: "while …:" },
+        { type: "repeat", label: "Repeat loop", code: "while True: … break" },
+        { type: "call", label: "Subprogram call", code: "Name(…)" },
+        { type: "return", label: "Return", code: "return …", subOnly: true },
+      ];
+
+      const holeStatement = () => ({ k: "assign", id: null, text: "" });
+
+      function newStatement(type, doc) {
+        switch (type) {
+          case "input": return { k: "input", id: null, text: "", inputType: "auto" };
+          case "output": return { k: "output", id: null, text: "" };
+          case "if": return { k: "if", id: null, text: "", negated: false, then: [holeStatement()], else: [] };
+          case "ifelse": return { k: "if", id: null, text: "", negated: false, then: [holeStatement()], else: [holeStatement()] };
+          case "while": return { k: "while", id: null, text: "", negated: false, body: [holeStatement()] };
+          case "repeat": return { k: "repeat", id: null, text: "", negated: false, body: [holeStatement()] };
+          case "call": {
+            const sub = doc.tabs.find((item) => item.kind === "sub");
+            return { k: "call", id: null, calleeId: sub ? sub.id : "", args: [], target: "" };
+          }
+          case "return": return { k: "return", id: null, text: "" };
+        }
+        return holeStatement();
+      }
+
+      const isTerminalStatement = (stmt) => !!stmt && (stmt.k === "end" || stmt.k === "return");
+
+      // A new statement goes after the selected line, first inside a selected
+      // if / else / loop header, or otherwise at the end of the program.
+      function insertStatement(root, row, stmt) {
+        let path = [];
+        let key = "body";
+        let index = null;
+        if (row) {
+          const at = row.path;
+          switch (row.kind) {
+            case "pass": path = at; key = row.key; index = 0; break;
+            case "if": case "elif": path = at; key = "then"; index = 0; break;
+            case "else": path = at; key = "else"; index = 0; break;
+            case "while": case "repeat": path = at; key = "body"; index = 0; break;
+            case "until": path = at; key = "body"; index = FlowCode.stmtAt(root, at).body.length; break;
+            default: {
+              path = at.slice(0, -1);
+              key = at[at.length - 1][0];
+              const position = at[at.length - 1][1];
+              const siblings = FlowCode.listAt(root, path, key);
+              index = isTerminalStatement(siblings[position]) ? position : position + 1;
+            }
+          }
+        }
+        const list = FlowCode.listAt(root, path, key);
+        if (index === null) index = list.length && isTerminalStatement(list[list.length - 1]) ? list.length - 1 : list.length;
+        list.splice(index, 0, stmt);
+        return { root, path: path.concat([[key, index]]) };
+      }
+
+      function chainEnd(stmt) {
+        let current = stmt;
+        while (current.else.length === 1 && current.else[0].k === "if") current = current.else[0];
+        return current;
+      }
+
+      function rowKey(row) {
+        return row.kind + ":" + JSON.stringify(row.path) + ":" + (row.key || "");
+      }
+
+      function codeCheck(kind, subNames) {
+        return (text) => {
+          const value = text.trim();
+          if (!value) return { ok: true, value: "" };
+          if (kind === "name") {
+            const problem = FlowLang.nameProblem(value);
+            return problem ? { ok: false, error: problem.message + (problem.hint ? " " + problem.hint : "") } : { ok: true, value };
+          }
+          try {
+            return { ok: true, value: FlowCode.pythonToPseudo(value, subNames) };
+          } catch (error) {
+            if (!(error instanceof FlowLang.FlowError)) throw error;
+            return { ok: false, error: error.message + (error.hint ? " " + error.hint : "") };
+          }
+        };
+      }
+
+      function CodeSlot({ value, invalid, label, placeholder, check, onValid, onStart, onEnd, faint }) {
+        const [draft, setDraft] = useState(null);
+        const [error, setError] = useState(null);
+        const shown = draft === null ? value : draft;
+        const chars = (String(shown).length || (placeholder ? placeholder.length : 1)) + 0.6;
+        const hole = !String(shown).trim();
+        return (
+          <span className="relative inline-block align-baseline">
+            <input
+              type="text"
+              value={shown}
+              aria-label={label}
+              aria-invalid={error || invalid ? "true" : undefined}
+              placeholder={placeholder}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
+              style={{ width: `calc(${chars}ch + 0.6rem)` }}
+              onFocus={() => {
+                setDraft(value);
+                onStart();
+              }}
+              onChange={(event) => {
+                const text = event.target.value;
+                setDraft(text);
+                const result = check(text);
+                if (result.ok) {
+                  setError(null);
+                  onValid(result.value);
+                } else {
+                  setError(result.error);
+                }
+              }}
+              onBlur={() => {
+                setDraft(null);
+                setError(null);
+                onEnd();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === "Escape") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+              className={
+                "fc-mono fc-code-slot rounded border px-1 py-0 text-[15px] leading-6 focus:outline-none focus:ring-2 " +
+                (error
+                  ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-400/50 dark:border-red-400 dark:bg-red-950 dark:text-red-100"
+                  : invalid
+                    ? "border-red-400 bg-red-50 text-red-900 underline decoration-wavy decoration-red-500 focus:ring-indigo-500/40 dark:border-red-500 dark:bg-red-950/60 dark:text-red-100"
+                    : hole && faint
+                      ? "border-dashed border-slate-300 bg-transparent text-slate-900 placeholder:text-slate-500 opacity-70 focus:opacity-100 focus:ring-indigo-500/40 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400"
+                    : hole
+                      ? "border-dashed border-amber-500 bg-amber-50 text-slate-900 placeholder:text-amber-700 focus:ring-indigo-500/40 dark:border-amber-400 dark:bg-amber-950/40 dark:text-slate-100 dark:placeholder:text-amber-300"
+                      : "border-transparent bg-slate-100 text-slate-900 hover:border-slate-300 focus:border-indigo-500 focus:bg-white focus:ring-indigo-500/40 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600 dark:focus:bg-slate-950") +
+                ""
+              }
+            />
+            {error && (
+              <span
+                role="alert"
+                className="absolute left-0 top-full z-30 mt-1 w-max max-w-[20rem] whitespace-normal rounded-md border border-red-300 bg-red-50 px-2 py-1 font-sans text-xs font-semibold leading-snug text-red-900 shadow-md dark:border-red-700 dark:bg-red-950 dark:text-red-100"
+              >
+                {error}
+                <span className="mt-0.5 block font-normal">Not applied yet: leaving this box undoes the change.</span>
+              </span>
+            )}
+          </span>
+        );
+      }
+
+      const kwClass = "font-bold text-purple-700 dark:text-purple-300";
+      const fnClass = "font-semibold text-sky-800 dark:text-sky-300";
+      const punctClass = "text-slate-500 dark:text-slate-400";
+
+      function CodeRow({ tab, doc, row, env, types, subNames, selected, onSelect, slotApi, edit, commitEdit, onTree }) {
+        const stmt = row.stmt;
+        const expr = (text, negated) => FlowCode.exprToPython(text, env, negated);
+        const checkExpr = codeCheck("expr", subNames);
+        const checkName = codeCheck("name", subNames);
+        const slot = (props) => <CodeSlot onStart={slotApi.start} onEnd={slotApi.end} {...props} />;
+        const patch = (nodeId, fields) => edit((value) => patchNode(value, tab.id, nodeId, fields));
+
+        const setCondition = (text) => edit((value) => mapTab(value, tab.id, (item) => {
+          const node = item.nodes.find((other) => other.id === stmt.id);
+          if (!node) return item;
+          if (!stmt.negated) return { ...item, nodes: item.nodes.map((other) => (other.id === stmt.id ? { ...other, text } : other)) };
+          // The code shows the opposite of this decision's condition, so the
+          // new condition is stored with True and False swapped round.
+          const flip = { true: "false", false: "true" };
+          return {
+            ...item,
+            nodes: item.nodes.map((other) => (other.id === stmt.id ? { ...other, text, trueSide: other.falseSide, falseSide: other.trueSide } : other)),
+            edges: item.edges.map((edge) => (edge.from === stmt.id && flip[edge.port] ? { ...edge, port: flip[edge.port] } : edge)),
+          };
+        }));
+
+        const setAssignment = (part, text) => edit((value) => mapTab(value, tab.id, (item) => {
+          const node = item.nodes.find((other) => other.id === stmt.id);
+          if (!node) return item;
+          const lines = FlowCode.processLines(node.text);
+          const parts = FlowCode.splitAssignment(lines[stmt.line] || "");
+          parts[part] = text;
+          const line = FlowCode.joinAssignment(parts.target, parts.expr);
+          if (stmt.line < lines.length) lines[stmt.line] = line;
+          else lines.push(line);
+          const joined = lines.filter((entry) => entry.trim()).join("\n");
+          return { ...item, nodes: item.nodes.map((other) => (other.id === node.id ? { ...other, text: joined } : other)) };
+        }));
+
+        const condition = (negated) => {
+          const shown = expr(stmt.text, negated);
+          return slot({
+            value: shown.ok ? shown.text : shown.hole ? "" : shown.text,
+            invalid: !shown.ok && !shown.hole,
+            label: "Condition",
+            placeholder: "condition",
+            check: checkExpr,
+            onValid: setCondition,
+          });
+        };
+
+        let content = null;
+        switch (row.kind) {
+          case "pass":
+            content = <span className={punctClass + " italic"}>pass</span>;
+            break;
+          case "if":
+          case "elif":
+            content = (
+              <React.Fragment>
+                <span className={kwClass}>{row.kind}</span> {condition(stmt.negated)}
+                <span className={punctClass}>:</span>
+              </React.Fragment>
+            );
+            break;
+          case "else":
+            content = (
+              <React.Fragment>
+                <span className={kwClass}>else</span>
+                <span className={punctClass}>:</span>
+              </React.Fragment>
+            );
+            break;
+          case "while":
+            content = (
+              <React.Fragment>
+                <span className={kwClass}>while</span> {condition(stmt.negated)}
+                <span className={punctClass}>:</span>
+              </React.Fragment>
+            );
+            break;
+          case "repeat":
+            content = (
+              <React.Fragment>
+                <span className={kwClass}>while</span> <span className={kwClass}>True</span>
+                <span className={punctClass}>:</span>
+                <span className="ml-2 font-sans text-xs font-semibold text-slate-500 dark:text-slate-400">repeat loop</span>
+              </React.Fragment>
+            );
+            break;
+          case "until":
+            content = (
+              <React.Fragment>
+                <span className={kwClass}>if</span> {condition(stmt.negated)}
+                <span className={punctClass}>:</span> <span className={kwClass}>break</span>
+              </React.Fragment>
+            );
+            break;
+          default:
+            switch (stmt.k) {
+              case "assign": {
+                const parts = FlowCode.splitAssignment(stmt.text);
+                const value = expr(parts.expr);
+                const targetProblem = parts.target && FlowLang.nameProblem(parts.target);
+                content = (
+                  <React.Fragment>
+                    {slot({ value: parts.target, invalid: !!targetProblem, label: "Variable name", placeholder: "name", check: checkName, onValid: (text) => setAssignment("target", text) })}
+                    <span className={punctClass}>{" = "}</span>
+                    {slot({ value: value.ok || !value.hole ? value.text : "", invalid: !value.ok && !value.hole, label: "Value", placeholder: "value", check: checkExpr, onValid: (text) => setAssignment("expr", text) })}
+                  </React.Fragment>
+                );
+                break;
+              }
+              case "input": {
+                const inferred = FlowCode.inputCast({ id: stmt.id, inputType: "auto" }, types);
+                content = (
+                  <React.Fragment>
+                    {slot({ value: stmt.text, invalid: !!(stmt.text && FlowLang.nameProblem(stmt.text)), label: "Input variable", placeholder: "name", check: checkName, onValid: (text) => patch(stmt.id, { text }) })}
+                    <span className={punctClass}>{" = "}</span>
+                    <select
+                      aria-label="Data type of the input"
+                      value={stmt.inputType || "auto"}
+                      onChange={(event) => commitEdit((value) => patchNode(value, tab.id, stmt.id, { inputType: event.target.value }))}
+                      className="fc-mono rounded border border-slate-300 bg-white px-1 py-0.5 text-[15px] text-sky-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-sky-300"
+                    >
+                      <option value="auto">{inferred ? inferred + "(input())" : "input()"} · auto</option>
+                      <option value="int">int(input())</option>
+                      <option value="real">float(input())</option>
+                      <option value="string">input()</option>
+                    </select>
+                  </React.Fragment>
+                );
+                break;
+              }
+              case "output": {
+                const value = expr(stmt.text);
+                content = (
+                  <React.Fragment>
+                    <span className={fnClass}>print</span>
+                    <span className={punctClass}>(</span>
+                    {slot({ value: value.ok || !value.hole ? value.text : "", invalid: !value.ok && !value.hole, label: "Value to print", placeholder: "value", check: checkExpr, onValid: (text) => patch(stmt.id, { text }) })}
+                    <span className={punctClass}>)</span>
+                  </React.Fragment>
+                );
+                break;
+              }
+              case "call": {
+                const sub = doc.tabs.find((item) => item.id === stmt.calleeId && item.kind === "sub");
+                const params = sub ? FlowLang.parseParams(sub.paramsText).params : [];
+                const subs = doc.tabs.filter((item) => item.kind === "sub");
+                content = (
+                  <React.Fragment>
+                    {slot({ value: stmt.target, label: "Variable to store the result in (optional)", placeholder: "result", faint: true, check: checkName, onValid: (text) => patch(stmt.id, { target: text }) })}
+                    <span className={punctClass + (stmt.target ? "" : " opacity-50")}>{" = "}</span>
+                    <select
+                      aria-label="Subprogram to call"
+                      value={sub ? sub.id : ""}
+                      onChange={(event) => commitEdit((value) => patchNode(value, tab.id, stmt.id, { calleeId: event.target.value }))}
+                      className="fc-mono rounded border border-slate-300 bg-white px-1 py-0.5 text-[15px] font-semibold text-sky-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-sky-300"
+                    >
+                      {!sub && <option value="">choose…</option>}
+                      {subs.map((item) => (
+                        <option key={item.id} value={item.id}>{item.name || "?"}</option>
+                      ))}
+                    </select>
+                    <span className={punctClass}>(</span>
+                    {params.map((param, index) => {
+                      const value = expr((stmt.args || [])[index]);
+                      return (
+                        <React.Fragment key={param + index}>
+                          {index > 0 && <span className={punctClass}>{", "}</span>}
+                          {slot({
+                            value: value.ok || !value.hole ? value.text : "",
+                            invalid: !value.ok && !value.hole,
+                            label: "Value for " + param,
+                            placeholder: param,
+                            check: checkExpr,
+                            onValid: (text) => {
+                              const args = params.map((_, position) => String((stmt.args || [])[position] || ""));
+                              args[index] = text;
+                              patch(stmt.id, { args });
+                            },
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                    <span className={punctClass}>)</span>
+                  </React.Fragment>
+                );
+                break;
+              }
+              case "return": {
+                const value = expr(stmt.text);
+                content = (
+                  <React.Fragment>
+                    <span className={kwClass}>return</span>{" "}
+                    {slot({ value: value.ok || !value.hole ? value.text : "", invalid: !value.ok && !value.hole, label: "Value to return (optional)", placeholder: "value", faint: true, check: checkExpr, onValid: (text) => patch(stmt.id, { text }) })}
+                  </React.Fragment>
+                );
+                break;
+              }
+              case "end":
+                content = (
+                  <React.Fragment>
+                    <span className={fnClass}>exit</span>
+                    <span className={punctClass}>()</span>
+                    <span className="ml-2 font-sans text-xs font-semibold text-slate-500 dark:text-slate-400">END</span>
+                  </React.Fragment>
+                );
+                break;
+            }
+        }
+
+        const actions = [];
+        if (selected) {
+          const movable = row.kind === "simple" || row.kind === "if" || row.kind === "while" || row.kind === "repeat";
+          if (movable) {
+            actions.push({ label: "↑", name: "Move up", run: () => onTree(tab.id, (root) => FlowCode.moveStatement(root, row.path, -1)) });
+            actions.push({ label: "↓", name: "Move down", run: () => onTree(tab.id, (root) => FlowCode.moveStatement(root, row.path, 1)) });
+          }
+          if (row.kind === "if" || row.kind === "elif") {
+            actions.push({
+              label: "+ elif",
+              name: "Add an elif",
+              run: () => onTree(tab.id, (root) => {
+                const last = chainEnd(FlowCode.stmtAt(root, row.path));
+                last.else = [{ k: "if", id: null, text: "", negated: false, then: [holeStatement()], else: last.else }];
+                return { root, path: null };
+              }),
+            });
+            if (!chainEnd(stmt).else.length) {
+              actions.push({
+                label: "+ else",
+                name: "Add an else",
+                run: () => onTree(tab.id, (root) => {
+                  chainEnd(FlowCode.stmtAt(root, row.path)).else = [holeStatement()];
+                  return { root, path: null };
+                }),
+              });
+            }
+          }
+          if (row.kind === "elif") {
+            actions.push({
+              label: "Remove elif",
+              name: "Remove this elif and the lines inside it",
+              danger: true,
+              run: () => onTree(tab.id, (root) => {
+                const parent = FlowCode.stmtAt(root, row.path.slice(0, -1));
+                parent.else = FlowCode.stmtAt(root, row.path).else;
+                return { root, path: null };
+              }),
+            });
+          } else if (row.kind === "else") {
+            actions.push({
+              label: "Remove else",
+              name: "Remove else and the lines inside it",
+              danger: true,
+              run: () => onTree(tab.id, (root) => {
+                FlowCode.stmtAt(root, row.path).else = [];
+                return { root, path: null };
+              }),
+            });
+          } else if (movable) {
+            actions.push({
+              label: "Delete",
+              name: row.kind === "simple" ? "Delete this line" : "Delete this " + (row.kind === "if" ? "if" : "loop") + " and the lines inside it",
+              danger: true,
+              run: () => onTree(tab.id, (root) => {
+                const parentPath = row.path.slice(0, -1);
+                const last = row.path[row.path.length - 1];
+                FlowCode.listAt(root, parentPath, last[0]).splice(last[1], 1);
+                return { root, path: null };
+              }),
+            });
+          }
+        }
+
+        return (
+          <div
+            data-code-node={stmt ? stmt.id : undefined}
+            tabIndex={0}
+            aria-current={selected ? "true" : undefined}
+            onFocus={(event) => {
+              if (!selected) onSelect(row);
+              if (event.target === event.currentTarget) event.currentTarget.scrollIntoView({ block: "nearest" });
+            }}
+            onClick={() => !selected && onSelect(row)}
+            className={
+              "fc-code-row flex min-h-[2.25rem] flex-wrap items-center gap-x-2 gap-y-1 rounded-md py-0.5 pr-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
+              (selected ? "bg-indigo-50 ring-1 ring-indigo-300 dark:bg-indigo-950/60 dark:ring-indigo-700" : "hover:bg-slate-50 dark:hover:bg-slate-800/50")
+            }
+            style={{ paddingLeft: `calc(${row.depth * 2}rem + 0.5rem)`, "--fc-depth": row.depth }}
+          >
+            <span className="fc-mono whitespace-pre-wrap text-[15px] leading-8 text-slate-900 dark:text-slate-100">{content}</span>
+            {actions.length > 0 && (
+              <span className="ml-auto flex flex-wrap gap-1 pl-2 font-sans">
+                {actions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    aria-label={action.name}
+                    title={action.name}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      action.run();
+                    }}
+                    className={(action.danger ? dangerButton : smallButton) + " !px-2 !py-0.5 text-xs"}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </span>
+            )}
+          </div>
+        );
+      }
+
+      function CodeSection({ tab, doc, structure, types, selectedKey, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart }) {
+        const subs = doc.tabs.filter((item) => item.kind === "sub");
+        const subNames = subs.map((item) => item.name);
+        const env = types.envs[tab.id] || {};
+        const rows = useMemo(() => (structure.ok ? FlowCode.rowsFor(structure.body, tab.kind === "sub" ? 1 : 0) : []), [structure, tab.kind]);
+        const checkSubName = (text) => {
+          const value = text.trim();
+          if (!value) return { ok: true, value: "" };
+          const problem = FlowLang.nameProblem(value, "The subprogram name");
+          if (problem) return { ok: false, error: problem.message };
+          if (subs.some((other) => other.id !== tab.id && String(other.name).toLowerCase() === value.toLowerCase())) {
+            return { ok: false, error: "Another subprogram is already called " + value + "." };
+          }
+          return { ok: true, value };
+        };
+        const checkParams = (text) => {
+          const parsed = FlowLang.parseParams(text);
+          return parsed.error ? { ok: false, error: parsed.error.message } : { ok: true, value: parsed.params.join(", ") };
+        };
+        return (
+          <section data-code-tab={tab.id} aria-label={tab.kind === "main" ? "Main program" : "Subprogram " + tab.name} className="scroll-mt-2">
+            {tab.kind === "sub" ? (
+              <div className="fc-mono whitespace-pre-wrap px-2 py-0.5 text-[15px] leading-8">
+                <span className={kwClass}>def</span>{" "}
+                <CodeSlot
+                  value={tab.name}
+                  invalid={!!FlowLang.nameProblem(String(tab.name || "").trim(), "The subprogram name")}
+                  label="Subprogram name"
+                  placeholder="Name"
+                  check={checkSubName}
+                  onStart={slotApi.start}
+                  onEnd={slotApi.end}
+                  onValid={(text) => edit((value) => mapTab(value, tab.id, (item) => ({ ...item, name: text })))}
+                />
+                <span className={punctClass}>(</span>
+                <CodeSlot
+                  value={tab.paramsText}
+                  invalid={!!FlowLang.parseParams(tab.paramsText).error}
+                  label="Parameters, separated by commas"
+                  placeholder="parameters"
+                  faint
+                  check={checkParams}
+                  onStart={slotApi.start}
+                  onEnd={slotApi.end}
+                  onValid={(text) => edit((value) => mapTab(value, tab.id, (item) => ({ ...item, paramsText: text })))}
+                />
+                <span className={punctClass}>):</span>
+              </div>
+            ) : (
+              <p className="fc-mono px-2 py-1 text-[15px] italic text-emerald-800 dark:text-emerald-300"># Main program</p>
+            )}
+            {structure.ok ? (
+              <div role="list" aria-label={(tab.kind === "main" ? "Main program" : tab.name) + " code lines"}>
+                {rows.map((row) => {
+                  const key = rowKey(row);
+                  return (
+                    <div role="listitem" key={key}>
+                      <CodeRow
+                        tab={tab}
+                        doc={doc}
+                        row={row}
+                        env={env}
+                        types={types}
+                        subNames={subNames}
+                        selected={selectedKey === tab.id + "|" + key}
+                        onSelect={(chosen) => onSelect(tab.id, chosen)}
+                        slotApi={slotApi}
+                        edit={edit}
+                        commitEdit={commitEdit}
+                        onTree={onTree}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="m-2 rounded-md border border-amber-300 bg-amber-50 p-3 font-sans text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100" style={{ marginLeft: tab.kind === "sub" ? "2.5rem" : undefined }}>
+                <p className="font-bold">{structure.message}</p>
+                {structure.hint && <p className="mt-1">{structure.hint}</p>}
+                <button type="button" className={smallButton + " mt-2 bg-white dark:bg-slate-900"} onClick={() => onShowInFlowchart(tab.id, structure.nodeIds)}>
+                  Show in flowchart
+                </button>
+              </div>
+            )}
+          </section>
+        );
+      }
+
+      function CodeEditor({ doc, types, structures, codeSel, onSelect, slotApi, edit, commitEdit, onTree, onShowInFlowchart, scrollTo, focusNode }) {
+        const paneRef = useRef(null);
+        const subs = doc.tabs.filter((item) => item.kind === "sub");
+        const ordered = subs.concat(doc.tabs.filter((item) => item.kind === "main"));
+        const selectedKey = codeSel ? codeSel.tabId + "|" + rowKey(codeSel.row) : null;
+
+        useEffect(() => {
+          const pane = paneRef.current;
+          if (!scrollTo || !pane) return;
+          const section = Array.from(pane.querySelectorAll("[data-code-tab]")).find((element) => element.getAttribute("data-code-tab") === scrollTo.tabId);
+          if (section) section.scrollIntoView({ block: "start" });
+        }, [scrollTo]);
+
+        useEffect(() => {
+          const pane = paneRef.current;
+          if (!focusNode || !pane) return;
+          const section = Array.from(pane.querySelectorAll("[data-code-tab]")).find((element) => element.getAttribute("data-code-tab") === focusNode.tabId);
+          if (!section) return;
+          const line = Array.from(section.querySelectorAll("[data-code-node]")).find((element) => element.getAttribute("data-code-node") === focusNode.nodeId);
+          (line || section).scrollIntoView({ block: "center" });
+          if (line) line.focus({ preventScroll: true });
+        }, [focusNode]);
+
+        return (
+          <div ref={paneRef} role="region" aria-label="Python code" className="fc-code-pane absolute inset-0 overflow-auto bg-white px-2 py-3 dark:bg-slate-900">
+            <div className="flex min-w-0 flex-col gap-5 pb-16">
+              {ordered.map((tab) => (
+                <CodeSection
+                  key={tab.id}
+                  tab={tab}
+                  doc={doc}
+                  structure={structures.get(tab.id)}
+                  types={types}
+                  selectedKey={selectedKey}
+                  onSelect={onSelect}
+                  slotApi={slotApi}
+                  edit={edit}
+                  commitEdit={commitEdit}
+                  onTree={onTree}
+                  onShowInFlowchart={onShowInFlowchart}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      function CodePalette({ tabKind, onAdd }) {
+        const paneRef = useRef(null);
+        return (
+          <aside
+            ref={paneRef}
+            aria-label="Statements"
+            className="fc-scroll-pane flex min-w-0 flex-col gap-2 rounded-lg border border-slate-300 bg-white p-2 dark:border-slate-700 dark:bg-slate-900 lg:min-h-0 lg:overflow-y-auto"
+          >
+            <h2 className="px-1 text-sm font-bold text-slate-700 dark:text-slate-200">Statements</h2>
+            <div className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap">
+              {CODE_STATEMENTS.filter((item) => !item.subOnly || tabKind === "sub").map((item) => (
+                <button
+                  key={item.type}
+                  type="button"
+                  onClick={() => onAdd(item.type)}
+                  className="flex min-w-[8.5rem] flex-col items-start rounded-md border border-slate-300 bg-white px-2 py-1.5 text-left text-sm font-semibold text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-indigo-400 dark:hover:bg-slate-700 lg:min-w-0"
+                >
+                  <span className="leading-tight">{item.label}</span>
+                  <span className="fc-mono text-xs font-medium text-slate-600 dark:text-slate-300">{item.code}</span>
+                </button>
+              ))}
+            </div>
+            <p className="px-1 text-xs leading-snug text-slate-600 dark:text-slate-400">
+              Select a line, then click a statement to add it after that line (or inside a selected if, else or loop). Return is offered inside a subprogram.
+            </p>
+            <MoreBelow paneRef={paneRef} gap="0.5rem" fadeClass="to-white dark:to-slate-900" />
+          </aside>
+        );
+      }
+
+      function PythonCard({ python }) {
+        const [copied, setCopied] = useState(false);
+        const preRef = useRef(null);
+        useEffect(() => {
+          if (!copied) return undefined;
+          const timer = setTimeout(() => setCopied(false), 2000);
+          return () => clearTimeout(timer);
+        }, [copied]);
+        const copy = () => {
+          const fallback = () => {
+            const range = document.createRange();
+            range.selectNodeContents(preRef.current);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(python.text).then(() => setCopied(true), fallback);
+          } else {
+            fallback();
+          }
+        };
+        return (
+          <section aria-labelledby="fc-python-title" className={cardClass}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 id="fc-python-title" className="text-sm font-bold">Python file</h2>
+              <button type="button" className={smallButton} onClick={copy}>
+                {copied ? "Copied ✓" : "Copy"}
+              </button>
+            </div>
+            {!python.ok && (
+              <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+                <p className="font-bold">Finish these before saving as .py:</p>
+                <ul className="ml-4 mt-1 list-disc">
+                  {python.problems.slice(0, 6).map((problem, index) => (
+                    <li key={index}>{problem.message}</li>
+                  ))}
+                  {python.problems.length > 6 && <li>…and {python.problems.length - 6} more</li>}
+                </ul>
+              </div>
+            )}
+            <pre ref={preRef} className="fc-mono mt-2 max-h-[26rem] overflow-auto whitespace-pre rounded-md bg-slate-50 p-2 text-[13px] leading-snug text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+              {python.text}
+            </pre>
+          </section>
+        );
+      }
+
+      function PythonReferenceCard() {
+        const row = "border-t border-slate-200 py-1 align-top dark:border-slate-700";
+        const pairs = [
+          ["DIV  MOD  ^", "//  %  **"],
+          ["AND  OR  NOT", "and  or  not"],
+          ["LEN  INT  REAL  STR", "len  int  float  str"],
+          ["ROUND  RANDOM_INT", "round  random.randint"],
+          ["INPUT n (Integer)", "n = int(input())"],
+          ["OUTPUT x", "print(x)"],
+          ["\"Total: \" + t", "\"Total: \" + str(t)"],
+          ["loop test at the bottom", "while True: … if …: break"],
+          ["END inside a loop", "exit()"],
+        ];
+        return (
+          <details className={cardClass + " text-sm"}>
+            <summary className="cursor-pointer font-bold">Pseudocode ↔ Python</summary>
+            <table className="mt-2 w-full border-collapse text-left">
+              <thead>
+                <tr>
+                  <th scope="col" className="pb-1 pr-2 text-xs font-semibold text-slate-600 dark:text-slate-400">Flowchart</th>
+                  <th scope="col" className="pb-1 text-xs font-semibold text-slate-600 dark:text-slate-400">Python</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pairs.map(([pseudo, python]) => (
+                  <tr key={pseudo}>
+                    <td className={row + " fc-mono pr-2"}>{pseudo}</td>
+                    <td className={row + " fc-mono"}>{python}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs leading-snug text-slate-600 dark:text-slate-400">
+              Not supported: for loops, lists and break (except at the end of a repeat loop). Python's round() rounds halves to even, so ROUND(2.5) gives 3 here but round(2.5) gives 2 in Python.
+            </p>
+          </details>
+        );
+      }
+
+      function SaveDialog({ open, onClose, python, onSaveJson, onSavePython }) {
+        const dialogRef = useRef(null);
+        const [format, setFormat] = useState("json");
+        const [name, setName] = useState("flowchart");
+        useEffect(() => {
+          const dialog = dialogRef.current;
+          if (!dialog) return;
+          if (open && !dialog.open) {
+            if (!python.ok) setFormat("json");
+            if (dialog.showModal) dialog.showModal();
+            else dialog.setAttribute("open", "");
+          } else if (!open && dialog.open) {
+            dialog.close();
+          }
+        }, [open]);
+        const extension = format === "py" ? ".py" : ".json";
+        const submit = (event) => {
+          event.preventDefault();
+          const base = name.trim().replace(/\.(json|py)$/i, "").replace(/[\\/:*?"<>|]+/g, "_") || "flowchart";
+          if (format === "py" && python.ok) onSavePython(base + ".py");
+          else onSaveJson(base + ".json");
+          onClose();
+        };
+        const option = "flex cursor-pointer items-start gap-3 rounded-md border p-3 focus-within:ring-2 focus-within:ring-indigo-500 ";
+        return (
+          <dialog
+            ref={dialogRef}
+            aria-labelledby="fc-save-title"
+            onClose={onClose}
+            className="fc-dialog w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-slate-300 bg-white p-0 text-slate-900 shadow-xl dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+          >
+            <form onSubmit={submit} className="flex flex-col gap-4 p-5">
+              <h2 id="fc-save-title" className="text-lg font-bold">Save</h2>
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-2 text-sm font-semibold">Save as</legend>
+                <label className={option + (format === "json" ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/50" : "border-slate-300 dark:border-slate-600")}>
+                  <input type="radio" name="fc-save-format" value="json" checked={format === "json"} onChange={() => setFormat("json")} className="mt-1" />
+                  <span>
+                    <span className="block font-semibold">Flowchart (.json)</span>
+                    <span className="block text-sm text-slate-600 dark:text-slate-300">Keeps the layout and every tab, so you can open it here again with Open….</span>
+                  </span>
+                </label>
+                <label
+                  className={
+                    option +
+                    (!python.ok ? "cursor-not-allowed border-slate-200 opacity-70 dark:border-slate-700 " : "") +
+                    (format === "py" ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/50" : "border-slate-300 dark:border-slate-600")
+                  }
+                >
+                  <input type="radio" name="fc-save-format" value="py" checked={format === "py"} disabled={!python.ok} onChange={() => setFormat("py")} className="mt-1" />
+                  <span>
+                    <span className="block font-semibold">Python code (.py)</span>
+                    {python.ok ? (
+                      <span className="block text-sm text-slate-600 dark:text-slate-300">Runs in IDLE or any Python editor. Open… can turn it back into a flowchart.</span>
+                    ) : (
+                      <span className="block text-sm font-semibold text-amber-800 dark:text-amber-300">
+                        Not available yet: {python.problems[0] ? python.problems[0].message : "the flowchart isn't complete."}
+                        {python.problems.length > 1 ? ` (and ${python.problems.length - 1} more — see Code view)` : ""}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              </fieldset>
+              <label className="flex flex-col gap-1 text-sm font-semibold">
+                File name
+                <span className="flex items-center gap-1">
+                  <input value={name} onChange={(event) => setName(event.target.value)} className={fieldClass} spellCheck={false} />
+                  <span className="fc-mono text-sm font-normal">{extension}</span>
+                </span>
+              </label>
+              <div className="flex justify-end gap-2">
+                <button type="button" className={smallButton} onClick={onClose}>
+                  Cancel
+                </button>
+                <button type="submit" className={primaryButton}>
+                  Save {extension}
+                </button>
+              </div>
+            </form>
+          </dialog>
+        );
+      }
+
       function App() {
         const [doc, setDocState] = useState(loadInitialDoc);
         const docRef = useRef(doc);
@@ -4391,6 +7094,13 @@
         const [selection, setSelection] = useState(null);
         const [views, setViews] = useState({});
         const [mode, setMode] = useState("design");
+        const editModeRef = useRef("design");
+        const [codeSel, setCodeSel] = useState(null);
+        const [codeScroll, setCodeScroll] = useState(null);
+        const [codeFocus, setCodeFocus] = useState(null);
+        const [saveOpen, setSaveOpen] = useState(false);
+        const slotSnapshotRef = useRef(null);
+        const tidyNoticeRef = useRef(false);
         const [notice, setNotice] = useState(null);
         const [editKey, setEditKey] = useState(null);
         const [problemsFlash, setProblemsFlash] = useState(0);
@@ -4433,6 +7143,9 @@
         const tab = doc.tabs.find((item) => item.id === activeTabId) || doc.tabs[0];
         const key = logicKey(doc);
         const validation = useMemo(() => FlowLang.validateDoc(docRef.current), [key]);
+        const types = useMemo(() => FlowCode.inferTypes(docRef.current), [key]);
+        const structures = useMemo(() => new Map(docRef.current.tabs.map((item) => [item.id, FlowCode.structureTab(item)])), [key]);
+        const python = useMemo(() => FlowCode.toPython(docRef.current), [key]);
         const editingId = editing ? editing.nodeId : null;
         const layouts = useMemo(() => computeLayouts(tab, doc, editingId), [tab, doc.tabs, editingId]);
         const routes = useMemo(() => routeEdges(tab, layouts), [tab, layouts]);
@@ -4490,13 +7203,13 @@
         }
 
         function undo() {
-          if (!undoRef.current.length || mode !== "design") return;
+          if (!undoRef.current.length || mode === "run") return;
           redoRef.current.push(docRef.current);
           restore(undoRef.current.pop());
         }
 
         function redo() {
-          if (!redoRef.current.length || mode !== "design") return;
+          if (!redoRef.current.length || mode === "run") return;
           undoRef.current.push(docRef.current);
           restore(redoRef.current.pop());
         }
@@ -4751,19 +7464,34 @@
           setNotice({ tone: "info", text: "New flowchart started. Undo returns to your previous one." });
         }
 
-        function saveFile() {
+        function saveJson(filename) {
           const blob = new Blob([JSON.stringify({ format: "flowchart-designer", version: 1, ...docRef.current }, null, 2)], { type: "application/json" });
-          downloadBlob(blob, "flowchart.json");
+          downloadBlob(blob, filename);
+        }
+
+        function savePython(filename) {
+          const result = FlowCode.toPython(docRef.current);
+          if (!result.ok) return;
+          downloadBlob(new Blob([result.text], { type: "text/x-python" }), filename);
         }
 
         function openFile(file) {
           const reader = new FileReader();
           reader.onload = () => {
             let next = null;
-            try {
-              next = normaliseDoc(JSON.parse(String(reader.result)));
-            } catch (error) {
-              next = null;
+            if (/\.py$/i.test(file.name)) {
+              const parsed = FlowCode.parsePython(String(reader.result), { newId, measure: measureBlock });
+              if (!parsed.ok) {
+                setNotice({ tone: "error", text: `${file.name} couldn't be opened. ${parsed.message}` });
+                return;
+              }
+              next = normaliseDoc(parsed.doc);
+            } else {
+              try {
+                next = normaliseDoc(JSON.parse(String(reader.result)));
+              } catch (error) {
+                next = null;
+              }
             }
             if (!next) {
               setNotice({ tone: "error", text: "That file isn't a flowchart saved from this designer." });
@@ -4800,6 +7528,7 @@
           runnerRef.current = FlowLang.createRunner(validation.program);
           runStepsRef.current = 0;
           setLimitNotice(false);
+          if (mode !== "run") editModeRef.current = mode;
           setMode("run");
           setSelection(null);
           setActiveTabId(validation.program.mainId);
@@ -4810,7 +7539,7 @@
           setAutoRun(false);
           setLimitNotice(false);
           runnerRef.current = null;
-          setMode("design");
+          setMode(editModeRef.current);
         }
 
         function restartRun() {
@@ -4841,6 +7570,7 @@
           const error = runner && runner.state.error;
           stopRun();
           if (error) {
+            setMode("design");
             setActiveTabId(error.tabId);
             requestEdit(error.nodeId);
           }
@@ -4894,6 +7624,72 @@
           const target = state.status === "error" ? state.error.tabId : state.frames[state.frames.length - 1].tabId;
           if (target !== activeTabId) setActiveTabId(target);
         }, [runVersion]);
+
+        /* ----- code view ----- */
+        const slotApi = useMemo(() => ({
+          start() {
+            slotSnapshotRef.current = docRef.current;
+          },
+          end() {
+            const snapshot = slotSnapshotRef.current;
+            if (snapshot && snapshot !== docRef.current) remember(snapshot);
+            slotSnapshotRef.current = null;
+          },
+        }), [remember]);
+
+        // Adding, deleting or moving a statement: edit the tab's statement
+        // tree, then rebuild its blocks and connectors from it.
+        function editCodeTree(tabId, change) {
+          const current = docRef.current;
+          const target = current.tabs.find((item) => item.id === tabId);
+          if (!target) return;
+          const structured = FlowCode.structureTab(target);
+          if (!structured.ok) return;
+          const result = change({ body: FlowCode.cloneTree(structured.body) });
+          if (!result) return;
+          if (FlowCode.emptyLoop(result.root.body)) {
+            setNotice({ tone: "info", text: "A loop needs at least one statement inside it. To remove the whole loop, select its while line and click Delete." });
+            return;
+          }
+          const rebuilt = FlowCode.buildTab(result.root.body, target, { newId, measure: (node) => measureBlock(node, target, current) });
+          commit((value) => mapTab(value, tabId, () => rebuilt));
+          setCodeSel(result.path ? { tabId, row: { kind: "simple", path: result.path } } : null);
+          if (!tidyNoticeRef.current) {
+            tidyNoticeRef.current = true;
+            setNotice({ tone: "info", text: `The ${target.kind === "main" ? "Main" : target.name} flowchart was re-arranged to match the code. Undo puts it back.` });
+          }
+        }
+
+        function addCodeStatement(type) {
+          const selectedTab = codeSel && doc.tabs.some((item) => item.id === codeSel.tabId) ? codeSel.tabId : tab.id;
+          const target = doc.tabs.find((item) => item.id === selectedTab);
+          if (type === "return" && target.kind !== "sub") return;
+          if (type === "call" && !doc.tabs.some((item) => item.kind === "sub")) {
+            setNotice({ tone: "info", text: "Create a subprogram first with + New subprogram, then call it." });
+            return;
+          }
+          if (!structures.get(selectedTab).ok) {
+            setNotice({ tone: "error", text: "Fix the message shown in the code first, or edit this part in Design." });
+            return;
+          }
+          const row = codeSel && codeSel.tabId === selectedTab ? codeSel.row : null;
+          editCodeTree(selectedTab, (root) => insertStatement(root, row, newStatement(type, docRef.current)));
+        }
+
+        function switchMode(next) {
+          if (next === mode) return;
+          if (mode === "run") stopRun();
+          if (next === "run") {
+            startRun();
+            return;
+          }
+          setMode(next);
+          editModeRef.current = next;
+          if (next === "code") {
+            setSelection(null);
+            setCodeScroll({ tabId: tab.id, n: Date.now() });
+          }
+        }
 
         /* ----- palette drag ----- */
         function startPaletteDrag(type, event) {
@@ -4995,6 +7791,11 @@
         const setView = useCallback((view) => setViews((current) => ({ ...current, [tab.id]: view })), [tab.id]);
 
         function showProblem(problem) {
+          if (mode === "code") {
+            setActiveTabId(problem.tabId);
+            setCodeFocus({ tabId: problem.tabId, nodeId: problem.nodeId, n: Date.now() });
+            return;
+          }
           setActiveTabId(problem.tabId);
           if (problem.nodeId) requestEdit(problem.nodeId);
           else setSelection(null);
@@ -5002,6 +7803,8 @@
 
         const subs = doc.tabs.filter((item) => item.kind === "sub");
         const design = mode === "design";
+        const coding = mode === "code";
+        const editable = design || coding;
         const view = views[tab.id];
         const titleButton =
           "shrink-0 whitespace-nowrap rounded-md border border-white/40 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
@@ -5011,7 +7814,7 @@
             <header data-interactive-header className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-xl font-bold md:text-2xl">Flowchart Designer &amp; Simulator</h1>
-                <p className="text-sm opacity-90">Build a flowchart from standard symbols, check it, then run it step by step</p>
+                <p className="text-sm opacity-90">Build a flowchart from standard symbols, see it as Python, then run it step by step</p>
               </div>
               <div data-interactive-actions className="flex flex-wrap items-center gap-2">
                 <select
@@ -5033,13 +7836,13 @@
                 <button type="button" className={titleButton} onClick={() => fileRef.current.click()}>
                   Open…
                 </button>
-                <button type="button" className={titleButton} onClick={saveFile}>
-                  Save
+                <button type="button" className={titleButton} onClick={() => setSaveOpen(true)} aria-haspopup="dialog">
+                  Save…
                 </button>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".json,application/json"
+                  accept=".json,.py,application/json,text/x-python"
                   className="hidden"
                   aria-hidden="true"
                   tabIndex={-1}
@@ -5057,29 +7860,36 @@
               className="fc-main grid min-h-0 flex-1 gap-3 p-3"
               style={sideWidth ? { "--fc-side-width": sideWidth + "px" } : undefined}
             >
-              <Palette tabKind={tab.kind} disabled={!design} onAdd={placeNewBlock} onDragStart={startPaletteDrag} />
+              {coding ? (
+                <CodePalette tabKind={(codeSel && doc.tabs.find((item) => item.id === codeSel.tabId) || tab).kind} onAdd={addCodeStatement} />
+              ) : (
+                <Palette tabKind={tab.kind} disabled={!design} onAdd={placeNewBlock} onDragStart={startPaletteDrag} />
+              )}
 
               <section aria-label="Flowchart" className="fc-canvas-column flex min-w-0 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
                 <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-2 py-2 dark:border-slate-700">
                   <div role="group" aria-label="Mode" className="flex overflow-hidden rounded-md border border-slate-300 dark:border-slate-600">
-                    <button
-                      type="button"
-                      aria-pressed={design}
-                      onClick={() => !design && stopRun()}
-                      className={"px-3 py-1.5 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " + (design ? "bg-indigo-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800")}
-                    >
-                      ✎ Design
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={!design}
-                      onClick={() => design && startRun()}
-                      className={"border-l border-slate-300 px-3 py-1.5 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:border-slate-600 " + (!design ? "bg-indigo-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800")}
-                    >
-                      ▶ Simulate
-                    </button>
+                    {[
+                      { id: "design", label: "✎ Design" },
+                      { id: "code", label: "</> Code" },
+                      { id: "run", label: "▶ Simulate" },
+                    ].map((item, index) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={mode === item.id}
+                        onClick={() => switchMode(item.id)}
+                        className={
+                          "px-3 py-1.5 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
+                          (index ? "border-l border-slate-300 dark:border-slate-600 " : "") +
+                          (mode === item.id ? "bg-indigo-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800")
+                        }
+                      >
+                        {item.label}
+                      </button>
+                    ))}
                   </div>
-                  {design && (
+                  {editable && (
                     <span
                       className={
                         "whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-bold " +
@@ -5092,12 +7902,14 @@
                     </span>
                   )}
                   <div className="ml-auto flex flex-wrap items-center gap-1">
-                    <button type="button" className={smallButton} onClick={undo} disabled={!design || !undoRef.current.length} title="Undo (Ctrl+Z)">
-                      ↶ Undo
+                    <button type="button" className={smallButton} onClick={undo} disabled={!editable || !undoRef.current.length} title="Undo (Ctrl+Z)" aria-label="Undo">
+                      ↶<span className="hidden 2xl:inline"> Undo</span>
                     </button>
-                    <button type="button" className={smallButton} onClick={redo} disabled={!design || !redoRef.current.length} title="Redo (Ctrl+Y)">
-                      ↷ Redo
+                    <button type="button" className={smallButton} onClick={redo} disabled={!editable || !redoRef.current.length} title="Redo (Ctrl+Y)" aria-label="Redo">
+                      ↷<span className="hidden 2xl:inline"> Redo</span>
                     </button>
+                    {!coding && (
+                    <React.Fragment>
                     <span className="mx-1 h-5 w-px bg-slate-300 dark:bg-slate-600" aria-hidden="true"></span>
                     <button type="button" className={smallButton} onClick={() => canvasRef.current.zoom(1 / 1.2)} aria-label="Zoom out">
                       −
@@ -5112,6 +7924,8 @@
                     <button type="button" className={smallButton} onClick={saveImage} title="Download this tab as a PNG image">
                       Image
                     </button>
+                    </React.Fragment>
+                    )}
                   </div>
                 </div>
 
@@ -5125,7 +7939,10 @@
                         type="button"
                         role="tab"
                         aria-selected={active}
-                        onClick={() => showTab(item.id)}
+                        onClick={() => {
+                          showTab(item.id);
+                          if (coding) setCodeScroll({ tabId: item.id, n: Date.now() });
+                        }}
                         className={
                           "fc-mono -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border px-3 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 " +
                           (active
@@ -5134,7 +7951,7 @@
                         }
                       >
                         {item.kind === "main" ? "Main" : FlowLang.subprogramSignature(item)}
-                        {hasError && design && (
+                        {hasError && editable && (
                           <span className="rounded-full bg-red-600 px-1.5 text-[0.65rem] font-bold leading-4 text-white" aria-label="has errors">
                             !
                           </span>
@@ -5142,10 +7959,13 @@
                       </button>
                     );
                   })}
-                  {design && (
+                  {editable && (
                     <button
                       type="button"
-                      onClick={createSubprogram}
+                      onClick={() => {
+                        createSubprogram();
+                        if (coding) setCodeScroll({ tabId: docRef.current.tabs[docRef.current.tabs.length - 1].id, n: Date.now() });
+                      }}
                       className="mb-1 ml-1 shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:bg-slate-800"
                     >
                       + New subprogram
@@ -5153,7 +7973,31 @@
                   )}
                 </div>
 
-                <div className="relative min-h-0 flex-1">
+                <div className={"relative flex-1 " + (coding ? "min-h-[24rem] lg:min-h-0" : "min-h-0")}>
+                  {coding ? (
+                    <CodeEditor
+                      doc={doc}
+                      types={types}
+                      structures={structures}
+                      codeSel={codeSel}
+                      onSelect={(tabId, row) => {
+                        setCodeSel({ tabId, row });
+                        if (tabId !== activeTabId) setActiveTabId(tabId);
+                      }}
+                      slotApi={slotApi}
+                      edit={live}
+                      commitEdit={commit}
+                      onTree={editCodeTree}
+                      onShowInFlowchart={(tabId, nodeIds) => {
+                        setMode("design");
+                        editModeRef.current = "design";
+                        setActiveTabId(tabId);
+                        if (nodeIds && nodeIds[0]) setSelection({ kind: "node", id: nodeIds[0] });
+                      }}
+                      scrollTo={codeScroll}
+                      focusNode={codeFocus}
+                    />
+                  ) : (
                   <FlowCanvas
                     ref={canvasRef}
                     doc={doc}
@@ -5186,6 +8030,7 @@
                     onEditNode={requestEdit}
                     editing={editing}
                   />
+                  )}
                   {notice && (
                     <div
                       role="status"
@@ -5204,8 +8049,14 @@
 
               <SideResizer width={sideWidth} onResize={setSideWidth} containerRef={mainRef} asideRef={asideRef} />
 
-              <aside ref={asideRef} aria-label={design ? "Block editor and checks" : "Simulation"} className="fc-scroll-pane flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
-                {design ? (
+              <aside ref={asideRef} aria-label={design ? "Block editor and checks" : coding ? "Python file and checks" : "Simulation"} className="fc-scroll-pane flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+                {coding ? (
+                  <React.Fragment>
+                    <PythonCard python={python} />
+                    <ProblemsPanel doc={doc} validation={validation} onShowProblem={showProblem} highlightKey={problemsFlash} />
+                    <PythonReferenceCard />
+                  </React.Fragment>
+                ) : design ? (
                   <React.Fragment>
                     <Inspector
                       doc={doc}
@@ -5216,6 +8067,7 @@
                       editKey={editKey}
                       variables={variables}
                       onUpdateNode={(nodeId, patch) => live((value) => patchNode(value, tab.id, nodeId, patch))}
+                      onCommitNode={(nodeId, patch) => commit((value) => patchNode(value, tab.id, nodeId, patch))}
                       onUpdateTab={(patch) => live((value) => mapTab(value, tab.id, (item) => ({ ...item, ...patch })))}
                       onDeleteTab={deleteSubprogram}
                       onDeleteSelection={deleteSelection}
@@ -5249,12 +8101,15 @@
                       onInput={provideInput}
                       onEditError={editRunError}
                       limitNotice={limitNotice}
+                      backLabel={editModeRef.current === "code" ? "</> Back to Code" : "✎ Back to Design"}
                     />
                   )
                 )}
                 <MoreBelow paneRef={asideRef} gap="0.75rem" fadeClass="to-slate-100 dark:to-slate-950" />
               </aside>
             </div>
+
+            <SaveDialog open={saveOpen} onClose={() => setSaveOpen(false)} python={python} onSaveJson={saveJson} onSavePython={savePython} />
 
             {ghost && (
               <div className="fc-ghost flex items-center gap-2 rounded-md border border-indigo-400 bg-white px-2 py-1 text-sm font-semibold text-slate-800 shadow-lg dark:bg-slate-800 dark:text-slate-100" style={{ left: ghost.x, top: ghost.y }}>

@@ -720,13 +720,119 @@ if (fs.existsSync(subnetMaskingPath)) {
     || !/route\.junction && \(/.test(flowchartSource)) {
     failures.push('flowchart_designer.html: decisions must only be entered from the top, and joining connectors need a junction arrowhead');
   }
+  // The Code view: three modes, an in-page Save dialog offering .json or
+  // .py, and Open… accepting Python files.
+  if (!/\{ id: "design", label: "✎ Design" \},\s*\{ id: "code", label: "<\/> Code" \},\s*\{ id: "run", label: "▶ Simulate" \}/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: the mode switch must offer Design, Code and Simulate');
+  }
+  if (!/<dialog\b/.test(flowchartSource) || !/function SaveDialog\(/.test(flowchartSource) || !/accept="\.json,\.py,/.test(flowchartSource)) {
+    failures.push('flowchart_designer.html: Save must open a dialog offering .json or .py, and Open… must accept .py files');
+  }
   const languageScript = flowchartSource.match(/<script id="flowchart-language">([\s\S]*?)<\/script>/);
-  if (!languageScript) {
-    failures.push('flowchart_designer.html: missing the flowchart-language script');
+  const codeScript = flowchartSource.match(/<script id="flowchart-code">([\s\S]*?)<\/script>/);
+  if (!languageScript || !codeScript) {
+    failures.push('flowchart_designer.html: missing the flowchart-language or flowchart-code script');
   } else {
-    const { FlowLang, FlowExamples } = require('vm').runInNewContext(
-      `${languageScript[1]}; ({ FlowLang, FlowExamples })`, {}, { timeout: 2000 },
+    const { FlowLang, FlowExamples, FlowCode } = require('vm').runInNewContext(
+      `${languageScript[1]}; ${codeScript[1]}; ({ FlowLang, FlowExamples, FlowCode })`, {}, { timeout: 4000 },
     );
+    const runFlowchart = (doc, inputs) => {
+      const result = FlowLang.validateDoc(doc);
+      if (result.errors) return { status: 'invalid', output: result.problems.map((p) => p.message) };
+      const runner = FlowLang.createRunner(result.program, { random: () => 0 });
+      const queue = inputs.slice();
+      for (let guard = 0; guard < 20000 && !['done', 'error'].includes(runner.state.status); guard += 1) {
+        if (runner.state.status === 'input') runner.provideInput(queue.shift());
+        else runner.step();
+      }
+      return { status: runner.state.status, output: runner.state.output.filter((line) => line.kind === 'output').map((line) => line.text), error: runner.state.error };
+    };
+    let python3 = null;
+    try {
+      require('child_process').execFileSync('python3', ['--version'], { stdio: 'ignore' });
+      python3 = 'python3';
+    } catch (error) {
+      console.log('python3 not found: skipping the check that runs the generated Python.');
+    }
+    for (const example of FlowExamples.list) {
+      const expected = JSON.stringify(example.expectedOutput);
+      const python = FlowCode.toPython(example.doc);
+      if (!python.ok) {
+        failures.push(`flowchart_designer.html: example ${example.id} can't be shown as Python: ${python.problems.map((p) => p.message).join('; ')}`);
+        continue;
+      }
+      // Code -> flowchart -> code must give the same program, and the
+      // rebuilt flowchart must still run correctly.
+      const rebuilt = { tabs: example.doc.tabs.map((tab) => FlowCode.buildTab(FlowCode.structureTab(tab).body, tab)) };
+      const rebuiltRun = runFlowchart(rebuilt, example.inputs);
+      if (rebuiltRun.status !== 'done' || JSON.stringify(rebuiltRun.output) !== expected || FlowCode.toPython(rebuilt).text !== python.text) {
+        failures.push(`flowchart_designer.html: example ${example.id} changes when rebuilt from its code (${rebuiltRun.status} ${JSON.stringify(rebuiltRun.output)})`);
+      }
+      const parsed = FlowCode.parsePython(python.text);
+      if (!parsed.ok) {
+        failures.push(`flowchart_designer.html: example ${example.id}'s Python can't be opened again: ${parsed.message}`);
+      } else {
+        const parsedRun = runFlowchart(parsed.doc, example.inputs);
+        if (FlowCode.toPython(parsed.doc).text !== python.text || parsedRun.status !== 'done' || JSON.stringify(parsedRun.output) !== expected) {
+          failures.push(`flowchart_designer.html: example ${example.id}'s Python opens as a different flowchart`);
+        }
+      }
+      if (python3) {
+        try {
+          const stdout = require('child_process').execFileSync(python3, ['-c', python.text], { input: example.inputs.join('\n') + '\n', timeout: 5000 }).toString();
+          const lines = stdout.replace(/\n$/, '').split('\n');
+          if (JSON.stringify(lines) !== expected) failures.push(`flowchart_designer.html: example ${example.id}'s Python printed ${JSON.stringify(lines)}`);
+        } catch (error) {
+          failures.push(`flowchart_designer.html: example ${example.id}'s Python failed in python3: ${String(error.stderr || error.message).trim().split('\n').pop()}`);
+        }
+      }
+    }
+    const pythonOf = (pseudo, env = {}) => FlowCode.exprToPython(pseudo, env).text;
+    const pythonExpectations = [
+      ['7 DIV 2 + 7 MOD 2 + 2 ^ 3', '7 // 2 + 7 % 2 + 2 ** 3'],
+      ['NOT (a > 1 AND b < 2) OR c == TRUE', 'not (a > 1 and b < 2) or c == True'],
+      ['LEN(STR(REAL(x))) + ROUND(y, 2) + RANDOM_INT(1, 6)', 'len(str(float(x))) + round(y, 2) + random.randint(1, 6)'],
+      ['"Score: " + 3 * total', '"Score: " + str(3 * total)'],
+      ['(a - b) - (c - d)', 'a - b - (c - d)'],
+      ['-(x ^ 2)', '-x ** 2'],
+    ];
+    for (const [pseudo, expected] of pythonExpectations) {
+      const actual = pythonOf(pseudo);
+      if (actual !== expected) failures.push(`flowchart_designer.html: ${pseudo} became ${actual} in Python, expected ${expected}`);
+      const back = FlowCode.pythonToPseudo(actual, []);
+      if (pythonOf(back) !== actual) failures.push(`flowchart_designer.html: ${actual} doesn't survive Python -> pseudocode -> Python (${back})`);
+    }
+    for (const source of ['x ^ 2', 'x DIV 2', 'x +', 'x AND y', 'TRUE', 'LEN(s)', 'print(x)']) {
+      try {
+        FlowCode.pythonToPseudo(source, []);
+        failures.push(`flowchart_designer.html: the code view must reject ${source} as Python`);
+      } catch (error) {
+        if (!(error instanceof FlowLang.FlowError)) throw error;
+      }
+    }
+    // A loop with two ways out has no while-loop equivalent and must be named.
+    const node = (id, type, text) => ({ id, type, x: 0, y: 0, text: text || '' });
+    const edge = (from, to, port = 'next') => ({ id: from + port, from, to, port });
+    const twoExits = FlowCode.structureTab({
+      id: 'main', kind: 'main', name: 'Main', paramsText: '',
+      nodes: [node('s', 'start'), node('p', 'process', 'i = 0'), node('d1', 'decision', 'i < 10'), node('d2', 'decision', 'i == 5'),
+        node('p2', 'process', 'i = i + 1'), node('o', 'output', '"x"'), node('e', 'end')],
+      edges: [edge('s', 'p'), edge('p', 'd1'), edge('d1', 'd2', 'true'), edge('d1', 'o', 'false'), edge('d2', 'o', 'true'),
+        edge('d2', 'p2', 'false'), edge('p2', 'd1'), edge('o', 'e')],
+    });
+    if (twoExits.ok || !twoExits.nodeIds.includes('d2')) failures.push('flowchart_designer.html: a loop with two exits must be reported, naming its blocks');
+    const unsupported = FlowCode.parsePython('total = 0\nfor i in range(3):\n    total = total + i\n');
+    if (unsupported.ok || !/^Line 2: for loops/.test(unsupported.message)) failures.push('flowchart_designer.html: opening a .py with a for loop must name the line');
+    const printed = FlowCode.parsePython('t = 5\nprint("Total:", t)\n');
+    if (!printed.ok || !/print\("Total: " \+ str\(t\)\)/.test(FlowCode.toPython(printed.doc).text)) {
+      failures.push('flowchart_designer.html: print with several values must join them with spaces');
+    }
+    // An Integer input refuses text, as int(input()) does in Python.
+    const typed = FlowCode.parsePython('n = int(input())\nprint(n * 2)\n');
+    const typedRun = runFlowchart(typed.doc, ['abc']);
+    if (typedRun.status !== 'error' || !/expects an Integer/.test(typedRun.error.message)) {
+      failures.push('flowchart_designer.html: an Integer input given text must stop with an error');
+    }
     for (const example of FlowExamples.list) {
       const result = FlowLang.validateDoc(example.doc);
       if (result.problems.length) {
