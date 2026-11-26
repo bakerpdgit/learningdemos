@@ -827,6 +827,33 @@ if (fs.existsSync(subnetMaskingPath)) {
     if (!printed.ok || !/print\("Total: " \+ str\(t\)\)/.test(FlowCode.toPython(printed.doc).text)) {
       failures.push('flowchart_designer.html: print with several values must join them with spaces');
     }
+    // Code view: an elif clause moves with its own lines and the else stays
+    // last; the rebuilt flowchart must still be valid.
+    const grade = FlowExamples.list.find((example) => example.id === 'grade');
+    if (grade) {
+      const gradeTab = grade.doc.tabs[0];
+      const root = { body: FlowCode.structureTab(gradeTab).body };
+      const ifIndex = root.body.findIndex((stmt) => stmt.k === 'if');
+      const headPath = [['body', ifIndex]];
+      const moved = FlowCode.moveClause(root, headPath, 1, -1);
+      const rebuiltGrade = moved && { tabs: [FlowCode.buildTab(moved.root.body, gradeTab)] };
+      const text = rebuiltGrade ? FlowCode.toPython(rebuiltGrade).text : '';
+      if (!moved || FlowLang.validateDoc(rebuiltGrade).errors
+        || !/if mark >= 50:\n    print\("Grade B"\)\nelif mark >= 70:\n    print\("Grade A"\)[\s\S]*else:\n    print\("Grade U"\)/.test(text)) {
+        failures.push('flowchart_designer.html: moving an elif clause up must swap it with its neighbour and keep else last');
+      }
+      if (FlowCode.moveClause(root, headPath, 2, 1)) failures.push('flowchart_designer.html: the last elif must not move below else');
+    }
+    // Code mode has no subprogram tabs; a def palette item adds subprograms,
+    // and the palette shows lower-case Python keywords.
+    if (!/\{!coding && \(\s*<div role="tablist"/.test(flowchartSource) || !/\{ type: "def", label: "New subprogram", code: "def" \}/.test(flowchartSource)) {
+      failures.push('flowchart_designer.html: Code mode must hide the tabs and offer def in its palette');
+    }
+    const paletteCodes = (flowchartSource.match(/const CODE_STATEMENTS = \[([\s\S]*?)\];/) || ['', ''])[1].match(/code: "([^"]*)"/g) || [];
+    if (!paletteCodes.length || paletteCodes.some((entry) => /[A-Z]/.test(entry.replace('True', '')))) {
+      failures.push('flowchart_designer.html: the Code palette must show lower-case Python keywords');
+    }
+    if (!/function InsertMarker\(/.test(flowchartSource)) failures.push('flowchart_designer.html: the Code view must mark where new statements go');
     // An Integer input refuses text, as int(input()) does in Python.
     const typed = FlowCode.parsePython('n = int(input())\nprint(n * 2)\n');
     const typedRun = runFlowchart(typed.doc, ['abc']);
