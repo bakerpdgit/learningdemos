@@ -32,32 +32,18 @@
         color: var(--ink);
         background: var(--bg);
       }
-      header {
-        background: #0f172a;
-        height: 58px;
-        display: flex;
+      [hidden] { display: none !important; }
+      .ext-toggle {
+        display: inline-flex;
         align-items: center;
-        padding: 0 1.5rem;
-        gap: 0.75rem;
-        flex-shrink: 0;
-      }
-      .header-brand { color: #38bdf8; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em; }
-      #theme-toggle {
-        margin-left: auto;
-        background: none;
-        border: none;
+        gap: 0.4rem;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.88rem;
+        white-space: nowrap;
         cursor: pointer;
-        color: #94a3b8;
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0;
       }
-      #theme-toggle:hover { background: #1e293b; }
-      #theme-toggle svg { width: 20px; height: 20px; }
+      .ext-toggle input { width: 1.05rem; height: 1.05rem; margin: 0; cursor: pointer; }
       main {
         max-width: 1500px;
         margin: 0 auto;
@@ -66,54 +52,58 @@
         gap: 1rem;
         grid-template-columns: minmax(500px, 1.1fr) minmax(420px, 0.9fr);
       }
+      main > * { min-width: 0; }
       .panel {
         background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 0.9rem;
       }
-      .controls {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.6rem;
-        margin-bottom: 0.8rem;
-      }
-      .controls label { font-weight: 600; font-size: 0.9rem; display:block; margin-bottom:0.3rem; }
-      select, button {
+      .panel select, .panel button, dialog button {
         width: 100%;
         border-radius: 6px;
         border: 1px solid #9ca3af;
         padding: 0.5rem;
         font-size: 0.95rem;
+        background: #f9fafb;
+        color: var(--ink);
       }
+      .panel button, dialog button { cursor: pointer; }
+      .panel button:hover, dialog button:hover { background: #f3f4f6; }
+      .panel button:disabled { cursor: not-allowed; opacity: 0.55; }
       .button-row {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 0.5rem;
         margin-bottom: 0.8rem;
       }
-      button {
-        background: #f9fafb;
-        cursor: pointer;
+      .panel button.primary { background: var(--accent); color:white; border-color: #1e40af; }
+      .panel button.success { background:#ecfdf5; border-color:#6ee7b7; color:#065f46; }
+      .run-options {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin: -0.2rem 0 0.8rem;
+        font-size: 0.9rem;
+        font-weight: 600;
       }
-      button:hover { background: #f3f4f6; }
-      button.primary { background: var(--accent); color:white; border-color: #1e40af; }
-      button.warning { background:#fef2f2; border-color:#fca5a5; color:#7f1d1d; }
-      button.success { background:#ecfdf5; border-color:#6ee7b7; color:#065f46; }
+      .panel .run-options select { width: auto; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
       #editor {
         width: 100%;
         min-height: 330px;
         resize: vertical;
-        border: 1px solid #9ca3af;
+        border: 1px solid #475569;
         border-radius: 6px;
         padding: 0.7rem;
         tab-size: 4;
         font-family: Consolas, Monaco, "Courier New", monospace;
         white-space: pre;
         line-height: 1.3;
+        background: #0b1220;
+        color: #e2e8f0;
       }
       .challenge-text {
-        margin: 0.6rem 0 0.8rem;
+        margin: 0 0 0.8rem;
         padding: 0.6rem;
         border: 1px solid var(--border);
         background: #f8fafc;
@@ -124,6 +114,7 @@
         white-space: pre-wrap;
         font-family: Consolas, Monaco, "Courier New", monospace;
       }
+      .demo-note { margin: 0.45rem 0 0; font-size: 0.84rem; color: #92400e; font-weight: 600; }
       .status {
         margin-top: 0.8rem;
         border: 1px solid var(--border);
@@ -139,6 +130,7 @@
         display: grid;
         gap: 0.8rem;
       }
+      .table-scroll { overflow-x: auto; }
       table {
         width: 100%;
         border-collapse: collapse;
@@ -151,29 +143,98 @@
       }
       th { background: #eff6ff; }
       #memoryTable td.row-label { background:#f1f5f9; font-weight:600; }
+      #memoryTable.screen-page { font-size: 0.72rem; }
+      #memoryTable.screen-page td { padding: 0.15rem 0.1rem; }
+      #memoryTable td.sp-cell { outline: 2px solid var(--accent); outline-offset: -2px; font-weight: 700; }
+      .memory-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+      .memory-head h3 { margin: 0.6rem 0; }
+      .memory-head label { font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
+      .panel .memory-head select { width: auto; padding: 0.3rem 0.45rem; font-size: 0.88rem; }
       .crash { color: var(--danger); font-weight: 700; }
       .halt { color: var(--ok); font-weight: 700; }
       .meta {
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
         gap:0.6rem;
         margin-bottom: 0.6rem;
       }
-      .meta div { padding:0.45rem; border:1px solid var(--border); border-radius: 6px; background:#f9fafb; }
+      .meta > div { padding:0.45rem; border:1px solid var(--border); border-radius: 6px; background:#f9fafb; }
+      .io-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.9rem;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.8rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .io-card h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+      #screen {
+        display: block;
+        width: 224px;
+        height: 224px;
+        image-rendering: pixelated;
+        background: #000;
+        border: 2px solid #475569;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      #screen:focus-visible, #screen:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+      .io-card .small { margin: 0.4rem 0 0; }
+      #consoleOut {
+        margin: 0;
+        height: 118px;
+        overflow: auto;
+        background: #0b1220;
+        color: #a7f3d0;
+        border: 1px solid #475569;
+        border-radius: 6px;
+        padding: 0.45rem 0.55rem;
+        font: 0.85rem/1.3 Consolas, Monaco, "Courier New", monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .dpad {
+        display: grid;
+        grid-template-columns: repeat(3, 42px) 18px 50px;
+        grid-template-rows: repeat(3, 36px);
+        gap: 4px;
+        margin-top: 0.6rem;
+        align-items: center;
+      }
+      .panel .dpad button { width: 100%; height: 100%; padding: 0; font-size: 1rem; line-height: 1; }
+      .dpad-up { grid-column: 2; grid-row: 1; }
+      .dpad-left { grid-column: 1; grid-row: 2; }
+      .dpad-right { grid-column: 3; grid-row: 2; }
+      .dpad-down { grid-column: 2; grid-row: 3; }
+      .panel .dpad .dpad-action { grid-column: 5; grid-row: 1 / span 3; height: 50px; border-radius: 50%; font-weight: 700; }
+      .panel .dpad button.pressed { background: var(--accent); color: #fff; }
       dialog {
         border: 1px solid var(--border);
         border-radius: 10px;
         width: min(1000px, 96vw);
         max-height: 86vh;
         padding: 0;
+        overflow: auto;
+        color: var(--ink);
+        background: var(--panel);
       }
       dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
-      .dialog-inner { padding: 1rem; overflow: auto; max-height: 86vh; }
+      .dialog-inner { padding: 1rem; }
       .instruction-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
       .instruction-table th, .instruction-table td { border: 1px solid var(--border); padding: 0.45rem; text-align: left; vertical-align: top; }
       .instruction-table th { background: #f8fafc; }
+      .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.4rem; padding: 0; list-style: none; }
+      .palette li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.88rem; }
+      .palette .swatch { width: 1.3rem; height: 1.3rem; border-radius: 4px; border: 1px solid #64748b; flex: 0 0 auto; }
       .dialog-actions { display:flex; justify-content:flex-end; margin-top: 0.8rem; }
-      @media (max-width: 1200px) { main { grid-template-columns: 1fr; } }
+      .dialog-actions button { width: auto; padding: 0.5rem 1.2rem; }
+      @media (max-width: 1200px) { main { grid-template-columns: minmax(0, 1fr); } }
+      @media (max-width: 760px) {
+        .button-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
+      @media (max-width: 560px) {
+        .io-card { grid-template-columns: minmax(0, 1fr); }
+      }
       html.dark {
         --bg: #0f172a;
         --panel: #1e293b;
@@ -183,36 +244,29 @@
         --ok: #34d399;
         --border: #334155;
       }
-      #editor {
-        background: #0b1220;
-        color: #e2e8f0;
-        border-color: #475569;
-      }
-      html.dark select,
-      html.dark input[type="text"] {
-        background: #1e293b;
-        color: #f1f5f9;
-        border-color: #475569;
-      }
-      html.dark button {
+      html.dark .panel select,
+      html.dark .panel button,
+      html.dark dialog button {
         background: #1e293b;
         color: #e2e8f0;
         border-color: #475569;
       }
-      html.dark button.primary { background: #0369a1; color: white; border-color: #0284c7; }
-      html.dark button.warning { background: #450a0a; border-color: #7f1d1d; color: #fca5a5; }
-      html.dark button.success { background: #052e16; border-color: #166534; color: #86efac; }
+      html.dark .panel button:hover, html.dark dialog button:hover { background: #283548; }
+      html.dark .panel button.primary { background: #0369a1; color: white; border-color: #0284c7; }
+      html.dark .panel button.success { background: #052e16; border-color: #166534; color: #86efac; }
+      html.dark .panel .dpad button.pressed { background: #0369a1; color: #fff; }
       html.dark .challenge-text { background: #1e293b; border-color: #334155; }
+      html.dark .demo-note { color: #fcd34d; }
       html.dark .status { background: #1e293b; border-color: #334155; }
       html.dark .status.ok { border-color: #34d399; background: #052e16; }
       html.dark .status.error { border-color: #f87171; background: #450a0a; }
       html.dark th, html.dark td { border-color: #334155; }
       html.dark th { background: #1e3a5f; }
       html.dark #memoryTable td.row-label { background: #283548; }
-      html.dark .meta div { background: #1e293b; }
-      html.dark dialog { background: #1e293b; color: #f1f5f9; border-color: #334155; }
+      html.dark .meta > div { background: #1e293b; }
       html.dark .instruction-table th { background: #283548; }
       html.dark .small { color: #94a3b8; }
+      html.dark #screen { border-color: #64748b; }
     </style>
     <!-- Prevent FOUC: apply dark class before render -->
     <script>
@@ -246,20 +300,23 @@
     <script src="scripts/site-shell.js"></script>
 </head>
   <body>
-
+    <header data-interactive-header>
+      <div>
+        <h1>AQA Assembly Challenges Simulator</h1>
+        <p>Write, run and test programs in the AQA assembly language</p>
+      </div>
+      <div data-interactive-actions>
+        <select id="problemSelect" aria-label="Challenge"></select>
+        <select id="scenarioSelect" class="interactive-shell-question-select" aria-label="Scenario"></select>
+        <label class="ext-toggle" title="Adds a screen, console, controller and extra instructions">
+          <input type="checkbox" id="extendedToggle" />
+          Extended mode
+        </label>
+      </div>
+    </header>
 
     <main>
       <section class="panel">
-        <div class="controls">
-          <div>
-            <label for="problemSelect">Challenge</label>
-            <select id="problemSelect"></select>
-          </div>
-          <div>
-            <label for="scenarioSelect">Scenario</label>
-            <select id="scenarioSelect"></select>
-          </div>
-        </div>
         <div id="challengeText" class="challenge-text"></div>
         <div class="button-row">
           <button id="runBtn" class="primary">RUN</button>
@@ -269,33 +326,66 @@
           <button id="solutionBtn">LOAD SOLUTION</button>
           <button id="instructionSetBtn">VIEW INSTRUCTION SET</button>
         </div>
+        <div class="run-options" data-extended-only hidden>
+          <label for="speedSelect">Run speed</label>
+          <select id="speedSelect">
+            <option value="slow">Slow – one instruction at a time</option>
+            <option value="fast">Fast – for animation and games</option>
+          </select>
+        </div>
+        <label for="editor" class="small">Assembly program</label>
         <textarea id="editor" spellcheck="false"></textarea>
-        <div class="small">Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; immediate values must use decimal <code>#</code>; only registers <code>R0..R12</code>; memory refs are decimal addresses <code>100..199</code>. Registers and memory cells are implemented internally as 16-bit signed integers, so values outside <code>-32768..32767</code> overflow and wrap.</div>
-        <div id="status" class="status">Ready.</div>
+        <div id="syntaxNote" class="small"></div>
+        <div id="status" class="status" aria-live="polite">Ready.</div>
       </section>
 
       <section class="panel">
+        <div id="ioCard" class="io-card" data-extended-only hidden>
+          <div>
+            <h3>Screen (16×16)</h3>
+            <canvas id="screen" width="16" height="16" tabindex="0" role="img" aria-label="16 by 16 pixel screen. Select it, then use the arrow keys and Space to send controller input."></canvas>
+            <p class="small">Click the screen, then use the arrow keys and Space.</p>
+          </div>
+          <div>
+            <h3>Console</h3>
+            <pre id="consoleOut" role="log" aria-label="Console output"></pre>
+            <div class="dpad" role="group" aria-label="Controller">
+              <button type="button" class="dpad-up" data-key="1" aria-label="Up">▲</button>
+              <button type="button" class="dpad-left" data-key="4" aria-label="Left">◀</button>
+              <button type="button" class="dpad-right" data-key="2" aria-label="Right">▶</button>
+              <button type="button" class="dpad-down" data-key="3" aria-label="Down">▼</button>
+              <button type="button" class="dpad-action" data-key="5" aria-label="Action">A</button>
+            </div>
+            <p class="small">Last input: <span id="lastKey">none</span></p>
+          </div>
+        </div>
         <div class="meta">
           <div><strong>PC:</strong> <span id="pc">0</span></div>
           <div><strong>CMP Flag:</strong> <span id="cmpFlag">N/A</span></div>
           <div><strong>State:</strong> <span id="machineState">Stopped</span></div>
+          <div data-extended-only hidden><strong>SP:</strong> <span id="sp">768</span></div>
         </div>
         <div class="tables">
           <div>
             <h3>Registers (R0-R12)</h3>
             <label class="small"><input type="checkbox" id="binaryToggle" /> View registers in binary</label>
-            <table id="registerTable"></table>
+            <div class="table-scroll"><table id="registerTable"></table></div>
           </div>
           <div>
-            <h3>Memory 100-199 (10x10)</h3>
-            <table id="memoryTable"></table>
+            <div class="memory-head">
+              <h3 id="memoryHeading">Memory 100-199 (10x10)</h3>
+              <label data-extended-only hidden>Show
+                <select id="memoryPageSelect"></select>
+              </label>
+            </div>
+            <div class="table-scroll"><table id="memoryTable"></table></div>
           </div>
         </div>
       </section>
     </main>
-    <dialog id="instructionDialog">
+    <dialog id="instructionDialog" aria-labelledby="instructionDialogTitle">
       <div class="dialog-inner">
-        <h2>Instruction set</h2>
+        <h2 id="instructionDialogTitle">Instruction set</h2>
         <table class="instruction-table" id="instructionSetTable">
           <tr><th>Instruction</th><th>Description</th></tr>
         </table>
@@ -307,15 +397,45 @@
           <li><code>Rm</code> — use the value stored in register <code>m</code> (for example, <code>R6</code> means use the value stored in register 6).</li>
         </ul>
         <p>The available general purpose registers that the programmer can use are numbered 0 to 12.</p>
+        <section id="extendedHelp" data-extended-only hidden>
+          <h2>Extended mode</h2>
+          <p>Extended mode is <strong>not</strong> part of the AQA specification. It adds the features real assembly programs need for input, output, data and subroutines. Every AQA instruction above still works.</p>
+          <table class="instruction-table" id="extendedSetTable"></table>
+          <h3>Extra forms of &lt;operand2&gt;</h3>
+          <ul>
+            <li><code>#'A'</code> — the character code of a single character (here 65).</li>
+          </ul>
+          <h3>Extra forms of &lt;memory ref&gt;</h3>
+          <ul>
+            <li><code>150</code> — direct: any address <code>0..1023</code>.</li>
+            <li><code>total</code> — direct, using a label defined in the <code>.data</code> section.</li>
+            <li><code>[R2]</code> — indirect: the address is the value in R2.</li>
+            <li><code>[R2, #3]</code> — indexed: the address is R2 + 3.</li>
+            <li><code>[R2, R3]</code> — indexed: the address is R2 + R3 (useful for arrays).</li>
+          </ul>
+          <h3>The .data section</h3>
+          <p>Put <code>.data</code> on its own unindented line, then labels on their own lines followed by indented directives. Put <code>.text</code> before the instructions. Data is placed in memory from address 200 upwards. A <code>;</code> starts a comment anywhere on a line.</p>
+          <ul>
+            <li><code>.word 5, -2, 'A'</code> — one memory word per value.</li>
+            <li><code>.space 20</code> — reserve 20 words set to 0.</li>
+            <li><code>.asciz "HELLO"</code> — one character code per word, followed by a 0 terminator.</li>
+          </ul>
+          <h3>Memory map</h3>
+          <ul>
+            <li><code>0–99</code> free; <code>100–199</code> challenge data; <code>200+</code> the <code>.data</code> section.</li>
+            <li>The stack grows downwards from <code>767</code>. SP starts at 768 (empty stack).</li>
+            <li><code>768–1023</code> the screen: pixel (x, y) is at address <code>768 + y×16 + x</code>. Storing a colour number there lights the pixel; loading reads it back.</li>
+          </ul>
+          <h3>Screen colours</h3>
+          <ul class="palette" id="paletteList"></ul>
+        </section>
         <div class="dialog-actions">
           <button id="closeInstructionDialog">Close</button>
         </div>
       </div>
     </dialog>
 
-    <script>
-      const MAX_STEPS = 10000;
-      const INT_BITS = 16;
+    <script id="aqa-asm-machine">
       const instructionSetRows = [
         ["LDR Rd, <memory ref>", "Load the value stored in the memory location specified by <memory ref> into register d."],
         ["STR Rd, <memory ref>", "Store the value that is in register d into the memory location specified by <memory ref>."],
@@ -477,12 +597,920 @@
           ]
         }
       ];
+      const extendedInstructionRows = [
+        ["ADR Rd, <label>", "Load the memory address of the .data label <label> into register d."],
+        ["B<condition> <label>", "Extra conditions: GE (greater than or equal) and LE (less than or equal)."],
+        ["BL <label>", "Branch with link: push the return position onto the stack, then branch to the subroutine at <label>."],
+        ["RET", "Return from a subroutine: pop the return position from the stack and continue from there."],
+        ["PUSH Rn", "Decrease SP by 1, then store the value in register n at the address in SP."],
+        ["POP Rd", "Load the value at the address in SP into register d, then increase SP by 1."],
+        ["OUTC <operand2>", "Print the character whose code is <operand2> on the console. 10 starts a new line; 12 clears the console."],
+        ["OUTN <operand2>", "Print the value of <operand2> on the console as a signed decimal number."],
+        ["INP Rd", "Read the controller into register d: 0 nothing, 1 up, 2 right, 3 down, 4 left, 5 action. Reading clears the last press."],
+        ["RND Rd, <operand2>", "Store a random whole number from 0 up to (<operand2> − 1) in register d."],
+        ["WAIT <operand2>", "Pause the running program for <operand2> milliseconds so the screen can update (ignored when testing)."]
+      ];
+
+      // Turns an indented template into editor source: leading spaces become one tab.
+      const asm = (text) => text.replace(/^\n/, "").replace(/\n\s*$/, "").split("\n")
+        .map((line) => line.replace(/^ +/, (spaces) => (spaces.length ? "\t" : ""))).join("\n");
+      const outputIs = (expected) => (s) => s.output === expected;
+
+      const extendedChallenges = [
+        {
+          id: 1,
+          ext: true,
+          title: "Hello, world",
+          prompt: "Store the string \"HELLO WORLD\" in the .data section with .asciz, then print it on the console.\nUse ADR to get its address and a loop with indirect addressing [Rn] that stops at the 0 terminator.",
+          starter: asm(`
+.data
+msg:
+  .asciz "HELLO WORLD"
+.text
+START:
+  ADR R1, msg        ; R1 points at the first character
+NEXT:
+  LDR R2, [R1]       ; indirect: load the character R1 points at
+  CMP R2, #0
+  BEQ DONE           ; 0 marks the end of the string
+  OUTC R2
+  ADD R1, R1, #1     ; move to the next character
+  B NEXT
+DONE:
+  HALT
+`),
+          scenarios: [
+            { name: "A: print the message", registers: {}, memory: {}, check: outputIs("HELLO WORLD") }
+          ]
+        },
+        {
+          id: 2,
+          ext: true,
+          title: "Total of an array",
+          prompt: "memory[110] holds a count n. The n values that follow start at memory[111].\nAdd them up and store the total in memory[130]. Use indexed addressing [Rn, Rm] inside a loop.",
+          starter: asm(`
+START:
+  LDR R1, 110        ; n
+  MOV R2, #111       ; base address of the array
+  MOV R3, #0         ; index
+  MOV R4, #0         ; running total
+LOOP:
+  CMP R3, R1
+  BEQ DONE
+  LDR R5, [R2, R3]   ; indexed: address = base + index
+  ADD R4, R4, R5
+  ADD R3, R3, #1
+  B LOOP
+DONE:
+  STR R4, 130
+  HALT
+`),
+          scenarios: [
+            { name: "A: five values", registers: {}, memory: {110: 5, 111: 3, 112: 8, 113: -2, 114: 10, 115: 6}, check: (s) => s.memory[130] === 25 },
+            { name: "B: empty array", registers: {}, memory: {110: 0, 111: 99}, check: (s) => s.memory[130] === 0 },
+            { name: "C: eight values", registers: {}, memory: {110: 8, 111: 1, 112: 2, 113: 3, 114: 4, 115: 5, 116: 6, 117: 7, 118: 8}, check: (s) => s.memory[130] === 36 }
+          ]
+        },
+        {
+          id: 3,
+          ext: true,
+          title: "Countdown with subroutines",
+          prompt: "Print 10, 9, 8 … 1 on separate lines, then LIFT OFF!\nWrite a subroutine that prints the number in R0 and a new line, and another that prints the string whose address is in R0. Call them with BL and return with RET.\nThe string subroutine uses R1 and R2, so it must PUSH and POP them: R1 and R2 must be unchanged at the end.",
+          starter: asm(`
+.data
+liftoff:
+  .asciz "LIFT OFF!"
+.text
+START:
+  MOV R4, #10
+COUNT:
+  MOV R0, R4
+  BL SHOWNUM
+  SUB R4, R4, #1
+  CMP R4, #0
+  BGT COUNT
+  ADR R0, liftoff
+  BL SHOWSTR
+  HALT
+; SHOWNUM: print R0 then a new line
+SHOWNUM:
+  OUTN R0
+  OUTC #10
+  RET
+; SHOWSTR: print the string at address R0, keeping R1 and R2 safe
+SHOWSTR:
+  PUSH R1
+  PUSH R2
+  MOV R1, R0
+SS_NEXT:
+  LDR R2, [R1]
+  CMP R2, #0
+  BEQ SS_DONE
+  OUTC R2
+  ADD R1, R1, #1
+  B SS_NEXT
+SS_DONE:
+  POP R2             ; pop in the reverse order of the pushes
+  POP R1
+  RET
+`),
+          scenarios: [
+            {
+              name: "A: R1 = 111, R2 = 222",
+              registers: {R1: 111, R2: 222},
+              memory: {},
+              check: (s) => s.output === "10\n9\n8\n7\n6\n5\n4\n3\n2\n1\nLIFT OFF!" && s.registers[1] === 111 && s.registers[2] === 222
+            },
+            {
+              name: "B: R1 = -5, R2 = 7",
+              registers: {R1: -5, R2: 7},
+              memory: {},
+              check: (s) => s.output === "10\n9\n8\n7\n6\n5\n4\n3\n2\n1\nLIFT OFF!" && s.registers[1] === -5 && s.registers[2] === 7
+            }
+          ]
+        },
+        {
+          id: 4,
+          ext: true,
+          title: "Draw a pattern on the screen",
+          prompt: "The screen is memory-mapped: pixel (x, y) is at address 768 + y×16 + x.\nDraw a blue (4) border around the whole 16×16 screen, then a yellow (5) diagonal from (1, 1) to (14, 14). Leave every other pixel black (0).\nTip: [Rn, #768] adds 768 to the value in Rn.",
+          starter: asm(`
+START:
+  MOV R1, #0         ; i = 0 to 15
+  MOV R5, #4         ; blue
+BORDER:
+  STR R5, [R1, #768]   ; top row (i, 0)
+  STR R5, [R1, #1008]  ; bottom row (i, 15): 768 + 15*16 = 1008
+  LSL R3, R1, #4       ; i * 16
+  STR R5, [R3, #768]   ; left column (0, i)
+  STR R5, [R3, #783]   ; right column (15, i)
+  ADD R1, R1, #1
+  CMP R1, #16
+  BLT BORDER
+  MOV R1, #1
+  MOV R5, #5         ; yellow
+DIAG:
+  LSL R3, R1, #4
+  ADD R3, R3, R1     ; i * 16 + i
+  STR R5, [R3, #768]
+  ADD R1, R1, #1
+  CMP R1, #15
+  BLT DIAG
+  HALT
+`),
+          scenarios: [
+            {
+              name: "A: border and diagonal",
+              registers: {},
+              memory: {},
+              check: (s) => {
+                for (let y = 0; y < 16; y += 1) {
+                  for (let x = 0; x < 16; x += 1) {
+                    const edge = x === 0 || y === 0 || x === 15 || y === 15;
+                    const expected = edge ? 4 : (x === y ? 5 : 0);
+                    if (s.screen[y * 16 + x] !== expected) return false;
+                  }
+                }
+                return true;
+              }
+            }
+          ]
+        },
+        {
+          id: 5,
+          ext: true,
+          title: "Move a dot (demo)",
+          demo: true,
+          speed: "fast",
+          prompt: "A game loop: draw a dot, WAIT, read the controller with INP, then move the dot. Moving off one edge wraps to the other (AND #15).\nPress A (Space) to change colour. RUN with the speed set to Fast, click the screen and use the arrow keys.",
+          starter: asm(`
+START:
+  MOV R1, #8         ; x
+  MOV R2, #8         ; y
+  MOV R5, #4         ; colour
+LOOP:
+  LSL R3, R2, #4     ; R3 = y*16 + x
+  ADD R3, R3, R1
+  STR R5, [R3, #768] ; draw the dot
+  WAIT #60
+  INP R4
+  CMP R4, #0
+  BEQ LOOP           ; no input: keep waiting
+  CMP R4, #5
+  BEQ COLOUR
+  MOV R6, #0
+  STR R6, [R3, #768] ; rub out the old dot
+  CMP R4, #1
+  BEQ UP
+  CMP R4, #2
+  BEQ RIGHT
+  CMP R4, #3
+  BEQ DOWN
+  SUB R1, R1, #1     ; left
+  AND R1, R1, #15
+  B LOOP
+UP:
+  SUB R2, R2, #1
+  AND R2, R2, #15
+  B LOOP
+RIGHT:
+  ADD R1, R1, #1
+  AND R1, R1, #15
+  B LOOP
+DOWN:
+  ADD R2, R2, #1
+  AND R2, R2, #15
+  B LOOP
+COLOUR:
+  ADD R5, R5, #1
+  AND R5, R5, #15
+  CMP R5, #0
+  BNE LOOP
+  MOV R5, #1         ; skip black so the dot stays visible
+  B LOOP
+`),
+          scenarios: [
+            { name: "Demo: use the controller", registers: {}, memory: {}, check: null }
+          ]
+        },
+        {
+          id: 6,
+          ext: true,
+          title: "Snake (demo)",
+          demo: true,
+          speed: "fast",
+          prompt: "Steer the snake with the arrow keys to eat the red apples. Each apple makes it one longer. Hitting a wall or your own tail ends the game.\nThe body is a circular buffer of positions (position = y×16 + x). Collisions are found by loading the screen pixel in front of the head. RUN with the speed set to Fast and click the screen.",
+          starter: asm(`
+.data
+body:                  ; circular buffer of snake positions
+  .space 256
+title:
+  .asciz "SNAKE! Arrow keys to steer."
+over:
+  .asciz "GAME OVER - score "
+.text
+START:
+  OUTC #12             ; clear the console
+  ADR R0, title
+  BL PRINT
+  OUTC #10
+  ADR R10, body        ; R10 = base of the body buffer
+  MOV R1, #0           ; R1 = head index in the buffer
+  MOV R2, #0           ; R2 = tail index in the buffer
+  MOV R3, #2           ; R3 = direction (1 up, 2 right, 3 down, 4 left)
+  MOV R4, #134         ; R4 = head position: x = 6, y = 8
+  MOV R5, #0           ; R5 = score
+  MOV R9, #0           ; R9 = 1 when an apple was just eaten
+  STR R4, [R10, R1]
+  MOV R7, #5           ; yellow head
+  STR R7, [R4, #768]
+  BL APPLE
+LOOP:
+  WAIT #150
+  INP R7
+  CMP R7, #0
+  BEQ MOVE             ; no key pressed: keep going
+  CMP R7, #5
+  BEQ MOVE             ; ignore the action button
+  SUB R8, R7, R3       ; directions 2 apart are opposites
+  CMP R8, #2
+  BEQ MOVE             ; cannot reverse into yourself
+  CMP R8, #-2
+  BEQ MOVE
+  MOV R3, R7
+MOVE:
+  MOV R11, R4          ; R11 = old head position
+  AND R6, R4, #15      ; x
+  LSR R8, R4, #4       ; y
+  CMP R3, #1
+  BEQ UP
+  CMP R3, #2
+  BEQ RIGHT
+  CMP R3, #3
+  BEQ DOWN
+  CMP R6, #0           ; left
+  BEQ DEAD
+  SUB R4, R4, #1
+  B MOVED
+UP:
+  CMP R8, #0
+  BEQ DEAD
+  SUB R4, R4, #16
+  B MOVED
+RIGHT:
+  CMP R6, #15
+  BEQ DEAD
+  ADD R4, R4, #1
+  B MOVED
+DOWN:
+  CMP R8, #15
+  BEQ DEAD
+  ADD R4, R4, #16
+MOVED:
+  MOV R7, #3           ; old head becomes green body
+  STR R7, [R11, #768]
+  LDR R7, [R4, #768]   ; what is in front of the head?
+  CMP R7, #2
+  BEQ EAT
+  LDR R8, [R10, R2]    ; no apple: rub out the tail
+  MOV R12, #0
+  STR R12, [R8, #768]
+  ADD R2, R2, #1
+  AND R2, R2, #255     ; wrap the tail index round the buffer
+  LDR R7, [R4, #768]
+  CMP R7, #0
+  BNE DEAD             ; ran into the body
+  B ADVANCE
+EAT:
+  ADD R5, R5, #1
+  MOV R9, #1
+ADVANCE:
+  ADD R1, R1, #1
+  AND R1, R1, #255     ; wrap the head index round the buffer
+  STR R4, [R10, R1]
+  MOV R7, #5           ; new head is yellow
+  STR R7, [R4, #768]
+  CMP R9, #1
+  BNE LOOP
+  MOV R9, #0
+  BL APPLE
+  B LOOP
+DEAD:
+  ADR R0, over
+  BL PRINT
+  OUTN R5
+  HALT
+; APPLE: put a red apple (2) on a random empty pixel
+APPLE:
+  PUSH R6
+  PUSH R7
+APPLE_TRY:
+  RND R6, #256
+  LDR R7, [R6, #768]
+  CMP R7, #0
+  BNE APPLE_TRY        ; occupied: try again
+  MOV R7, #2
+  STR R7, [R6, #768]
+  POP R7
+  POP R6
+  RET
+; PRINT: print the string at address R0
+PRINT:
+  PUSH R1
+  PUSH R2
+  MOV R1, R0
+PRINT_NEXT:
+  LDR R2, [R1]
+  CMP R2, #0
+  BEQ PRINT_DONE
+  OUTC R2
+  ADD R1, R1, #1
+  B PRINT_NEXT
+PRINT_DONE:
+  POP R2
+  POP R1
+  RET
+`),
+          scenarios: [
+            { name: "Demo: play Snake", registers: {}, memory: {}, check: null }
+          ]
+        }
+      ];
+
+      const AqaAsm = (() => {
+        const MAX_STEPS = 10000;
+        const INT_BITS = 16;
+        const MEMORY_SIZE = 1024;
+        const DATA_BASE = 200;
+        const STACK_BASE = 768;
+        const SCREEN_BASE = 768;
+        const SCREEN_SIZE = 16;
+        const OUTPUT_LIMIT = 4000;
+        const LABEL_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+        const AQA_OPS = new Set(["HALT", "LDR", "STR", "MOV", "MVN", "ADD", "SUB", "AND", "ORR", "EOR", "LSL", "LSR", "CMP", "B", "BEQ", "BNE", "BGT", "BLT"]);
+        const EXTENDED_OPS = new Set(["ADR", "BGE", "BLE", "BL", "RET", "PUSH", "POP", "OUTC", "OUTN", "INP", "RND", "WAIT"]);
+        const BRANCH_OPS = new Set(["B", "BEQ", "BNE", "BGT", "BLT", "BGE", "BLE", "BL"]);
+        const KEY_NAMES = ["none", "up", "right", "down", "left", "action"];
+        const PALETTE = [
+          ["black", "#000000"], ["white", "#ffffff"], ["red", "#e53935"], ["green", "#43a047"],
+          ["blue", "#1e88e5"], ["yellow", "#fdd835"], ["cyan", "#00bcd4"], ["magenta", "#d500f9"],
+          ["orange", "#fb8c00"], ["purple", "#7e57c2"], ["brown", "#8d6e63"], ["grey", "#9e9e9e"],
+          ["dark grey", "#424242"], ["lime", "#c6ff00"], ["pink", "#f48fb1"], ["navy", "#283593"]
+        ];
+
+        function toInt16(value) {
+          const normalized = Number(value) & 0xFFFF;
+          return normalized >= 0x8000 ? normalized - 0x10000 : normalized;
+        }
+
+        function parseRegister(token, lineNo) {
+          const m = /^R(\d{1,2})$/.exec(token);
+          if (!m) throw new Error(`Line ${lineNo}: invalid register '${token}'. Use R0..R12.`);
+          const idx = Number(m[1]);
+          if (idx < 0 || idx > 12) throw new Error(`Line ${lineNo}: register out of range '${token}'. Only R0..R12 exist.`);
+          return idx;
+        }
+
+        function parseOperand2(token, lineNo, extended) {
+          if (/^#-?\d+$/.test(token)) return { type: "imm", value: toInt16(Number(token.slice(1))) };
+          if (extended) {
+            const ch = /^#'(.)'$/.exec(token);
+            if (ch) return { type: "imm", value: ch[1].charCodeAt(0) };
+          }
+          if (/^R\d{1,2}$/.test(token)) return { type: "reg", value: parseRegister(token, lineNo) };
+          throw new Error(`Line ${lineNo}: invalid operand2 '${token}'. Use #decimal${extended ? ", #'c'" : ""} or Rm.`);
+        }
+
+        function parseMemoryRef(token, lineNo) {
+          if (!/^-?\d+$/.test(token)) throw new Error(`Line ${lineNo}: invalid memory reference '${token}'. Must be decimal address 100..199.`);
+          const addr = Number(token);
+          if (addr < 100 || addr > 199) throw new Error(`Line ${lineNo}: memory address ${addr} out of range (100..199).`);
+          return addr;
+        }
+
+        // Removes a trailing ; comment, ignoring semicolons inside quotes.
+        function stripComment(line) {
+          let quote = null;
+          for (let i = 0; i < line.length; i += 1) {
+            const ch = line[i];
+            if (quote) {
+              if (ch === "\\") i += 1;
+              else if (ch === quote) quote = null;
+            } else if (ch === '"' || ch === "'") {
+              quote = ch;
+            } else if (ch === ";") {
+              return line.slice(0, i);
+            }
+          }
+          return line;
+        }
+
+        // Splits operands on commas that are not inside [ ] or quotes.
+        function splitArgs(text) {
+          const parts = [];
+          let current = "";
+          let depth = 0;
+          let quote = null;
+          for (let i = 0; i < text.length; i += 1) {
+            const ch = text[i];
+            if (quote) {
+              current += ch;
+              if (ch === "\\" && i + 1 < text.length) { current += text[i + 1]; i += 1; }
+              else if (ch === quote) quote = null;
+              continue;
+            }
+            if (ch === '"' || ch === "'") quote = ch;
+            else if (ch === "[") depth += 1;
+            else if (ch === "]") depth -= 1;
+            if (ch === "," && depth === 0) {
+              parts.push(current.trim());
+              current = "";
+            } else {
+              current += ch;
+            }
+          }
+          parts.push(current.trim());
+          return parts.filter((part) => part !== "");
+        }
+
+        function parseDirective(text, lineNo) {
+          const m = /^\.([A-Za-z]+)\s*(.*)$/.exec(text);
+          const name = m ? m[1].toLowerCase() : "";
+          const rest = m ? m[2].trim() : "";
+          if (name === "word") {
+            const items = splitArgs(rest);
+            if (!items.length) throw new Error(`Line ${lineNo}: .word needs at least one value.`);
+            return items.map((item) => {
+              if (/^-?\d+$/.test(item)) return toInt16(Number(item));
+              const ch = /^'(.)'$/.exec(item);
+              if (ch) return ch[1].charCodeAt(0);
+              throw new Error(`Line ${lineNo}: invalid .word value '${item}'. Use decimal numbers or 'c'.`);
+            });
+          }
+          if (name === "space") {
+            if (!/^\d+$/.test(rest) || Number(rest) < 1) throw new Error(`Line ${lineNo}: .space needs a whole number of words, e.g. .space 10.`);
+            return Array(Number(rest)).fill(0);
+          }
+          if (name === "asciz") {
+            const s = /^"((?:[^"\\]|\\.)*)"$/.exec(rest);
+            if (!s) throw new Error(`Line ${lineNo}: .asciz needs text in double quotes, e.g. .asciz "HELLO".`);
+            const textValue = s[1].replace(/\\(.)/g, (_, c) => (c === "n" ? "\n" : c));
+            return Array.from(textValue).map((c) => c.charCodeAt(0) & 0xFFFF).concat(0);
+          }
+          throw new Error(`Line ${lineNo}: unknown directive '${text.split(/\s/)[0]}'. Use .word, .space or .asciz.`);
+        }
+
+        function decodeAddress(token, lineNo, ctx) {
+          if (!ctx.extended) {
+            if (token.startsWith("[")) throw new Error(`Line ${lineNo}: indirect addressing such as ${token} is only available in Extended mode.`);
+            return { mode: "abs", addr: parseMemoryRef(token, lineNo) };
+          }
+          if (/^-?\d+$/.test(token)) {
+            const addr = Number(token);
+            if (addr < 0 || addr >= MEMORY_SIZE) throw new Error(`Line ${lineNo}: memory address ${addr} out of range (0..${MEMORY_SIZE - 1}).`);
+            return { mode: "abs", addr };
+          }
+          const ind = /^\[\s*([^,\]\s]+)\s*(?:,\s*([^\]\s]+)\s*)?\]$/.exec(token);
+          if (ind) {
+            const base = parseRegister(ind[1], lineNo);
+            const offset = ind[2] ? parseOperand2(ind[2], lineNo, true) : { type: "imm", value: 0 };
+            return { mode: "ind", base, offset };
+          }
+          if (LABEL_RE.test(token)) {
+            if (ctx.dataLabels[token] !== undefined) return { mode: "abs", addr: ctx.dataLabels[token] };
+            if (ctx.labels[token] !== undefined) throw new Error(`Line ${lineNo}: '${token}' labels an instruction, not data. Put data labels in the .data section.`);
+            throw new Error(`Line ${lineNo}: data label '${token}' not found.`);
+          }
+          throw new Error(`Line ${lineNo}: invalid memory reference '${token}'. Use an address 0..${MEMORY_SIZE - 1}, a .data label, [Rn], [Rn, #n] or [Rn, Rm].`);
+        }
+
+        function decode(ins, ctx) {
+          const { op, args, lineNo } = ins;
+          const ext = ctx.extended;
+          const d = { op, lineNo, text: ins.text };
+          const count = (n, what) => {
+            if (args.length !== n) throw new Error(`Line ${lineNo}: ${op} ${what}.`);
+          };
+          switch (op) {
+            case "HALT":
+            case "RET":
+              count(0, "takes no operands");
+              break;
+            case "LDR":
+            case "STR":
+              count(2, "needs 2 operands");
+              d.rd = parseRegister(args[0], lineNo);
+              d.addr = decodeAddress(args[1], lineNo, ctx);
+              break;
+            case "MOV":
+            case "MVN":
+              count(2, "needs 2 operands");
+              d.rd = parseRegister(args[0], lineNo);
+              d.op2 = parseOperand2(args[1], lineNo, ext);
+              break;
+            case "ADD":
+            case "SUB":
+            case "AND":
+            case "ORR":
+            case "EOR":
+            case "LSL":
+            case "LSR":
+              count(3, "needs 3 operands");
+              d.rd = parseRegister(args[0], lineNo);
+              d.rn = parseRegister(args[1], lineNo);
+              d.op2 = parseOperand2(args[2], lineNo, ext);
+              break;
+            case "CMP":
+              count(2, "needs 2 operands");
+              d.rn = parseRegister(args[0], lineNo);
+              d.op2 = parseOperand2(args[1], lineNo, ext);
+              break;
+            case "ADR":
+              count(2, "needs a register and a .data label");
+              d.rd = parseRegister(args[0], lineNo);
+              if (ctx.dataLabels[args[1]] !== undefined) d.value = ctx.dataLabels[args[1]];
+              else if (ctx.labels[args[1]] !== undefined) throw new Error(`Line ${lineNo}: ADR needs a .data label, but '${args[1]}' labels an instruction.`);
+              else throw new Error(`Line ${lineNo}: data label '${args[1]}' not found.`);
+              break;
+            case "PUSH":
+            case "POP":
+            case "INP":
+              count(1, "needs one register");
+              d.rd = parseRegister(args[0], lineNo);
+              break;
+            case "OUTC":
+            case "OUTN":
+            case "WAIT":
+              count(1, "needs one operand2");
+              d.op2 = parseOperand2(args[0], lineNo, ext);
+              break;
+            case "RND":
+              count(2, "needs 2 operands");
+              d.rd = parseRegister(args[0], lineNo);
+              d.op2 = parseOperand2(args[1], lineNo, ext);
+              break;
+            default:
+              if (!BRANCH_OPS.has(op)) throw new Error(`Line ${lineNo}: unsupported instruction '${op}'.`);
+              count(1, "needs one label");
+              if (!LABEL_RE.test(args[0])) throw new Error(`Line ${lineNo}: invalid label reference '${args[0]}'.`);
+              if (ctx.labels[args[0]] !== undefined) d.target = ctx.labels[args[0]];
+              else if (ctx.dataLabels[args[0]] !== undefined) throw new Error(`Line ${lineNo}: '${args[0]}' is a .data label, so ${op} cannot branch to it.`);
+              else throw new Error(`Line ${lineNo}: branch target label '${args[0]}' not found.`);
+          }
+          return d;
+        }
+
+        function parse(source, options = {}) {
+          const extended = Boolean(options.extended);
+          const lines = String(source).replace(/\r/g, "").split("\n");
+          const pending = [];
+          const labels = {};
+          const dataLabels = {};
+          const data = [];
+          let dataPtr = DATA_BASE;
+          let section = "text";
+
+          for (let i = 0; i < lines.length; i += 1) {
+            const lineNo = i + 1;
+            const raw = extended ? stripComment(lines[i]) : lines[i];
+            if (raw.trim() === "") continue;
+            if (/^\s*;/.test(raw)) continue;
+            const trimmed = raw.trim();
+            const indented = /^\s/.test(raw);
+
+            if (/^\.(data|text)$/i.test(trimmed)) {
+              if (!extended) throw new Error(`Line ${lineNo}: sections such as ${trimmed} are only available in Extended mode.`);
+              if (indented) throw new Error(`Line ${lineNo}: section markers such as ${trimmed} must not be indented.`);
+              section = trimmed.slice(1).toLowerCase();
+              continue;
+            }
+
+            if (trimmed.endsWith(":")) {
+              if (indented) throw new Error(`Line ${lineNo}: labels must not be indented.`);
+              const labelName = trimmed.slice(0, -1);
+              if (!LABEL_RE.test(labelName)) throw new Error(`Line ${lineNo}: invalid label name '${labelName}'.`);
+              if (labels[labelName] !== undefined || dataLabels[labelName] !== undefined) throw new Error(`Line ${lineNo}: duplicate label '${labelName}'.`);
+              if (section === "data") dataLabels[labelName] = dataPtr;
+              else labels[labelName] = pending.length;
+              continue;
+            }
+
+            if (trimmed.startsWith(".")) {
+              if (!extended) throw new Error(`Line ${lineNo}: directives such as ${trimmed.split(/\s/)[0]} are only available in Extended mode.`);
+              if (!indented) throw new Error(`Line ${lineNo}: directives must be indented under their label.`);
+              if (section !== "data") throw new Error(`Line ${lineNo}: ${trimmed.split(/\s/)[0]} must be inside a .data section.`);
+              const values = parseDirective(trimmed, lineNo);
+              if (dataPtr + values.length > STACK_BASE) throw new Error(`Line ${lineNo}: the .data section would run past address ${STACK_BASE - 1}.`);
+              values.forEach((value) => { data.push({ addr: dataPtr, value }); dataPtr += 1; });
+              continue;
+            }
+
+            if (/^[A-Za-z_][A-Za-z0-9_]*\s+/.test(raw) && !indented) {
+              throw new Error(`Line ${lineNo}: instruction lines must be indented. If this is a label, add ':'.`);
+            }
+            if (!indented) {
+              throw new Error(`Line ${lineNo}: instruction lines must be indented with spaces or tab.`);
+            }
+            if (section === "data") {
+              throw new Error(`Line ${lineNo}: only .word, .space and .asciz can go in the .data section. Add a .text line before the instructions.`);
+            }
+
+            const spaceIdx = trimmed.search(/\s/);
+            const op = (spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx)).toUpperCase();
+            const argText = spaceIdx === -1 ? "" : trimmed.slice(spaceIdx + 1).trim();
+            const args = argText === "" ? [] : splitArgs(argText);
+            if (EXTENDED_OPS.has(op) && !extended) {
+              throw new Error(`Line ${lineNo}: '${op}' is an extended instruction. Tick Extended mode to use it.`);
+            }
+            if (!AQA_OPS.has(op) && !EXTENDED_OPS.has(op)) {
+              throw new Error(`Line ${lineNo}: instruction '${op}' is not in the AQA${extended ? " or extended" : ""} set.`);
+            }
+            pending.push({ op, args, lineNo, text: trimmed });
+          }
+
+          const ctx = { extended, labels, dataLabels };
+          const instructions = pending.map((ins) => decode(ins, ctx));
+          return { instructions, labels, dataLabels, data, dataEnd: dataPtr, extended };
+        }
+
+        function createMachine(program, init = {}, options = {}) {
+          const extended = Boolean(options.extended);
+          const m = {
+            extended,
+            program,
+            registers: Array(13).fill(0),
+            memory: Array(MEMORY_SIZE).fill(0),
+            pc: 0,
+            cmp: null,
+            sp: STACK_BASE,
+            halted: false,
+            crashed: false,
+            error: "",
+            output: "",
+            key: 0,
+            waitMs: 0,
+            steps: 0,
+            random: options.random || Math.random
+          };
+          const low = extended ? 0 : 100;
+          const high = extended ? MEMORY_SIZE - 1 : 199;
+          Object.entries(init.registers || {}).forEach(([reg, value]) => {
+            const idx = Number(reg.replace("R", ""));
+            if (idx >= 0 && idx <= 12) m.registers[idx] = toInt16(value);
+          });
+          Object.entries(init.memory || {}).forEach(([addrStr, value]) => {
+            const addr = Number(addrStr);
+            if (addr >= low && addr <= high) m.memory[addr] = toInt16(value);
+          });
+          if (program) program.data.forEach(({ addr, value }) => { m.memory[addr] = value; });
+          return m;
+        }
+
+        function crash(m, message) {
+          m.crashed = true;
+          m.halted = false;
+          m.error = message;
+        }
+
+        function value(m, op2) {
+          return op2.type === "imm" ? op2.value : toInt16(m.registers[op2.value]);
+        }
+
+        function effectiveAddress(m, addr) {
+          if (addr.mode === "abs") return addr.addr;
+          const a = toInt16(m.registers[addr.base]) + value(m, addr.offset);
+          if (a < 0 || a >= MEMORY_SIZE) throw new Error(`address ${a} is outside memory (0..${MEMORY_SIZE - 1}).`);
+          return a;
+        }
+
+        function push(m, v) {
+          const floor = m.program ? m.program.dataEnd : DATA_BASE;
+          if (m.sp - 1 < floor) throw new Error("stack overflow: the stack has grown into the .data section.");
+          m.sp -= 1;
+          m.memory[m.sp] = toInt16(v);
+        }
+
+        function pop(m) {
+          if (m.sp >= STACK_BASE) throw new Error("stack underflow: nothing left on the stack to POP or RET.");
+          const v = m.memory[m.sp];
+          m.sp += 1;
+          return v;
+        }
+
+        function print(m, text) {
+          m.output += text;
+          if (m.output.length > OUTPUT_LIMIT) m.output = m.output.slice(-OUTPUT_LIMIT);
+        }
+
+        function step(m) {
+          if (m.halted || m.crashed || !m.program) return;
+          const list = m.program.instructions;
+          if (m.pc < 0 || m.pc >= list.length) {
+            crash(m, "Program crashed: execution moved beyond last instruction without HALT.");
+            return;
+          }
+          const ins = list[m.pc];
+          const nextPc = m.pc + 1;
+          m.steps += 1;
+          m.lastLine = ins.lineNo;
+          try {
+            switch (ins.op) {
+              case "HALT":
+                m.halted = true;
+                break;
+              case "LDR":
+                m.registers[ins.rd] = toInt16(m.memory[effectiveAddress(m, ins.addr)]);
+                m.pc = nextPc;
+                break;
+              case "STR":
+                m.memory[effectiveAddress(m, ins.addr)] = toInt16(m.registers[ins.rd]);
+                m.pc = nextPc;
+                break;
+              case "MOV":
+              case "MVN": {
+                let v = value(m, ins.op2);
+                if (ins.op === "MVN") v = ~v;
+                m.registers[ins.rd] = toInt16(v);
+                m.pc = nextPc;
+                break;
+              }
+              case "ADD":
+              case "SUB":
+              case "AND":
+              case "ORR":
+              case "EOR":
+              case "LSL":
+              case "LSR": {
+                const a = toInt16(m.registers[ins.rn]);
+                const b = value(m, ins.op2);
+                let out;
+                if (ins.op === "ADD") out = a + b;
+                else if (ins.op === "SUB") out = a - b;
+                else if (ins.op === "AND") out = a & b;
+                else if (ins.op === "ORR") out = a | b;
+                else if (ins.op === "EOR") out = a ^ b;
+                else if (ins.op === "LSL") out = b >= INT_BITS ? 0 : a << b;
+                else out = b >= INT_BITS ? 0 : (a & 0xFFFF) >>> b;
+                m.registers[ins.rd] = toInt16(out);
+                m.pc = nextPc;
+                break;
+              }
+              case "CMP": {
+                const a = toInt16(m.registers[ins.rn]);
+                const b = value(m, ins.op2);
+                m.cmp = a === b ? 0 : a > b ? 1 : -1;
+                m.pc = nextPc;
+                break;
+              }
+              case "ADR":
+                m.registers[ins.rd] = toInt16(ins.value);
+                m.pc = nextPc;
+                break;
+              case "BL":
+                push(m, nextPc);
+                m.pc = ins.target;
+                break;
+              case "RET": {
+                const back = pop(m);
+                if (back < 0 || back > list.length) throw new Error(`RET popped ${back}, which is not a return position. Check that every PUSH has a matching POP.`);
+                m.pc = back;
+                break;
+              }
+              case "PUSH":
+                push(m, m.registers[ins.rd]);
+                m.pc = nextPc;
+                break;
+              case "POP":
+                m.registers[ins.rd] = toInt16(pop(m));
+                m.pc = nextPc;
+                break;
+              case "OUTC": {
+                const code = value(m, ins.op2) & 0xFFFF;
+                if (code === 12) m.output = "";
+                else print(m, String.fromCharCode(code));
+                m.pc = nextPc;
+                break;
+              }
+              case "OUTN":
+                print(m, String(value(m, ins.op2)));
+                m.pc = nextPc;
+                break;
+              case "INP":
+                m.registers[ins.rd] = m.key;
+                m.key = 0;
+                m.pc = nextPc;
+                break;
+              case "RND": {
+                const n = value(m, ins.op2);
+                if (n < 1) throw new Error("RND needs a range of at least 1.");
+                m.registers[ins.rd] = Math.floor(m.random() * n);
+                m.pc = nextPc;
+                break;
+              }
+              case "WAIT":
+                m.waitMs = Math.max(0, value(m, ins.op2));
+                m.pc = nextPc;
+                break;
+              default: {
+                let take = false;
+                if (ins.op === "B") take = true;
+                else if (m.cmp === null) throw new Error("conditional branch used before CMP.");
+                else if (ins.op === "BEQ") take = m.cmp === 0;
+                else if (ins.op === "BNE") take = m.cmp !== 0;
+                else if (ins.op === "BGT") take = m.cmp > 0;
+                else if (ins.op === "BLT") take = m.cmp < 0;
+                else if (ins.op === "BGE") take = m.cmp >= 0;
+                else if (ins.op === "BLE") take = m.cmp <= 0;
+                m.pc = take ? ins.target : nextPc;
+              }
+            }
+          } catch (error) {
+            crash(m, `Program crashed at line ${ins.lineNo}: ${error.message}`);
+          }
+        }
+
+        // Runs without pauses (WAIT is ignored) until HALT, a crash or the step limit.
+        function runToEnd(m, limit = MAX_STEPS, limitMessage = `Program crashed: exceeded ${MAX_STEPS} execution steps in test mode.`) {
+          let steps = 0;
+          while (!m.halted && !m.crashed && steps <= limit) {
+            step(m);
+            m.waitMs = 0;
+            steps += 1;
+          }
+          if (!m.halted && !m.crashed) crash(m, limitMessage);
+          return m;
+        }
+
+        function checkState(m) {
+          return {
+            registers: m.registers.slice(),
+            memory: m.memory.slice(),
+            output: m.output,
+            screen: m.memory.slice(SCREEN_BASE, SCREEN_BASE + SCREEN_SIZE * SCREEN_SIZE)
+          };
+        }
+
+        return {
+          MAX_STEPS, INT_BITS, MEMORY_SIZE, DATA_BASE, STACK_BASE, SCREEN_BASE, SCREEN_SIZE, KEY_NAMES, PALETTE,
+          toInt16, parse, createMachine, step, runToEnd, checkState
+        };
+      })();
+    </script>
+
+    <script>
+      const MAX_STEPS = AqaAsm.MAX_STEPS;
+      const INT_BITS = AqaAsm.INT_BITS;
+      const FAST_BUDGET = 2000;
+      const SLOW_DELAY = 120;
+      const KEY_MAP = { ArrowUp: 1, ArrowRight: 2, ArrowDown: 3, ArrowLeft: 4, " ": 5, Enter: 5 };
 
       const ui = {
         problemSelect: document.getElementById("problemSelect"),
         scenarioSelect: document.getElementById("scenarioSelect"),
+        extendedToggle: document.getElementById("extendedToggle"),
         challengeText: document.getElementById("challengeText"),
         editor: document.getElementById("editor"),
+        syntaxNote: document.getElementById("syntaxNote"),
         status: document.getElementById("status"),
         runBtn: document.getElementById("runBtn"),
         stepBtn: document.getElementById("stepBtn"),
@@ -490,75 +1518,106 @@
         testBtn: document.getElementById("testBtn"),
         solutionBtn: document.getElementById("solutionBtn"),
         instructionSetBtn: document.getElementById("instructionSetBtn"),
+        speedSelect: document.getElementById("speedSelect"),
         binaryToggle: document.getElementById("binaryToggle"),
         registerTable: document.getElementById("registerTable"),
         memoryTable: document.getElementById("memoryTable"),
+        memoryHeading: document.getElementById("memoryHeading"),
+        memoryPageSelect: document.getElementById("memoryPageSelect"),
         pc: document.getElementById("pc"),
+        sp: document.getElementById("sp"),
         cmpFlag: document.getElementById("cmpFlag"),
         machineState: document.getElementById("machineState"),
+        ioCard: document.getElementById("ioCard"),
+        screen: document.getElementById("screen"),
+        consoleOut: document.getElementById("consoleOut"),
+        lastKey: document.getElementById("lastKey"),
         instructionDialog: document.getElementById("instructionDialog"),
         instructionSetTable: document.getElementById("instructionSetTable"),
+        extendedSetTable: document.getElementById("extendedSetTable"),
+        paletteList: document.getElementById("paletteList"),
         closeInstructionDialog: document.getElementById("closeInstructionDialog")
       };
 
       const state = {
-        registers: Array(13).fill(0),
-        memory: Array(100).fill(0),
-        pc: 0,
-        cmp: null,
+        extended: false,
+        machine: null,
         running: false,
-        halted: false,
-        crashed: false,
-        crashMessage: "",
-        program: null,
         runTimer: null,
-        stepPending: false
+        runSteps: 0,
+        stepPending: false,
+        memoryPage: 100,
+        shownOutput: null
       };
 
-      function toInt16(value) {
-        const normalized = Number(value) & 0xFFFF;
-        return normalized >= 0x8000 ? normalized - 0x10000 : normalized;
-      }
+      const screenContext = ui.screen.getContext("2d");
+      const screenImage = screenContext.createImageData(AqaAsm.SCREEN_SIZE, AqaAsm.SCREEN_SIZE);
+      const paletteRgb = AqaAsm.PALETTE.map(([, hex]) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
+
       function setStatus(message, kind = "") {
         ui.status.className = "status" + (kind ? ` ${kind}` : "");
         ui.status.innerHTML = message;
       }
 
-      function resetMachineFromScenario() {
-        const challenge = challengeData[Number(ui.problemSelect.value)];
-        const scenario = challenge.scenarios[Number(ui.scenarioSelect.value)];
-        state.registers = Array(13).fill(0);
-        state.memory = Array(100).fill(0);
-        Object.entries(scenario.registers).forEach(([reg, value]) => {
-          const idx = Number(reg.replace("R", ""));
-          if (idx >= 0 && idx <= 12) state.registers[idx] = toInt16(value);
-        });
-        Object.entries(scenario.memory).forEach(([addrStr, value]) => {
-          const addr = Number(addrStr);
-          if (addr >= 100 && addr <= 199) state.memory[addr - 100] = toInt16(value);
-        });
-        state.pc = 0;
-        state.cmp = null;
+      function challengeList() {
+        return state.extended ? challengeData.concat(extendedChallenges) : challengeData;
+      }
+      function currentChallenge() {
+        const list = challengeList();
+        return list[Number(ui.problemSelect.value)] || list[0];
+      }
+      function currentScenario() {
+        const challenge = currentChallenge();
+        return challenge.scenarios[Number(ui.scenarioSelect.value)] || challenge.scenarios[0];
+      }
+
+      function newMachine(program) {
+        return AqaAsm.createMachine(program, currentScenario(), { extended: state.extended });
+      }
+
+      function stopRun() {
         state.running = false;
-        state.halted = false;
-        state.crashed = false;
-        state.crashMessage = "";
         if (state.runTimer) {
-          clearInterval(state.runTimer);
+          clearTimeout(state.runTimer);
           state.runTimer = null;
         }
         ui.runBtn.textContent = "RUN";
         ui.stepBtn.textContent = "STEP";
+      }
+
+      function resetMachineFromScenario() {
+        stopRun();
+        let program = null;
+        try { program = AqaAsm.parse(ui.editor.value, { extended: state.extended }); } catch (error) { program = null; }
+        state.machine = newMachine(program);
         updateTables();
         setStatus("Scenario reset. Ready to run.");
       }
 
+      // ---------- Display ----------
+
+      function memoryPages() {
+        if (!state.extended) return [{ start: 100, end: 199, cols: 10, label: "100–199" }];
+        const pages = [];
+        for (let start = 0; start < 700; start += 100) pages.push({ start, end: start + 99, cols: 10, label: `${start}–${start + 99}` });
+        pages.push({ start: 700, end: 767, cols: 10, label: "700–767 (stack)" });
+        pages.push({ start: AqaAsm.SCREEN_BASE, end: AqaAsm.MEMORY_SIZE - 1, cols: AqaAsm.SCREEN_SIZE, label: "768–1023 (screen)" });
+        return pages;
+      }
+
+      function populateMemoryPages() {
+        ui.memoryPageSelect.innerHTML = memoryPages().map((p) => `<option value="${p.start}">${p.label}</option>`).join("");
+        ui.memoryPageSelect.value = String(state.memoryPage);
+      }
+
       function updateTables() {
-        ui.pc.textContent = String(state.pc);
-        ui.cmpFlag.textContent = state.cmp === null ? "N/A" : (state.cmp > 0 ? "GT" : state.cmp < 0 ? "LT" : "EQ");
-        if (state.crashed) {
+        const m = state.machine;
+        ui.pc.textContent = String(m.pc);
+        ui.sp.textContent = String(m.sp);
+        ui.cmpFlag.textContent = m.cmp === null ? "N/A" : (m.cmp > 0 ? "GT" : m.cmp < 0 ? "LT" : "EQ");
+        if (m.crashed) {
           ui.machineState.innerHTML = `<span class='crash'>CRASHED</span>`;
-        } else if (state.halted) {
+        } else if (m.halted) {
           ui.machineState.innerHTML = `<span class='halt'>HALTED</span>`;
         } else if (state.running) {
           ui.machineState.textContent = "Running";
@@ -570,253 +1629,147 @@
         if (ui.binaryToggle.checked) {
           rHtml += "<tr><th>Register</th><th>Value (binary)</th></tr>";
           for (let i = 0; i <= 12; i += 1) {
-            const binary = (state.registers[i] & 0xFFFF).toString(2).padStart(INT_BITS, "0");
+            const binary = (m.registers[i] & 0xFFFF).toString(2).padStart(INT_BITS, "0");
             rHtml += `<tr><td>R${i}</td><td>0b${binary}</td></tr>`;
           }
         } else {
           rHtml += "<tr>";
           for (let i = 0; i <= 12; i += 1) rHtml += `<th>R${i}</th>`;
           rHtml += "</tr><tr>";
-          for (let i = 0; i <= 12; i += 1) rHtml += `<td>${state.registers[i]}</td>`;
+          for (let i = 0; i <= 12; i += 1) rHtml += `<td>${m.registers[i]}</td>`;
           rHtml += "</tr>";
         }
         ui.registerTable.innerHTML = rHtml;
 
+        const page = memoryPages().find((p) => p.start === state.memoryPage) || memoryPages()[0];
+        ui.memoryHeading.textContent = state.extended ? "Memory" : "Memory 100-199 (10x10)";
+        ui.memoryTable.classList.toggle("screen-page", page.cols !== 10);
         let mHtml = "";
-        for (let row = 0; row < 10; row += 1) {
-          const base = 100 + row * 10;
-          mHtml += "<tr>";
-          mHtml += `<td class='row-label'>${base}</td>`;
-          for (let col = 0; col < 10; col += 1) {
-            mHtml += `<td>${state.memory[row * 10 + col]}</td>`;
+        for (let base = page.start; base <= page.end; base += page.cols) {
+          mHtml += `<tr><td class='row-label'>${base}</td>`;
+          for (let col = 0; col < page.cols; col += 1) {
+            const addr = base + col;
+            if (addr > page.end) {
+              mHtml += "<td></td>";
+            } else {
+              const isTop = state.extended && addr === m.sp && m.sp < AqaAsm.STACK_BASE;
+              mHtml += `<td title="address ${addr}"${isTop ? " class='sp-cell'" : ""}>${m.memory[addr]}</td>`;
+            }
           }
           mHtml += "</tr>";
         }
         ui.memoryTable.innerHTML = mHtml;
-      }
 
-      function parseRegister(token, lineNo) {
-        const m = /^R(\d{1,2})$/.exec(token);
-        if (!m) throw new Error(`Line ${lineNo}: invalid register '${token}'. Use R0..R12.`);
-        const idx = Number(m[1]);
-        if (idx < 0 || idx > 12) throw new Error(`Line ${lineNo}: register out of range '${token}'. Only R0..R12 exist.`);
-        return idx;
-      }
-
-      function parseOperand2(token, lineNo) {
-        if (/^#-?\d+$/.test(token)) return { type: "imm", value: Number(token.slice(1)) };
-        if (/^R\d{1,2}$/.test(token)) return { type: "reg", value: parseRegister(token, lineNo) };
-        throw new Error(`Line ${lineNo}: invalid operand2 '${token}'. Use #decimal or Rm.`);
-      }
-
-      function parseMemoryRef(token, lineNo) {
-        if (!/^-?\d+$/.test(token)) throw new Error(`Line ${lineNo}: invalid memory reference '${token}'. Must be decimal address 100..199.`);
-        const addr = Number(token);
-        if (addr < 100 || addr > 199) throw new Error(`Line ${lineNo}: memory address ${addr} out of range (100..199).`);
-        return addr;
-      }
-
-      function parseProgram(source) {
-        const lines = source.replace(/\r/g, "").split("\n");
-        const instructions = [];
-        const labels = {};
-
-        for (let i = 0; i < lines.length; i += 1) {
-          const raw = lines[i];
-          const lineNo = i + 1;
-          if (raw.trim() === "") continue;
-
-          if (/^\s*;/.test(raw)) continue;
-
-          const trimmed = raw.trim();
-          if (trimmed.endsWith(":")) {
-            if (/^\s/.test(raw)) throw new Error(`Line ${lineNo}: labels must not be indented.`);
-            const labelName = trimmed.slice(0, -1);
-            if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(labelName)) throw new Error(`Line ${lineNo}: invalid label name '${labelName}'.`);
-            if (labels[labelName] !== undefined) throw new Error(`Line ${lineNo}: duplicate label '${labelName}'.`);
-            labels[labelName] = instructions.length;
-            continue;
+        if (state.extended) {
+          drawScreen();
+          if (state.shownOutput !== m.output) {
+            ui.consoleOut.textContent = m.output;
+            ui.consoleOut.scrollTop = ui.consoleOut.scrollHeight;
+            state.shownOutput = m.output;
           }
-
-          if (/^[A-Za-z_][A-Za-z0-9_]*\s+/.test(raw) && !/^\s/.test(raw)) {
-            throw new Error(`Line ${lineNo}: instruction lines must be indented. If this is a label, add ':'.`);
-          }
-          if (!/^\s/.test(raw)) {
-            throw new Error(`Line ${lineNo}: instruction lines must be indented with spaces or tab.`);
-          }
-
-          const body = trimmed;
-          const spaceIdx = body.indexOf(" ");
-          const op = (spaceIdx === -1 ? body : body.slice(0, spaceIdx)).toUpperCase();
-          const argText = spaceIdx === -1 ? "" : body.slice(spaceIdx + 1).trim();
-          const args = argText === "" ? [] : argText.split(",").map((a) => a.trim()).filter((a) => a !== "");
-
-          const inst = { op, args, lineNo, text: trimmed };
-
-          switch (op) {
-            case "HALT":
-              if (args.length !== 0) throw new Error(`Line ${lineNo}: HALT takes no operands.`);
-              break;
-            case "LDR":
-            case "STR":
-              if (args.length !== 2) throw new Error(`Line ${lineNo}: ${op} needs 2 operands.`);
-              parseRegister(args[0], lineNo);
-              parseMemoryRef(args[1], lineNo);
-              break;
-            case "MOV":
-            case "MVN":
-              if (args.length !== 2) throw new Error(`Line ${lineNo}: ${op} needs 2 operands.`);
-              parseRegister(args[0], lineNo);
-              parseOperand2(args[1], lineNo);
-              break;
-            case "ADD":
-            case "SUB":
-            case "AND":
-            case "ORR":
-            case "EOR":
-            case "LSL":
-            case "LSR":
-              if (args.length !== 3) throw new Error(`Line ${lineNo}: ${op} needs 3 operands.`);
-              parseRegister(args[0], lineNo);
-              parseRegister(args[1], lineNo);
-              parseOperand2(args[2], lineNo);
-              break;
-            case "CMP":
-              if (args.length !== 2) throw new Error(`Line ${lineNo}: CMP needs 2 operands.`);
-              parseRegister(args[0], lineNo);
-              parseOperand2(args[1], lineNo);
-              break;
-            case "B":
-            case "BEQ":
-            case "BNE":
-            case "BGT":
-            case "BLT":
-              if (args.length !== 1) throw new Error(`Line ${lineNo}: ${op} needs one label.`);
-              if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(args[0])) throw new Error(`Line ${lineNo}: invalid label reference '${args[0]}'.`);
-              break;
-            default:
-              throw new Error(`Line ${lineNo}: instruction '${op}' is not in the AQA set.`);
-          }
-
-          instructions.push(inst);
         }
-
-        instructions.forEach((ins) => {
-          if (["B", "BEQ", "BNE", "BGT", "BLT"].includes(ins.op)) {
-            if (labels[ins.args[0]] === undefined) throw new Error(`Line ${ins.lineNo}: branch target label '${ins.args[0]}' not found.`);
-          }
-        });
-
-        return { instructions, labels };
       }
 
-      function operandValue(op2, lineNo) {
-        if (op2.type === "imm") return toInt16(op2.value);
-        if (op2.type === "reg") return toInt16(state.registers[op2.value]);
-        throw new Error(`Line ${lineNo}: internal operand error.`);
-      }
-
-      function executeInstruction() {
-        if (!state.program) state.program = parseProgram(ui.editor.value);
-        const { instructions, labels } = state.program;
-
-        if (state.pc < 0 || state.pc >= instructions.length) {
-          crash(`Program crashed: execution moved beyond last instruction without HALT.`);
-          return;
+      function drawScreen() {
+        const memory = state.machine.memory;
+        const pixels = screenImage.data;
+        for (let i = 0; i < AqaAsm.SCREEN_SIZE * AqaAsm.SCREEN_SIZE; i += 1) {
+          const [r, g, b] = paletteRgb[memory[AqaAsm.SCREEN_BASE + i] & 15];
+          pixels[i * 4] = r;
+          pixels[i * 4 + 1] = g;
+          pixels[i * 4 + 2] = b;
+          pixels[i * 4 + 3] = 255;
         }
+        screenContext.putImageData(screenImage, 0, 0);
+      }
 
-        const ins = instructions[state.pc];
-        const nextPc = state.pc + 1;
+      function reportEnd() {
+        const m = state.machine;
+        if (m.crashed) setStatus(`<span class='crash'>${m.error}</span>`, "error");
+        else if (m.halted) setStatus(`HALT reached at line ${m.lastLine}.`, "ok");
+      }
 
+      // ---------- Running ----------
+
+      // Parses the editor. A fresh start (or restart after HALT/crash) rebuilds the machine so
+      // .data is loaded; otherwise execution continues from the current state with the new code.
+      function prepareMachine() {
+        let program;
         try {
-          switch (ins.op) {
-            case "HALT":
-              state.halted = true;
-              state.running = false;
-              break;
-            case "LDR": {
-              const rd = parseRegister(ins.args[0], ins.lineNo);
-              const addr = parseMemoryRef(ins.args[1], ins.lineNo);
-              state.registers[rd] = toInt16(state.memory[addr - 100]);
-              state.pc = nextPc;
-              break;
-            }
-            case "STR": {
-              const rd = parseRegister(ins.args[0], ins.lineNo);
-              const addr = parseMemoryRef(ins.args[1], ins.lineNo);
-              state.memory[addr - 100] = toInt16(state.registers[rd]);
-              state.pc = nextPc;
-              break;
-            }
-            case "MOV":
-            case "MVN": {
-              const rd = parseRegister(ins.args[0], ins.lineNo);
-              const op2 = parseOperand2(ins.args[1], ins.lineNo);
-              let value = operandValue(op2, ins.lineNo);
-              if (ins.op === "MVN") value = ~value;
-              state.registers[rd] = toInt16(value);
-              state.pc = nextPc;
-              break;
-            }
-            case "ADD":
-            case "SUB":
-            case "AND":
-            case "ORR":
-            case "EOR":
-            case "LSL":
-            case "LSR": {
-              const rd = parseRegister(ins.args[0], ins.lineNo);
-              const rn = parseRegister(ins.args[1], ins.lineNo);
-              const op2 = parseOperand2(ins.args[2], ins.lineNo);
-              const a = toInt16(state.registers[rn]);
-              const b = operandValue(op2, ins.lineNo);
-              let out;
-              if (ins.op === "ADD") out = a + b;
-              else if (ins.op === "SUB") out = a - b;
-              else if (ins.op === "AND") out = a & b;
-              else if (ins.op === "ORR") out = a | b;
-              else if (ins.op === "EOR") out = a ^ b;
-              else if (ins.op === "LSL") out = a << b;
-              else out = a >>> b;
-              state.registers[rd] = toInt16(out);
-              state.pc = nextPc;
-              break;
-            }
-            case "CMP": {
-              const rn = parseRegister(ins.args[0], ins.lineNo);
-              const op2 = parseOperand2(ins.args[1], ins.lineNo);
-              const a = toInt16(state.registers[rn]);
-              const b = operandValue(op2, ins.lineNo);
-              state.cmp = a === b ? 0 : a > b ? 1 : -1;
-              state.pc = nextPc;
-              break;
-            }
-            case "B":
-            case "BEQ":
-            case "BNE":
-            case "BGT":
-            case "BLT": {
-              const label = ins.args[0];
-              let take = false;
-              if (ins.op === "B") take = true;
-              else if (state.cmp === null) throw new Error(`Line ${ins.lineNo}: conditional branch used before CMP.`);
-              else if (ins.op === "BEQ") take = state.cmp === 0;
-              else if (ins.op === "BNE") take = state.cmp !== 0;
-              else if (ins.op === "BGT") take = state.cmp > 0;
-              else if (ins.op === "BLT") take = state.cmp < 0;
-              state.pc = take ? labels[label] : nextPc;
-              break;
-            }
-            default:
-              throw new Error(`Line ${ins.lineNo}: unsupported instruction '${ins.op}'.`);
-          }
+          program = AqaAsm.parse(ui.editor.value, { extended: state.extended });
         } catch (error) {
-          crash(`Program crashed at line ${ins.lineNo}: ${error.message}`);
+          stopRun();
+          state.machine = newMachine(null);
+          state.machine.crashed = true;
+          state.machine.error = `Program crashed during parsing: ${error.message}`;
+          updateTables();
+          reportEnd();
+          return false;
+        }
+        const m = state.machine;
+        if (m.halted || m.crashed || m.steps === 0) state.machine = newMachine(program);
+        else m.program = program;
+        return true;
+      }
+
+      function isFast() {
+        return state.extended && ui.speedSelect.value === "fast";
+      }
+
+      function scheduleTick(delay) {
+        state.runTimer = setTimeout(runTick, delay);
+      }
+
+      function runTick() {
+        state.runTimer = null;
+        if (!state.running) return;
+        const m = state.machine;
+        const fast = isFast();
+        const budget = fast ? FAST_BUDGET : 1;
+        let wait = 0;
+        for (let i = 0; i < budget; i += 1) {
+          AqaAsm.step(m);
+          state.runSteps += 1;
+          if (!state.extended && state.runSteps > MAX_STEPS && !m.halted && !m.crashed) {
+            m.crashed = true;
+            m.error = `Program crashed: exceeded ${MAX_STEPS} execution steps (possible infinite loop).`;
+          }
+          if (m.halted || m.crashed) break;
+          if (m.waitMs > 0) {
+            wait = m.waitMs;
+            m.waitMs = 0;
+            break;
+          }
+        }
+        if (m.halted || m.crashed) {
+          stopRun();
+          updateTables();
+          reportEnd();
           return;
         }
-
         updateTables();
-        if (state.halted) setStatus(`HALT reached at line ${ins.lineNo}.`, "ok");
+        scheduleTick(fast ? Math.max(wait, 16) : Math.max(wait, SLOW_DELAY));
+      }
+
+      function runProgram() {
+        if (state.running) {
+          stopRun();
+          setStatus("Run stopped.");
+          updateTables();
+          return;
+        }
+        if (!prepareMachine()) return;
+        state.running = true;
+        state.runSteps = 0;
+        ui.runBtn.textContent = "STOP";
+        if (state.extended) {
+          setStatus("Running… Click the screen (or use the controller buttons) to send input.");
+          ui.screen.focus({ preventScroll: true });
+        } else {
+          setStatus("Running...");
+        }
+        updateTables();
+        scheduleTick(isFast() ? 0 : SLOW_DELAY);
       }
 
       function lineRange(lineNo) {
@@ -827,8 +1780,9 @@
       }
 
       function highlightCurrentInstruction() {
-        if (!state.program) return;
-        const ins = state.program.instructions[state.pc];
+        const m = state.machine;
+        if (!m.program) return;
+        const ins = m.program.instructions[m.pc];
         if (!ins) return;
         const range = lineRange(ins.lineNo);
         ui.editor.focus();
@@ -836,176 +1790,190 @@
         ui.editor.selectionEnd = range.end;
       }
 
-      function crash(msg) {
-        state.crashed = true;
-        state.running = false;
-        state.halted = false;
-        state.crashMessage = msg;
-        if (state.runTimer) {
-          clearInterval(state.runTimer);
-          state.runTimer = null;
-        }
-        ui.runBtn.textContent = "RUN";
-        ui.stepBtn.textContent = "STEP";
-        setStatus(`<span class='crash'>${msg}</span>`, "error");
-        updateTables();
-      }
-
-      function prepareProgram() {
-        try {
-          state.program = parseProgram(ui.editor.value);
-          return true;
-        } catch (error) {
-          crash(`Program crashed during parsing: ${error.message}`);
-          return false;
-        }
-      }
-
-      function runProgram() {
-        if (state.running) {
-          state.running = false;
-          clearInterval(state.runTimer);
-          state.runTimer = null;
-          ui.runBtn.textContent = "RUN";
-          setStatus("Run stopped.");
-          updateTables();
-          return;
-        }
-        if (state.halted || state.crashed) resetMachineFromScenario();
-        if (!prepareProgram()) return;
-
-        state.running = true;
-        ui.runBtn.textContent = "STOP";
-        setStatus("Running...");
-        let steps = 0;
-        state.runTimer = setInterval(() => {
-          if (!state.running) return;
-          if (state.halted || state.crashed) {
-            state.running = false;
-            clearInterval(state.runTimer);
-            state.runTimer = null;
-            ui.runBtn.textContent = "RUN";
-            return;
-          }
-          executeInstruction();
-          steps += 1;
-          if (steps > MAX_STEPS) crash(`Program crashed: exceeded ${MAX_STEPS} execution steps (possible infinite loop).`);
-          if (state.halted || state.crashed) {
-            state.running = false;
-            clearInterval(state.runTimer);
-            state.runTimer = null;
-            ui.runBtn.textContent = "RUN";
-          }
-        }, 120);
-        updateTables();
-      }
-
       function stepOnce() {
         if (state.stepPending) return;
         if (state.running) {
-          state.running = false;
-          clearInterval(state.runTimer);
-          state.runTimer = null;
-          ui.stepBtn.textContent = "STEP";
-          ui.runBtn.textContent = "RUN";
+          stopRun();
           setStatus("Execution stopped.");
           updateTables();
           return;
         }
-        if (state.halted || state.crashed) resetMachineFromScenario();
-        if (!prepareProgram()) return;
+        if (!prepareMachine()) return;
         highlightCurrentInstruction();
         state.stepPending = true;
         setTimeout(() => {
-          executeInstruction();
+          AqaAsm.step(state.machine);
+          state.machine.waitMs = 0;
+          updateTables();
+          reportEnd();
           highlightCurrentInstruction();
           state.stepPending = false;
         }, 80);
       }
 
-      function runForTesting() {
-        resetMachineFromScenario();
-        if (!prepareProgram()) return;
-        let steps = 0;
-        while (!state.halted && !state.crashed && steps <= MAX_STEPS) {
-          executeInstruction();
-          steps += 1;
-        }
-        if (!state.halted && !state.crashed) {
-          crash(`Program crashed: exceeded ${MAX_STEPS} execution steps in test mode.`);
-        }
-      }
-
       function testScenario() {
-        runForTesting();
-        if (state.crashed) {
-          setStatus(`<span class='crash'>TEST FAILED: program crashed. ${state.crashMessage}</span>`, "error");
+        stopRun();
+        const challenge = currentChallenge();
+        const scenario = currentScenario();
+        const name = challenge.ext ? `Extended X${challenge.id}` : `Challenge ${challenge.id}`;
+        if (!scenario.check) {
+          setStatus("This example is a demo without an automatic test. RUN it and use the controller.");
           return;
         }
-        const challenge = challengeData[Number(ui.problemSelect.value)];
-        const scenario = challenge.scenarios[Number(ui.scenarioSelect.value)];
-        const ok = scenario.check({ registers: state.registers.slice(), memory: Object.fromEntries(state.memory.map((v, i) => [i + 100, v])) });
+        if (!prepareMachine()) {
+          setStatus(`<span class='crash'>TEST FAILED: program crashed. ${state.machine.error}</span>`, "error");
+          return;
+        }
+        state.machine = newMachine(state.machine.program);
+        AqaAsm.runToEnd(state.machine);
+        updateTables();
+        if (state.machine.crashed) {
+          setStatus(`<span class='crash'>TEST FAILED: program crashed. ${state.machine.error}</span>`, "error");
+          return;
+        }
+        const ok = scenario.check(AqaAsm.checkState(state.machine));
         if (ok) {
-          setStatus(`✅ TEST PASSED for Challenge ${challenge.id} (${scenario.name}).`, "ok");
+          setStatus(`✅ TEST PASSED for ${name} (${scenario.name}).`, "ok");
         } else {
-          setStatus(`❌ TEST FAILED for Challenge ${challenge.id} (${scenario.name}): resulting machine state was not as expected.`, "error");
+          setStatus(`❌ TEST FAILED for ${name} (${scenario.name}): resulting machine state was not as expected.`, "error");
         }
       }
 
+      // ---------- Challenges and help ----------
+
       function renderChallenge() {
-        const challenge = challengeData[Number(ui.problemSelect.value)];
-        ui.challengeText.innerHTML = `<strong>Problem ${challenge.id} of ${challengeData.length} — ${challenge.title}</strong><pre>${challenge.prompt}</pre>`;
+        const challenge = currentChallenge();
+        ui.challengeText.textContent = "";
+        const heading = document.createElement("strong");
+        heading.textContent = challenge.ext
+          ? `Extended example X${challenge.id} of ${extendedChallenges.length} — ${challenge.title}`
+          : `Problem ${challenge.id} of ${challengeData.length} — ${challenge.title}`;
+        const prompt = document.createElement("pre");
+        prompt.textContent = challenge.prompt;
+        ui.challengeText.append(heading, prompt);
+        if (challenge.demo) {
+          const note = document.createElement("p");
+          note.className = "demo-note";
+          note.textContent = "Demo: there is no automatic test. Load the solution, set the speed to Fast and RUN it.";
+          ui.challengeText.append(note);
+        }
+        if (challenge.speed) ui.speedSelect.value = challenge.speed;
         ui.editor.value = "";
+        updateTestButton();
+      }
+
+      function updateTestButton() {
+        ui.testBtn.disabled = !currentScenario().check;
       }
 
       function loadSolution() {
-        const challenge = challengeData[Number(ui.problemSelect.value)];
-        ui.editor.value = challenge.starter;
-        state.program = null;
+        ui.editor.value = currentChallenge().starter;
+        resetMachineFromScenario();
+        const program = state.machine.program;
+        if (state.extended && program && program.data.length) {
+          state.memoryPage = AqaAsm.DATA_BASE;
+          ui.memoryPageSelect.value = String(state.memoryPage);
+          updateTables();
+        }
         setStatus("Worked solution loaded into the editor.");
       }
 
-      function renderInstructionSet() {
-        ui.instructionSetTable.textContent = "";
-
+      function renderRows(table, rows) {
+        table.textContent = "";
         const headerRow = document.createElement("tr");
-        const instructionHeader = document.createElement("th");
-        instructionHeader.textContent = "Instruction";
-        const descriptionHeader = document.createElement("th");
-        descriptionHeader.textContent = "Description";
-        headerRow.append(instructionHeader, descriptionHeader);
-        ui.instructionSetTable.appendChild(headerRow);
-
-        instructionSetRows.forEach(([instruction, description]) => {
+        ["Instruction", "Description"].forEach((text) => {
+          const th = document.createElement("th");
+          th.textContent = text;
+          headerRow.appendChild(th);
+        });
+        table.appendChild(headerRow);
+        rows.forEach(([instruction, description]) => {
           const row = document.createElement("tr");
           const instructionCell = document.createElement("td");
           const descriptionCell = document.createElement("td");
           const instructionCode = document.createElement("code");
-
           instructionCode.textContent = instruction;
           descriptionCell.textContent = description;
-
           instructionCell.appendChild(instructionCode);
           row.append(instructionCell, descriptionCell);
-          ui.instructionSetTable.appendChild(row);
+          table.appendChild(row);
         });
       }
 
+      function renderInstructionSet() {
+        renderRows(ui.instructionSetTable, instructionSetRows);
+        renderRows(ui.extendedSetTable, extendedInstructionRows);
+        ui.paletteList.innerHTML = AqaAsm.PALETTE.map(([name, hex], i) =>
+          `<li><span class="swatch" style="background:${hex}"></span><span><strong>${i}</strong> ${name}</span></li>`).join("");
+      }
+
+      function renderSyntaxNote() {
+        ui.syntaxNote.innerHTML = state.extended
+          ? "Extended mode: everything in the AQA rules still applies, plus <code>.data</code>/<code>.text</code> sections, <code>;</code> comments at the end of lines, memory refs <code>0..1023</code>, <code>.data</code> labels, <code>[Rn]</code>, <code>[Rn, #n]</code> and <code>[Rn, Rm]</code>, and character immediates such as <code>#'A'</code>. The screen is memory-mapped at <code>768..1023</code>. See VIEW INSTRUCTION SET for the extra instructions."
+          : "Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; immediate values must use decimal <code>#</code>; only registers <code>R0..R12</code>; memory refs are decimal addresses <code>100..199</code>. Registers and memory cells are implemented internally as 16-bit signed integers, so values outside <code>-32768..32767</code> overflow and wrap.";
+      }
+
       function populateSelectors() {
-        ui.problemSelect.innerHTML = challengeData.map((c, i) => `<option value='${i}'>Q${c.id}: ${c.title}</option>`).join("");
+        ui.problemSelect.innerHTML = challengeList().map((c, i) => `<option value='${i}'>${c.ext ? `X${c.id}: ${c.title}` : `Q${c.id}: ${c.title}`}</option>`).join("");
       }
 
       function populateScenarios() {
-        const challenge = challengeData[Number(ui.problemSelect.value)];
+        const challenge = currentChallenge();
         ui.scenarioSelect.innerHTML = challenge.scenarios.map((s, i) => `<option value='${i}'>${s.name}</option>`).join("");
       }
+
+      function setExtended(on) {
+        stopRun();
+        const wasExtendedChallenge = Boolean(currentChallenge().ext);
+        const index = ui.problemSelect.value;
+        state.extended = on;
+        document.querySelectorAll("[data-extended-only]").forEach((el) => { el.hidden = !on; });
+        populateSelectors();
+        let changedChallenge = false;
+        if (on) {
+          ui.problemSelect.value = index;
+        } else if (wasExtendedChallenge) {
+          ui.problemSelect.value = "0";
+          changedChallenge = true;
+        } else {
+          ui.problemSelect.value = index;
+        }
+        state.memoryPage = 100;
+        populateMemoryPages();
+        renderSyntaxNote();
+        if (changedChallenge) {
+          populateScenarios();
+          renderChallenge();
+        }
+        state.shownOutput = null;
+        resetMachineFromScenario();
+        setStatus(on
+          ? "Extended mode on: the screen, console and controller are shown, extra instructions are allowed and examples X1–X6 are at the end of the Challenge list."
+          : "Extended mode off: only the AQA instruction set is allowed.");
+      }
+
+      function pressKey(code) {
+        state.machine.key = code;
+        ui.lastKey.textContent = AqaAsm.KEY_NAMES[code];
+        const button = ui.ioCard.querySelector(`[data-key="${code}"]`);
+        if (button) {
+          button.classList.add("pressed");
+          setTimeout(() => button.classList.remove("pressed"), 120);
+        }
+      }
+
+      // ---------- Events ----------
 
       ui.problemSelect.addEventListener("change", () => {
         populateScenarios();
         renderChallenge();
         resetMachineFromScenario();
       });
-      ui.scenarioSelect.addEventListener("change", resetMachineFromScenario);
+      ui.scenarioSelect.addEventListener("change", () => {
+        updateTestButton();
+        resetMachineFromScenario();
+      });
+      ui.extendedToggle.addEventListener("change", () => setExtended(ui.extendedToggle.checked));
       ui.resetBtn.addEventListener("click", resetMachineFromScenario);
       ui.runBtn.addEventListener("click", runProgram);
       ui.stepBtn.addEventListener("click", stepOnce);
@@ -1014,6 +1982,20 @@
       ui.instructionSetBtn.addEventListener("click", () => ui.instructionDialog.showModal());
       ui.closeInstructionDialog.addEventListener("click", () => ui.instructionDialog.close());
       ui.binaryToggle.addEventListener("change", updateTables);
+      ui.memoryPageSelect.addEventListener("change", () => {
+        state.memoryPage = Number(ui.memoryPageSelect.value);
+        updateTables();
+      });
+      ui.ioCard.addEventListener("keydown", (event) => {
+        const code = KEY_MAP[event.key];
+        if (!code) return;
+        event.preventDefault();
+        pressKey(code);
+      });
+      ui.ioCard.querySelectorAll("[data-key]").forEach((button) => {
+        button.addEventListener("click", () => pressKey(Number(button.dataset.key)));
+      });
+      ui.screen.addEventListener("pointerdown", () => ui.screen.focus());
 
       ui.editor.addEventListener("keydown", (event) => {
         if (event.key === "Tab") {
@@ -1026,27 +2008,14 @@
         }
       });
 
+      ui.extendedToggle.checked = false;
       populateSelectors();
       populateScenarios();
+      populateMemoryPages();
       renderInstructionSet();
+      renderSyntaxNote();
       renderChallenge();
       resetMachineFromScenario();
-      updateTables();
-
-      function applyTheme(mode) {
-        document.documentElement.classList.toggle('dark', mode === 'dark');
-        localStorage.setItem('uimode', mode);
-        document.getElementById('icon-sun').style.display = mode === 'dark' ? '' : 'none';
-        document.getElementById('icon-moon').style.display = mode === 'dark' ? 'none' : '';
-      }
-      document.getElementById('theme-toggle').addEventListener('click', () => {
-        applyTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark');
-      });
-      (function () {
-        const isDark = document.documentElement.classList.contains('dark');
-        document.getElementById('icon-sun').style.display = isDark ? '' : 'none';
-        document.getElementById('icon-moon').style.display = isDark ? 'none' : '';
-      })();
     </script>
   </body>
 </html>

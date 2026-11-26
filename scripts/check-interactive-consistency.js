@@ -405,6 +405,94 @@ if (/Problem \$\{c\.id\}: \$\{c\.title\}/.test(assemblyChallengesSource)
   || !/Q\$\{c\.id\}: \$\{c\.title\}/.test(assemblyChallengesSource)) {
   failures.push('aqa_assembly_challenges.html: challenge selector options must use the compact Qn prefix');
 }
+
+// Assembly challenges: the help dialog has a single scroller, Extended mode is
+// opt-in, every worked solution passes its scenarios, extended syntax is
+// rejected in plain AQA mode, and the Snake demo runs and grows.
+{
+  if (/\.dialog-inner\s*\{[^}]*(overflow|max-height)/.test(assemblyChallengesSource)) {
+    failures.push('aqa_assembly_challenges.html: the instruction set dialog must scroll once, on the dialog, not also on .dialog-inner');
+  }
+  if (!/<input type="checkbox" id="extendedToggle" \/>/.test(assemblyChallengesSource) || /id="extendedToggle"[^>]*checked/.test(assemblyChallengesSource)) {
+    failures.push('aqa_assembly_challenges.html: Extended mode must be an unchecked tick box by default');
+  }
+  if (/\balert\(/.test(assemblyChallengesSource) || /theme-toggle/.test(assemblyChallengesSource)) {
+    failures.push('aqa_assembly_challenges.html: no alert() and no page-level theme toggle (the shell owns the theme)');
+  }
+  const asmScript = assemblyChallengesSource.match(/<script id="aqa-asm-machine">([\s\S]*?)<\/script>/);
+  if (!asmScript) {
+    failures.push('aqa_assembly_challenges.html: missing the aqa-asm-machine script');
+  } else {
+    const { AqaAsm, challengeData, extendedChallenges } = require('vm').runInNewContext(
+      `${asmScript[1]}; ({ AqaAsm, challengeData, extendedChallenges })`, {}, { timeout: 5000 },
+    );
+    const runScenario = (challenge, scenario, extended) => {
+      const machine = AqaAsm.createMachine(AqaAsm.parse(challenge.starter, { extended }), scenario, { extended });
+      AqaAsm.runToEnd(machine);
+      return !machine.crashed && scenario.check(AqaAsm.checkState(machine));
+    };
+    for (const extended of [false, true]) {
+      for (const challenge of challengeData) {
+        for (const scenario of challenge.scenarios) {
+          if (!runScenario(challenge, scenario, extended)) {
+            failures.push(`aqa_assembly_challenges.html: Q${challenge.id} solution fails ${scenario.name} (extended ${extended})`);
+          }
+        }
+      }
+    }
+    for (const challenge of extendedChallenges) {
+      for (const scenario of challenge.scenarios) {
+        if (scenario.check && !runScenario(challenge, scenario, true)) {
+          failures.push(`aqa_assembly_challenges.html: X${challenge.id} solution fails ${scenario.name}`);
+        }
+      }
+    }
+    for (const source of ['.data\nx:\n\t.word 1\n.text\n\tHALT', '\tLDR R1, [R2]\n\tHALT', '\tOUTC #65\n\tHALT']) {
+      let rejected = false;
+      try { AqaAsm.parse(source, { extended: false }); } catch (error) { rejected = true; }
+      if (!rejected) failures.push(`aqa_assembly_challenges.html: AQA mode must reject extended syntax: ${JSON.stringify(source)}`);
+    }
+    // LSR is a 16-bit logical shift: 0xFFFE >> 1 = 0x7FFF.
+    const lsr = AqaAsm.createMachine(AqaAsm.parse('\tMOV R1, #-2\n\tLSR R2, R1, #1\n\tHALT'), {}, {});
+    AqaAsm.runToEnd(lsr);
+    if (lsr.registers[2] !== 32767) failures.push('aqa_assembly_challenges.html: LSR must shift the 16-bit pattern logically');
+
+    // Steer Snake towards each apple; it must eat, grow by one per apple, and end with HALT.
+    const snake = extendedChallenges.find((challenge) => /snake/i.test(challenge.title));
+    if (!snake) {
+      failures.push('aqa_assembly_challenges.html: missing the Snake extended example');
+    } else {
+      let seed = 7;
+      const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+      const machine = AqaAsm.createMachine(AqaAsm.parse(snake.starter, { extended: true }), {}, { extended: true, random });
+      let ticks = 0;
+      let lengthErrors = 0;
+      while (!machine.halted && !machine.crashed && ticks < 3000) {
+        AqaAsm.step(machine);
+        if (!machine.waitMs) continue;
+        machine.waitMs = 0;
+        ticks += 1;
+        const screen = machine.memory.slice(AqaAsm.SCREEN_BASE);
+        const apple = screen.indexOf(2);
+        const head = machine.registers[4];
+        const [hx, hy, ax, ay] = [head & 15, head >> 4, apple & 15, apple >> 4];
+        const direction = machine.registers[3];
+        const free = (d) => {
+          const nx = hx + (d === 2) - (d === 4);
+          const ny = hy + (d === 3) - (d === 1);
+          return nx >= 0 && nx < 16 && ny >= 0 && ny < 16 && [0, 2].includes(screen[ny * 16 + nx]) && Math.abs(d - direction) !== 2;
+        };
+        const wanted = [ax > hx && 2, ax < hx && 4, ay > hy && 3, ay < hy && 1].filter(Boolean);
+        const choice = wanted.find(free) || [1, 2, 3, 4].find(free);
+        if (choice) machine.key = choice;
+        if (screen.filter((v) => v === 3 || v === 5).length !== machine.registers[5] + 1) lengthErrors += 1;
+      }
+      if (machine.crashed || !machine.halted || machine.registers[5] < 10 || lengthErrors) {
+        failures.push(`aqa_assembly_challenges.html: Snake must run, grow with each apple and end with HALT (score ${machine.registers[5]}, ${machine.error || 'no crash'}, ${lengthErrors} length errors)`);
+      }
+    }
+  }
+}
 const logicCircuitsSource = fs.readFileSync(path.join(root, 'logic_circuits.html'), 'utf8');
 if (!/const\s*\[topic,\s*setTopic\]\s*=\s*useState\(Object\.keys\(TOPICS\)\[0\]\)/.test(logicCircuitsSource)) {
   failures.push('logic_circuits.html: the initial question topic must be the first tab');
