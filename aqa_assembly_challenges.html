@@ -219,7 +219,30 @@
         background: var(--panel);
       }
       dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
-      .dialog-inner { padding: 1rem; }
+      .dialog-header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.6rem 0.75rem 0.6rem 1rem;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+      }
+      .dialog-header h2 { margin: 0; font-size: 1.3rem; }
+      dialog button.dialog-close {
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        font-size: 1.4rem;
+        line-height: 1;
+      }
+      dialog button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+      .dialog-inner { padding: 0 1rem 1rem; }
       .instruction-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
       .instruction-table th, .instruction-table td { border: 1px solid var(--border); padding: 0.45rem; text-align: left; vertical-align: top; }
       .instruction-table th { background: #f8fafc; }
@@ -384,13 +407,18 @@
       </section>
     </main>
     <dialog id="instructionDialog" aria-labelledby="instructionDialogTitle">
-      <div class="dialog-inner">
+      <div class="dialog-header">
         <h2 id="instructionDialogTitle">Instruction set</h2>
+        <button type="button" id="closeInstructionDialogTop" class="dialog-close" aria-label="Close instruction set">×</button>
+      </div>
+      <div class="dialog-inner">
         <table class="instruction-table" id="instructionSetTable">
           <tr><th>Instruction</th><th>Description</th></tr>
         </table>
         <h3>Labels</h3>
         <p>A label is placed in the code by writing an identifier followed by a colon (<code>:</code>). To refer to a label, place the label identifier after the branch instruction.</p>
+        <h3>Comments</h3>
+        <p>A semicolon (<code>;</code>) starts a comment, either on its own line or after an instruction or label. Everything after it on that line is ignored, for example <code>ADD R3, R3, #1 ; add one to the count</code>.</p>
         <h3>Interpretation of &lt;operand2&gt;</h3>
         <ul>
           <li><code>#</code> — use the decimal value specified after the <code>#</code> (for example, <code>#25</code> means decimal value 25).</li>
@@ -414,7 +442,7 @@
             <li><code>[R2, R3]</code> — indexed: the address is R2 + R3 (useful for arrays).</li>
           </ul>
           <h3>The .data section</h3>
-          <p>Put <code>.data</code> on its own unindented line, then labels on their own lines followed by indented directives. Put <code>.text</code> before the instructions. Data is placed in memory from address 200 upwards. A <code>;</code> starts a comment anywhere on a line.</p>
+          <p>Put <code>.data</code> on its own unindented line, then labels on their own lines followed by indented directives. Put <code>.text</code> before the instructions. Data is placed in memory from address 200 upwards.</p>
           <ul>
             <li><code>.word 5, -2, 'A'</code> — one memory word per value.</li>
             <li><code>.space 20</code> — reserve 20 words set to 0.</li>
@@ -436,6 +464,9 @@
     </dialog>
 
     <script id="aqa-asm-machine">
+      // Turns an indented template into editor source: leading spaces become one tab.
+      const asm = (text) => text.replace(/^\n/, "").replace(/\n\s*$/, "").split("\n")
+        .map((line) => line.replace(/^ +/, (spaces) => (spaces.length ? "\t" : ""))).join("\n");
       const instructionSetRows = [
         ["LDR Rd, <memory ref>", "Load the value stored in the memory location specified by <memory ref> into register d."],
         ["STR Rd, <memory ref>", "Store the value that is in register d into the memory location specified by <memory ref>."],
@@ -458,7 +489,19 @@
           id: 1,
           title: "Conditional overwrite from two memory cells",
           prompt: "Load memory[120] and memory[121], add them, and if the sum is greater than memory[122], store the sum in memory[122].",
-          starter: "START:\n\tLDR R1, 120\n\tLDR R2, 121\n\tADD R3, R1, R2\n\tLDR R4, 122\n\tCMP R3, R4\n\tBGT OVERWRITE\n\tHALT\nOVERWRITE:\n\tSTR R3, 122\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 120        ; first value
+  LDR R2, 121        ; second value
+  ADD R3, R1, R2     ; R3 = sum
+  LDR R4, 122        ; current value in 122
+  CMP R3, R4
+  BGT OVERWRITE      ; only overwrite if the sum is bigger
+  HALT
+OVERWRITE:
+  STR R3, 122
+  HALT
+`),
           scenarios: [
             {
               name: "A: overwrite expected",
@@ -478,7 +521,20 @@
           id: 2,
           title: "Absolute difference",
           prompt: "Store |memory[130] - memory[131]| into memory[132]. Here || means absolute value, e.g. |-7| = 7.",
-          starter: "START:\n\tLDR R1, 130\n\tLDR R2, 131\n\tCMP R1, R2\n\tBGT FIRSTBIG\n\tSUB R3, R2, R1\n\tB STORE\nFIRSTBIG:\n\tSUB R3, R1, R2\nSTORE:\n\tSTR R3, 132\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 130
+  LDR R2, 131
+  CMP R1, R2
+  BGT FIRSTBIG       ; take the smaller from the larger
+  SUB R3, R2, R1     ; second is larger (or equal)
+  B STORE
+FIRSTBIG:
+  SUB R3, R1, R2     ; first is larger
+STORE:
+  STR R3, 132
+  HALT
+`),
           scenarios: [
             { name: "A: first larger", registers: {}, memory: {130: 30, 131: 11}, check: (s) => s.memory[132] === 19 },
             { name: "B: second larger", registers: {}, memory: {130: 7, 131: 16}, check: (s) => s.memory[132] === 9 }
@@ -488,7 +544,38 @@
           id: 3,
           title: "Count matching values across fixed cells",
           prompt: "Count how many of memory[140], memory[141], memory[142], memory[143], memory[144] equal memory[145]. Store count in memory[146].",
-          starter: "START:\n\tMOV R2, #0\n\tLDR R3, 145\n\tLDR R4, 140\n\tCMP R4, R3\n\tBNE C141\n\tADD R2, R2, #1\nC141:\n\tLDR R4, 141\n\tCMP R4, R3\n\tBNE C142\n\tADD R2, R2, #1\nC142:\n\tLDR R4, 142\n\tCMP R4, R3\n\tBNE C143\n\tADD R2, R2, #1\nC143:\n\tLDR R4, 143\n\tCMP R4, R3\n\tBNE C144\n\tADD R2, R2, #1\nC144:\n\tLDR R4, 144\n\tCMP R4, R3\n\tBNE END\n\tADD R2, R2, #1\nEND:\n\tSTR R2, 146\n\tHALT",
+          starter: asm(`
+START:
+  MOV R2, #0         ; R2 = count of matches
+  LDR R3, 145        ; R3 = value to match
+  LDR R4, 140
+  CMP R4, R3
+  BNE C141           ; no match: skip the increment
+  ADD R2, R2, #1
+C141:
+  LDR R4, 141
+  CMP R4, R3
+  BNE C142
+  ADD R2, R2, #1
+C142:
+  LDR R4, 142
+  CMP R4, R3
+  BNE C143
+  ADD R2, R2, #1
+C143:
+  LDR R4, 143
+  CMP R4, R3
+  BNE C144
+  ADD R2, R2, #1
+C144:
+  LDR R4, 144
+  CMP R4, R3
+  BNE END
+  ADD R2, R2, #1
+END:
+  STR R2, 146
+  HALT
+`),
           scenarios: [
             { name: "A: three matches", registers: {}, memory: {140: 2,141: 9,142: 2,143: 2,144: 8,145:2}, check: (s)=>s.memory[146]===3 },
             { name: "B: zero matches", registers: {}, memory: {140: 1,141:3,142:5,143:7,144:9,145:2}, check: (s)=>s.memory[146]===0 }
@@ -498,7 +585,21 @@
           id: 4,
           title: "Multiply by repeated addition",
           prompt: "Compute memory[150] * memory[151] using a loop and store in memory[152].",
-          starter: "START:\n\tLDR R1, 150\n\tLDR R2, 151\n\tMOV R3, #0\nLOOP:\n\tCMP R2, #0\n\tBEQ DONE\n\tADD R3, R3, R1\n\tSUB R2, R2, #1\n\tB LOOP\nDONE:\n\tSTR R3, 152\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 150        ; value to add each time
+  LDR R2, 151        ; R2 = how many times left
+  MOV R3, #0         ; R3 = running total
+LOOP:
+  CMP R2, #0
+  BEQ DONE           ; stop when the counter reaches 0
+  ADD R3, R3, R1
+  SUB R2, R2, #1
+  B LOOP
+DONE:
+  STR R3, 152
+  HALT
+`),
           scenarios: [
             { name:"A: 6 x 5", registers:{}, memory:{150:6,151:5}, check:(s)=>s.memory[152]===30 },
             { name:"B: multiply by zero", registers:{}, memory:{150:17,151:0}, check:(s)=>s.memory[152]===0 }
@@ -508,7 +609,13 @@
           id: 5,
           title: "Bit mask extract",
           prompt: "Use AND to isolate the lowest 4 bits of memory[160], store result in memory[161].",
-          starter: "START:\n\tLDR R1, 160\n\tAND R2, R1, #15\n\tSTR R2, 161\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 160
+  AND R2, R1, #15    ; mask 00001111 keeps the lowest 4 bits
+  STR R2, 161
+  HALT
+`),
           scenarios: [
             { name:"A: mixed bits", registers:{}, memory:{160:173}, check:(s)=>s.memory[161]===(173 & 15) },
             { name:"B: already small", registers:{}, memory:{160:12}, check:(s)=>s.memory[161]===12 }
@@ -518,7 +625,16 @@
           id: 6,
           title: "Build bit pattern",
           prompt: "Create value (memory[170] OR memory[171]) XOR memory[172], store in memory[173].",
-          starter: "START:\n\tLDR R1, 170\n\tLDR R2, 171\n\tLDR R3, 172\n\tORR R4, R1, R2\n\tEOR R5, R4, R3\n\tSTR R5, 173\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 170
+  LDR R2, 171
+  LDR R3, 172
+  ORR R4, R1, R2     ; R4 = M[170] OR M[171]
+  EOR R5, R4, R3     ; R5 = R4 XOR M[172]
+  STR R5, 173
+  HALT
+`),
           scenarios: [
             { name:"A: non-trivial", registers:{}, memory:{170:10,171:12,172:7}, check:(s)=>s.memory[173]===((10|12)^7) },
             { name:"B: zero xor", registers:{}, memory:{170:5,171:2,172:0}, check:(s)=>s.memory[173]===(5|2) }
@@ -528,7 +644,16 @@
           id: 7,
           title: "Shift-based scaling",
           prompt: "Calculate (memory[180] << 2) + (memory[181] >> 1), store in memory[182]. Here << means left shift (×2 each shift) and >> means right shift (÷2 each shift, integer).",
-          starter: "START:\n\tLDR R1, 180\n\tLDR R2, 181\n\tLSL R3, R1, #2\n\tLSR R4, R2, #1\n\tADD R5, R3, R4\n\tSTR R5, 182\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 180
+  LDR R2, 181
+  LSL R3, R1, #2     ; shift left 2 = multiply by 4
+  LSR R4, R2, #1     ; shift right 1 = divide by 2 (whole number)
+  ADD R5, R3, R4
+  STR R5, 182
+  HALT
+`),
           scenarios: [
             { name:"A: odd right shift", registers:{}, memory:{180:3,181:9}, check:(s)=>s.memory[182]===((3<<2)+(9>>>1)) },
             { name:"B: zero case", registers:{}, memory:{180:0,181:1}, check:(s)=>s.memory[182]===0 }
@@ -538,7 +663,17 @@
           id: 8,
           title: "Convert packed hex byte to ASCII digits",
           prompt: "Memory cell 100 starts with binary 10011110, which is hexadecimal 9E. Your task is to store the ASCII code representations of this hexadecimal value into memory[101] for the most significant digit and memory[102] for the least significant digit. Your solution must use masking/shifting. Reminder: \"0\" in ASCII is binary 0110000 and \"A\" in ASCII is binary 1000001.",
-          starter: "START:\n\tLDR R2, 100\n\tLSR R3, R2, #4\n\tAND R4, R2, #15\n\tADD R3, R3, #48\n\tADD R4, R4, #55\n\tSTR R3, 101\n\tSTR R4, 102\n\tHALT",
+          starter: asm(`
+START:
+  LDR R2, 100        ; 10011110 (9E)
+  LSR R3, R2, #4     ; high nibble: 1001 = 9
+  AND R4, R2, #15    ; low nibble: 1110 = 14 (E)
+  ADD R3, R3, #48    ; digit 0-9: add the code for '0' (48)
+  ADD R4, R4, #55    ; letter A-F: 10 + 55 = 65, the code for 'A'
+  STR R3, 101
+  STR R4, 102
+  HALT
+`),
           scenarios: [
             { name:"A: expected 9E", registers:{}, memory:{100:158}, check:(s)=>s.memory[101]===57 && s.memory[102]===69 },
             { name:"B: expected 9E", registers:{}, memory:{100:158}, check:(s)=>s.memory[101]===57 && s.memory[102]===69 }
@@ -548,7 +683,14 @@
           id: 9,
           title: "Two's complement invert and add one",
           prompt: "Produce two's complement negation of memory[183] using MVN and ADD #1. Store in memory[184].",
-          starter: "START:\n\tLDR R1, 183\n\tMVN R2, R1\n\tADD R2, R2, #1\n\tSTR R2, 184\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 183
+  MVN R2, R1         ; invert every bit
+  ADD R2, R2, #1     ; then add one
+  STR R2, 184
+  HALT
+`),
           scenarios: [
             { name:"A: value 9", registers:{}, memory:{183:9}, check:(s)=>s.memory[184]===(-9|0) },
             { name:"B: zero", registers:{}, memory:{183:0}, check:(s)=>s.memory[184]===0 }
@@ -558,7 +700,27 @@
           id: 10,
           title: "Minimum of three values",
           prompt: "Find min(memory[185], memory[186], memory[187]) and store it in memory[188].",
-          starter: "START:\n\tLDR R1, 185\n\tLDR R2, 186\n\tLDR R3, 187\n\tMOV R4, R1\n\tCMP R2, R4\n\tBLT TAKE2\n\tB C3\nTAKE2:\n\tMOV R4, R2\nC3:\n\tCMP R3, R4\n\tBLT TAKE3\n\tB DONE\nTAKE3:\n\tMOV R4, R3\nDONE:\n\tSTR R4, 188\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 185
+  LDR R2, 186
+  LDR R3, 187
+  MOV R4, R1         ; R4 = smallest so far
+  CMP R2, R4
+  BLT TAKE2
+  B C3
+TAKE2:
+  MOV R4, R2         ; second value is smaller
+C3:
+  CMP R3, R4
+  BLT TAKE3
+  B DONE
+TAKE3:
+  MOV R4, R3         ; third value is smaller
+DONE:
+  STR R4, 188
+  HALT
+`),
           scenarios: [
             { name:"A: third smallest", registers:{}, memory:{185:8,186:10,187:2}, check:(s)=>s.memory[188]===2 },
             { name:"B: first smallest", registers:{}, memory:{185:1,186:9,187:5}, check:(s)=>s.memory[188]===1 }
@@ -568,7 +730,24 @@
           id: 11,
           title: "Challenge in AQA pseudocode: clamp to range",
           prompt: "Convert this pseudocode:\nIF M[190] < 0 THEN\n    M[191] <- 0\nELSE\n    IF M[190] > 255 THEN\n        M[191] <- 255\n    ELSE\n        M[191] <- M[190]\n    ENDIF\nENDIF",
-          starter: "START:\n\tLDR R1, 190\n\tCMP R1, #0\n\tBLT LOW\n\tCMP R1, #255\n\tBGT HIGH\n\tSTR R1, 191\n\tHALT\nLOW:\n\tMOV R2, #0\n\tSTR R2, 191\n\tHALT\nHIGH:\n\tMOV R2, #255\n\tSTR R2, 191\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 190
+  CMP R1, #0
+  BLT LOW            ; IF M[190] < 0
+  CMP R1, #255
+  BGT HIGH           ; ELSE IF M[190] > 255
+  STR R1, 191        ; ELSE M[191] <- M[190]
+  HALT
+LOW:
+  MOV R2, #0
+  STR R2, 191
+  HALT
+HIGH:
+  MOV R2, #255
+  STR R2, 191
+  HALT
+`),
           scenarios: [
             { name:"A: below range", registers:{}, memory:{190:-6}, check:(s)=>s.memory[191]===0 },
             { name:"B: above range", registers:{}, memory:{190:400}, check:(s)=>s.memory[191]===255 },
@@ -579,7 +758,23 @@
           id: 12,
           title: "Count set bits in low nibble",
           prompt: "Count how many of the lowest 4 bits of memory[192] are 1. Store count in memory[193].",
-          starter: "START:\n\tLDR R1, 192\n\tMOV R2, #0\n\tMOV R3, #0\nLOOP:\n\tCMP R3, #4\n\tBEQ DONE\n\tAND R4, R1, #1\n\tADD R2, R2, R4\n\tLSR R1, R1, #1\n\tADD R3, R3, #1\n\tB LOOP\nDONE:\n\tSTR R2, 193\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 192
+  MOV R2, #0         ; R2 = count of 1 bits
+  MOV R3, #0         ; R3 = bits checked so far
+LOOP:
+  CMP R3, #4
+  BEQ DONE
+  AND R4, R1, #1     ; R4 = lowest bit
+  ADD R2, R2, R4
+  LSR R1, R1, #1     ; move the next bit into place
+  ADD R3, R3, #1
+  B LOOP
+DONE:
+  STR R2, 193
+  HALT
+`),
           scenarios: [
             { name:"A: 1101b", registers:{}, memory:{192:13}, check:(s)=>s.memory[193]===3 },
             { name:"B: 0000b", registers:{}, memory:{192:0}, check:(s)=>s.memory[193]===0 }
@@ -589,7 +784,31 @@
           id: 13,
           title: "Hard: compare weighted sums and set flag",
           prompt: "Compute A=(M[194]<<1)+M[195], B=(M[196]<<1)+M[197]. If A==B set M[198]=0, if A>B set M[198]=1, else set M[198]=-1.",
-          starter: "START:\n\tLDR R1, 194\n\tLDR R2, 195\n\tLDR R3, 196\n\tLDR R4, 197\n\tLSL R5, R1, #1\n\tADD R5, R5, R2\n\tLSL R6, R3, #1\n\tADD R6, R6, R4\n\tCMP R5, R6\n\tBEQ EQCASE\n\tBGT GTCASE\n\tMOV R7, #-1\n\tSTR R7, 198\n\tHALT\nEQCASE:\n\tMOV R7, #0\n\tSTR R7, 198\n\tHALT\nGTCASE:\n\tMOV R7, #1\n\tSTR R7, 198\n\tHALT",
+          starter: asm(`
+START:
+  LDR R1, 194
+  LDR R2, 195
+  LDR R3, 196
+  LDR R4, 197
+  LSL R5, R1, #1     ; A = (M[194] << 1) + M[195]
+  ADD R5, R5, R2
+  LSL R6, R3, #1     ; B = (M[196] << 1) + M[197]
+  ADD R6, R6, R4
+  CMP R5, R6
+  BEQ EQCASE
+  BGT GTCASE
+  MOV R7, #-1        ; A < B
+  STR R7, 198
+  HALT
+EQCASE:
+  MOV R7, #0
+  STR R7, 198
+  HALT
+GTCASE:
+  MOV R7, #1
+  STR R7, 198
+  HALT
+`),
           scenarios: [
             { name:"A: A>B", registers:{}, memory:{194:7,195:1,196:2,197:5}, check:(s)=>s.memory[198]===1 },
             { name:"B: A<B", registers:{}, memory:{194:1,195:0,196:3,197:0}, check:(s)=>s.memory[198]===-1 },
@@ -611,9 +830,6 @@
         ["WAIT <operand2>", "Pause the running program for <operand2> milliseconds so the screen can update (ignored when testing)."]
       ];
 
-      // Turns an indented template into editor source: leading spaces become one tab.
-      const asm = (text) => text.replace(/^\n/, "").replace(/\n\s*$/, "").split("\n")
-        .map((line) => line.replace(/^ +/, (spaces) => (spaces.length ? "\t" : ""))).join("\n");
       const outputIs = (expected) => (s) => s.output === expected;
 
       const extendedChallenges = [
@@ -1212,7 +1428,7 @@ PRINT_DONE:
 
           for (let i = 0; i < lines.length; i += 1) {
             const lineNo = i + 1;
-            const raw = extended ? stripComment(lines[i]) : lines[i];
+            const raw = stripComment(lines[i]);
             if (raw.trim() === "") continue;
             if (/^\s*;/.test(raw)) continue;
             const trimmed = raw.trim();
@@ -1909,8 +2125,8 @@ PRINT_DONE:
 
       function renderSyntaxNote() {
         ui.syntaxNote.innerHTML = state.extended
-          ? "Extended mode: everything in the AQA rules still applies, plus <code>.data</code>/<code>.text</code> sections, <code>;</code> comments at the end of lines, memory refs <code>0..1023</code>, <code>.data</code> labels, <code>[Rn]</code>, <code>[Rn, #n]</code> and <code>[Rn, Rm]</code>, and character immediates such as <code>#'A'</code>. The screen is memory-mapped at <code>768..1023</code>. See VIEW INSTRUCTION SET for the extra instructions."
-          : "Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; immediate values must use decimal <code>#</code>; only registers <code>R0..R12</code>; memory refs are decimal addresses <code>100..199</code>. Registers and memory cells are implemented internally as 16-bit signed integers, so values outside <code>-32768..32767</code> overflow and wrap.";
+          ? "Extended mode: everything in the AQA rules still applies, plus <code>.data</code>/<code>.text</code> sections, memory refs <code>0..1023</code>, <code>.data</code> labels, <code>[Rn]</code>, <code>[Rn, #n]</code> and <code>[Rn, Rm]</code>, and character immediates such as <code>#'A'</code>. The screen is memory-mapped at <code>768..1023</code>. See VIEW INSTRUCTION SET for the extra instructions."
+          : "Syntax rules enforced strictly: labels must end with <code>:</code> and be on their own unindented line; instruction lines must be indented; <code>;</code> starts a comment; immediate values must use decimal <code>#</code>; only registers <code>R0..R12</code>; memory refs are decimal addresses <code>100..199</code>. Registers and memory cells are implemented internally as 16-bit signed integers, so values outside <code>-32768..32767</code> overflow and wrap.";
       }
 
       function populateSelectors() {
@@ -1979,8 +2195,12 @@ PRINT_DONE:
       ui.stepBtn.addEventListener("click", stepOnce);
       ui.testBtn.addEventListener("click", testScenario);
       ui.solutionBtn.addEventListener("click", loadSolution);
-      ui.instructionSetBtn.addEventListener("click", () => ui.instructionDialog.showModal());
+      ui.instructionSetBtn.addEventListener("click", () => {
+        ui.instructionDialog.showModal();
+        ui.instructionDialog.scrollTop = 0;
+      });
       ui.closeInstructionDialog.addEventListener("click", () => ui.instructionDialog.close());
+      document.getElementById("closeInstructionDialogTop").addEventListener("click", () => ui.instructionDialog.close());
       ui.binaryToggle.addEventListener("change", updateTables);
       ui.memoryPageSelect.addEventListener("change", () => {
         state.memoryPage = Number(ui.memoryPageSelect.value);

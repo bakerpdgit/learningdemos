@@ -413,6 +413,10 @@ if (/Problem \$\{c\.id\}: \$\{c\.title\}/.test(assemblyChallengesSource)
   if (/\.dialog-inner\s*\{[^}]*(overflow|max-height)/.test(assemblyChallengesSource)) {
     failures.push('aqa_assembly_challenges.html: the instruction set dialog must scroll once, on the dialog, not also on .dialog-inner');
   }
+  if (!/<div class="dialog-header">\s*<h2[^>]*>[^<]*<\/h2>\s*<button[^>]*class="dialog-close"[^>]*aria-label="Close/.test(assemblyChallengesSource)
+    || !/\.dialog-header\s*\{[^}]*position:\s*sticky/.test(assemblyChallengesSource)) {
+    failures.push('aqa_assembly_challenges.html: the instruction set dialog needs a sticky header with a labelled top-right close button, so it opens at the top');
+  }
   if (!/<input type="checkbox" id="extendedToggle" \/>/.test(assemblyChallengesSource) || /id="extendedToggle"[^>]*checked/.test(assemblyChallengesSource)) {
     failures.push('aqa_assembly_challenges.html: Extended mode must be an unchecked tick box by default');
   }
@@ -451,6 +455,14 @@ if (/Problem \$\{c\.id\}: \$\{c\.title\}/.test(assemblyChallengesSource)
       let rejected = false;
       try { AqaAsm.parse(source, { extended: false }); } catch (error) { rejected = true; }
       if (!rejected) failures.push(`aqa_assembly_challenges.html: AQA mode must reject extended syntax: ${JSON.stringify(source)}`);
+    }
+    try {
+      AqaAsm.parse('START: ; entry point\n\tMOV R1, #1 ; one\n; whole-line comment\n\tHALT', { extended: false });
+    } catch (error) {
+      failures.push(`aqa_assembly_challenges.html: AQA mode must allow ; comments (${error.message})`);
+    }
+    if (challengeData.some((challenge) => !/;/.test(challenge.starter))) {
+      failures.push('aqa_assembly_challenges.html: every AQA worked solution should be commented');
     }
     // LSR is a 16-bit logical shift: 0xFFFE >> 1 = 0x7FFF.
     const lsr = AqaAsm.createMachine(AqaAsm.parse('\tMOV R1, #-2\n\tLSR R2, R1, #1\n\tHALT'), {}, {});
